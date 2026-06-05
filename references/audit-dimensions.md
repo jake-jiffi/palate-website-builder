@@ -1,0 +1,134 @@
+# Audit dimensions - the pre-production reviewer pass
+
+After Compose, before the production checkpoint, Claude takes a deliberate
+reviewer stance and walks the canonical pages against this 11-dimension audit.
+The output is a findings list in the format described at the bottom of this
+file. Critical and High findings block the build; the verify-fail loop in
+`errors.md` applies.
+
+This pass is interpretive (the structural counterpart is
+`verify-is-real-astro.sh`; the aesthetic-mechanical counterpart is
+`scripts/ux-lint.sh`). A senior reviewer's eye, codified.
+
+## The dimensions
+
+### 1. Visual hierarchy
+
+Is the most important thing on the page also the most visually weighted? Is
+there exactly one Z1 element per screen, or are several fighting? A typical
+failure: the hero, the nav CTA and a feature card all use the brand accent at
+the same weight.
+
+### 2. Spacing rhythm
+
+Is vertical spacing on a documented scale (8 / 12 / 16 / 24 / 32 / 48 / 80),
+or has it been freelanced per section? Are section padding choices consistent
+within a page (e.g. all `py-20` or all `py-24`, not a mix)?
+
+### 3. Typography pairing
+
+Is there a clear display / body distinction at scale, weight, or family?
+Are there fewer than three font sizes per section? Is line-length between
+50 and 80 characters for body text?
+
+### 4. Empty states
+
+Does every list / collection / search result have a designed empty state?
+Does the blog index render gracefully when zero items have been published?
+Forms with no submissions yet, dashboards with nothing to show, search with
+no matches - all named, all designed.
+
+### 5. Loading states
+
+Every async region (CMS-fetched content, OG image generation, form submit)
+has a designed loading state. No bare spinners; named skeletons or
+explicit progress.
+
+### 6. Error states
+
+Forms render their error states deliberately (per-field message, accessible
+to a screen reader, not red-on-red); fetch failures degrade to the `content.ts`
+fallback rather than a blank section; 404 and 500 routes exist and feel like
+they belong to the site, not generic Astro defaults.
+
+### 7. Dark mode (only if the brand supports it)
+
+If the brand has a documented dark mode, every page passes a dark-mode pass:
+contrast on text holds, brand accents do not glow, images that were tuned
+for a light background still read.
+
+### 8. Density and breathing room
+
+The page does not feel either claustrophobic (every gap collapsed to 8px) or
+unfocused (every gap blown out to 96px). Density matches the audience: dense
+for power users, breathing room for narrative / consumer pages.
+
+### 9. Accessibility (WCAG 2.2 AA minimum)
+
+Visible focus on every interactive element. Colour contrast >= 4.5:1 for body,
+>= 3:1 for large text. Forms have labels and `aria-describedby` for errors.
+No motion that violates `prefers-reduced-motion`. Headings descend in order
+without skipping levels.
+
+### 10. Copy quality
+
+Body copy is specific (passes the Conceptual Grounding Test from
+`critique-discipline.md`); CTAs use a verb + noun shape ("See pricing" not
+"Learn more"); the page would not be improved by deleting another 30% of the
+words.
+
+### 11. Reference fidelity / bespoke-ness
+
+Does the page reproduce the lead reference's signature compositional move(s),
+named and located? Point to it ("the donor's full-bleed pinned hero stage, at
+`index.astro` L12-40, re-skinned to the brand"). Is the type / motion / grid the
+reference's actual system (its scale, easings, rhythm re-skinned) or a Tailwind
+default standing in for it? This is the positive counterpart to the anti-default
+detector in `critique-discipline.md`: the audit fails not just for being slop,
+but for being generic where a reference should have been reproduced.
+
+Check against structured data, not memory: the donor's `sections[]` name the move
+per section (`signatureMove`), and `refs_get sections:["doDont"]` lists the rules
+the page must honour. Name the move, locate it in the code, and confirm the page
+does not break the donor's `doDont`.
+
+A page that is **default-shaped with no reproduced signature move** is a Critical
+finding (it is the exact failure this skill exists to beat). A page that uses
+Tailwind-default type / spacing / motion where the lead reference had a distinct
+system is High. Identity-layer borrowing (exact hexes, wordmark, font files,
+photos, a trademark-grade gimmick) is also a finding - the fidelity is to the
+craft layer, never the trade dress (see the two-layer doctrine in
+`reference-library-usage.md`).
+
+---
+
+## Output format (for the reviewer pass)
+
+Follow the Vercel review format, copied in. No preamble. No padding. No
+encouraging sentences. Findings grouped by file, in this shape:
+
+```
+src/pages/index.astro
+  L23 [Critical / hierarchy] Hero CTA and nav CTA both use --brand-accent at
+       100%; the hero loses primacy. Suggest desaturating nav to --brand-muted.
+  L78 [High / empty-state] Features grid renders nothing when content array
+       is empty; add a one-line note and a sample card.
+  pass
+
+src/pages/blog/index.astro
+  L14 [High / empty-state] Blog index has no zero-items state; add a copy
+       block "First post coming soon" and a subscribe link.
+  L42 [Medium / typography] Three font sizes in one card (24, 18, 14).
+       Drop the 18; promote 14 if it carries metadata.
+```
+
+`pass` is allowed on a file with no Critical or High findings, but skipping
+files because they "look fine" is a regression. Walk every page on the audit
+route.
+
+Severity mapping: Critical halts the build; High halts by default
+(`--fail-on=High` is the default for the reviewer pass); Medium reports;
+Cosmetic is advice.
+
+After fixes, re-run the reviewer pass and re-run `scripts/ux-lint.sh`. Both
+must come back clean before the production checkpoint.

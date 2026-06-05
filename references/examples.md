@@ -1,0 +1,37 @@
+# Example invocations
+
+## Fresh build with brand assets (most common)
+> "Build a site for Addikted to Ink, atink.com.au. Brand assets are at ~/Downloads/atink-brand."
+
+Phase 0 finds no brand repo, sees assets, invokes brand-as-code (composed), publishes @jiffi-projects/atink-brand, then scaffolds the site consuming it. Style inferred (service or consumer), mode inferred from the brand.
+
+## Existing brand repo
+> "Build the site for Acme. Brand repo already at jiffi-projects/acme-brand."
+
+Phase 0 finds the repo, verifies exports, pins the exact version, skips brand-as-code, scaffolds straight away.
+
+## Full ecosystem with CRO and ads
+> "Build everything for Acme: brand repo, site, and the CRO module. We're running Google Ads on 5 keyword groups. Assets at ~/Downloads/acme-brand."
+
+Brand-as-code runs, site scaffolds, --with-cro installs the dormant module, campaignPage types ready for the 5 keyword groups. handover.md notes the CRO warm-up.
+
+## Direct reference
+> "Build a site for Tallystone, tallystone.com. Make it feel like Linear. Brand repo exists."
+
+select-references.sh --site linear loads Linear's notes directly for structural inspiration (varied, not copied), brand package supplies the actual design tokens.
+
+## Webflow migration
+> "Migrate Enviz from Webflow to our stack. enviz.com.au, brand repo exists."
+
+Follows references/webflow-migration.md: inventory, map CMS to Sanity, migrate content, rebuild design, set redirects, DNS cutover.
+
+## Brand-only mode
+> "Build a brand package for Enviz. Assets at ~/Downloads/enviz-brand."
+
+Runs the BUILD BRAND mode standalone (interactive): inventories assets, generates four-format tokens, writes fonts.css and components, publishes @jiffi-projects/enviz-brand. No website. Useful when the brand package is needed for decks, Figma, or v0 before any site exists.
+
+## Curate mode (self-improvement)
+> "Add Linear to your reference library."
+> "Study vercel.com and learn from it for future builds."
+
+Runs the CURATE mode: scaffolds the catalog entry, inspects the live site, fills the six notes files, marks it available. No client deliverable. The next relevant build automatically draws on it.
