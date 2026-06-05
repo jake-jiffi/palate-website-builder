@@ -151,8 +151,8 @@ remote-fetched), and Jiffi's house-style (no em dashes, Australian English).
 - Severity: Critical
 - Mode: always
 - Files: *.md,*.mdx,*.astro,*.ts,*.tsx
-- Pattern: `(?i)\bunleash`
-- Fix: Marketing cliche. Say "let people do X" or just describe the action.
+- Pattern: `(?i)\bunleash(ing|es)?\b`
+- Fix: Marketing cliche. Say "let people do X" or just describe the action. (Matches the verb forms unleash/unleashing/unleashes, not the proper noun "Unleashed" - the real inventory product some ops businesses partner with.)
 
 ### Rule: ai-tell-seamless
 - Severity: High
