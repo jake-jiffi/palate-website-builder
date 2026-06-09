@@ -53,7 +53,7 @@ is rejected. Show, do not tell.
 
 ## Grounding concepts in the MCP (the concept layer is first-class)
 
-The `website-references` MCP now indexes feeling and mechanic, not just craft. Use
+The `palate` MCP now indexes feeling and mechanic, not just craft. Use
 it to assemble concepts:
 
 - `refs_insights { topic: "mechanics" }` - the catalogue of demonstrative devices

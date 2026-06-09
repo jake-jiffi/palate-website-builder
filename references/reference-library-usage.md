@@ -3,7 +3,7 @@
 The library is deep design intelligence - structure, tokens, motion, component
 behaviour and an Astro translation for 260+ top-tier sites - to inform a build:
 reproduce a reference's craft faithfully, re-skin it with the client's brand,
-and never copy its identity. It is served by the **`website-references` MCP connector**, which
+and never copy its identity. It is served by the **`palate` MCP connector**, which
 is the read path for a build. The catalog repo is now private; the MCP is how a
 build reaches it. To add or refresh sites see `reference-library-curation.md`
 (CURATE still writes to the repo); for the entry shape see
@@ -11,7 +11,7 @@ build reaches it. To add or refresh sites see `reference-library-curation.md`
 
 ## The MCP is the read path (use this, not the old sync)
 
-The `website-references` MCP exposes every entry as read-only `refs_*` tools,
+The `palate` MCP exposes every entry as read-only `refs_*` tools,
 decomposed into orthogonal layers (tokens, typography, motion, layout,
 structure, components, voice, signals, cluster) plus `referenceItFor` (what to
 borrow) and `doNotCopy` (what is brand-coded, leave alone). The layers being

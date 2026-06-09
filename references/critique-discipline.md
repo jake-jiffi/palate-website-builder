@@ -110,7 +110,7 @@ brand"). If you cannot name and locate one, the page is default-shaped - redo it
 with the lead reference's craft reproduced faithfully (see
 `references/reference-library-usage.md`, the two-layer doctrine).
 
-Source: the website-references two-layer doctrine (reproduce the craft, protect
+Source: the palate two-layer doctrine (reproduce the craft, protect
 the identity).
 
 ## 6. The feel gate - would the ICP feel seen

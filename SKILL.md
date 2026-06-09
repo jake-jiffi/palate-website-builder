@@ -178,7 +178,7 @@ Brand: `brand-preflight`, `resolve-repo`, `brand-state-init/update/resume`, `inv
 
 ## Evals
 
-`evals/` holds canonical test briefs with objective pass/fail checklists - run them after any change to the skill to catch regressions before they reach a client build. `evals/01-brochure-preview.md` through `04-explore-stage.md` cover the core build flows; `evals/05-design-skill-gates.md` covers ux-lint, critique discipline, perceptual floors, the project-level hook, the reviewer pass, and brand normalisation (six evals in one file to stay under the 200-file skill cap).
+`evals/` holds canonical test briefs with objective pass/fail checklists - run them after any change to the skill to catch regressions before they reach a client build. `evals/01-brochure-preview.md` through `04-explore-stage.md` cover the core build flows; `evals/05-ux-lint-critical-rules.md` through `10-brand-normalisation.md` cover ux-lint, critique discipline, perceptual floors, the project-level hook, the reviewer pass, and brand normalisation (one eval per file).
 
 ## Examples
 
