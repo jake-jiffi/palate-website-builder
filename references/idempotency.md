@@ -17,7 +17,7 @@ the same single result, never multiply it.
 2. **Upsert.** Use an API that creates-or-replaces in one call, keyed by a
    stable identifier. Always idempotent by construction - prefer it when the
    provider offers it (e.g. `PUT .../datasets/{name}`).
-3. **Tombstone.** Record "this step is done" in state (`.jiffi-skill-state.json`)
+3. **Tombstone.** Record "this step is done" in state (`.palate-skill-state.json`)
    the moment it succeeds, so a resume skips it. Use for steps with side effects
    that are awkward to detect after the fact (an email invite, a DNS write).
 

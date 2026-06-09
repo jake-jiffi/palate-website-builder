@@ -1,7 +1,7 @@
 # Build stages: preview and production
 
 A website build runs in one of two stages, recorded as `stage` in
-`.jiffi-skill-state.json`. The SAME codebase carries from one to the other.
+`.palate-skill-state.json`. The SAME codebase carries from one to the other.
 This is the heart of building things right: the preview IS the production
 codebase, just not provisioned.
 

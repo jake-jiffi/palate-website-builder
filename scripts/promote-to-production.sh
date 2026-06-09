@@ -4,9 +4,9 @@
 # pipeline runs phases B-F on the SAME project. No rebuild.
 # Run from the project directory. Usage: promote-to-production.sh
 set -euo pipefail
-[ -f .jiffi-skill-state.json ] || { echo "no project state here; run a preview build first" >&2; exit 1; }
+[ -f .palate-skill-state.json ] || { echo "no project state here; run a preview build first" >&2; exit 1; }
 
-stage=$(jq -r '.stage' .jiffi-skill-state.json)
+stage=$(jq -r '.stage' .palate-skill-state.json)
 if [ "$stage" = "production" ]; then
   echo "already in production stage; resuming production phases"
 else
@@ -20,7 +20,7 @@ else
   }
   tmp=$(mktemp)
   jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.stage="production" | .skill.lastUpdatedAt=$ts' \
-    .jiffi-skill-state.json > "$tmp" && mv "$tmp" .jiffi-skill-state.json
+    .palate-skill-state.json > "$tmp" && mv "$tmp" .palate-skill-state.json
   echo "promoted to production stage."
 fi
 echo "Next: the build pipeline runs phases sanity -> cloudflare -> github -> domain -> optional on this project."

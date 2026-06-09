@@ -1,6 +1,6 @@
 # State and resume
 
-`.jiffi-skill-state.json` makes the build resumable and idempotent. Created by `state-init.sh`, mutated by `state-update.sh`, queried by `state-resume.sh`.
+`.palate-skill-state.json` makes the build resumable and idempotent. Created by `state-init.sh`, mutated by `state-update.sh`, queried by `state-resume.sh`.
 
 ## Shape
 Top-level: skill, client, brand, design, phases, cro. Each phase has a status (pending/in_progress/complete/manual_pending/failed) and a resources object (the non-secret IDs and URLs it created).

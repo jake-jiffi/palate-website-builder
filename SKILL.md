@@ -29,7 +29,7 @@ Do not use this skill for: one-page landing pages with no CMS, pure web applicat
 Brief plus domain in, real Astro site out. The build runs in two stages on ONE codebase, and the process below is mandatory, not advisory (see "The non-negotiable build contract").
 
 ### Two stages, one codebase
-A build has a `stage`, recorded in `.jiffi-skill-state.json`:
+A build has a `stage`, recorded in `.palate-skill-state.json`:
 
 - **preview** (the default for "redesign this", "make it look good", "let me see it first"): runs Phase 0 (brand) + Phase A (scaffold the real SSR + Sanity-wired Astro project) + the preview verification gate, then STOPS. Deliverable: a **shareable Vercel preview deployment** (a live `*.vercel.app` link the client can open and leave Vercel Toolbar Comments on) via `scripts/deploy-preview.sh` - this is the default so previews are shareable for feedback. The preview runs on the bundled `content.ts` fallback layer, so NO Sanity project, custom domain, GitHub repo or PRODUCTION deploy is touched (a preview deployment is throwaway) - the SSR adapter, the Sanity data layer, the draft-mode endpoints and the visual-editing channel are all already wired in. Use `--local-preview` for a local dev-server link instead (faster for solo iteration, no cloud). This is the real production codebase, just not provisioned; promoting it later is a continuation, never a rebuild.
 - **production** ("make it production-ready", "take it live", "ship it"): runs `scripts/promote-to-production.sh` (which re-checks the preview is a real Astro project) then continues Phases B-F on the SAME project - provisioning Sanity, deploying the SSR worker, seeding the CMS from `content.ts`. Never starts over.
@@ -153,7 +153,7 @@ A path to raw assets (brand PDF, fonts, logos, illustrations, copy, any existing
 
 - **Slug derivation**: `scripts/derive-slug.sh` (shared across both modes; handles the digit-start edge case).
 - **Reference library**: the Palate MCP serves the catalog of deeply-analysed sites. BUILD SITE reads it through the hosted **Palate MCP** (`refs_*` tools via the `palate` connector), not by cloning. See `references/reference-library-usage.md`.
-- **State**: BUILD SITE uses `.jiffi-skill-state.json`; BUILD BRAND uses `.jiffi-brand-state.json`. Both resumable. The cross-mode handshake (a build that called a brand build, interrupted mid-brand) is in `references/phase-0-brand-detection.md`.
+- **State**: BUILD SITE uses `.palate-skill-state.json`; BUILD BRAND uses `.jiffi-brand-state.json`. Both resumable. The cross-mode handshake (a build that called a brand build, interrupted mid-brand) is in `references/phase-0-brand-detection.md`.
 
 ## Known gotchas
 
