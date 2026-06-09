@@ -10,7 +10,7 @@ project's variants were generated from the same blank slate.
 Outside the skill, at:
 
 ```
-~/.config/jiffi/builds.log.json
+~/.config/palate/builds.log.json
 ```
 
 Same convention the skill already uses for the GitHub token (the directory is
@@ -62,7 +62,7 @@ three entries, the rules are inert and Explore proceeds normally.
 
 The diversification signal is Jiffi-wide, not per-project. A log inside any
 single project would only track that project's own variants. The shared file
-in `~/.config/jiffi/` is read and written by every build on the machine, so a
+in `~/.config/palate/` is read and written by every build on the machine, so a
 team running multiple builds in a week diversifies across all of them.
 
 ## Manual override

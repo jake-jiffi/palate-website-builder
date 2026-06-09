@@ -3,15 +3,13 @@
 The library is deep design intelligence - structure, tokens, motion, component
 behaviour and an Astro translation for 260+ top-tier sites - to inform a build:
 reproduce a reference's craft faithfully, re-skin it with the client's brand,
-and never copy its identity. It is served by the **`website-references` MCP connector**, which
-is the read path for a build. The catalog repo is now private; the MCP is how a
-build reaches it. To add or refresh sites see `reference-library-curation.md`
-(CURATE still writes to the repo); for the entry shape see
-`reference-library/_meta/schema.md`.
+and never copy its identity. It is served by the **`palate` MCP connector**, which
+is the read path for a build. The catalog is served only through the MCP; there
+is no local copy and nothing is cloned.
 
 ## The MCP is the read path (use this, not the old sync)
 
-The `website-references` MCP exposes every entry as read-only `refs_*` tools,
+The `palate` MCP exposes every entry as read-only `refs_*` tools,
 decomposed into orthogonal layers (tokens, typography, motion, layout,
 structure, components, voice, signals, cluster) plus `referenceItFor` (what to
 borrow) and `doNotCopy` (what is brand-coded, leave alone). The layers being
@@ -100,12 +98,6 @@ menu / services page from how the best sites build THAT page, not from a generic
 skeleton plus the client's colours. If a build only calls `refs_for_business` +
 `refs_get_screenshot` (home) + `refs_get_tokens`, it is leaving the section-level
 depth, the inner pages and the taste layer (`doDont` / `componentPrompts`) unused.
-
-Offline / CURATE fallback only: `eval "$(scripts/sync-reference-library.sh)"`
-clones the (now private) repo - it needs the token in `library-source.json` -
-and `select-references.sh` reads that local clone. Use this only when the MCP is
-unreachable or when CURATE is writing entries. For a normal build, the MCP is
-the default and nothing is cloned.
 
 ## The organ-transplant method (structure wholesale, then graft two organs)
 
@@ -220,5 +212,4 @@ from range across builds, not from blanding each one.
 
 The library is internal Jiffi intelligence. Captured screenshots and SVGs are
 reference material for understanding a site, not assets to ship. Every client
-deliverable is original work informed by references, never copied from them. See
-`reference-library/CONTRIBUTING.md`.
+deliverable is original work informed by references, never copied from them.

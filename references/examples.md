@@ -18,7 +18,7 @@ Brand-as-code runs, site scaffolds, --with-cro installs the dormant module, camp
 ## Direct reference
 > "Build a site for Tallystone, tallystone.com. Make it feel like Linear. Brand repo exists."
 
-select-references.sh --site linear loads Linear's notes directly for structural inspiration (varied, not copied), brand package supplies the actual design tokens.
+`refs_get { slug: "linear" }` (or `refs_search`) reads Linear's notes from the MCP for structural inspiration (varied, not copied); the brand package supplies the actual design tokens.
 
 ## Webflow migration
 > "Migrate Enviz from Webflow to our stack. enviz.com.au, brand repo exists."

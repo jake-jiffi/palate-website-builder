@@ -22,7 +22,7 @@ grep -qE "@astrojs/(vercel|cloudflare)" astro.config.mjs \
 
 # 3. The brand package is consumed (dependency present), not inlined ad hoc
 jq -e '.dependencies | to_entries[] | select(.key | startswith("@jiffi-projects/"))' package.json >/dev/null 2>&1 \
-  || grep -q "vendored" .jiffi-skill-state.json 2>/dev/null \
+  || grep -q "vendored" .palate-skill-state.json 2>/dev/null \
   || fail "brand package not consumed and not vendored; brand system not wired"
 
 # 4. Real Astro source structure, not a pile of root .html files

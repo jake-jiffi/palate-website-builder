@@ -3,13 +3,13 @@
 # Usage: state-update.sh phase <phaseName> <status>
 #        state-update.sh set '<jq-path>' '<json-value>'   e.g. set '.brand.packageVersion' '"2.0.0"'
 set -euo pipefail
-[ -f .jiffi-skill-state.json ] || { echo "no state file here" >&2; exit 1; }
+[ -f .palate-skill-state.json ] || { echo "no state file here" >&2; exit 1; }
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ); tmp=$(mktemp)
 if [ "${1:?}" = "phase" ]; then
-  jq --arg p "$2" --arg s "$3" --arg ts "$TS" '.phases[$p].status=$s | .skill.lastUpdatedAt=$ts' .jiffi-skill-state.json > "$tmp"
+  jq --arg p "$2" --arg s "$3" --arg ts "$TS" '.phases[$p].status=$s | .skill.lastUpdatedAt=$ts' .palate-skill-state.json > "$tmp"
 elif [ "$1" = "set" ]; then
-  jq --argjson v "$3" --arg ts "$TS" "$2 = \$v | .skill.lastUpdatedAt=\$ts" .jiffi-skill-state.json > "$tmp"
+  jq --argjson v "$3" --arg ts "$TS" "$2 = \$v | .skill.lastUpdatedAt=\$ts" .palate-skill-state.json > "$tmp"
 else
   echo "unknown command $1" >&2; exit 1
 fi
-mv "$tmp" .jiffi-skill-state.json
+mv "$tmp" .palate-skill-state.json

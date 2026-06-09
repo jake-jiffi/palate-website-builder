@@ -29,9 +29,9 @@ happen after the pick + a confirm pause. PREVIEW stops there.
       reads it, so the count on the page matches.
 - [ ] The variants are genuinely different - **no two share the same hero
       pattern, the same section sequence, or the same density level**. At
-      least one pulls from the reference library (`select-references.sh`
-      invoked) and at least one is an invented approach not tied to any
-      reference.
+      least one pulls from the reference library via the MCP (`refs_search` /
+      `refs_get` invoked) and at least one is an invented approach not tied to
+      any reference.
 - [ ] Token variation is real - type scale, density, accent treatment differ
       between variants within the brand's permitted range. They do not invent
       off-brand colours.
