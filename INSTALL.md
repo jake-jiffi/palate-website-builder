@@ -21,9 +21,63 @@ The zip has SKILL.md at the archive root and exactly one SKILL.md, so the upload
 
 A website build calls the brand build in-process when the client has no brand package yet. The Palate MCP's reference library informs every build.
 
-## MCP connector setup
+## Connector + enforcement (one command)
 
-The skill reads the Palate reference library through the `palate` MCP connector. Add the connector to your Claude Code configuration:
+After dropping in the skill, run the installer once. It adds the `palate` MCP
+connector, installs `jq`, and registers the gate hooks into your
+`~/.claude/settings.json` (backed up first, with every change printed):
+
+```bash
+PALATE_TOKEN=plt_live_xxx ./scripts/install.sh
+```
+
+That wires three hooks that make a build actually use the library:
+
+- **PreToolUse** blocks writing source files until you have surveyed the library.
+- **Stop** blocks finishing until the build reached real MCP depth.
+- **PostToolUse** records real tool telemetry to `build-manifest.json` (the gate
+  reads this, so depth cannot be faked).
+
+The gate itself is a plain script (`scripts/gate-mcp-depth.sh`), so it also runs
+in CI or a pre-commit hook independently of Claude Code. Temporarily disable the
+gate with `PALATE_GATE_OFF=1`.
+
+The skill's `allowed-tools` includes `mcp__palate`, giving it the `refs_*` tools
+(refs_for_business, refs_search, refs_get, refs_get_tokens, refs_get_astro_recipe,
+refs_get_screenshot, refs_insights, refs_match_brief, refs_similar,
+refs_list_verticals).
+
+### Updating
+
+Pull the latest skill and re-run the installer. It is idempotent and refreshes the
+hook paths, so re-running is the update path:
+
+```bash
+git -C <skill-dir> pull            # or: npx skills add -y https://github.com/jake-jiffi/palate-website-builder
+./scripts/install.sh
+```
+
+Your installed version is recorded at `~/.config/palate/skill-version`; the skill
+ships its version in `VERSION`.
+
+### Uninstalling
+
+```bash
+./scripts/install.sh --uninstall
+```
+
+Removes the hooks and the connector (your cross-build memory at
+`~/.config/palate/builds.log.json` is left in place).
+
+### Cursor
+
+Cursor hooks are beta and only `deny` reliably blocks. Point Cursor's PreToolUse
+hook at the same script (`scripts/gate-mcp-depth.sh`) and use a `deny` decision;
+the portable gate is identical, only the wrapper differs.
+
+### Manual connector (fallback)
+
+If you do not use the `claude` CLI, add the connector to your config yourself:
 
 ```json
 {
@@ -31,15 +85,11 @@ The skill reads the Palate reference library through the `palate` MCP connector.
     "palate": {
       "type": "url",
       "url": "https://mcp.palatemcp.com/sse",
-      "headers": {
-        "Authorization": "Bearer YOUR_PALATE_API_TOKEN"
-      }
+      "headers": { "Authorization": "Bearer YOUR_PALATE_API_TOKEN" }
     }
   }
 }
 ```
-
-The skill's `allowed-tools` includes `mcp__palate`, which gives it access to the `refs_*` tools (refs_for_business, refs_search, refs_get, refs_get_tokens, refs_get_astro_recipe, refs_get_screenshot, refs_insights, refs_match_brief, refs_similar, refs_list_verticals).
 
 ## One-time machine setup
 
