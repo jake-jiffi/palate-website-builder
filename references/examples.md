@@ -18,7 +18,7 @@ Brand-as-code runs, site scaffolds, --with-cro installs the dormant module, camp
 ## Direct reference
 > "Build a site for Tallystone, tallystone.com. Make it feel like Linear. Brand repo exists."
 
-`refs_get { slug: "linear" }` (or `refs_search`) reads Linear's notes from the MCP for structural inspiration (varied, not copied); the brand package supplies the actual design tokens.
+`refs_get { slug:"linear", layer:"signature_moves" }` reads the move to reproduce (its calm, evenly-spaced section rhythm and quiet motion) and `refs_get { slug:"linear", format:"design" }` pulls the DESIGN.md so you reproduce Linear's token scale with the WHY of each choice; the brand package supplies the actual hues. Respect `doNotCopy`: re-skin the craft, never lift Linear's literal dot-grid.
 
 ## Webflow migration
 > "Migrate Enviz from Webflow to our stack. enviz.com.au, brand repo exists."

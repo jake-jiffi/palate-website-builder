@@ -18,6 +18,8 @@ check() { # desc  expected_exit  manifest_path
 check "deep build passes" 0 "$DIR/fixtures/manifest-deep.json"
 check "shallow build is blocked" 2 "$DIR/fixtures/manifest-shallow.json"
 check "missing manifest is blocked" 2 "$DIR/fixtures/no-such-manifest.json"
+check "token/concept-only read is blocked (R2 rich-layer gate)" 2 "$DIR/fixtures/manifest-token-only.json"
+check "layer:pages counts as a rich read" 0 "$DIR/fixtures/manifest-pages.json"
 
 echo "---"
 echo "passed=$pass failed=$fail"

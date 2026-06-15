@@ -50,9 +50,8 @@
           "bright-dental"
         ],
         "layer": [
-          "do_dont",
-          "component_prompts",
-          "signature_moves"
+          "tokens",
+          "concept"
         ]
       },
       "slugs": [

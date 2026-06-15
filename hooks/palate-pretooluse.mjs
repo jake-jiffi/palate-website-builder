@@ -67,6 +67,6 @@ try {
 } catch (e) {
   const reason =
     (e.stderr ? e.stderr.toString() : "").trim() ||
-    "MCP-depth gate failed: survey the library (refs_search, refs_get, refs_get_screenshot) before writing code.";
+    'MCP-depth gate failed: survey the library first: refs_search with concrete lexical terms (a font, "GSAP", "preloader", the business category), then refs_get your donors with a layer (signature_moves / do_dont / component_prompts) or format:design before writing code.';
   deny(reason);
 }

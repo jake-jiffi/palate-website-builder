@@ -47,7 +47,11 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    donor) and design from the pixels - match its actual composition (weight,
    asymmetry, negative space, signature move), then re-skin with the brand. This
    is a required step, not optional: composing from prose alone regresses to
-   generic priors. Before emit, score the proposed composition on the **6-axis
+   generic priors. Then pull `refs_get { slug, format:"design" }` for the spine
+   donor to lift its exact type scale, spacing and easings as structured YAML
+   (with the WHY of each token) and map them onto the brand's range, reproducing
+   the rationale, not just the values. Before emit, score the proposed composition
+   on the **6-axis
    pre-emit critique**
    (Philosophy / Hierarchy / Execution / Specificity / Restraint / Variety, 1
    to 5 each; revise if any axis is below 3); apply the **Conceptual Grounding
@@ -109,10 +113,20 @@ execute its craft via the organ-transplant method (`reference-library-usage.md`)
 Every variant's lead donor MUST be studied through the **section-build recipe**
 (`reference-library-usage.md`): pull the donor by pattern (`refs_search { pageType,
 uiElement, conversionPrimitive }`), VIEW its inner page (`refs_get_screenshot
-{ slug, page:"pricing" }` etc., not only its home), read its `doDont` +
-`componentPrompts` + `sections[]`/`pages[]`, then build from those. Do not stop at
-the homepage screenshot and tokens; that leaves the section depth, inner pages and
-taste layer unused.
+{ slug, page:"pricing" }` etc., not only its home), read its
+`refs_get { slug, layer:"do_dont" }` + `refs_get { slug, layer:"component_prompts" }`
++ `sections[]`/`pages[]`, then build from those. For the spine donor, also pull
+`refs_get { slug, layer:"signature_moves" }` and `refs_get { slug, layer:"concept" }`
+so the mechanic is named and re-skinned. Do not stop at the homepage screenshot and
+tokens; that leaves the section depth, inner pages and taste layer unused.
+When you reach for donors, a `refs_search` query may mix facets with exact lexical
+terms because retrieval is hybrid (dense + lexical, RRF-fused), quality-ranked and
+diversity-re-ranked: name the literal font, library, mechanic or business category
+in `query` alongside the facets and it retrieves sites that use precisely that, with
+the best craft first and cross-vertical range across the spread. For example:
+`refs_search { vertical:"hospitality", query:"split-flap menu board" }`,
+`refs_search { intensity:"high", query:"GSAP Lenis pinned hero" }`,
+`refs_search { serifPresent:true, query:"Fraunces editorial optometry" }`.
 For a set of eight, spread across the **concept-ambition spectrum**:
 
 - **~3 safe-warm concepts** - a clear, human demonstrative idea, low-risk to
@@ -205,9 +219,10 @@ The mechanic when the client says "v3 hero + v7 features + v5 cta":
    For every conversion section (pricing, booking, menu, services, contact) and
    every conversion-critical inner page, run the **section-build recipe**
    (`reference-library-usage.md`): facet-search 2-3 donors for THAT section, view
-   their inner-page screenshots, build from their `componentPrompts`, and check the
-   result against their `doDont` before emit. The composed section is grounded in
-   how the best sites build that page, not assembled from memory.
+   their inner-page screenshots, build each component from
+   `refs_get { slug, layer:"component_prompts" }`, and check the result against
+   `refs_get { slug, layer:"do_dont" }` before emit. The composed section is grounded
+   in how the best sites build that page, not assembled from memory.
 5. **Archive the variant routes**. Move `src/pages/v*.astro` and
    `src/pages/lp*.astro` into `_explore-archive/` (project-level, gitignored)
    or remove them. Clear `src/lib/variants.ts`. The project shape returns to a

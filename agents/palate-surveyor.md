@@ -20,13 +20,20 @@ not converge on the same sites.
    a starting build plan (a backbone + donors).
 2. `refs_search` across the brief's vertical AND at least two adjacent verticals,
    varying facets (style, mode, page type, conversion primitive), to widen the
-   pool. Survey **at least 8 distinct references**.
+   pool. Survey **at least 8 distinct references**. Seed **at least two** of your
+   searches with lexical craft terms in `query` (a target font like `"Fraunces"`,
+   a motion library like `"GSAP"` or `"Lenis"`, a named compositional move like
+   `"pinned hero"` or `"split-flap"`), not facets alone: retrieval is hybrid, so
+   naming the exact thing surfaces the sites that actually use it. Read both the
+   **top of the spread AND the middle**, since results are diversity-re-ranked and
+   the cross-vertical grafts often sit below the first few.
 3. `refs_similar` off the two strongest candidates to find cross-vertical donors.
-4. `refs_get` the backbone and the top donors deeply (essence, tokens, do/don't,
-   signature moves, section anatomy).
+4. `refs_get` the backbone and the top donors deeply (essence, signature moves,
+   section anatomy). Pull `refs_get { slug, format:"design" }` (the DESIGN.md) for
+   the backbone AND the chosen aesthetic donor, so you ingest their tokens with the
+   WHY of each choice, and `refs_get { slug, layer:"do_dont" }` for the backbone.
 5. `refs_get_screenshot` the relevant **inner pages** (pricing, menu, booking,
    services) of the donors. View **at least 3 inner pages**.
-6. `refs_get_tokens` for the backbone and the aesthetic donor you will re-skin from.
 
 These calls are recorded automatically into `build-manifest.json` by the
 PostToolUse hook, so the depth gate sees real telemetry. Do not fabricate the
@@ -39,6 +46,10 @@ DONORS (>=3, each cross-vertical where possible):
   - <slug> - borrow: <palette | motion | a specific component | the conversion pattern>
   - ...
 SIGNATURE MOVE: <name> (source: <slug>) - the one distinctive thing this build commits to
+TOKEN INTENT: <3-5 lines distilled from the DESIGN.md rationale - which type scale,
+  easing and canvas the backbone/aesthetic donor use and WHY, so the re-skin keeps
+  the reasoning, not just the values>
+DO/DONT: <the 2-3 load-bearing do/don't rules from the backbone's do_dont layer>
 INNER PAGES SEEN: <slug>/<page>, ...
 AVOIDED (recent builds): <slugs you deliberately skipped>
 COMPOSITION NOTE: pick the backbone for structure, compose specific moves from at

@@ -39,13 +39,14 @@ function load() {
 
 function blank() {
   return {
-    schema: 1,
+    schema: 2,
     created_at: new Date().toISOString(),
     business: null,
     signature_move: null,
     mcp_calls: [],
     references_surveyed: [],
     inner_pages_viewed: [],
+    layers_read: [], // R2: intent-named refs_get layers actually pulled (depth signal)
     files_written: [],
     sections: [],
   };
@@ -88,6 +89,7 @@ function main() {
   const result = p.tool_response ?? p.tool_output ?? p.toolResponse ?? null;
 
   const m = load() ?? blank();
+  if (!Array.isArray(m.layers_read)) m.layers_read = []; // back-compat with schema 1 manifests
 
   if (tool.startsWith("mcp__palate__")) {
     const slugs = new Set();
@@ -101,6 +103,20 @@ function main() {
     if (tool === "mcp__palate__refs_get_screenshot" && input.page && input.slug) {
       const seen = m.inner_pages_viewed.some((v) => v.slug === input.slug && v.page === input.page);
       if (!seen) m.inner_pages_viewed.push({ slug: input.slug, page: input.page });
+    }
+    // R2 rich-layer depth signal: record which intent-named refs_get layers the
+    // build actually pulled (format:"design" counts as the 'design' layer). And
+    // layer:"pages" is the LLM-native inner-page read, so it counts as inner-page
+    // coverage the same as viewing an inner-page screenshot.
+    if (tool === "mcp__palate__refs_get") {
+      const layers = Array.isArray(input.layer) ? input.layer.slice() : (typeof input.layer === "string" ? [input.layer] : []);
+      if (input.format === "design") layers.push("design");
+      for (const l of layers) if (!m.layers_read.includes(l)) m.layers_read.push(l);
+      if (layers.includes("pages")) {
+        for (const s of slugList) {
+          if (!m.inner_pages_viewed.some((v) => v.slug === s && v.page === "pages")) m.inner_pages_viewed.push({ slug: s, page: "pages" });
+        }
+      }
     }
   } else if (tool === "Write" || tool === "Edit" || tool === "MultiEdit") {
     const fp = input.file_path || input.filePath || input.path;

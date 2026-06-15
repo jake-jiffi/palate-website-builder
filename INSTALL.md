@@ -43,9 +43,10 @@ in CI or a pre-commit hook independently of Claude Code. Temporarily disable the
 gate with `PALATE_GATE_OFF=1`.
 
 The skill's `allowed-tools` includes `mcp__palate`, giving it the `refs_*` tools
-(refs_for_business, refs_search, refs_get, refs_get_tokens, refs_get_astro_recipe,
-refs_get_screenshot, refs_insights, refs_match_brief, refs_similar,
-refs_list_verticals).
+(refs_for_business, refs_search (hybrid: facets + a lexical query string),
+refs_get (layer: concept|pages|tokens|signature_moves|do_dont|component_prompts|astro_recipe; format:"design" returns a DESIGN.md),
+refs_get_tokens, refs_get_astro_recipe, refs_get_screenshot, refs_insights,
+refs_match_brief, refs_similar, refs_list_verticals).
 
 ### Updating
 

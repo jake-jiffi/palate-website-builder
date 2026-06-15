@@ -32,22 +32,44 @@ The tool-chain, in the order a build uses it:
    service-area, reviews-integration). `format:"detailed"` adds tokens, sections
    and borrow guidance; `responseFormat:"md"` returns a token-lean list; `page`
    paginates the faceted path.
+   **Exploit hybrid retrieval:** search is now hybrid (dense meaning + lexical
+   exact-term, RRF-fused, quality-ranked and diversity-re-ranked). Name the exact
+   thing you want directly in `query` ALONGSIDE the facets - a font (`"Fraunces"`),
+   a library (`"GSAP"`, `"Lenis"`), a named move (`"preloader"`, `"marquee"`,
+   `"pinned hero"`, `"split-flap"`), or the literal business category
+   (`"optometry"`) - and it retrieves sites that use precisely that. Trust the top
+   few for craft (quality-ranked) and scan the spread for cross-vertical range (at
+   most two per cluster). The same lexical-anchor habit applies to
+   `refs_match_brief` and `refs_for_business`.
 3. **`refs_list_verticals {}`** - the taxonomy with counts and example slugs.
 4. **`refs_insights { topic: "trends" | "clusters" | "playbook" }`** -
    corpus-level patterns. Use `clusters` to pick a visual signature that is
    deliberately rare in the brief's vertical.
-5. **`refs_get { slug | slugs[], sections?, format }`** - the full record plus
-   note bodies. `sections` is any of `overview, structure, visualSystem,
-   components, motion, typography, layout, voice, astroRebuild, tokens` PLUS the
-   taste-teaching layer: `doDont` (the explicit do/don't rules that keep a build
-   faithful to this reference) and `componentPrompts` (paste-ready per-component
-   build prompts in the reference's own tokens). Pass `slugs[]` to read a whole
-   donor set (spine + grafts) in one call. The detailed record now also carries
-   `sections[]` - the homepage section sequence, each tagged with its uiElements,
-   uxPatterns, conversionPrimitives and (where present) the named signatureMove.
-6. **`refs_get_tokens { slug }`** - palette, type scale, radii, easings.
-   Reproduce the scale, radii and easings; substitute the client's hues into the
-   same roles. Re-skin the palette, never lift it.
+5. **`refs_get { slug | slugs[], layer?, format, sections? }`** - the full record
+   plus note bodies, asked for by **intent-named `layer`** (the documented path),
+   any of: `concept` (essence + voice), `pages` (page/section anatomy), `tokens`
+   (design tokens + type + layout), `signature_moves` (the distinctive moves +
+   motion), `do_dont` (the explicit do/don't rules that keep a build faithful),
+   `component_prompts` (paste-ready per-component build prompts in the reference's
+   own tokens), `astro_recipe` (the rebuild recipe). Defaults to `concept` +
+   `astro_recipe`. **`format:"design"`** returns a **DESIGN.md** - YAML token
+   front-matter (the exact fonts, palette, accent, canvas, craft score) plus a
+   Markdown body of the rationale and rules - the LLM-native way to ingest a
+   donor's tokens *with the WHY of each choice*, which is exactly what stops
+   generic re-skinning; prefer it over hand-parsing raw token JSON. Pass `slugs[]`
+   to read a whole donor set (spine + grafts) in one call. (Raw `sections:[...]`
+   still works as a power-user fallback for naming individual note sections;
+   `voice` has no named layer, so reach it via `sections:["voice"]`.) The detailed
+   record also carries `sections[]` - the homepage section sequence, each tagged
+   with its uiElements, uxPatterns, conversionPrimitives and the named signatureMove.
+6. **`refs_get { slug, format:"design" }`** (preferred) or **`refs_get_tokens
+   { slug }`** (lean fallback) - the donor's tokens. `format:"design"` returns a
+   DESIGN.md whose YAML front-matter carries the exact fonts / palette / accent /
+   canvas and whose Markdown body explains the WHY of each choice; reproduce that
+   rationale, not just the values. `refs_get_tokens` returns the raw palette / type
+   scale / radii / easings when you only need the numbers. Either way: reproduce
+   the scale, radii and easings; substitute the client's hues into the same roles.
+   Re-skin the palette, never lift it.
 7. **`refs_get_astro_recipe { slug }`** - the `astro-rebuild` recipe (islands,
    motion-on-Astro, packages, pitfalls). This is the file that makes a donor
    actionable on the Jiffi stack.
@@ -82,9 +104,11 @@ section), not an optional extra.
    This is the depth the library now carries: study how the best sites actually
    build THAT page, at the pixel, before you compose it.
 3. **Read its anatomy + discipline**:
-   `refs_get { slug, sections:["doDont","componentPrompts"] }`, plus the donor's
-   `sections[]` (the homepage section breakdown) and `pages[]` (its inner-page
-   sections, each with type + the named signatureMove).
+   `refs_get { slug, layer:"component_prompts" }` and `refs_get { slug, layer:"do_dont" }`,
+   plus the donor's `sections[]` (the homepage section breakdown) and `pages[]` (its
+   inner-page sections, each with type + the named signatureMove). `refs_get { slug,
+   layer:"pages" }` is the LLM-native read of a donor's inner-page anatomy when you
+   are not also pulling its screenshot.
 4. **Build the section** by reproducing the strongest donor's structure for that
    section, re-skinned to the client brand: start each component from its
    `componentPrompts`, keep its `sections[]`/`pages[]` rhythm, reproduce its named
@@ -95,9 +119,12 @@ section), not an optional extra.
 
 The point of the upgraded library is that you build a great pricing / booking /
 menu / services page from how the best sites build THAT page, not from a generic
-skeleton plus the client's colours. If a build only calls `refs_for_business` +
-`refs_get_screenshot` (home) + `refs_get_tokens`, it is leaving the section-level
-depth, the inner pages and the taste layer (`doDont` / `componentPrompts`) unused.
+skeleton plus the client's colours. A build that pulls one `format:"design"`
+DESIGN.md per donor but never opens `layer:"do_dont"`, `layer:"component_prompts"`
+or `layer:"signature_moves"`, and never views the inner-page screenshots, is
+leaving the taste layer and the section depth unused - the exact thing that stops
+output looking generic. The depth gate checks for those rich layers, not just call
+count.
 
 ## The organ-transplant method (structure wholesale, then graft two organs)
 
@@ -121,11 +148,11 @@ comes from.
 
 | Layer | Where it comes from | How to fetch it |
 |-------|---------------------|-----------------|
-| **Spine** - structure, section rhythm, conversion | a flagship in the brief's own vertical | `refs_match_brief` -> `refs_get sections:[structure,components]` on the top anchor |
-| **Motion language** - the "full motion" feel | a donor from a motion-rich cluster the vertical rarely uses (creative-studio, agency) | `refs_search { hasWebgl:true }` or `{ cluster:... }` -> `refs_get_astro_recipe` |
-| **Typographic voice** - designed, not catalogued | a bespoke-type flagship (fashion / editorial) | `refs_search { serifPresent:true }` or `{ cluster:"bespoke-variable-font-flagship" }` -> `refs_get_tokens` |
+| **Spine** - structure, section rhythm, conversion | a flagship in the brief's own vertical | `refs_match_brief` -> `refs_get { slug, layer:"signature_moves" }` (the move) + `layer:"pages"` (structure) on the top anchor |
+| **Motion language** - the "full motion" feel | a donor from a motion-rich cluster the vertical rarely uses (creative-studio, agency) | `refs_search { hasWebgl:true }` or `{ query:"GSAP pinned scroll" }` -> `refs_get { slug, layer:"signature_moves" }` + `refs_get_astro_recipe` |
+| **Typographic voice** - designed, not catalogued | a bespoke-type flagship (fashion / editorial) | `refs_search { serifPresent:true, query:"<the font>" }` or `{ cluster:"bespoke-variable-font-flagship" }` -> `refs_get { slug, format:"design" }` |
 | **Canvas / colour** - stand out on the shelf | a `canvasFamily` that is rare in the brief's vertical | `refs_search { vertical:..., canvasFamily:... }` to confirm rarity |
-| **Component patterns** | only patterns that actually exist across the refs | `refs_get sections:[components]` on two or three donors |
+| **Component patterns** | only patterns that actually exist across the refs | `refs_get { slug, layer:"component_prompts" }` on two or three donors |
 
 Rules for the transplant:
 
@@ -147,23 +174,28 @@ Rules for the transplant:
 
 For each chosen donor, call in this order and use it for its assigned layer:
 
-1. `refs_get sections:[overview]` - decide what this donor is FOR on this build.
+1. `refs_get { slug, layer:"concept" }` - decide what this donor is FOR on this
+   build: its essence, demonstrative device and emotional register. For the spine
+   donor this names the mechanic to re-skin and enact.
 2. `refs_get_screenshot` - VIEW it. Design from the pixels: read the actual
    composition (weight, asymmetry, negative space, the signature move) before the
    prose. Required for the spine donor.
-3. `refs_get sections:[structure,visualSystem]` - rhythm and hierarchy (spine
-   donor); reproduce them, re-skinned.
-4. `refs_get_tokens` - reproduce scale, type and spacing; substitute the client's
-   hues into the same roles.
-5. `refs_get sections:[motion]` + `refs_get_astro_recipe` - motion intensity and
-   the concrete recipe for interactions you implement (motion donor); reproduce
-   the easings and choreography.
-6. `refs_get sections:[components]` - component anatomy and states.
-7. `refs_get sections:[voice]` - calibrate tone only, never copy phrasing.
-8. `refs_get sections:[doDont,componentPrompts]` (spine donor) - the do/don't
-   discipline to hold the build to, and paste-ready component prompts to start
-   from, both in the donor's own tokens. Re-skin, then check the composed page
-   against `doDont` before emitting.
+3. `refs_get { slug, layer:"signature_moves" }` - the distinctive compositional
+   moves + motion (spine donor): name and locate the move in the code, re-skinned.
+4. `refs_get { slug, format:"design" }` - the DESIGN.md: reproduce the exact type
+   scale, spacing and easings AND the rationale (the WHY of each token);
+   substitute the client's hues into the same roles. (`refs_get_tokens` for raw
+   values only.)
+5. `refs_get { slug, layer:"signature_moves" }` + `refs_get_astro_recipe` - motion
+   intensity and the concrete recipe for the interactions you implement (motion
+   donor); reproduce the easings and choreography.
+6. `refs_get { slug, layer:"component_prompts" }` - component anatomy, states, and
+   the paste-ready per-component prompts in the donor's own tokens.
+7. `refs_get { slug, sections:["voice"] }` - calibrate tone only, never copy
+   phrasing. (`voice` has no named layer; use the raw `sections` fallback.)
+8. `refs_get { slug, layer:"do_dont" }` (spine donor) - the do/don't discipline to
+   hold the build to. Re-skin, then check the composed page against it before
+   emitting.
 
 `astro-rebuild` (via `refs_get_astro_recipe`) and the motion specs are what make
 a donor buildable on the Jiffi stack - use them, do not just read the prose.

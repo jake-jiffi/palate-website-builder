@@ -112,6 +112,13 @@ remote-fetched), and Jiffi's house-style (no em dashes, Australian English).
 
 ## AI-tell phrases (anti-slop-ui curated subset)
 
+The lint rules below are the mechanical floor: a fixed list of the highest-signal
+tells, caught deterministically so they never ship. They are not the full copy
+pass. For that, run the `humanizer` skill over the copy: it sweeps 40+ patterns
+(rhythm, hedging, structure, the puffery the regex cannot see) that no fixed
+pattern list catches. Lint first to clear the obvious tells, then humanise for the
+full sweep.
+
 ### Rule: ai-tell-leverage
 - Severity: Critical
 - Mode: always
@@ -189,6 +196,41 @@ remote-fetched), and Jiffi's house-style (no em dashes, Australian English).
 - Pattern: `(?i)cutting[- ]edge`
 - Fix: Decade-old startup filler. Describe the actual newness, dated.
 
+### Rule: ai-tell-delve
+- Severity: High
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\bdelve\b`
+- Fix: The signature LLM verb. Say "look at", "dig into", or just make the point directly.
+
+### Rule: ai-tell-in-the-realm-of
+- Severity: High
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)in the realm of`
+- Fix: Throat-clearing that adds nothing. Name the field plainly ("in payments", "for restaurants") or drop the phrase.
+
+### Rule: ai-tell-its-worth-noting
+- Severity: High
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)it'?s worth noting`
+- Fix: Filler hedge. If it is worth saying, just say it; if it is not, cut it.
+
+### Rule: ai-tell-underscore
+- Severity: High
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\bunderscore(s|d)?\b(?! ?_)`
+- Fix: "Underscores the importance of" is LLM emphasis filler. Say "shows", "proves", or state the point. (The negative look-ahead skips the literal `_` character used in code and identifiers.)
+
+### Rule: ai-tell-testament-to
+- Severity: High
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)testament to`
+- Fix: "A testament to" is empty praise. Give the concrete evidence instead (the number, the outcome, the named result).
+
 ---
 
 ## Code-level rules (Vercel web-interface-guidelines, copied in)
@@ -251,7 +293,7 @@ remote-fetched), and Jiffi's house-style (no em dashes, Australian English).
 - Mode: compose-time
 - Files: src/pages/index.astro
 - Pattern: `(?s)class="[^"]*text-center[^"]*"[^>]*>\s*<h1[^>]*>.*?</h1>\s*<p[^>]*>.*?</p>\s*<(a|button)[^>]*>.*?</(a|button)>\s*</(section|div)>`
-- Fix: A centred H1 + sub + single button as the entire hero is the AI default. Add a real visual element (a product still, a chart, a quote, an asymmetric image), or build the hero off-centre, or commit to a maximalist text-only treatment with extreme type.
+- Fix: A centred H1 + sub + single button as the entire hero is the AI default. Add a real visual element (a product still, a chart, a quote, an asymmetric image), or build the hero off-centre, or commit to a maximalist text-only treatment with extreme type. Note: this regex is only a backstop - it catches the one literal shape, and a generic hero can dodge it a dozen ways. The real judgement is the interpretive audit (dimension 11 / critique habit 5), which reads the composition against the donor and asks whether it actually earns its layout, not whether it matched a pattern.
 
 ### Rule: emoji-as-icon
 - Severity: Medium

@@ -79,6 +79,13 @@ Replace each with a specific observation:
 The ban applies to Claude's narration, not to the client's brief or to the
 brand's voice document. Naming things specifically is the discipline.
 
+The specific numbers that replace a banned word must come from a real token, not
+be invented to sound precise: read them off the brand package or off the donor's
+`refs_get { slug, layer:"tokens" }` (or `refs_get { slug, format:"design" }`)
+output. A specific-sounding claim ("96px display at -0.03em") that does not trace
+back to a token in the brand package or the donor's design tokens is itself a
+finding - precise-but-fabricated is worse than vague.
+
 Source: taste-skills (Dragoon0x) `skills/perception/visual-audit/SKILL.md`.
 
 ## 5. The anti-default detector - reject the Claude-default shape
@@ -106,8 +113,12 @@ The default tells (a cluster of these is the smell):
 The positive test that clears it: name the signature move this page reproduces
 from the lead reference, and point to where it lives ("the donor's full-bleed
 pinned hero stage, reproduced at `index.astro` lines 12-40, re-skinned to the
-brand"). If you cannot name and locate one, the page is default-shaped - redo it
-with the lead reference's craft reproduced faithfully (see
+brand"). Derive the candidate move from `refs_get { slug, layer:"signature_moves" }`
+on the lead donor and quote the move's name verbatim, do not paraphrase it into a
+generic label. Hybrid search lets you confirm a move actually exists before you
+claim it: search its lexical term (e.g. `refs_search { query:"split-flap" }`) and
+trust the exact-term match. If you cannot name and locate one, the page is
+default-shaped - redo it with the lead reference's craft reproduced faithfully (see
 `references/reference-library-usage.md`, the two-layer doctrine).
 
 Source: the palate two-layer doctrine (reproduce the craft, protect

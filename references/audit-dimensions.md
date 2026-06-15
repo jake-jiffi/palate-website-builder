@@ -23,13 +23,17 @@ the same weight.
 
 Is vertical spacing on a documented scale (8 / 12 / 16 / 24 / 32 / 48 / 80),
 or has it been freelanced per section? Are section padding choices consistent
-within a page (e.g. all `py-20` or all `py-24`, not a mix)?
+within a page (e.g. all `py-20` or all `py-24`, not a mix)? Compare against the
+donor's documented scale from `refs_get { slug, layer:"tokens" }` (or
+`format:"design"`), not just internal consistency.
 
 ### 3. Typography pairing
 
 Is there a clear display / body distinction at scale, weight, or family?
 Are there fewer than three font sizes per section? Is line-length between
-50 and 80 characters for body text?
+50 and 80 characters for body text? Compare against the donor's documented
+type scale from `refs_get { slug, layer:"tokens" }` (or `format:"design"`), not
+just internal consistency.
 
 ### 4. Empty states
 
@@ -87,10 +91,18 @@ default standing in for it? This is the positive counterpart to the anti-default
 detector in `critique-discipline.md`: the audit fails not just for being slop,
 but for being generic where a reference should have been reproduced.
 
+Before the pass, re-pull the lead donor's tokens: `refs_get { slug, layer:"tokens" }`
+(or `format:"design"` for the DESIGN.md with the rationale) plus
+`refs_get_screenshot`, and compare the built page's type scale, easings and spacing
+rhythm against the donor's documented numbers, not your memory of them. Auditing
+from memory is itself a finding: if the pass did not re-pull the donor, say so.
+
 Check against structured data, not memory: the donor's `sections[]` name the move
-per section (`signatureMove`), and `refs_get sections:["doDont"]` lists the rules
-the page must honour. Name the move, locate it in the code, and confirm the page
-does not break the donor's `doDont`.
+per section (`signatureMove`); read the move via `refs_get { slug,
+layer:"signature_moves" }` and the rules via `refs_get { slug, layer:"do_dont" }`.
+`format:"design"` returns a DESIGN.md the reviewer can diff the built page against.
+Name the move, locate it in the code, and confirm the page does not break the
+donor's `do_dont`.
 
 A page that is **default-shaped with no reproduced signature move** is a Critical
 finding (it is the exact failure this skill exists to beat). A page that uses

@@ -50,9 +50,7 @@
           "bright-dental"
         ],
         "layer": [
-          "do_dont",
-          "component_prompts",
-          "signature_moves"
+          "pages"
         ]
       },
       "slugs": [

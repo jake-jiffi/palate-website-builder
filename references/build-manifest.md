@@ -31,6 +31,9 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   the agent/surveyor to record intent; the depth gate cross-checks them against the
   telemetry (e.g. a declared signature move's `source_slug` must appear in
   `references_surveyed`).
+- Note: the manifest `sections` field is the section -> donor provenance map (which
+  donor each section came from). It is UNRELATED to the `refs_get` `layer` arg, which
+  is the renamed retrieval selector (concept / pages / tokens / signature_moves / ...).
 
 ## What reads it
 
