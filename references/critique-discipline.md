@@ -134,6 +134,14 @@ The default tells (a cluster of these is the smell):
   no pinned stage, no repeated-identical-section rhythm.
 - Tailwind default spacing and the default blue / slate palette doing the work
   instead of the brand.
+- The CATEGORY-default palette: the colour scheme every site in this vertical
+  already reaches for (dark-teal + orange for a coffee roaster, forest-green for a
+  dental / wellness clinic, navy for finance). It is a default even when executed
+  well. Ground the palette in a CROSS-vertical donor so it is not the genre cliche.
+- A three-card "shop / services / pricing" row the page falls back to even when the
+  hero is distinctive - the most template-shaped section there is. Carry the page's
+  OWN signature motif into it (the numbered index, the editorial list, the donor's
+  real component) instead of three equal cards.
 - NO named, located signature move reproduced from the lead reference.
 
 The positive test that clears it: name the signature move this page reproduces
