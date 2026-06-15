@@ -28,10 +28,19 @@ happen after the pick + a confirm pause. PREVIEW stops there.
 - [ ] `src/lib/variants.ts` lists every generated variant - the switcher
       reads it, so the count on the page matches.
 - [ ] The variants are genuinely different - **no two share the same hero
-      pattern, the same section sequence, or the same density level**. At
-      least one pulls from the reference library via the MCP (`refs_search` /
-      `refs_get` invoked) and at least one is an invented approach not tied to
-      any reference.
+      pattern, the same section sequence, or the same density level**. They
+      span the concept-ambition spectrum: roughly 3 safe-warm, roughly 3 bold,
+      and roughly 2 one-of-a-kind, and **every one is MCP-grounded** (the
+      "invented" end means a surprising mechanic, not an approach untied to any
+      reference).
+- [ ] EVERY variant names a real donor slug studied via the MCP. The bold and
+      one-of-a-kind variants fetched an inner-page screenshot
+      (`refs_get_screenshot { slug, page }`). The spine donor (the one
+      supplying the hero) was read via `refs_get { layer:"signature_moves" }`
+      AND `refs_get { layer:"do_dont" }` (bonus: `format:"design"` for the
+      DESIGN.md). Each variant's Design Read names a located signatureMove, and
+      the donor search used a lexical/category anchor relevant to the brief
+      (an exact font, move, or vertical), not a vague keyword.
 - [ ] Token variation is real - type scale, density, accent treatment differ
       between variants within the brand's permitted range. They do not invent
       off-brand colours.
