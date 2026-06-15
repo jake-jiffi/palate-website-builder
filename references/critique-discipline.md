@@ -46,6 +46,32 @@ client, for the next reviewer.
 
 Source: adapted from the Hallmark `references/slop-test.md` rubric.
 
+### 2b. The visual rubric gate (judge the RENDER, then loop)
+
+The 6-axis critique is not only a thought experiment over the proposed composition,
+it is a hard gate applied to the **rendered page**, because a build looks different
+than it reads in code. After Compose (and for each Explore variant before it is
+shown), RENDER and SCREENSHOT the page, then score the screenshot on the six axes:
+
+1. Take a real screenshot of the built page, desktop **and** mobile (the preview
+   deploy, `scripts/serve-preview.sh`, or a headless shot of the route). View the
+   pixels, do not score from the code or from memory.
+2. Score all six axes 1 to 5 against what you SEE. Apply the perceptual floors
+   (`references/brand/perceptual-floors.md`) at the same time: body-on-dark contrast,
+   44px tap targets, the type scale, the motion floor.
+3. **Gate (the standard we hold to): every axis must be >=4, no axis below 3, no
+   floor violation, and no unresolved placeholder imagery.** Any axis at 3 or below,
+   any floor violation, or a section that still reads as a wireframe -> it has NOT
+   passed. Name the specific failing section, revise it, re-render, and re-score.
+   **Loop until it passes; a build is not done until its render clears the rubric.**
+4. The most common real failures the render exposes (fix, do not excuse): placeholder
+   or empty imagery on a launch-bar site, a hero that plays safer than the body, dead
+   space where a section trails off, a section that reads as assembled (a generic
+   card grid) next to designed ones, and motion that is claimed but invisible.
+
+This is the same rubric as 2.; the difference is it judges the artefact a client
+will actually see, and it repeats until the artefact is genuinely good.
+
 ## 3. The Conceptual Grounding Test
 
 Every section, every component, every image must finish the sentence:
