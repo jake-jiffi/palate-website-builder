@@ -177,6 +177,29 @@ fails this gate. This is the gate that catches "refined but underwhelming". See
 
 Source: the Jiffi Story Engine.
 
+## 7. Recurring finish failures (lift the Execution / Restraint 4 to a 5)
+
+These are the three that the visual rubric gate (2b) flags most often on otherwise-
+strong builds: the difference between a 4 and a 5 on Execution and Restraint. Pre-empt
+them at Compose, do not wait for the gate.
+
+- **CTA-verb sprawl.** Three near-synonymous primary actions competing ("Book a
+  call-out" + "Get a fixed quote" + a per-row "Quote this" + a sticky "Get a quote")
+  reads as nagging and dilutes the accent. Pick ONE primary verb, let the secondary
+  actions inherit it (or demote them to plain-text targets), and keep the accent scarce.
+- **Loose baseline grid in editorial / numbered rows.** A numbered index or service
+  ledger (the move that replaces three cards) only reads as crafted if the number, the
+  title baseline, the description column and the right-hand price/action share ONE
+  baseline grid with consistent row padding and rule-line lengths. "Close enough"
+  alignment here is exactly the close-enough default the rubric penalises.
+- **Small-text contrast on tinted / dark / photo surfaces.** Eyebrows, captions,
+  muted labels and over-photo suburb lists routinely sit below 4.5:1 on a dark band,
+  a persimmon-on-cream link, or the lighter regions of a hero image. Check every small
+  label against its actual background; add a scrim or bump weight/opacity. This is a
+  perceptual-floor failure, not a nicety.
+
+Source: distilled from the capstone validation heal lists (coffee / dental / trades).
+
 ---
 
 ## Where these apply
