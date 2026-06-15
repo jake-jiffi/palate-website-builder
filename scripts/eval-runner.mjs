@@ -79,9 +79,17 @@ function outputPlane() {
   const slop = [];
   for (const f of variants) {
     if (!existsSync(f)) continue;
-    const html = readFileSync(f, "utf8");
+    const raw = readFileSync(f, "utf8");
+    // Scan VISIBLE copy only: strip script/style blocks and HTML comments, then tags,
+    // so an AI-tell word in a code comment ("Robust:") is not a false positive.
+    const html = raw
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<[^>]+>/g, " ");
     if (AI_TELLS.test(html)) slop.push(`${f.split("/").pop()}: AI-tell copy`);
-    if (/linear-gradient\([^)]*\)[^;]*;[\s\S]{0,400}<h1/i.test(html) && /#[0-9a-f]{6}[\s\S]{0,40}purple|#8b5cf6|#a855f7/i.test(html)) slop.push(`${f.split("/").pop()}: gradient hero`);
+    // gradient-hero needs the raw CSS + markup (a purple/pink gradient near an h1).
+    if (/linear-gradient\([^)]*\)[^;]*;[\s\S]{0,400}<h1/i.test(raw) && /purple|#8b5cf6|#a855f7|#d946ef|#ec4899/i.test(raw)) slop.push(`${f.split("/").pop()}: purple-pink gradient hero`);
   }
   if (slop.length) reasons.push(...slop.map((s) => "output: " + s));
   return {
