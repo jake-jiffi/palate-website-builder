@@ -29,13 +29,13 @@ hooks). In Claude Code, run these as two separate commands (slash commands run o
 ```
 /plugin install palate-website-builder@palate
 ```
-Then connect the Palate MCP with one command (create a token at https://app.palatemcp.com):
+Then connect the Palate MCP. Easiest is to sign in with your browser, no token:
 ```bash
-claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp --header "Authorization: Bearer plt_live_..."
+claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp
 ```
-No environment variables: `claude mcp add` stores the token in your Claude Code config, so it works
-the same in the terminal, the IDE extensions, and the desktop app. Full steps, updating, and the
-legacy/manual path: see `INSTALL.md`.
+Claude Code opens your browser to sign in and click Allow. Prefer a token (CI, or no browser)? Create
+one at https://app.palatemcp.com and add `--header "Authorization: Bearer plt_live_..."`. Full steps,
+updating, and the legacy/manual path: see `INSTALL.md`.
 
 ## Layout
 

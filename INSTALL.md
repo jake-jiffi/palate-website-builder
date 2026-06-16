@@ -16,18 +16,19 @@ Two short steps, no environment variables to manage.
    ```
    /plugin install palate-website-builder@palate
    ```
-2. Get a Palate API token at https://app.palatemcp.com (Tokens -> Create; copy the `plt_live_...`).
-3. Connect the Palate MCP, with your token baked in (run in your terminal):
+2. Connect the Palate MCP. Easiest is to **sign in with your browser, no token**:
    ```bash
-   claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp \
-     --header "Authorization: Bearer plt_live_xxx"
+   claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp
    ```
-4. Confirm: run `/mcp` (the `palate` server shows connected), or ask Claude to call `refs_list_verticals`.
+   Claude Code opens your browser to sign in to Palate and click **Allow** (or run `/mcp` and choose
+   Authenticate). Prefer a token instead (CI, or no browser)? Get one at https://app.palatemcp.com and
+   add `--header "Authorization: Bearer plt_live_xxx"` to that command.
+3. Confirm: run `/mcp` (the `palate` server shows connected), or ask Claude to call `refs_list_verticals`.
 
-The Palate dashboard hands you all three blocks with your real token already filled in, so it is
-pure copy-paste, no environment variables to wrangle. `claude mcp add` stores the token in your
-Claude Code config, so it works the same from the terminal, the VS Code / JetBrains extension, and
-the desktop app. `brew install jq` once (the gate needs it) - see "One-time machine setup" below.
+Most Claude Code users need no token at all — the browser sign-in handles it, and works the same in
+the terminal, the VS Code / JetBrains extension, and the desktop app. If you do use a token,
+`claude mcp add` stores it in your Claude Code config (no environment variables). `brew install jq`
+once (the gate needs it) - see "One-time machine setup" below.
 
 ## The two modes
 
