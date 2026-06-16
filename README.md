@@ -23,8 +23,11 @@ A website build can trigger a brand build in-process (Phase 0, when the client h
 
 Palate is a Claude Code plugin (it bundles the skill, the agents, the MCP-depth enforcement hooks,
 and the Palate MCP connector). In Claude Code:
+Run these as two separate commands (slash commands run one at a time):
 ```
 /plugin marketplace add jake-jiffi/palate-marketplace
+```
+```
 /plugin install palate-website-builder@palate
 ```
 Then set your token: `export PALATE_MCP_TOKEN=plt_live_...` (create one at https://app.palatemcp.com).

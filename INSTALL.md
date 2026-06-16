@@ -7,9 +7,12 @@ One skill, two modes. It builds production-grade Astro websites grounded by the 
 Palate ships as a Claude Code plugin that bundles the skill, the survey/verify agents, the
 MCP-depth enforcement hooks, and the Palate MCP connector, so one install wires up everything.
 
-1. In Claude Code, add the marketplace and install the plugin:
+1. In Claude Code, add the marketplace then install the plugin, as two separate commands
+   (slash commands run one at a time, so enter the first, wait, then the second):
    ```
    /plugin marketplace add jake-jiffi/palate-marketplace
+   ```
+   ```
    /plugin install palate-website-builder@palate
    ```
 2. Get a Palate API token at https://app.palatemcp.com (Tokens -> Create; copy the `plt_live_...`).
