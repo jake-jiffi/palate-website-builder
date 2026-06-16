@@ -67,7 +67,9 @@ shown), RENDER and SCREENSHOT the page, then score the screenshot on the six axe
 4. The most common real failures the render exposes (fix, do not excuse): placeholder
    or empty imagery on a launch-bar site, a hero that plays safer than the body, dead
    space where a section trails off, a section that reads as assembled (a generic
-   card grid) next to designed ones, and motion that is claimed but invisible.
+   card grid) next to designed ones, motion that is claimed but invisible, and a dark
+   or photo-led hero that reads on desktop but drops below the contrast floor on mobile
+   (see section 7).
 
 This is the same rubric as 2.; the difference is it judges the artefact a client
 will actually see, and it repeats until the artefact is genuinely good.
@@ -197,8 +199,22 @@ them at Compose, do not wait for the gate.
   a persimmon-on-cream link, or the lighter regions of a hero image. Check every small
   label against its actual background; add a scrim or bump weight/opacity. This is a
   perceptual-floor failure, not a nicety.
+- **Dark / immersive hero text on MOBILE.** A dark or photo-led hero that reads cleanly
+  on desktop is the single most common thing that fails at 390px: the mobile stack pushes
+  the eyebrow, the headline and the intro paragraph across the BRIGHTEST part of the hero
+  photo (fur, sky, water highlights), or onto a gradient that is dark at the foot but light
+  at the top, exactly where the desktop layout had kept that text in a dark zone. So judge
+  the hero on the MOBILE screenshot, not only the desktop one; any hero text over a photo or
+  a dark gradient needs a mobile-scoped scrim that pulls the background luminance under EVERY
+  line (the eyebrow included) below ~70, clearing 4.5:1. Related: do not leave desktop HUD
+  chrome (a floating location label, a live clock, a marquee edge) in the mobile top bar,
+  it collides with the wordmark and the CTA, hide it at the mobile breakpoint and leave the
+  wordmark plus one CTA.
 
-Source: distilled from the capstone validation heal lists (coffee / dental / trades).
+Source: distilled from the capstone validation heal lists (coffee / dental / trades) and
+the S2 eval-runs slice (physio / accountant / hair-salon / pilates / real-estate / vet),
+where every variant that needed more than two heal rounds failed on the dark/immersive
+mobile hero, never on desktop.
 
 ---
 
