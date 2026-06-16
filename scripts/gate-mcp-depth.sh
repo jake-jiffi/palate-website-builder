@@ -8,13 +8,16 @@
 #
 # Exit 0 = pass, 2 = block (with a specific, actionable reason on stderr).
 #
-# Thresholds are overridable via env so thin verticals can be loosened later
-# (ties to G1): PALATE_MIN_REFS, PALATE_MIN_INNER, PALATE_MIN_TOOLS.
+# Thresholds are overridable via env. These DEFAULTS are the gentle public-plugin
+# bar (enough to guarantee a build actually drew on the library, without blocking a
+# quick site). For agency-strict builds raise them: PALATE_MIN_REFS=8 PALATE_MIN_INNER=3
+# (the internal Jiffi config). PALATE_GATE_OFF=1 disables the gate entirely.
+# Overridable: PALATE_MIN_REFS, PALATE_MIN_INNER, PALATE_MIN_TOOLS, PALATE_MIN_RICH_LAYER.
 set -euo pipefail
 
 MANIFEST="${1:-build-manifest.json}"
-MIN_REFS="${PALATE_MIN_REFS:-8}"
-MIN_INNER="${PALATE_MIN_INNER:-3}"
+MIN_REFS="${PALATE_MIN_REFS:-5}"
+MIN_INNER="${PALATE_MIN_INNER:-2}"
 MIN_TOOLS="${PALATE_MIN_TOOLS:-3}"
 MIN_RICH="${PALATE_MIN_RICH_LAYER:-1}"
 

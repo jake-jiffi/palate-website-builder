@@ -21,14 +21,14 @@ A website build can trigger a brand build in-process (Phase 0, when the client h
 
 ## Install
 
-```bash
-npx skills add -y https://github.com/jake-jiffi/palate-website-builder
+Palate is a Claude Code plugin (it bundles the skill, the agents, the MCP-depth enforcement hooks,
+and the Palate MCP connector). In Claude Code:
 ```
-
-Or drop the folder into your skills directory:
+/plugin marketplace add jake-jiffi/palate-marketplace
+/plugin install palate-website-builder@palate
 ```
-cp -r palate-website-builder ~/.claude/skills/
-```
+Then set your token: `export PALATE_MCP_TOKEN=plt_live_...` (create one at https://app.palatemcp.com).
+Full steps, updating, and the legacy/manual path: see `INSTALL.md`.
 
 ## Layout
 
@@ -43,4 +43,4 @@ cp -r palate-website-builder ~/.claude/skills/
 
 ## The Palate MCP
 
-The skill reads the reference library through the Palate MCP (`palate` connector, `refs_*` tools). Set up the MCP connector to connect to `mcp.palatemcp.com` with your Palate API token.
+The skill reads the reference library through the Palate MCP (`palate` connector, `refs_*` tools) at `https://mcp.palatemcp.com/api/mcp` (http transport), authenticated with your `plt_live_...` token via `PALATE_MCP_TOKEN`. The plugin's bundled `.mcp.json` wires this up for you.
