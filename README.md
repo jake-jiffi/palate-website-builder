@@ -21,17 +21,21 @@ A website build can trigger a brand build in-process (Phase 0, when the client h
 
 ## Install
 
-Palate is a Claude Code plugin (it bundles the skill, the agents, the MCP-depth enforcement hooks,
-and the Palate MCP connector). In Claude Code:
-Run these as two separate commands (slash commands run one at a time):
+Palate is a Claude Code plugin (it bundles the skill, the agents, and the MCP-depth enforcement
+hooks). In Claude Code, run these as two separate commands (slash commands run one at a time):
 ```
 /plugin marketplace add jake-jiffi/palate-marketplace
 ```
 ```
 /plugin install palate-website-builder@palate
 ```
-Then set your token: `export PALATE_MCP_TOKEN=plt_live_...` (create one at https://app.palatemcp.com).
-Full steps, updating, and the legacy/manual path: see `INSTALL.md`.
+Then connect the Palate MCP with one command (create a token at https://app.palatemcp.com):
+```bash
+claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp --header "Authorization: Bearer plt_live_..."
+```
+No environment variables: `claude mcp add` stores the token in your Claude Code config, so it works
+the same in the terminal, the IDE extensions, and the desktop app. Full steps, updating, and the
+legacy/manual path: see `INSTALL.md`.
 
 ## Layout
 
@@ -46,4 +50,4 @@ Full steps, updating, and the legacy/manual path: see `INSTALL.md`.
 
 ## The Palate MCP
 
-The skill reads the reference library through the Palate MCP (`palate` connector, `refs_*` tools) at `https://mcp.palatemcp.com/api/mcp` (http transport), authenticated with your `plt_live_...` token via `PALATE_MCP_TOKEN`. The plugin's bundled `.mcp.json` wires this up for you.
+The skill reads the reference library through the Palate MCP (`palate` connector, `refs_*` tools) at `https://mcp.palatemcp.com/api/mcp` (http transport), authenticated with your `plt_live_...` token. You add the connector once with `claude mcp add` (see Install); the token is baked into your Claude Code config, so there is no env var to manage and the tools resolve as `mcp__palate__*` for the skill and the depth gate.

@@ -4,8 +4,9 @@ One skill, two modes. It builds production-grade Astro websites grounded by the 
 
 ## Install (the Claude Code plugin)
 
-Palate ships as a Claude Code plugin that bundles the skill, the survey/verify agents, the
-MCP-depth enforcement hooks, and the Palate MCP connector, so one install wires up everything.
+Palate ships as a Claude Code plugin that bundles the skill, the survey/verify agents, and the
+MCP-depth enforcement hooks. You install the plugin, then connect the Palate MCP with one command.
+Two short steps, no environment variables to manage.
 
 1. In Claude Code, add the marketplace then install the plugin, as two separate commands
    (slash commands run one at a time, so enter the first, wait, then the second):
@@ -16,14 +17,17 @@ MCP-depth enforcement hooks, and the Palate MCP connector, so one install wires 
    /plugin install palate-website-builder@palate
    ```
 2. Get a Palate API token at https://app.palatemcp.com (Tokens -> Create; copy the `plt_live_...`).
-3. Set it so the bundled MCP connector can read it, then restart Claude Code:
+3. Connect the Palate MCP, with your token baked in (run in your terminal):
    ```bash
-   echo 'export PALATE_MCP_TOKEN=plt_live_xxx' >> ~/.zshrc && source ~/.zshrc
+   claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp \
+     --header "Authorization: Bearer plt_live_xxx"
    ```
 4. Confirm: run `/mcp` (the `palate` server shows connected), or ask Claude to call `refs_list_verticals`.
 
-The Palate dashboard hands you both blocks with your real token already filled in, so it is pure
-copy-paste. `brew install jq` once (the gate needs it) - see "One-time machine setup" below.
+The Palate dashboard hands you all three blocks with your real token already filled in, so it is
+pure copy-paste, no environment variables to wrangle. `claude mcp add` stores the token in your
+Claude Code config, so it works the same from the terminal, the VS Code / JetBrains extension, and
+the desktop app. `brew install jq` once (the gate needs it) - see "One-time machine setup" below.
 
 ## The two modes
 
@@ -39,7 +43,8 @@ A website build calls the brand build in-process when the client has no brand pa
   refs_search (hybrid: facets + a lexical query string), refs_get (layer:
   concept|pages|tokens|signature_moves|do_dont|component_prompts|astro_recipe; format:"design"
   returns a DESIGN.md), refs_get_tokens, refs_get_astro_recipe, refs_get_screenshot, refs_insights,
-  refs_match_brief, refs_similar, refs_list_verticals). Token via `PALATE_MCP_TOKEN`.
+  refs_match_brief, refs_similar, refs_list_verticals). Added once with `claude mcp add` (your token
+  is baked into your Claude Code config, no env var).
 - Three **enforcement hooks** (`hooks/hooks.json`) that make a build actually use the library:
   - **PreToolUse** blocks writing source files until you have surveyed the library.
   - **Stop** blocks finishing until the build reached real MCP depth.
@@ -60,9 +65,9 @@ Picks up the new plugin version (or enable per-marketplace auto-update). No re-r
 
 ```
 /plugin uninstall palate-website-builder@palate
+claude mcp remove palate
 ```
-Your cross-build memory at `~/.config/palate/builds.log.json` is left in place; remove the
-`PALATE_MCP_TOKEN` export from your shell profile to drop the connector too.
+Your cross-build memory at `~/.config/palate/builds.log.json` is left in place.
 
 ### Other MCP clients (Cursor / Windsurf / Claude Desktop)
 
