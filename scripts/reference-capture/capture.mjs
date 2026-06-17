@@ -51,10 +51,16 @@ const VIEWPORTS = {
   tablet:  { width: 834,  height: 1112 },
   desktop: { width: 1440, height: 900  },
 };
+// The Chromium sandbox stays ON by default: this engine navigates to arbitrary
+// external URLs, so disabling it is a real risk. Set PALATE_CAPTURE_NO_SANDBOX=1
+// only in a contained environment that cannot run the sandbox (e.g. some CI),
+// never against untrusted input on a workstation.
+const LAUNCH_ARGS = ['--disable-gpu', '--disable-dev-shm-usage', '--disable-software-rasterizer'];
+if (process.env.PALATE_CAPTURE_NO_SANDBOX === '1') LAUNCH_ARGS.unshift('--no-sandbox');
 const LAUNCH = {
   headless: true,
   channel: 'chromium', // the full Chromium build; the headless_shell segfaults in-sandbox
-  args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-software-rasterizer'],
+  args: LAUNCH_ARGS,
 };
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
            '(KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -86,8 +92,29 @@ function parseArgs(argv) {
     process.exit(2);
   }
   if (!/^https?:\/\//.test(a.url)) a.url = 'https://' + a.url;
+  if (isInternalTarget(a.url)) {
+    console.error('refusing to capture an internal / link-local / private target:', a.url);
+    process.exit(2);
+  }
   if (!['desktop', 'responsive', 'full'].includes(a.phase)) a.phase = 'desktop';
   return a;
+}
+
+// Block obvious SSRF-style targets (localhost, link-local, cloud metadata,
+// RFC1918) before any navigation. Hostname-based: a best-effort guard against
+// the easy cases, not a substitute for network isolation.
+function isInternalTarget(url) {
+  let host;
+  try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === '169.254.169.254' || host.startsWith('169.254.')) return true; // link-local + metadata
+  if (host === '0.0.0.0' || host === '::1' || host === '[::1]') return true;
+  if (host.startsWith('127.')) return true;                                    // loopback
+  if (host.startsWith('10.')) return true;                                     // RFC1918
+  if (host.startsWith('192.168.')) return true;                                // RFC1918
+  const m = host.match(/^172\.(\d{1,3})\./);                                   // RFC1918 172.16-31
+  if (m && Number(m[1]) >= 16 && Number(m[1]) <= 31) return true;
+  return false;
 }
 const log = (...m) => console.log('[capture]', ...m);
 const isUnreachable = msg => /ERR_NAME_NOT_RESOLVED|ERR_CONNECTION|ERR_ADDRESS|ERR_INTERNET|ERR_ABORTED|ERR_SOCKET/i.test(msg);

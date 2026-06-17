@@ -62,7 +62,7 @@ for (const ev of ["PreToolUse", "PostToolUse", "Stop"]) {
 
 if (action === "install") {
   for (const [ev, matcher, base] of ENTRIES) {
-    const cmd = `node ${path.join(hooksDir, base)}`;
+    const cmd = `node "${path.join(hooksDir, base)}"`;
     const entry =
       matcher == null
         ? { hooks: [{ type: "command", command: cmd }] }
