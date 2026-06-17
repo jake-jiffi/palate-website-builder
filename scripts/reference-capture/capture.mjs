@@ -106,14 +106,19 @@ function parseArgs(argv) {
 function isInternalTarget(url) {
   let host;
   try { host = new URL(url).hostname.toLowerCase(); } catch { return false; }
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);    // strip IPv6 brackets
+  const mapped = host.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (mapped) host = mapped[1];                                                // IPv4-mapped IPv6 -> re-check IPv4
   if (host === 'localhost' || host.endsWith('.localhost')) return true;
   if (host === '169.254.169.254' || host.startsWith('169.254.')) return true; // link-local + metadata
-  if (host === '0.0.0.0' || host === '::1' || host === '[::1]') return true;
+  if (host === '0.0.0.0' || host === '::' || host === '::1') return true;
   if (host.startsWith('127.')) return true;                                    // loopback
   if (host.startsWith('10.')) return true;                                     // RFC1918
   if (host.startsWith('192.168.')) return true;                                // RFC1918
   const m = host.match(/^172\.(\d{1,3})\./);                                   // RFC1918 172.16-31
   if (m && Number(m[1]) >= 16 && Number(m[1]) <= 31) return true;
+  if (host.startsWith('fe80:')) return true;                                   // IPv6 link-local
+  if (/^f[cd][0-9a-f][0-9a-f]:/.test(host)) return true;                       // IPv6 unique-local fc00::/7
   return false;
 }
 const log = (...m) => console.log('[capture]', ...m);
@@ -548,6 +553,7 @@ async function runDesktop(browser, args, outDir, manifest) {
         try {
           const ip = await b.ctx.newPage();
           const innerUrl = new URL(path, args.url).href;
+          if (isInternalTarget(innerUrl)) { manifest.notes.push(`inner ${path} refused (internal target)`); await ip.close(); continue; }
           await ip.goto(innerUrl, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT });
           await ip.waitForTimeout(1100);
           await dismissOverlays(ip);
