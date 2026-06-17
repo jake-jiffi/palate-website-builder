@@ -30,8 +30,4 @@ Follows references/webflow-migration.md: inventory, map CMS to Sanity, migrate c
 
 Runs the BUILD BRAND mode standalone (interactive): inventories assets, generates four-format tokens, writes fonts.css and components, publishes @jiffi-projects/enviz-brand. No website. Useful when the brand package is needed for decks, Figma, or v0 before any site exists.
 
-## Curate mode (self-improvement)
-> "Add Linear to your reference library."
-> "Study vercel.com and learn from it for future builds."
-
-Runs the CURATE mode: scaffolds the catalog entry, inspects the live site, fills the six notes files, marks it available. No client deliverable. The next relevant build automatically draws on it.
+(The internal library-curation mode is not part of the public skill.)

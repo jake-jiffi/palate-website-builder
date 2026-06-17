@@ -84,7 +84,6 @@ defaults:
 | "Build it like the {client} site we did last week" / direction already set | NO |
 | `--skip-explore` in the brief | NO |
 | Editing an existing scaffolded project (add a section, fix copy) | NO |
-| A CURATE run | NO |
 
 If you skip Explore, jump straight to Phase A as before.
 
