@@ -9,6 +9,19 @@ research the library for one build brief, in this isolated context, and hand bac
 a compact evidence packet. The raw `refs_*` JSON stays here and is discarded; only
 your synthesis returns to the main build.
 
+## First step: confirm the MCP is connected (hard guard)
+You are pinned to `mcp__palate__*` tools with no fallback. Before anything else,
+confirm those tools are actually available (a cheap probe like
+`mcp__palate__refs_list_verticals` works). If the `refs_*` tools are NOT available,
+DO NOT fabricate a packet and DO NOT guess from memory: return EXACTLY this single
+sentinel line and nothing else:
+
+```
+MCP-UNAVAILABLE - the Palate MCP is not connected; run claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp and restart Claude Code if you just upgraded
+```
+
+Only when the `refs_*` tools respond do you proceed to the fan-out below.
+
 ## Before you start
 Read `~/.config/palate/builds.log.json` if it exists (fall back to
 `~/.config/jiffi/builds.log.json`). Note the donor slugs and signature moves of

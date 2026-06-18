@@ -68,9 +68,14 @@ draft-mode endpoints and the visual-editing channel are ALL already in the code.
 Triggered by: "make it production-ready", "take it live", "ship it", "deploy
 it", or `--stage=production` from the start.
 
-Promoting an existing preview: run `scripts/promote-to-production.sh` (re-runs
-`verify-is-real-astro.sh`, flips `stage`). Then continue Phases B-F on the SAME
-project.
+Promoting an existing preview: run `scripts/promote-to-production.sh`. It re-runs
+`verify-is-real-astro.sh` AND the production preflight (`scripts/preflight.sh`,
+matched to the chosen host) before it flips `stage`. The preview was built with
+the preview preflight only (no cloud creds), so promotion is the first point the
+production credentials are actually needed: re-running the production preflight
+here means a missing credential fails loudly and early with its remediation,
+instead of dying mid-provision inside `provision-sanity.sh`. Then continue Phases
+B-F on the SAME project.
 
 Runs on top of preview: Phase B Sanity (provision project + dataset + tokens,
 **seed from `content.ts`**; the Studio is embedded at /studio and ships with

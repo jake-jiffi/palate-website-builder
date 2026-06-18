@@ -44,7 +44,21 @@ command -v jq >/dev/null 2>&1 || skip "jq is not installed; not gating done."
 [ -f "$MANIFEST" ] || skip "no $MANIFEST (no tracked build, or the Palate MCP is not in use)."
 
 mcpcalls=$(jq '((.mcp_calls // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
-[ "${mcpcalls:-0}" -ge 1 ] || skip "no Palate MCP calls recorded (MCP not connected, or surveyed in a subagent); cannot gate done."
+if [ "${mcpcalls:-0}" -lt 1 ]; then
+  # Fail-open is preserved (we still SKIP, never block here). But if source files
+  # were written with ZERO Palate MCP calls, the most likely cause is the MCP is
+  # not connected or was renamed (e.g. after a plugin upgrade), so the skill built
+  # without the taste layer. Speak the connect/restart reminder UNCONDITIONALLY
+  # (not only under strict) so the silent fail-open is no longer silent.
+  fileswritten=$(jq '((.files_written // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
+  if [ "${fileswritten:-0}" -ge 1 ]; then
+    echo "Done gate: source files were written but ZERO Palate MCP calls were recorded." >&2
+    echo "  The build ran WITHOUT the Palate taste layer - the MCP is likely not connected or was renamed (e.g. after a plugin upgrade)." >&2
+    echo "  Reconnect: claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp" >&2
+    echo "  Then restart Claude Code (or run /mcp and reconnect) so the mcp__palate__* tools load." >&2
+  fi
+  skip "no Palate MCP calls recorded (MCP not connected, or surveyed in a subagent); cannot gate done."
+fi
 
 # NEW rung beyond the depth gate: a render must be possible for visual/verifier to
 # mean anything. If neither a built dist/ nor a verify-report.json exists, the gate

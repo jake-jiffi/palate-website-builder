@@ -3,7 +3,7 @@
 The skill assumes fresh infra by default but accepts overrides.
 
 - **Existing Cloudflare account**: pass the account id; the skill uses it rather than assuming. Worker name still `{slug}-site`.
-- **Existing Sanity org**: default is the single Jiffi org (JIFFI_SANITY_ORG_ID). Override only if a client insists on their own org.
+- **Existing Sanity org**: export your Sanity organisation id as `SANITY_ORG_ID` (find it under Settings then API in the Sanity dashboard). `JIFFI_SANITY_ORG_ID` is still accepted as a fallback for existing Jiffi-internal setups.
 - **Existing GitHub repo**: if `jiffi-projects/{slug}` exists and is empty, use it. If non-empty, it is a conflict (append -web) unless it is a resume.
 - **Existing domain on Cloudflare**: attach-domain.sh detects the zone automatically and goes full-auto.
 

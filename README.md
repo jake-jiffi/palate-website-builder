@@ -29,25 +29,35 @@ hooks). In Claude Code, run these as two separate commands (slash commands run o
 ```
 /plugin install palate-website-builder@palate
 ```
-Then connect the Palate MCP. Easiest is to sign in with your browser, no token:
+Then connect the Palate MCP. Two equal paths (always with `--scope user`, so the connector exists in
+every directory the skill builds in, not just the current one). Static token (deterministic, one
+header, works in CLI / IDE / Desktop / CI), token from https://app.palatemcp.com:
 ```bash
-claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp
+claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp --header 'Authorization: Bearer plt_live_...'
 ```
-Claude Code opens your browser to sign in and click Allow. Prefer a token (CI, or no browser)? Create
-one at https://app.palatemcp.com and add `--header "Authorization: Bearer plt_live_..."`. Full steps,
-updating, and the legacy/manual path: see `INSTALL.md`.
+Or OAuth (no-copy convenience, browser sign-in):
+```bash
+claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp
+```
+Claude Code opens your browser to sign in and click Allow. Full steps, updating, and the
+legacy/manual path: see `INSTALL.md`.
 
 ## Layout
 
-- `SKILL.md` — mode dispatch + the two mode workflows
-- `references/` — build operational + detail docs, `brand/` (the brand-package docs), `reference-library/` (library machinery)
-- `scripts/` — build scripts, brand scripts (brand- prefixed where they'd collide), all tested bash
-- `templates/` — `astro-project/` (the site, build-in-CI workflows), `brand-repo-skeleton/` (the brand package shape), `sanity-schema/`, `github-workflows/`, `cro/` (dormant sub-skills as .tpl)
+- `SKILL.md`: mode dispatch + the two mode workflows
+- `references/`: build operational + detail docs, `brand/` (the brand-package docs), `reference-library/` (library machinery)
+- `scripts/`: build scripts, brand scripts (brand- prefixed where they'd collide), all tested bash
+- `templates/`: `astro-project/` (the site, build-in-CI workflows), `brand-repo-skeleton/` (the brand package shape), `sanity-schema/`, `github-workflows/`, `cro/` (dormant sub-skills as .tpl)
 
 ## Setup required once per machine
 
-`gh`, `node` 22+, `npm`, `jq`, plus env for the modes you use: Vercel CLI (`vercel`), SANITY_AUTH_TOKEN, RESEND_API_KEY (build); GITHUB_PACKAGES_TOKEN in ~/.npmrc (brand). `scripts/preflight.sh` (build) and `scripts/brand-preflight.sh` (brand) check what's needed.
+`gh`, `node` 22+, `npm`, `jq`, plus env for the modes you use:
+
+- **Build a website**: Vercel CLI (`vercel`), `SANITY_AUTH_TOKEN`, `SANITY_ORG_ID` (your Sanity org id, from Settings then API in the Sanity dashboard), `RESEND_API_KEY`. The brand GitHub Packages token (`GITHUB_PACKAGES_TOKEN` in `~/.npmrc`, `read:packages` scope) is **Required unless you pass `--vendor-brand`**, since a build consumes the private brand package.
+- **Build a brand package**: `GITHUB_PACKAGES_TOKEN` with `write:packages` scope (this mode publishes a package).
+
+`scripts/preflight.sh` (build) and `scripts/brand-preflight.sh` (brand) check what's needed. `JIFFI_SANITY_ORG_ID` is still accepted as a fallback for `SANITY_ORG_ID`.
 
 ## The Palate MCP
 
-The skill reads the reference library through the Palate MCP (`palate` connector, `refs_*` tools) at `https://mcp.palatemcp.com/api/mcp` (http transport), authenticated with your `plt_live_...` token. You add the connector once with `claude mcp add` (see Install); the token is baked into your Claude Code config, so there is no env var to manage and the tools resolve as `mcp__palate__*` for the skill and the depth gate.
+The skill reads the reference library through the Palate MCP (`palate` connector, `refs_*` tools) at `https://mcp.palatemcp.com/api/mcp` (http transport), authenticated with your `plt_live_...` token. You add the connector once with `claude mcp add --scope user` (see Install); the token is baked into your Claude Code config, so there is no env var to manage and the tools resolve as `mcp__palate__*` for the skill and the depth gate.

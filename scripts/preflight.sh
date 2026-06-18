@@ -26,9 +26,12 @@ else
   vercel whoami >/dev/null 2>&1 || fail "vercel not authed" "vercel login"; ok "vercel authed"
 fi
 
-# Sanity management token
+# Sanity management token + org. SANITY_ORG_ID is the primary, user-facing var;
+# JIFFI_SANITY_ORG_ID is kept as a fallback so existing Jiffi-internal setups
+# keep working.
 [ -n "${SANITY_AUTH_TOKEN:-}" ] || fail "SANITY_AUTH_TOKEN unset" "sanity login or create a management token with manage scope"
-[ -n "${JIFFI_SANITY_ORG_ID:-}" ] || fail "JIFFI_SANITY_ORG_ID unset" "export the Jiffi Sanity org id"
+SANITY_ORG_ID="${SANITY_ORG_ID:-${JIFFI_SANITY_ORG_ID:-}}"
+[ -n "${SANITY_ORG_ID:-}" ] || fail "SANITY_ORG_ID unset" "export your Sanity organisation id (Settings then API in your Sanity dashboard)"
 ok "sanity management token + org present"
 
 # Resend

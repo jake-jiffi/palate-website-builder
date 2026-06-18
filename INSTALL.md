@@ -16,19 +16,31 @@ Two short steps, no environment variables to manage.
    ```
    /plugin install palate-website-builder@palate
    ```
-2. Connect the Palate MCP. Easiest is to **sign in with your browser, no token**:
+2. Connect the Palate MCP. Two paths, pick one. Both add the connector once and store everything in
+   your Claude Code config (no environment variables).
+
+   **Static token (deterministic, one header, works everywhere).** Get a token at
+   https://app.palatemcp.com, then:
    ```bash
-   claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp
+   claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp --header 'Authorization: Bearer plt_live_...'
+   ```
+   This is the predictable path: one bearer header, works the same in the terminal, the VS Code /
+   JetBrains extension, the desktop app, and CI.
+
+   **OAuth (no-copy convenience).** Sign in with your browser, no token to paste:
+   ```bash
+   claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp
    ```
    Claude Code opens your browser to sign in to Palate and click **Allow** (or run `/mcp` and choose
-   Authenticate). Prefer a token instead (CI, or no browser)? Get one at https://app.palatemcp.com and
-   add `--header "Authorization: Bearer plt_live_xxx"` to that command.
+   Authenticate).
+
+   **`--scope user` is required either way.** Without it, `claude mcp add` defaults to local (project)
+   scope, so `palate` only exists in the directory where you ran the command. The skill builds client
+   sites in fresh directories, so a project-scoped server silently loses the `mcp__palate__*` tools
+   there. Always use `--scope user`.
 3. Confirm: run `/mcp` (the `palate` server shows connected), or ask Claude to call `refs_list_verticals`.
 
-Most Claude Code users need no token at all — the browser sign-in handles it, and works the same in
-the terminal, the VS Code / JetBrains extension, and the desktop app. If you do use a token,
-`claude mcp add` stores it in your Claude Code config (no environment variables). `brew install jq`
-once (the gate needs it) - see "One-time machine setup" below.
+`brew install jq` once (the gate needs it) - see "One-time machine setup" below.
 
 ## The two modes
 
@@ -44,8 +56,8 @@ A website build calls the brand build in-process when the client has no brand pa
   refs_search (hybrid: facets + a lexical query string), refs_get (layer:
   concept|pages|tokens|signature_moves|do_dont|component_prompts|astro_recipe; format:"design"
   returns a DESIGN.md), refs_get_tokens, refs_get_astro_recipe, refs_get_screenshot, refs_insights,
-  refs_match_brief, refs_similar, refs_list_verticals). Added once with `claude mcp add` (your token
-  is baked into your Claude Code config, no env var).
+  refs_match_brief, refs_similar, refs_list_verticals). Added once with `claude mcp add --scope user`
+  (your token is baked into your Claude Code config, no env var).
 - Three **depth hooks** (`hooks/hooks.json`) that nudge a build to actually use the library:
   - **PreToolUse** / **Stop**: by DEFAULT they NUDGE (a non-blocking reminder), they do not block.
     So the plugin can't trap you when the Palate MCP isn't connected, when you're editing an existing
@@ -63,7 +75,10 @@ A website build calls the brand build in-process when the client has no brand pa
 ```
 /plugin marketplace update palate
 ```
-Picks up the new plugin version (or enable per-marketplace auto-update). No re-running an installer.
+Then restart Claude Code (or run `/mcp` and reconnect) so the new tools load. Until you do, you may
+see an `MCP server palate skipped` warning, especially when upgrading from an older bundled version.
+The update picks up the new plugin version (or enable per-marketplace auto-update). No re-running an
+installer.
 
 ### Uninstalling
 
@@ -111,8 +126,9 @@ brew install gh jq
 npm i -g vercel
 gh auth login
 
-# Brand mode: GitHub Packages
-export GITHUB_PACKAGES_TOKEN=ghp_...   # classic PAT: write:packages + read:packages
+# The brand GitHub Packages token (REQUIRED for a build unless you pass --vendor-brand).
+# A build consumes the private brand package, so it needs a read:packages token in ~/.npmrc.
+export GITHUB_PACKAGES_TOKEN=ghp_...   # classic PAT, read:packages scope (consuming the brand package)
 cat >> ~/.npmrc <<NPMRC
 @jiffi-projects:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=\${GITHUB_PACKAGES_TOKEN}
@@ -120,10 +136,20 @@ NPMRC
 
 # Build mode: Vercel + Sanity + email
 # Vercel CLI: `vercel login` handles auth
-export SANITY_AUTH_TOKEN=...
+export SANITY_AUTH_TOKEN=...           # Sanity management token (manage scope)
+export SANITY_ORG_ID=...               # your Sanity org id (Settings then API in your Sanity dashboard)
 export RESEND_API_KEY=...
 ```
 `scripts/preflight.sh` (build) and `scripts/brand-preflight.sh` (brand) check what each mode needs.
+
+### PAT scope: read vs write
+
+The GitHub Packages PAT needs different scopes for the two things you might do:
+
+- **Consuming the brand package** (a website build, the common case): `read:packages` is enough. `scripts/preflight.sh` only installs the private package, so a read-only token works. This token is REQUIRED for a build unless you pass `--vendor-brand` (which uses bundled brand defaults and needs no GitHub Packages token at all).
+- **Publishing / authoring a brand package** (BUILD BRAND mode): `write:packages` is required, since that mode pushes a new package version. `scripts/brand-preflight.sh` checks the write capability.
+
+A read-only PAT for builds is the least-privilege default; only mint `write:packages` when you actually author brand packages.
 
 ## Build sequence
 

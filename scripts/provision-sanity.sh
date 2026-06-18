@@ -4,12 +4,15 @@
 # and CORS for the site origin. The Studio is EMBEDDED in the site via
 # @sanity/astro (route /studio) - there is no separate Studio to deploy.
 # Uses the Management API via curl (more reliable than sanity init --no-interactive).
-# Requires: SANITY_AUTH_TOKEN (manage scope), JIFFI_SANITY_ORG_ID.
+# Requires: SANITY_AUTH_TOKEN (manage scope), SANITY_ORG_ID (your Sanity org id;
+# JIFFI_SANITY_ORG_ID is accepted as a fallback for existing setups).
 # Usage: provision-sanity.sh <slug> <display-name> <site-domain> [editors-csv]
 set -euo pipefail
 SLUG="${1:?slug}"; NAME="${2:?display name}"; SITE_DOMAIN="${3:?site domain}"; EDITORS="${4:-}"
 API="https://api.sanity.io/v2021-06-07"
 AUTH="Authorization: Bearer ${SANITY_AUTH_TOKEN:?set SANITY_AUTH_TOKEN}"
+# SANITY_ORG_ID is primary; JIFFI_SANITY_ORG_ID is the back-compat fallback.
+SANITY_ORG_ID="${SANITY_ORG_ID:-${JIFFI_SANITY_ORG_ID:-}}"
 
 # Idempotent (check-before-act, see references/idempotency.md): reuse an
 # existing project with this displayName rather than creating a duplicate, so a
@@ -22,7 +25,7 @@ if [ -n "$PROJECT_ID" ] && [ "$PROJECT_ID" != "null" ]; then
 else
   echo "creating Sanity project '${NAME}'..."
   proj=$(curl -s -X POST "${API}/projects" -H "$AUTH" -H "Content-Type: application/json" \
-    -d "{\"displayName\":\"${NAME}\",\"organizationId\":\"${JIFFI_SANITY_ORG_ID:?set org id}\"}")
+    -d "{\"displayName\":\"${NAME}\",\"organizationId\":\"${SANITY_ORG_ID:?set SANITY_ORG_ID (your Sanity organisation id, Settings then API in your Sanity dashboard)}\"}")
   PROJECT_ID=$(printf '%s' "$proj" | jq -r '.id // empty')
   [ -n "$PROJECT_ID" ] || { echo "project create failed: $proj" >&2; exit 1; }
   echo "  projectId=$PROJECT_ID"

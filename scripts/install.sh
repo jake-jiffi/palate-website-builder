@@ -50,12 +50,12 @@ fi
 # Connector + token
 if command -v claude >/dev/null 2>&1; then
   if [ -n "$TOKEN" ]; then
-    claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp --header "Authorization: Bearer $TOKEN" >/dev/null 2>&1 \
+    claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp --header "Authorization: Bearer $TOKEN" >/dev/null 2>&1 \
       && say "  registered the palate MCP connector" \
       || say "  palate connector already present (skipped)"
   else
     say "  no token given - add the connector with:"
-    say "    claude mcp add --transport http palate https://mcp.palatemcp.com/api/mcp --header \"Authorization: Bearer <plt_live_ token>\""
+    say "    claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp --header \"Authorization: Bearer <plt_live_ token>\""
     say "  or re-run: PALATE_TOKEN=plt_live_... $0"
   fi
 else

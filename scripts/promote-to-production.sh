@@ -10,7 +10,7 @@ stage=$(jq -r '.stage' .palate-skill-state.json)
 if [ "$stage" = "production" ]; then
   echo "already in production stage; resuming production phases"
 else
-  # Gate: the preview MUST be a real Astro project before we promote it.
+  # Gate 1: the preview MUST be a real Astro project before we promote it.
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   echo "verifying the preview is a real Astro build before promoting..."
   bash "$SCRIPT_DIR/verify-is-real-astro.sh" || {
@@ -18,6 +18,21 @@ else
     echo "Fix Phase A (scaffold from template) before promoting to production." >&2
     exit 2
   }
+
+  # Gate 2: the PRODUCTION preflight MUST pass before we flip the stage. A preview
+  # is built with preview-preflight only (no cloud creds), so promotion is the
+  # first time the production credentials are actually required. Run the full
+  # production preflight HERE so a missing credential fails loudly and early with
+  # its remediation, rather than dying mid-provision inside provision-sanity.sh.
+  # Mirror the build flow: production targets the chosen host (default vercel).
+  export JIFFI_HOST="${JIFFI_HOST:-vercel}"
+  echo "running the production preflight before promoting (host: ${JIFFI_HOST})..."
+  bash "$SCRIPT_DIR/preflight.sh" || {
+    echo "REFUSING TO PROMOTE: the production preflight failed." >&2
+    echo "Fix the missing credential it reported above, then re-run promotion." >&2
+    exit 2
+  }
+
   tmp=$(mktemp)
   jq --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '.stage="production" | .skill.lastUpdatedAt=$ts' \
     .palate-skill-state.json > "$tmp" && mv "$tmp" .palate-skill-state.json
