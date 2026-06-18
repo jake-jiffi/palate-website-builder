@@ -102,13 +102,17 @@ where direction-setting happens.
 ## Generating distinct variants - concept-led, not skin-deep
 
 Eight variants that all feel like a slightly-reskinned Linear is failure, and so
-is eight aesthetic skins of the same idea. **Each variant carries a distinct
-DEMONSTRATIVE CONCEPT from the Story Engine** (`story-engine.md`): a mechanic that
-makes the visitor feel the transformation, a 3-beat arc, one named feeling. Run
-the Story Engine first (research -> the one true thing -> concepts). Ground each
-concept in the MCP concept layer (`refs_insights { topic: "mechanics" }` /
-`{ topic: "emotion" }`, `refs_search { register, device, intensity }`), then
-execute its craft via the organ-transplant method (`reference-library-usage.md`).
+is eight aesthetic skins of the same idea. **Each variant elaborates one of the
+1-2 ADVANCED concepts from the Story Engine's DIVERGE -> CONVERGE pass**
+(`story-engine.md`), not a fresh spine each: a mechanic that makes the visitor feel
+the transformation, a 3-beat arc, one named feeling. Run the Story Engine's
+DIVERGE -> CONVERGE first (research -> the one true thing -> sample N concepts wide
+with self-tagged conventionality -> score on originality + craft-feasibility ->
+advance the best 1-2), then spread the variants that elaborate those concepts
+across the ambition spectrum. Ground each concept in the MCP concept layer
+(`refs_insights { topic: "mechanics" }` / `{ topic: "emotion" }`,
+`refs_search { register, device, intensity }`), then execute its craft via the
+organ-transplant method (`reference-library-usage.md`).
 Every variant's lead donor MUST be studied through the **section-build recipe**
 (`reference-library-usage.md`): pull the donor by pattern (`refs_search { pageType,
 uiElement, conversionPrimitive }`), VIEW its inner page (`refs_get_screenshot
@@ -156,6 +160,13 @@ regenerated. Every variant must pass the feel gate (`critique-discipline.md`).
   border-radius 0 vs 8 vs 16, accent weight (subtle vs loud), font-weight
   emphasis. Stay inside the brand's permitted range; do not invent off-brand
   colours.
+- **Choose type per direction, treat it as colour.** No font is banned and none is
+  the default (`references/type-selection.md`): reproduce the donor's type SYSTEM
+  and decide the FACE fresh to fit the brand and the concept. Across the set, faces
+  differ because the directions genuinely differ, not to tick a box, and never the
+  same face reached for out of habit on unrelated builds (the type-face recurrence
+  smell in `scripts/gate-novelty.mjs`). A system sans at one weight standing in for
+  a decision is the failure, not any particular family.
 - **Landing-page variants** (when included) are single-page, conversion-shaped:
   hero + value props + social proof + CTA + FAQ + footer. The full-site
   variants are home pages that hint at site depth.

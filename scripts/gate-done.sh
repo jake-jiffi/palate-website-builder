@@ -93,27 +93,26 @@ fi
 verdict=$(jq -r '(.verdict // "fail")' "$REPORT")
 [ "$verdict" = "pass" ] || fail "Verifier verdict is '$verdict' (not pass). Fix the named gate findings in verify-report.json and re-run the fresh-context palate-verifier."
 
-# --- EVIDENCE 3 (NOVELTY): fail-open-if-absent for now (Move 1 wires it next) ---
-# Novelty is the one block that is NOT yet machine-enforced here: gate-novelty.mjs
-# (Move 1) does not exist yet, and the floor must never block on a missing check.
-# This is the clearly-marked switch: when Move 1 ships gate-novelty.mjs, set
-# PALATE_GATE_NOVELTY=1 to require it. Until then, and whenever there are <2 rendered
-# variants (a single page cannot be checked for variety), novelty is a SKIPPED
-# sub-check, never a block. This keeps the existing gate-uniqueness.mjs exit-2-on-<2
-# behaviour wrapped so it cannot trap a single-page build.
-REQUIRE_NOVELTY="${PALATE_GATE_NOVELTY:-0}"
-novelty_note="novelty=skipped(Move 1 not wired)"
+# --- EVIDENCE 3 (NOVELTY): Move 1 is wired - gate-novelty.mjs now exists ---------
+# The DIVERGE/CONVERGE spine + scripts/gate-novelty.mjs (Move 1) are live, so novelty
+# is required by DEFAULT (PALATE_GATE_NOVELTY defaults to 1). gate-novelty.mjs is
+# itself fully FAIL-OPEN: its CONVERGE pre-check skips (exit 0) when DIVERGE did not
+# run, and its build-level / type-face-recurrence check skips (exit 0) with <2 rendered
+# variants or no build history. So it can only BLOCK on a real novelty failure (a
+# safe-only converge, a near-repeat build, or a recurring display face) and never traps
+# a build that has nothing to compare. Set PALATE_GATE_NOVELTY=0 to disable it entirely.
+REQUIRE_NOVELTY="${PALATE_GATE_NOVELTY:-1}"
+novelty_note="novelty=off(PALATE_GATE_NOVELTY=0)"
 if [ "$REQUIRE_NOVELTY" = "1" ] && [ -f "$NOVELTY_GATE" ]; then
-  variant_count=$(jq -r '((.variants // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
-  if [ "${variant_count:-0}" -ge 2 ]; then
-    if novelty_err="$(node "$NOVELTY_GATE" --manifest "$MANIFEST" 2>&1 1>/dev/null)"; then
-      novelty_note="novelty=pass"
-    else
-      fail "Novelty gate did not pass. ${novelty_err}"
-    fi
+  if novelty_err="$(node "$NOVELTY_GATE" --manifest "$MANIFEST" 2>&1 1>/dev/null)"; then
+    # gate-novelty prints "passed:" on a real pass and "skipped:" when nothing to
+    # compare; both exit 0. Reflect which one happened in the summary.
+    novelty_note="novelty=pass-or-skip"
   else
-    novelty_note="novelty=skipped(<2 variants)"
+    fail "Novelty gate did not pass. ${novelty_err}"
   fi
+elif [ ! -f "$NOVELTY_GATE" ]; then
+  novelty_note="novelty=skipped(gate-novelty.mjs not present)"
 fi
 
 echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note."

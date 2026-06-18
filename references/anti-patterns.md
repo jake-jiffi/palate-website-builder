@@ -39,35 +39,50 @@ remote-fetched), and Jiffi's house-style (no em dashes, Australian English).
 
 ---
 
-## Banned display fonts (Anthropic frontend-design)
+## Known default display faces - JUSTIFY-OR-FLAG (not a hard ban)
+
+These four faces (Inter, Roboto, Arial, Space Grotesk used as a DISPLAY family)
+are the AI / no-opinion defaults: the face a model reaches for when it has no
+opinion. They are a **yellow flag, not forbidden**. No font is banned and none is
+the default; type is chosen because it fits THIS brand's voice and the website
+vision, then used with craft (`references/type-selection.md`).
+
+The rule below still FIRES on each of these faces used as display. The PASS
+condition is a justified decision: a `ux-lint-disable banned-display-<face>`
+directive on the same or preceding line, **accompanied by a one-line reason
+comment** (e.g. `the brand calls for Inter because ...`). A disable with no reason
+is itself the default tell, so `ux-lint.sh` flags a bare disable too. If you cannot
+state the brand reason, it is the default tell: replace it with a face the brand
+actually chose. Treat type exactly as colour: reproduce the donor's type SYSTEM
+and decide the FACE per brief.
 
 ### Rule: banned-display-inter
-- Severity: Critical
+- Severity: High
 - Mode: always
 - Files: *.css,*.ts,*.tsx,*.astro,*.mjs
 - Pattern: `font-family\s*:\s*['"]?Inter`
-- Fix: Inter is the AI-default display font and instantly reads as average. Use a more committed face from the brand package (a contemporary grotesque, a humanist sans, an editorial serif, a display) selected as part of the brand's voice.
+- Fix: Inter is a known AI/no-opinion default display face, so it must be a DECISION, not a fallback. Justify it with a one-line reason on a `ux-lint-disable banned-display-inter` directive (the brand calls for it because ...) - and only if the type system carries real contrast and craft. Otherwise it reads as average: replace it with a more committed face the brand actually chose (a contemporary grotesque, a humanist sans, an editorial serif, a display).
 
 ### Rule: banned-display-roboto
-- Severity: Critical
+- Severity: High
 - Mode: always
 - Files: *.css,*.ts,*.tsx,*.astro,*.mjs
 - Pattern: `font-family\s*:\s*['"]?Roboto`
-- Fix: Roboto is Material's default; banned as a marketing-site display family for the same reason as Inter.
+- Fix: Roboto is Material's default - a known no-opinion display face. Same justify-or-flag rule as Inter: a `ux-lint-disable banned-display-roboto` with a one-line brand reason, or replace it with a face the brand decided on.
 
 ### Rule: banned-display-arial
-- Severity: Critical
+- Severity: High
 - Mode: always
 - Files: *.css,*.ts,*.tsx,*.astro,*.mjs
 - Pattern: `font-family\s*:\s*['"]?Arial`
-- Fix: Arial as a primary display family signals "no design opinion". Pick from the brand package.
+- Fix: Arial as a primary display family signals "no design opinion". Known default: justify with a one-line brand reason on a `ux-lint-disable banned-display-arial`, or replace it with a face the brand chose.
 
 ### Rule: banned-display-space-grotesk
-- Severity: Critical
+- Severity: High
 - Mode: always
 - Files: *.css,*.ts,*.tsx,*.astro,*.mjs
 - Pattern: `font-family\s*:\s*['"]?Space Grotesk`
-- Fix: Space Grotesk is the 2023-2024 startup default; overuse has made it generic. Use a face the brand actually chose.
+- Fix: Space Grotesk is the 2023-2024 startup default; overuse has made it generic. Known default: justify with a one-line brand reason on a `ux-lint-disable banned-display-space-grotesk`, or replace it with a face the brand actually chose.
 
 ### Rule: banned-display-system-ui
 - Severity: High
@@ -304,9 +319,25 @@ full sweep.
 
 ---
 
-## The tracked-mono "eyebrow" kicker
+## The eyebrow / kicker label above a heading
 
-### Anti-pattern: the tracked-mono eyebrow kicker
+### Anti-pattern: a small label above a section heading (the eyebrow / kicker)
+
+**Do not place a small label above a section heading at all.** The eyebrow / kicker
+(a tiny line of text sitting above the heading, e.g. `THE LIBRARY`, `GET STARTED`,
+`WHAT WE DO`) is a generic-AI tell **regardless of styling** - it is the PATTERN
+that reads as a template, not just the way it is set. Let the heading carry the
+section. A confident display heading needs no label announcing that a section has
+begun; the label is scaffolding the page does not need, and a stack of them down a
+page is one of the loudest "assembled by a model" signals. Drop it.
+
+This BROADENS the older rule, which only caught the most-styled form (mono + caps +
+wide tracking). That trio is still the worst case and still flagged, but the kicker
+PATTERN itself - a small label above a heading, however tastefully styled - is the
+thing to avoid. When a section genuinely needs more than its heading, prefer a short
+standfirst sentence below the heading, or a hairline rule, over a label above it.
+
+### Anti-pattern: the tracked-mono eyebrow kicker (the worst case of the above)
 
 Tiny section labels set in **monospace + ALL CAPS + wide letter-spacing (>=0.1em)**,
 usually in the accent colour, floating above a heading (e.g. `THE LIBRARY`,
@@ -340,8 +371,10 @@ is absent from the flagship tier. Jake's taste refs agree: jiffi.co opens with a
 huge confident serif and no tracked kickers; leoleo.studio uses bold maximal type
 and minimal cased labels.
 
-**The rule.** Never combine uppercase + wide tracking + monospace. Pick at most
-one device per label selector. Default to:
+**The rule.** Default to NO label above the heading: let the heading carry the
+section (the kicker pattern itself is the tell, see the anti-pattern above). If a
+build genuinely keeps a small label, never combine uppercase + wide tracking +
+monospace, and pick at most one device per label selector:
 
 - `text-transform: none` (keep the source sentence / Title case, do not uppercase
   in CSS and do not rewrite the copy to caps; the cased reading is the whole point),
@@ -350,13 +383,12 @@ one device per label selector. Default to:
 - ~13px / weight 500,
 - inherit the per-section colour from a utility rather than hardcoding accent.
 
-If a section needs more punctuation than a cased label, add a short hairline rule
-or dot in `currentColor` **as an opt-in marker on section kickers only** (never on
-footer column headers or inline step labels: a leading rule there reads as a stray
-divider or a broken list bullet). Better still on hero / flagship sections: delete
-the kicker and let the heading stand alone. The intentional-craft move is a small
-cased label in the brand sans (the sibling of the display heading, an editorial
-caption), not a template chip.
+If a section needs more punctuation than its heading, prefer a short standfirst
+sentence BELOW the heading, or a hairline rule, over a label above it. Better still
+on hero / flagship sections: delete the kicker and let the heading stand alone. The
+intentional-craft move, when a label is truly warranted, is a small cased label in
+the brand sans (the sibling of the display heading, an editorial caption), not a
+template chip - but the default is no label at all.
 
 The mechanical floor for this anti-pattern is enforced two ways. The inline-style
 markup variant (all three properties on one element) is caught by the per-line
@@ -372,7 +404,7 @@ opening line). Keep both in step if you tune the threshold.
 - Mode: always
 - Files: *.astro,*.html
 - Pattern: `style="[^"]*text-transform\s*:\s*uppercase[^"]*(mono|monospace|font-mono)[^"]*letter-spacing\s*:\s*0?\.(1[0-9]|[2-9])[^"]*"`
-- Fix: This is the tracked-mono eyebrow kicker as an inline style: uppercase + a mono font + letter-spacing >=0.1em on one element. It is a top AI / template tell. Set `text-transform:none`, swap to the brand sans (not mono), drop letter-spacing to <=0.01em, or delete the kicker and let the heading carry the section. See the section above for the grounded alternative.
+- Fix: This is the tracked-mono eyebrow kicker as an inline style: uppercase + a mono font + letter-spacing >=0.1em on one element. It is the worst-styled case of the kicker tell - but the kicker PATTERN itself (any small label above a heading, however styled) is the thing to avoid. The default fix is to DELETE the label and let the heading carry the section. If a label is truly warranted, set `text-transform:none`, swap to the brand sans (not mono), and drop letter-spacing to <=0.01em. See the section above for the doctrine and the grounded alternative.
 
 ---
 

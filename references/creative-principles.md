@@ -35,5 +35,12 @@ something a client has never seen.
    HOW; the concept is WHAT and the feeling is WHY. Reproduce craft faithfully,
    but always in service of an idea, never as decoration for its own sake.
 
+9. **Treat type exactly as colour.** Reproduce the donor's type SYSTEM (scale,
+   pairing, weight contrast, optical sizing, tracking, line-length, motion) and
+   choose the FACE fresh, per brief, to fit the brand's voice and the website
+   vision. No font is banned and none is the default; the craft is in how type is
+   used, not which name is set. A face reached for out of habit, or recurring
+   across unrelated builds, is the tell, not the family (`references/type-selection.md`).
+
 This is why the reference library has a concept layer (emotional register +
 demonstrative mechanics), not just a craft layer.

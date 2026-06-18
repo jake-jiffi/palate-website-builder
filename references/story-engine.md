@@ -34,12 +34,89 @@ The one human checkpoint is a **confirmation, not a quiz**: "Here is what I
 believe your customer feels, and the one true thing about you. Did I get it
 right?" Then surprise them.
 
-## From truth to concepts (one per variant)
+## DIVERGE - sample wide before you narrow (Verbalized Sampling)
+
+A single "best concept" collapses to the category mode: the safe, typical idea
+the model reaches for first. Do not narrow yet. From the one true thing (stage 4)
+and the spine (stage 5), generate **N candidate concepts (N = 6-8) in one pass,
+NOT one**, with the constraints deliberately removed, and self-tag each so the
+surprising tail survives. Each concept is `{ mechanic, 3-beat arc, named feeling }`
+as before, PLUS three tags:
+
+- **`conventionality: 0..1`** - the model self-rates how TYPICAL this concept is
+  for the category (1 = the category default, what every site in this vertical
+  does; 0 = nobody in this category does this). This is Verbalized Sampling:
+  asking the model to verbalise each sample's typicality surfaces the
+  low-typicality tail it otherwise collapses to the mode. Be honest: a flood-then-
+  resolve hero for a SaaS launch is `~0.7` (common now), the same mechanic on a
+  conveyancer is `~0.2`.
+- **`lens`** - which directing lens generated it. Use **2-3 varied lenses**, not
+  one, and require the set to span **>=2 lenses**. Lenses: *the customer's worst
+  moment*, *the founder's obsession*, *the physical object or space*, *the thing
+  the category refuses to show*, *the after-feeling made literal*.
+- **`analogical_seed`** - a forced **cross-domain analogy** that seeds the
+  mechanic: reframe the brief through an UNRELATED domain (print, signage,
+  architecture, film, games, instruments, maps, tide charts) and let it suggest a
+  device. "What if a conveyancer's site behaved like a flight tracker / a tide
+  chart / a relay baton?" Pull seeds from the `refs_insights { topic: "mechanics" }`
+  catalogue (flood-then-resolve, tap-to-decode, absence-as-argument, carried-
+  timeline, crowd-as-proof, scroll-as-time, press-and-nothing-happens) AND from a
+  deliberately DIFFERENT vertical via `refs_similar` / `refs_search { device }`, so
+  the seed is borrowed across domains, not from the obvious neighbour.
+
+**Carry the lower-typicality tail forward.** After sampling, drop the highest-
+`conventionality` concepts unless one is genuinely needed as the safe-warm anchor.
+The bold and one-of-a-kind slots MUST come from the low-typicality tail; aim for
+at least two concepts at `conventionality <= 0.3`. Write the sampled set to
+`manifest.diverge` (`{ ran: true, n, concepts: [...] }`).
+
+The split that governs everything downstream: **reference = craft + buildability
+(the HOW and the CAN); the concept layer + this DIVERGE pass = novelty (the
+WHAT-that-is-new).** Originality comes from sampling wide here, never from a
+donor's safe default.
+
+## CONVERGE - score on two axes, advance the best 1-2
+
+Now narrow, but on EVIDENCE, never on a single "creativity" feeling. Score each
+diverged candidate on **two SEPARATE axes**, each 0-5:
+
+- **Originality** = distance from the category default AND from the last N builds.
+  Start from the candidate's own self-tag (`originality ~= 5 * (1 - conventionality)`),
+  then PENALISE any mechanic, feeling or signature move that matches a recent build
+  - read the cross-build memory (`~/.config/palate/builds.log.json`, the same log
+  the surveyor consults) and dock a concept that repeats what you shipped last
+  time. A face, a mechanic or a feeling reached for out of habit is not original
+  however novel it felt in isolation.
+- **Craft-feasibility** = can the chosen donor's craft plus the Jiffi stack
+  actually BUILD this? Decompose the mechanic into named parts and check each has a
+  real precedent with a buildable `astro_recipe` (the buildability oracle in
+  `reference-library-usage.md`). A concept with no buildable precedent scores low
+  here even if maximally original; an original concept must never exceed what the
+  stack can build.
+
+**Combine the two, never one number.** Use a harmonic-mean-style blend so a
+candidate cannot win on one axis while failing the other (a dazzling-but-
+unbuildable concept and a flawlessly-buildable-but-generic one both score low):
+`combined = 2 * O * F / (O + F)` (with a documented, env-tunable weighting in the
+eval, not a magic constant in prose). Advance the **best 1-2** concepts into
+EXPLORE as the carried concepts each variant elaborates. Variants still number
+8-10, but they elaborate the 1-2 advanced concepts across the ambition spectrum,
+not 8-10 unrelated spines.
+
+Write `manifest.converge` (`{ ran: true, scored: [{ id, originality, craft_feasibility, combined }], advanced: [ids] }`).
+The deterministic pre-check `scripts/gate-novelty.mjs --manifest build-manifest.json`
+catches a safe-only converge: it fails when the advanced set's mean
+`conventionality` is above the threshold (you narrowed back to the mode and threw
+the tail away). It fails-open (skips) when DIVERGE did not run, so it never traps a
+build that could not sample.
+
+## From truth to concepts (elaborating the advanced concepts)
 
 Each Explore variant carries a demonstrative concept: a **mechanic** where the
 visitor does or witnesses something that enacts the transformation, a **3-beat
 arc** (tension, turn, payoff), and **one named feeling** that governs every craft
-choice. Spread the set across the ambition spectrum:
+choice. The variants **elaborate the 1-2 concepts CONVERGE advanced** (not a fresh
+spine each), spread across the ambition spectrum:
 
 - **safe-warm** - clear, human, low-risk, but still a real idea (not a brochure).
 - **bold** - one strong demonstrative move.
@@ -50,6 +127,13 @@ The ambition scales to the business: a particle firehose suits a SaaS launch; a
 conveyancer's one-of-a-kind is emotionally huge but visually quiet
 (`intensity: whisper|calm`). A concept that only describes the value in nice type
 is rejected. Show, do not tell.
+
+Treat type exactly as colour: reproduce the donor's type SYSTEM and choose the
+FACE fresh per brief, to fit the brand's voice and the website vision (no font is
+banned, no font is the default; see `references/type-selection.md`). Across the
+variant set, faces differ because the DIRECTIONS genuinely differ, never to tick a
+box, and a face recurring across unrelated builds is the smell to catch, not the
+face itself (the cross-build type-face recurrence check in `scripts/gate-novelty.mjs`).
 
 ## Grounding concepts in the MCP (the concept layer is first-class)
 

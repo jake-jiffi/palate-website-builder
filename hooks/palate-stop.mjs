@@ -49,6 +49,26 @@ function readStdin() {
   }
 }
 
+// Pull the display FACE names a rendered variant actually used, so cross-build
+// type-face recurrence (the smell gate-novelty.mjs catches) has data. The recurring
+// FACE across unrelated builds is the tell, not the family - see references/type-
+// selection.md. Normalise each declaration's first family + Google-Fonts link families
+// to a bare lower-case token; drop the generic fallbacks.
+function facesFromHtml(html) {
+  const faces = new Set();
+  const GENERIC = new Set(["serif", "sans-serif", "monospace", "system-ui", "ui-sans-serif", "ui-serif", "ui-monospace", "inherit", "initial", "unset", ""]);
+  // Capture the whole value up to ; or } (quotes included) so a quoted first family is read.
+  for (const m of html.matchAll(/font-family\s*:\s*([^;}]+)/gi)) {
+    const f = m[1].replace(/['"]/g, "").split(",")[0].trim().toLowerCase().replace(/\s+/g, " ");
+    if (!GENERIC.has(f) && !f.startsWith("var(")) faces.add(f);
+  }
+  for (const m of html.matchAll(/family=([A-Za-z0-9+]+)/g)) {
+    const f = m[1].replace(/\+/g, " ").trim().toLowerCase();
+    if (!GENERIC.has(f)) faces.add(f);
+  }
+  return [...faces];
+}
+
 function recordBuild(manifest) {
   try {
     const m = JSON.parse(fs.readFileSync(manifest, "utf8"));
@@ -68,11 +88,27 @@ function recordBuild(manifest) {
         entries = [];
       }
     }
+    // Record the display faces used, read from the rendered variant HTML the manifest
+    // points at, so type-face recurrence is computable across builds. Best-effort: a
+    // missing/unreadable variant file just contributes no faces.
+    const faces = new Set();
+    const mdir = path.dirname(manifest);
+    for (const v of Array.isArray(m.variants) ? m.variants : []) {
+      const hp = v && v.html_path;
+      if (typeof hp !== "string") continue;
+      const abs = path.isAbsolute(hp) ? hp : path.join(mdir, hp);
+      try {
+        for (const f of facesFromHtml(fs.readFileSync(abs, "utf8"))) faces.add(f);
+      } catch {
+        /* variant file gone; skip */
+      }
+    }
     entries.push({
       ts: new Date().toISOString(),
       business: m.business ?? null,
       signature_move: m.signature_move ?? null,
       donors: m.references_surveyed ?? [],
+      faces: [...faces],
     });
     fs.writeFileSync(log, JSON.stringify(entries, null, 2) + "\n");
   } catch {

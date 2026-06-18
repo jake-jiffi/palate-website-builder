@@ -116,10 +116,16 @@ list_files() {
 }
 
 # Run one rule against one file via perl PCRE. Emits TSV: file\tline\tseverity\trule\ttext
+#
+# requires_reason (5th arg, default 0): for the JUSTIFY-OR-FLAG rules (banned-display-*),
+# a `ux-lint-disable <rule>` directive only suppresses the finding when it is ACCOMPANIED
+# by a one-line reason (non-trivial text after the rule id). A bare disable with no reason
+# is itself the default tell, so the rule still FIRES on it. For every other rule a bare
+# disable suppresses as before (the existing behaviour is untouched).
 run_rule() {
-  local file="$1" rule="$2" severity="$3" regex="$4"
+  local file="$1" rule="$2" severity="$3" regex="$4" requires_reason="${5:-0}"
   perl -e '
-    my ($file, $rule, $severity, $regex) = @ARGV;
+    my ($file, $rule, $severity, $regex, $requires_reason) = @ARGV;
     open(my $fh, "<", $file) or exit 0;
     my $rx;
     eval { $rx = qr/$regex/m; };
@@ -127,12 +133,33 @@ run_rule() {
       print STDERR "ux-lint: bad regex in rule $rule: $@\n";
       exit 0;
     }
+    # A disable counts as a JUSTIFIED disable only if a reason follows the rule id.
+    # >=3 word chars of text after the directive (and not another ux-lint directive)
+    # is the reason. A bare `ux-lint-disable <rule>` has no reason -> not justified.
+    sub justified {
+      my ($l) = @_;
+      return 0 unless $l =~ /ux-lint-disable\s+\Q$rule\E\b(.*)$/;
+      my $rest = $1;
+      $rest =~ s/\*\///g;            # strip a trailing block-comment close
+      $rest =~ s/-->//g;            # strip a trailing html-comment close
+      $rest =~ s/[^a-zA-Z0-9]+/ /g; # collapse punctuation to spaces
+      $rest =~ s/^\s+|\s+$//g;
+      return ($rest =~ /\w{3,}/) ? 1 : 0;
+    }
     my @lines = <$fh>;
     close($fh);
     for (my $i = 0; $i < @lines; $i++) {
       my $line = $lines[$i];
-      next if $line =~ /ux-lint-disable\s+\Q$rule\E\b/;
-      next if $i > 0 && $lines[$i-1] =~ /ux-lint-disable\s+\Q$rule\E\b/;
+      my $disabled_here = ($line =~ /ux-lint-disable\s+\Q$rule\E\b/);
+      my $disabled_prev = ($i > 0 && $lines[$i-1] =~ /ux-lint-disable\s+\Q$rule\E\b/);
+      if ($requires_reason) {
+        # Only a JUSTIFIED disable (with a reason) suppresses; a bare one does not.
+        next if $disabled_here && justified($line);
+        next if $disabled_prev && justified($lines[$i-1]);
+      } else {
+        next if $disabled_here;
+        next if $disabled_prev;
+      }
       next if $line =~ /ux-lint-disable-all\b/;
       if ($line =~ /$rx/) {
         chomp $line;
@@ -140,10 +167,18 @@ run_rule() {
         printf("%s\t%d\t%s\t%s\t%s\n", $file, $i + 1, $severity, $rule, $line);
       }
     }
-  ' "$file" "$rule" "$severity" "$regex" 2>&1
+  ' "$file" "$rule" "$severity" "$regex" "$requires_reason" 2>&1
 }
 
-# Block-aware check: the tracked-mono "eyebrow" kicker.
+# Block-aware check: the tracked-mono "eyebrow" kicker (the worst-styled case of
+# the kicker pattern).
+#
+# DOCTRINE: the kicker PATTERN itself - a small label above a section heading,
+# however styled - is the generic-AI tell; the default is to drop the label and
+# let the heading carry the section (references/anti-patterns.md). A precise
+# deterministic heuristic for "a tiny label above a heading" is hard, so the
+# doctrine in anti-patterns is the primary lever; this styling check stays the
+# mechanical floor and keeps firing on the worst case.
 #
 # The markdown rules above match one line at a time, so they cannot catch a CSS
 # rule block where uppercase, the mono font and the wide tracking each sit on
@@ -173,10 +208,10 @@ run_tracked_eyebrow() {
 
       if (has_upper && has_mono && has_wide) {
         sel=block; sub(/\{.*/, "", sel); gsub(/^[[:space:]\n]+|[[:space:]\n]+$/, "", sel); gsub(/[[:space:]]*\n[[:space:]]*/, " ", sel);
-        printf("%s\t%d\t%s\t%s\t%s\n", file, start, severity, rule, "tracked-mono uppercase kicker -> " sel " { uppercase + mono + letter-spacing>=0.1em }");
+        printf("%s\t%d\t%s\t%s\t%s\n", file, start, severity, rule, "kicker label above a heading (worst case: uppercase + mono + letter-spacing>=0.1em) -> " sel " { the kicker PATTERN is the AI tell - default to no label, let the heading carry the section }");
       } else if (is_kicker_class && has_mono) {
         sel=block; sub(/\{.*/, "", sel); gsub(/^[[:space:]\n]+|[[:space:]\n]+$/, "", sel); gsub(/[[:space:]]*\n[[:space:]]*/, " ", sel);
-        printf("%s\t%d\t%s\t%s\t%s\n", file, start, severity, rule, "eyebrow/kicker class still set in a mono font -> " sel);
+        printf("%s\t%d\t%s\t%s\t%s\n", file, start, severity, rule, "eyebrow/kicker class still set in a mono font -> " sel " { the kicker PATTERN is the AI tell - prefer dropping the label entirely }");
       }
     }
   ' "$file" 2>/dev/null
@@ -197,9 +232,16 @@ while IFS=$'\t' read -r RULE_ID SEVERITY MODE FILES_GLOB REGEX; do
   RANK=$(severity_rank "$SEVERITY")
   [ "$RANK" -lt "$SHOW_RANK" ] && continue
 
+  # JUSTIFY-OR-FLAG: the banned-display-<face> rules are known no-opinion defaults,
+  # not a hard ban. They keep FIRING on the face used as display; the pass condition
+  # is a `ux-lint-disable banned-display-<face>` WITH a one-line reason. A bare disable
+  # (no reason) is itself the default tell, so the rule still fires on it.
+  REQUIRES_REASON=0
+  case "$RULE_ID" in banned-display-inter|banned-display-roboto|banned-display-arial|banned-display-space-grotesk) REQUIRES_REASON=1 ;; esac
+
   while IFS= read -r f; do
     [ -z "$f" ] && continue
-    run_rule "$f" "$RULE_ID" "$SEVERITY" "$REGEX" >> "$TMP"
+    run_rule "$f" "$RULE_ID" "$SEVERITY" "$REGEX" "$REQUIRES_REASON" >> "$TMP"
   done < <(list_files "$FILES_GLOB" "$PROJECT_DIR")
 done < <(parse_rules)
 
