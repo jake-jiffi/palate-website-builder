@@ -292,6 +292,20 @@ full sweep.
 - Pattern: `useState[^(]*\(\s*\{[^}]*x\s*:[^,}]*,[^}]*y\s*:`
 - Fix: `useState` for continuous mouse / pointer values triggers a re-render per move. Use a `ref` and read it in the animation frame, or use Motion's `useMotionValue`.
 
+### Rule: fullpage-webgl-canvas
+- Severity: High
+- Mode: always
+- Files: *.tsx,*.astro
+- Pattern: `<Canvas\b(?=[^>]*(?:h-screen|min-h-screen|height:\s*100vh|height:\s*100dvh))`
+- Fix: A full-viewport-height WebGL `<Canvas>` (`h-screen` / `100vh`) as a permanent background blows the motion budget (`references/motion-and-3d.md`): one canvas per page, never full-page, `frameloop="demand"`, `dpr` capped at 2. Constrain the canvas to a bounded, reserved aspect-ratio box, hydrate it `client:visible`, and ship a static poster as the LCP and the reduced-motion fallback.
+
+### Rule: r3f-frameloop-always
+- Severity: Medium
+- Mode: always
+- Files: *.tsx
+- Pattern: `<Canvas(?![^>]*frameloop)[^>]*>`
+- Fix: An R3F `<Canvas>` without `frameloop` runs a free RAF loop and drains mobile battery / GPU. Set `frameloop="demand"` (and `"never"` under reduced motion) per the motion budget (`references/motion-and-3d.md`). The Tier-2 island MUST also gate on `prefers-reduced-motion` in JS and render a static poster - the global CSS switch cannot stop a three.js draw loop. ux-lint-disable r3f-frameloop-always to opt out for a deliberately animated above-the-fold hero with a poster fallback.
+
 ### Rule: button-without-type
 - Severity: Medium
 - Mode: always

@@ -7,6 +7,7 @@ import "../styles/globals.css";
 import { ClientRouter } from "astro:transitions";
 import { VisualEditing } from "@sanity/astro/visual-editing";
 import ExploreSwitcher from "../components/ExploreSwitcher.astro";
+import Motion from "../components/Motion.astro";
 
 interface Props {
   title: string;
@@ -52,6 +53,7 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
   </head>
   <body>
     <ExploreSwitcher />
+    <Motion />
     <slot name="header" />
     <main><slot /></main>
     <slot name="footer" />

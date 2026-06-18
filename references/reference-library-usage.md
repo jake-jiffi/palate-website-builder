@@ -113,6 +113,13 @@ section), not an optional extra.
    section, re-skinned to the client brand: start each component from its
    `componentPrompts`, keep its `sections[]`/`pages[]` rhythm, reproduce its named
    signatureMove (named and located in the code).
+4b. **If the section carries an audacious motion / 3D / scroll moment, run the
+   buildability oracle FIRST** (see "The buildability oracle" below): decompose the
+   moment into named mechanics and resolve each to its closest precedent +
+   `astro_recipe`, or, where the library fails closed, to the matching
+   `references/motion-and-3d.md` recipe and its perf / reduced-motion budget. Build
+   only what the oracle returns as buildable; never ship a guessed shader / 3D / pointer
+   interaction. (Skip this step for calm conversion sections - they need only steps 1-4.)
 5. **Check against `doDont` BEFORE emit**: the composed section must honour the
    donor's Do rules and break none of its Don'ts. Hard pre-emit gate, not advice.
    Audit dimension 11 re-checks it against the structured `doDont`.
@@ -125,6 +132,122 @@ or `layer:"signature_moves"`, and never views the inner-page screenshots, is
 leaving the taste layer and the section depth unused - the exact thing that stops
 output looking generic. The depth gate checks for those rich layers, not just call
 count.
+
+## The buildability oracle - decompose ambition into buildable mechanics
+
+The MCP is not only a craft library, it is a **buildability oracle**. When CONVERGE
+(`references/story-engine.md`) advances an audacious concept, do NOT build it from
+memory of "how something like that probably works". Decompose it into its
+constituent mechanics, then ask the library, per mechanic, for the closest real
+precedent and its `astro_recipe`, so ambition is grounded in **how someone actually
+built something like this on this stack**, not in a guess. This is also the
+mechanism behind CONVERGE's craft-feasibility axis: the oracle's per-mechanic
+verdict IS that score.
+
+Run this only when the carried concept is audacious (an ambitious motion / 3D /
+scroll-choreography moment, not a calm conversion page). For a calm brief the
+section-build recipe above is sufficient. Where it runs, follow the exact query
+sequence:
+
+**Step 0 - route the whole concept (one call, get a spine).**
+`refs_match_brief { brief: "<the audacious concept in prose>", format: "detailed" }`
+(or `refs_for_business` for a named real business). It returns the three closest
+refs plus the inferred style / mode / cluster. Pick ONE as the structural
+**backbone**; the rest are donors.
+
+**Step 1 - decompose the concept into named mechanics.** Map it to the MCP's
+mechanic vocabulary (confirm the live list with `refs_insights { topic:"mechanics" }`).
+Example: "a living, shader-lit homepage that scrubs a 3D product through the hero
+and morphs into the detail page" decomposes to `shader-surface` (Tier-2 Recipe 2),
+`product-rotate` / `model-viewer-3d` (Recipe 1), `scrub-timeline` (Recipe 3), a
+shared-element View Transition (Recipe 6) and `kinetic-type` (Recipe 7). The recipes
+live in `references/motion-and-3d.md`.
+
+**Step 2 - for EACH mechanic, find the closest precedent (the oracle loop).**
+Prefer the exact facet path (it returns a `coverage` signal); fall back to semantic
+where no facet exists:
+
+```
+// faceted (preferred where a facet / mechanic exists):
+refs_search { device: "scrub-timeline", tier: "flagship", responseFormat: "md" }
+refs_search { device: "kinetic-type", intensity: "bold", responseFormat: "md" }
+refs_search { hasWebgl: true, canvasFamily: "near-white", responseFormat: "md" }  // light-WebGL
+// semantic (where the mechanic is not yet a facet, e.g. shader / cursor-physics):
+refs_search { query: "fluid distortion shader gradient-mesh hero", responseFormat: "md" }
+```
+
+**Read the coverage signal, do not trust the rank alone.** If `coverage:"good"`
+AND the top `similarity` is high AND the returned cluster actually matches the
+mechanic, that is a real precedent. If the hits are off-topic fallbacks, treat it
+as **NO donor** (see the graceful fallback below) rather than cloning the wrong
+ref.
+
+**Step 3 - for each chosen precedent, pull the buildable craft.**
+
+```
+refs_get { slug: "<precedent>", layer: ["concept","signature_moves","do_dont"] }
+refs_get_astro_recipe { slug: "<precedent>" }   // islands, dpr/triangle budget, reduced-motion path
+refs_get_tokens { slug: "<precedent>" }          // adaptable tokens (re-skin, never clone)
+refs_get_screenshot { slug: "<precedent>" }      // see the pixels before composing
+```
+
+The `astro_recipe` is the terminus: `stas-bondar`, for instance, returns a full
+island strategy (a single `client:visible` WebGL island, Lenis as `client:idle`,
+the expo `cubic-bezier(0.84,0,0.16,1)`, a DPR / particle budget, and the mandatory
+static poster + reduced-motion path). That is what makes a mechanic buildable on
+the Jiffi stack rather than a guess.
+
+**Step 4 - widen each donor, then assemble.** `refs_similar { slug: "<backbone>" }`
+to expand the shortlist from the best find. Compose ONE backbone for structure,
+then graft specific moves (a palette, one motion, one component, the conversion
+pattern) from at least three other donors via the organ-transplant method below.
+Re-skin every identity layer; never clone one reference.
+
+**Step 5 - emit the build plan (one row per mechanic).** A table:
+`mechanic -> precedent slug (or "no donor") -> Template Recipe -> island / hydration ->
+perf + reduced-motion note`. Where the oracle found a real precedent, the row cites
+its `astro_recipe`. Where it found no donor (Step 2 failed closed), the row cites the
+matching `references/motion-and-3d.md` recipe and flags the CURATE gap. Write the
+per-mechanic verdicts to `manifest.buildability`
+(`{ ran, mechanics:[{ name, precedent_slug, astro_recipe_pulled, feasible, fallback }] }`).
+
+### The graceful fallback - what to do when the library fails closed
+
+The corpus is deep but narrow on the frontier. Three high-value mechanics currently
+return real-but-wrong fallbacks (the query succeeds, the hits are off-topic), so the
+oracle must read them as NO donor, never build from them:
+
+- **shader-surface hero** (fluid-distortion / gradient-mesh / noise / raymarch /
+  dither) - the live query returns `raycast` / `menuxl` / `microdot`, none of which
+  are shaders.
+- **interactive 3D product** (glTF / drag-to-orbit / explode-view) - the live query
+  returns `polecat` (an illustrated island) and `roberta-ungaro` (photography), zero
+  glTF / orbit.
+- **cursor-driven physics** (magnetic buttons / pointer repulsion / particle field) -
+  the live query returns `guidepost-montessori` / `ichiki-109` / `cursor` / `bychudy`,
+  and `cursor` is the brand name, not the mechanic.
+
+For any mechanic where the oracle reads NO donor:
+
+1. **Do not fabricate a precedent and do not clone the wrong ref.** Set
+   `feasible: false` (no donor) but still buildable via the recipe layer, and record
+   the named fallback.
+2. **Fall back to the matching Template Recipe** in `references/motion-and-3d.md`
+   (Recipe 2 for shader-surface, Recipe 1 for interactive 3D, the cursor-physics note
+   for pointer-physics), built to that recipe's performance + prefers-reduced-motion
+   budget (a static poster is the LCP and the no-JS / reduced-motion state). The
+   recipe layer is exactly the floor that lets a build reach the ceiling even where a
+   donor is thin.
+3. **Log the donor gap, do not silently absorb it.** These fail-closed mechanics are
+   the CURATE work-list - tracked for sourcing in the private `palate-library` repo
+   (the demand-ranked donor list in `docs/ambition-tier-requirements-2026-06-18.md`).
+   Recording the gap when a real build hits it is what grows the moat from real
+   demand. Sourcing the donors is library / moat work, not skill work; the skill's
+   job is to fall back cleanly and note the gap.
+
+So the oracle fails **open**: a thin or missing donor never blocks an ambitious
+build, it routes it to the template recipe and its budget, and writes a CURATE task
+instead of a wrong clone.
 
 ## The organ-transplant method (structure wholesale, then graft two organs)
 
