@@ -44,7 +44,7 @@ axis forces a revision pass before emit.
 Document the scores in the build transcript or in `handover.md`; not for the
 client, for the next reviewer.
 
-Source: adapted from the Hallmark `references/slop-test.md` rubric.
+Source: adapted from an internal slop-test rubric.
 
 ### 2b. The visual rubric gate (judge the RENDER, then loop)
 
