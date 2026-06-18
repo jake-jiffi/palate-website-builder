@@ -17,7 +17,11 @@ check() { # desc  expected_exit  manifest_path
 
 check "deep build passes" 0 "$DIR/fixtures/manifest-deep.json"
 check "shallow build is blocked" 2 "$DIR/fixtures/manifest-shallow.json"
-check "missing manifest is blocked" 2 "$DIR/fixtures/no-such-manifest.json"
+# Fail-open contract: a missing manifest is NOT a tracked build, so the gate SKIPS
+# (exit 0), never blocks. A public-plugin user editing an existing app, or one whose
+# MCP token is not set, must never be trapped. (The gate is the spine of the fail-open
+# invariant; this asserts the contract the gate actually implements, not a stricter one.)
+check "missing manifest skips (fail-open)" 0 "$DIR/fixtures/no-such-manifest.json"
 check "token/concept-only read is blocked (R2 rich-layer gate)" 2 "$DIR/fixtures/manifest-token-only.json"
 check "layer:pages counts as a rich read" 0 "$DIR/fixtures/manifest-pages.json"
 
