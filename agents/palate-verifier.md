@@ -30,9 +30,14 @@ reads). Do not write or edit any source file - you gate, you do not build.
    different backbones and re-skin from different donors.
 
 3. **Anti-default / slop lint** (no Claude-default shapes or AI-tell copy):
-   `bash scripts/ux-lint.sh <built file(s)>` and read `references/anti-patterns.md`.
-   Flag a gradient hero, three-card value props, a centred stack over a stock photo,
-   feature-grid sameness, repeated section order, and the AI-tell vocabulary.
+   `bash scripts/ux-lint.sh <built file(s)>` and read `references/anti-patterns.md` (and
+   the full tell catalogue it links, `references/ai-slop-tells.md`). Flag a gradient hero,
+   gradient-clipped headline text, three-card value props, a centred stack over a stock
+   photo, feature-grid sameness, repeated section order, the AI-tell vocabulary, and the
+   new flag-with-justify findings (trendy default faces, raw untuned accent colours,
+   gradient-overuse, decorative glassmorphism, the serif-italic-in-a-heading treatment,
+   AI-washing copy). A justify-or-flag finding passes ONLY with a `ux-lint-disable` plus a
+   real one-line brand reason; a bare disable is itself the tell and still fires.
 
 4. **Provenance mixing** (Brief 5's "compose from at least three donors", enforced):
    read `build-manifest.json` `references_surveyed`, `signature_move`, `layers_read`,
@@ -53,10 +58,18 @@ reads). Do not write or edit any source file - you gate, you do not build.
    4. `Read` each PNG and score the six axes (Philosophy / Hierarchy / Execution /
       Specificity / Restraint / Variety) 1 to 5 each against `references/visual-rubric.md`
       - the FIXED rubric and the fixed defect checklist (overflow, overlap, contrast,
-      missing imagery, mobile hero legibility), plus the perceptual floors
+      missing OR fabricated imagery, mobile hero legibility, default / genre-cliche accent
+      in the render, and the decorative tell shapes: glassmorphism / bento as decoration,
+      the universal icon-tile feature-card row, cursor-chasing or hover-hides motion,
+      inconsistent visual language across sections), plus the perceptual floors
       (`references/brand/perceptual-floors.md`). Do NOT score from `critique-discipline.md`
-      prose alone. **The bar: every axis >=4, no axis below 3, no defect, no floor
-      violation, no placeholder/empty imagery, zero console errors.**
+      prose alone. Then run the **AI-slop Quick QA pass** from `references/visual-rubric.md`
+      (the field guide's own list, `references/ai-slop-tells.md`): tick more than two and
+      the build is still AI-default; and apply the **remove-the-word-"AI" test** to any
+      "AI-powered" claim in the render (remove "AI", re-read; unchanged product = a fail,
+      name it). **The bar: every axis >=4, no axis below 3, no defect, no floor
+      violation, no placeholder/empty/fabricated imagery, two or fewer Quick QA ticks,
+      zero console errors.**
    5. Apply the loop guardrails from `references/visual-rubric.md` verbatim:
       - **A revision is accepted only if the rubric score improves** (the axis sum is
         strictly greater, or a named defect is resolved with no new defect introduced).

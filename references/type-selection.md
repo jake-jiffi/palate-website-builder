@@ -38,3 +38,24 @@ face itself.
   with `ux-lint-disable banned-display-<face>` plus a one-line reason (the brand
   calls for it because ...). If you cannot state that reason, it is the default
   tell, replace it with a face the brand actually chose.
+
+## Two typographic tells to avoid by reflex
+
+These are named in the field guide (`references/ai-slop-tells.md`) as 5-second
+giveaways. Both have a mechanical flag (`banned-display-instrument-serif`,
+`banned-display-geist`, `reseed-serif-italic-heading` in `references/anti-patterns.md`),
+but the doctrine is the real lever because both are too variable to catch on every
+authoring shape.
+
+- **The of-the-moment display serif used by reflex.** Instrument Serif (and whatever
+  trendy display serif follows it) bolted onto a generic sans body is the current
+  version of the same default Space Grotesk was in 2023. The face is not banned, but
+  reaching for it because it is current, not because the brand chose it, is the tell.
+  Decide the editorial serif the brand voice actually calls for.
+- **The serif-italic accent word in a sans heading (the Reseed "slop" treatment).** A
+  single word inside a sans headline flipped to a serif italic to fake emphasis (e.g.
+  "give your AI a *palate*"). It has become an instant AI-design signature because the
+  generators all reach for it. Carry emphasis with the brand's real type system, weight,
+  size, a genuine display face, not a borrowed italic word. If a one-word italic IS a
+  deliberate brand device, it is a justified `ux-lint-disable reseed-serif-italic-heading`
+  with a one-line reason, not a default.

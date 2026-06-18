@@ -117,7 +117,9 @@ list_files() {
 
 # Run one rule against one file via perl PCRE. Emits TSV: file\tline\tseverity\trule\ttext
 #
-# requires_reason (5th arg, default 0): for the JUSTIFY-OR-FLAG rules (banned-display-*),
+# requires_reason (5th arg, default 0): for the JUSTIFY-OR-FLAG rules (the banned-display-*
+# faces plus the trendy-default faces, the raw untuned accent colours, gradient-overuse,
+# decorative glassmorphism, the serif-italic-in-a-heading treatment and AI-washing copy),
 # a `ux-lint-disable <rule>` directive only suppresses the finding when it is ACCOMPANIED
 # by a one-line reason (non-trivial text after the rule id). A bare disable with no reason
 # is itself the default tell, so the rule still FIRES on it. For every other rule a bare
@@ -237,7 +239,12 @@ while IFS=$'\t' read -r RULE_ID SEVERITY MODE FILES_GLOB REGEX; do
   # is a `ux-lint-disable banned-display-<face>` WITH a one-line reason. A bare disable
   # (no reason) is itself the default tell, so the rule still fires on it.
   REQUIRES_REASON=0
-  case "$RULE_ID" in banned-display-inter|banned-display-roboto|banned-display-arial|banned-display-space-grotesk) REQUIRES_REASON=1 ;; esac
+  case "$RULE_ID" in
+    banned-display-inter|banned-display-roboto|banned-display-arial|banned-display-space-grotesk) REQUIRES_REASON=1 ;;
+    banned-display-instrument-serif|banned-display-geist) REQUIRES_REASON=1 ;;
+    accent-indigo-default|accent-tailwind-class|accent-cyan-on-dark|accent-emerald-cta|accent-friendly-teal) REQUIRES_REASON=1 ;;
+    gradient-overuse|glassmorphism-decorative|reseed-serif-italic-heading|ai-washing-copy) REQUIRES_REASON=1 ;;
+  esac
 
   while IFS= read -r f; do
     [ -z "$f" ] && continue

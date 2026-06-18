@@ -19,6 +19,12 @@ frontend-design skill, the curated subset of anti-slop-ui's 34 tells, the
 Vercel `web-interface-guidelines/command.md` code-level rules (copied in, NOT
 remote-fetched), and Jiffi's house-style (no em dashes, Australian English).
 
+The canonical catalogue of every known tell (the checklist a build is held to,
+including the structural / substance / trust-chrome ones a linter cannot reliably
+catch, and the Quick QA pass) is `references/ai-slop-tells.md`. This file is the
+deterministic and doctrinal subset that the skill enforces; that file is the full
+map of what those rules are chasing. Read it when adding a rule.
+
 ---
 
 ## House style
@@ -91,6 +97,26 @@ and decide the FACE per brief.
 - Pattern: `font-family\s*:\s*['"]?system-ui['"]?\s*[,;]`
 - Fix: `system-ui` as the FIRST family in a display stack means the page renders different fonts on different OSes; do not use as primary. Acceptable only at the tail of a stack as a safety net.
 
+The two faces below are the CURRENT of-the-moment defaults (the 2025-2026 successors
+to Space Grotesk): the trendy display serif and the trendy geometric sans a model now
+reaches for when it has no opinion. Same JUSTIFY-OR-FLAG model as the four above, a
+`ux-lint-disable banned-display-<face>` with a one-line brand reason passes; a bare
+disable does not.
+
+### Rule: banned-display-instrument-serif
+- Severity: Medium
+- Mode: always
+- Files: *.css,*.ts,*.tsx,*.astro,*.mjs
+- Pattern: `font-family\s*:\s*['"]?Instrument Serif`
+- Fix: Instrument Serif is the current of-the-moment display serif and a named 5-second AI giveaway (`references/ai-slop-tells.md`) - the face bolted onto a generic sans body by reflex. Justify it with a one-line brand reason on a `ux-lint-disable banned-display-instrument-serif` (the brand calls for it because ...) only if the type system carries real contrast and craft, or replace it with an editorial serif the brand actually chose.
+
+### Rule: banned-display-geist
+- Severity: Medium
+- Mode: always
+- Files: *.css,*.ts,*.tsx,*.astro,*.mjs
+- Pattern: `font-family\s*:\s*['"]?Geist(?!\s+Mono)`
+- Fix: Geist (Vercel's default sans) is the new Inter - the no-opinion geometric sans of the v0 / Next starter, named in the field guide alongside Inter. Justify with a one-line brand reason on a `ux-lint-disable banned-display-geist`, or replace it with a more committed face the brand chose. (Pattern excludes "Geist Mono", which is a legitimate code face, not a display tell.)
+
 ---
 
 ## Banned visual defaults
@@ -122,6 +148,96 @@ and decide the FACE per brief.
 - Files: *.css,*.ts,*.tsx,*.astro
 - Pattern: `gradient\((?:[^,()]|\([^)]*\))*,(?:[^,()]|\([^)]*\))*,(?:[^,()]|\([^)]*\))*,(?:[^,()]|\([^)]*\))*,`
 - Fix: A gradient with four or more colour stops reads as a sticker. Two stops at most for marketing surfaces; three only if the brand documents it. (Pattern counts only top-level commas, so an `rgba()`/`hsl()`/`calc()` colour's internal commas do not falsely trip a 2-stop scrim or vignette.)
+
+---
+
+## Gradient-text, gradient-overuse and glassmorphism (JUSTIFY-OR-FLAG)
+
+### Rule: gradient-text-clip
+- Severity: Medium
+- Mode: always
+- Files: *.css,*.ts,*.tsx,*.astro
+- Pattern: `(?i)(bg-clip-text[^>"']*text-transparent|text-transparent[^>"']*bg-clip-text|-webkit-background-clip\s*:\s*text|(?<!-webkit-)background-clip\s*:\s*text)`
+- Fix: Gradient-clipped text on a headline (`bg-clip-text text-transparent` with a `from-*/to-*` gradient, or `background-clip:text` + `color:transparent`) is the universal #1 5-second AI giveaway (`references/ai-slop-tells.md`). The purple-pink CSS gradient is already a hard Critical block; this catches the Tailwind utility idiom the colour rule misses, in ANY hue. Carry hierarchy with weight, size and composition, not rainbow text. If a single gradient word is a genuine brand device, justify it on a `ux-lint-disable gradient-text-clip` with a one-line reason.
+
+### Rule: gradient-overuse
+- Severity: Medium
+- Mode: always
+- Files: *.css
+- Pattern: `(?im)^(?=(?:[^\n]*\bgradient\([^\n]*){3,})`
+- Fix: Three or more `gradient()` declarations on one CSS line (or gradient-on-everything across a stylesheet) reads as decoration by reflex. Gradients earn their place one or two at a time; if every surface has one, the page has none. Justify a genuine multi-gradient system on a `ux-lint-disable gradient-overuse` with a one-line brand reason. (Per-line, low-FP: only fires when three gradients stack on a single line, e.g. a layered `background` shorthand.)
+
+### Rule: glassmorphism-decorative
+- Severity: Medium
+- Mode: always
+- Files: *.css,*.ts,*.tsx,*.astro
+- Pattern: `(?i)(backdrop-filter\s*:\s*[^;{}]*blur|\bbackdrop-blur(-(sm|md|lg|xl|2xl|3xl|none))?\b)`
+- Fix: Frosted-glass panels (`backdrop-filter: blur`, Tailwind `backdrop-blur`) used as decoration are a named tell, now in backlash, and routinely drop body text below the contrast floor. Reserve a blur for a genuine overlay where the layer beneath must read through (a sticky nav over a photo). If glass is a brand decision, justify it on a `ux-lint-disable glassmorphism-decorative` with a one-line reason, and keep it off body copy. See the glassmorphism doctrine below.
+
+---
+
+## Raw untuned accent colours used AS the brand accent (JUSTIFY-OR-FLAG)
+
+These flag the framework / genre-default accent colours when they are used AS the
+primary accent (a custom property named accent/primary/brand/cta, or a Tailwind
+accent class), not anywhere the colour merely appears. A brand that genuinely owns
+the colour passes with a `ux-lint-disable accent-<rule>` plus a one-line reason; a
+bare disable does not. Tints (50-300) and deep shades (700+) are NOT flagged, only the
+accent band (400-600). The render-side complement is the visual rubric defect
+"the accent reads as a raw framework default / the genre cliche".
+
+### Rule: accent-indigo-default
+- Severity: Medium
+- Mode: always
+- Files: *.css,*.ts,*.tsx,*.astro,*.mjs
+- Pattern: `(?i)--[a-z-]*(accent|primary|brand|cta)[a-z-]*\s*:\s*#?(6366f1|818cf8|8b5cf6|a855f7|7c3aed|6d28d9)\b`
+- Fix: The raw Tailwind indigo / violet hex (#6366F1 and its family) assigned to an accent / primary / brand / cta custom property is "that one shade of purple" - the single most universal visual AI tell (`references/ai-slop-tells.md`). Tune a real brand accent. If the brand genuinely owns this purple, justify it on a `ux-lint-disable accent-indigo-default` with a one-line reason.
+
+### Rule: accent-tailwind-class
+- Severity: Medium
+- Mode: always
+- Files: *.astro,*.tsx,*.ts,*.html
+- Pattern: `(?i)\b(bg|text|border|from|to|ring|fill)-(indigo|violet|purple)-(4|5|6)\d\d\b`
+- Fix: A raw Tailwind indigo / violet / purple accent class (e.g. `bg-indigo-500`, `text-violet-600`, `from-purple-500`) used as the brand accent is the default-palette tell. Tune a brand colour into the Tailwind config and use a brand token. If the brand owns purple, justify it on a `ux-lint-disable accent-tailwind-class` with a one-line reason. (Only the 400-600 accent band fires; tints and deep shades are fine.)
+
+### Rule: accent-cyan-on-dark
+- Severity: Medium
+- Mode: always
+- Files: *.astro,*.tsx,*.ts,*.html
+- Pattern: `(?i)\b(bg|text|border|from|to|ring|fill)-cyan-(3|4|5)\d\d\b`
+- Fix: A bright cyan accent class (the "cyan-on-dark" tell) is a very common generated-look default. Decide a brand accent instead. If cyan is genuinely the brand, justify it on a `ux-lint-disable accent-cyan-on-dark` with a one-line reason.
+
+### Rule: accent-emerald-cta
+- Severity: Medium
+- Mode: always
+- Files: *.astro,*.tsx,*.ts,*.html
+- Pattern: `(?i)\b(bg|from|to)-emerald-(4|5|6)\d\d\b`
+- Fix: A raw emerald CTA (`bg-emerald-500`) is the SaaS default-green accent. Pick a brand colour; green is a genre default even when executed well (`critique-discipline.md` habit 5, category-default palette). If green is the brand, justify it on a `ux-lint-disable accent-emerald-cta` with a one-line reason.
+
+### Rule: accent-friendly-teal
+- Severity: Medium
+- Mode: always
+- Files: *.css,*.ts,*.tsx,*.astro,*.mjs
+- Pattern: `(?i)--[a-z-]*(accent|primary|brand|cta)[a-z-]*\s*:\s*#?008275\b`
+- Fix: The "friendly" teal-green (~#008275) assigned to the brand accent is the newer anti-purple-but-still-generic palette (soft beige + teal + curved friendly fonts). It is a default, just a different one. Tune a real accent or justify it on a `ux-lint-disable accent-friendly-teal` with a one-line reason.
+
+---
+
+## Stock card / heading shapes (JUSTIFY-OR-FLAG)
+
+### Rule: accent-side-border-card
+- Severity: Medium
+- Mode: always
+- Files: *.astro,*.tsx,*.ts,*.html
+- Pattern: `(?i)class="[^"]*\bborder-l-4\b[^"]*\b(border|from|bg)-(indigo|violet|purple|cyan|emerald|blue|teal)-(4|5|6)\d\d\b`
+- Fix: A thick coloured stripe down one side of a rounded card (`border-l-4` + an accent colour) is the Tailwind-UI "callout" reflex (`references/ai-slop-tells.md`). Reserve a coloured edge for a real state (an error, a selected plan) where the colour means something; do not put it on every card as default decoration. If this is a genuine callout, justify it on a `ux-lint-disable accent-side-border-card` with a one-line reason. See the side-border doctrine below.
+
+### Rule: reseed-serif-italic-heading
+- Severity: Medium
+- Mode: always
+- Files: *.astro,*.tsx,*.html
+- Pattern: `(?i)<h[1-3][^>]*>[^<]*<(span|em|i)[^>]*(font-family[^>]*serif|class="[^"]*\b(italic[^"]*(serif|font-serif)|(serif|font-serif)[^"]*italic)\b)`
+- Fix: A serif-italic accent word dropped into a sans heading (the Reseed "slop" treatment, e.g. `<h1 class="font-sans">give your AI a <em class="font-serif italic">palate</em></h1>`) is a named, very-common typographic tell. The mix faked emphasis by reflex. Carry the emphasis with weight, size or the page's real type system instead. If a single italic word is a deliberate brand device, justify it on a `ux-lint-disable reseed-serif-italic-heading` with a one-line reason. (Catches the inline-markup form only; the broader pattern is doctrine in `references/type-selection.md`.)
 
 ---
 
@@ -245,6 +361,85 @@ full sweep.
 - Files: *.md,*.mdx,*.astro,*.ts,*.tsx
 - Pattern: `(?i)testament to`
 - Fix: "A testament to" is empty praise. Give the concrete evidence instead (the number, the outcome, the named result).
+
+The rules below extend the AI-tell list with the field guide's tapestry talk, contrast
+framing, therapy-mode openers and the exact stock pricing / free-tier phrases
+(`references/ai-slop-tells.md`). Same mechanism as the phrases above: a bare
+`ux-lint-disable <rule>` suppresses a genuine quote / proper-noun use.
+
+### Rule: ai-tell-rich-tapestry
+- Severity: High
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\brich tapestry\b`
+- Fix: "A rich tapestry of ..." is signature LLM metaphor. Name the actual things plainly instead of weaving them into a tapestry.
+
+### Rule: ai-tell-landscape-of
+- Severity: High
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\bthe landscape of\b`
+- Fix: "The landscape of {industry}" is throat-clearing stock metaphor. Name the field plainly ("in payments", "for restaurants") or drop the phrase.
+
+### Rule: ai-tell-fast-paced-world
+- Severity: High
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)in today'?s fast[- ]?paced world`
+- Fix: "In today's fast-paced world" is pure boilerplate (caught with or without the apostrophe and with a hyphen or a space). Open with a specific observation about the reader's actual situation. (Complements `ai-tell-fast-paced`, which catches the shorter "in today's fast-paced" stem.)
+
+### Rule: ai-tell-contrast-framing
+- Severity: Medium
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\bit'?s (not just|not only) [a-z]|\bit'?s [a-z]+, not [a-z]`
+- Fix: Contrast-framing headline formulas ("It's not just X, it's Y", "It's X, not Y") are an overused AI copy shape. State the one true thing directly; you rarely need the foil. Quote a real source on a `ux-lint-disable ai-tell-contrast-framing` if it is genuine.
+
+### Rule: ai-tell-and-honestly
+- Severity: Medium
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)(^|[>"'(])\s*and honestly[,?\s]`
+- Fix: "And honestly?" / "And honestly," as an opener is therapy-mode tic copy. Cut the throat-clearing and lead with the point. (Anchored to a sentence / element start, so "and honestly earned" mid-sentence does not fire.)
+
+### Rule: ai-tell-youre-not-alone
+- Severity: Medium
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\byou(?:'re| are) not (alone|broken)\b`
+- Fix: "You're not alone" / "you're not broken" is therapist-talk that has become an AI tell in marketing copy. Speak to the specific situation, not the reassurance template.
+
+### Rule: ai-tell-simple-honest-pricing
+- Severity: Medium
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\bsimple,? honest pricing\b`
+- Fix: "Simple, honest pricing" is a verbatim stock phrase (`references/ai-slop-tells.md`). Show the price and what it buys; the adjectives prove nothing. Write the heading the brand would actually use.
+
+### Rule: ai-tell-free-forever
+- Severity: Medium
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\b(completely )?free forever\b`
+- Fix: "Completely free forever" is free-tier microcopy slop. Say exactly what the free tier includes and where it ends, in plain words.
+
+### Rule: ai-tell-no-registration-required
+- Severity: Medium
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\bno (registration|sign-?up|credit card) required\b`
+- Fix: "No registration required" / "No credit card required" is generated free-tier eyebrow microcopy. If frictionless start is a real selling point, say it in the brand's own voice and only once, not as a stock badge.
+
+---
+
+## AI-washing copy (JUSTIFY-OR-FLAG)
+
+### Rule: ai-washing-copy
+- Severity: High
+- Mode: always
+- Files: *.md,*.mdx,*.astro,*.ts,*.tsx
+- Pattern: `(?i)\bAI[- ]?(powered|driven|enabled|native|first)\b|\bpowered by AI\b`
+- Fix: "AI-powered" / "powered by AI" / "AI-driven" is AI-washing, a now-regulated claim and a universal tell. The test: remove the word "AI" and read the sentence again - if the product is unchanged, the AI is decoration. Lead with the outcome; if the AI is real, name what only a model could do. Justify a true claim on a `ux-lint-disable ai-washing-copy` with a one-line reason naming what the AI actually does (a bare disable does not pass - the reason IS the test). See the AI-washing doctrine below.
 
 ---
 
@@ -419,6 +614,207 @@ opening line). Keep both in step if you tune the threshold.
 - Files: *.astro,*.html
 - Pattern: `style="[^"]*text-transform\s*:\s*uppercase[^"]*(mono|monospace|font-mono)[^"]*letter-spacing\s*:\s*0?\.(1[0-9]|[2-9])[^"]*"`
 - Fix: This is the tracked-mono eyebrow kicker as an inline style: uppercase + a mono font + letter-spacing >=0.1em on one element. It is the worst-styled case of the kicker tell - but the kicker PATTERN itself (any small label above a heading, however styled) is the thing to avoid. The default fix is to DELETE the label and let the heading carry the section. If a label is truly warranted, set `text-transform:none`, swap to the brand sans (not mono), and drop letter-spacing to <=0.01em. See the section above for the doctrine and the grounded alternative.
+
+---
+
+## Structural / substance / trust-chrome tells (DOCTRINE, not lintable)
+
+These are the AI-slop tells from `references/ai-slop-tells.md` that a regex cannot
+catch reliably: they are shapes, substance failures, copy patterns and trust smells.
+They are checked by judgement, at Compose and in the verifier's render read (the six
+axes + the defect checklist + the Quick QA pass). Each is the why plus the do-instead,
+in the same voice as the lint rules. None of these blocks the build mechanically; the
+combination is the smell, and the verifier names and locates the offenders.
+
+### Anti-pattern: the identical hero formula
+
+An eyebrow pill, a big centred H1, a one-line subhead and a primary + ghost button,
+stacked and centred, with nothing else above the fold. Very common. This is the exact
+shape v0 / Lovable / Bolt emit by default, so it reads as "started from the template
+and never touched the hero". The structure is not wrong, the untouched-ness is.
+
+Do instead: build the hero off-centre, or add a real visual element the brief earns (a
+product still, a chart, an editorial quote, an asymmetric image), or commit to a
+maximalist text-only hero with extreme type. Drop the eyebrow pill, let the heading
+carry it (cross-ref the eyebrow / kicker doctrine above). The deterministic backstop is
+`stock-hero-centred-stack`, but it only catches one literal markup shape; the real lever
+is reproducing a named signature move from the lead reference (`critique-discipline.md`
+habit 5).
+
+### Anti-pattern: feature-pill rows
+
+A row of one-word capability chips (`Automated`  `Scalable`  `Efficient`  `Intelligent`
+ `Secure`), usually small rounded pills under the hero. Common. They say nothing
+specific, they are adjective soup wearing the shape of a feature, and a model reaches
+for them because they fill the band cheaply. Bonus tell if any pill repeats a word from
+the headline.
+
+Do instead: name the actual capabilities as short specific phrases tied to a user
+outcome, or cut the band entirely. If the page needs a scannable capability list, give
+each item a real verb and object ("Reconciles Stripe payouts nightly"), not a single
+abstract adjective.
+
+### Anti-pattern: the universal feature card (rounded icon-tile above a heading)
+
+A small rounded-square icon container (a tinted box with a Lucide / Heroicons glyph
+inside) sitting above a feature heading, repeated three across in a symmetric row. Very
+common. It is the single most-copied SaaS component of the era and now reads as a
+template even when executed cleanly. The icon tile in particular is the tell: it is
+decoration standing in for a decision.
+
+Do instead: vary the card aspect ratios, mix in a real screenshot, split the features
+across two visual treatments, or carry the page's own signature motif (a numbered index,
+an editorial ledger, the donor's real component) into the band instead of three equal
+icon-tile cards. If a glyph genuinely helps, it inherits the brand's icon language, it is
+not a generic tinted square. Cross-ref `industry-patterns.md` SaaS ("no three-feature
+cards with identical icons") and `critique-discipline.md` habit 5.
+
+### Anti-pattern: a thick coloured border on one side of a rounded card
+
+A rounded card with a thick accent-coloured stripe down one edge (`border-l-4` and the
+brand colour, the "callout" / "alert" card shape). Very common. It is a Tailwind-UI
+reflex: a quick way to make a plain card look "designed" without a real layout decision.
+A page where every card wears the same accent stripe reads as generated.
+
+Do instead: let the card's content, spacing and type carry it; reserve a coloured edge
+for a genuine state (an error, a selected plan) where the colour means something, not as
+default decoration on every card. There is a flag-with-justify lint for the
+`border-l-4` + accent shape (`accent-side-border-card` below) so a real callout passes
+with a one-line reason.
+
+### Anti-pattern: a bento grid used as lazy decoration
+
+A "bento" grid (mixed-size tiles in a rounded grid) reached for as a trendy name rather
+than because the content wants asymmetric emphasis. Very common, now in backlash. The
+grid itself is fine, the tell is the trendy-label-as-substitute-for-craft: equal-weight
+tiles dressed up as a bento, nothing in the layout actually prioritising one tile over
+another, the same card content a plain grid would hold.
+
+Do instead: only build a bento when one or two tiles genuinely deserve more weight, and
+let the size differences encode real priority (the headline metric large, the supporting
+ones small). If every tile is equal, it is a card grid, build it as one and put the craft
+into type and spacing.
+
+### Anti-pattern: glassmorphism used as decoration
+
+Frosted-glass panels (`backdrop-filter: blur` behind a translucent card or nav) applied
+because it looks current, not because layering depth serves clarity. Very common, now in
+backlash, and it routinely drops body text below the contrast floor. The tell is glass on
+everything: a blurred nav, blurred cards, blurred modals, all at once, with no
+content reason.
+
+Do instead: use a solid or near-solid surface with a real border and shadow; reserve a
+blur for a genuine overlay where the layer beneath must read through (a sticky nav over a
+photo). If glass is a brand decision, it lives in the brand package as a documented
+effect with a tested contrast floor, not sprinkled inline. The lint flags decorative
+`backdrop-filter: blur` (`glassmorphism-decorative` below); justify a real overlay use.
+
+### Anti-pattern: decorative motion for its own sake
+
+Motion added because a site "should have motion", not because it is the argument: a
+cursor-following line, a hover that hides the very button it decorates, scroll-jacking, a
+parallax that fights reading, particles behind the hero. Common. The motion budget
+(`references/motion-and-3d.md`) catches the implementation cost; this is the taste
+failure underneath, motion that the page would be better without.
+
+Do instead: every motion finishes the sentence "this moves because {a specific product
+or user reason}" (the Conceptual Grounding Test, `critique-discipline.md` habit 3). Cut
+any motion that fails it. Motion serves the concept or it goes (`creative-principles.md`).
+The reduced-motion state must be the finished state, never a stuck `opacity:0`.
+
+### Anti-pattern: inconsistent visual language across sections
+
+Sections that look like they came from different sites: the type scale, spacing rhythm,
+corner radius, border weight, accent usage and density all shift band to band because the
+page was generated piecemeal with no shared constraints. Common. It is the signature of
+"generated section by section and never reconciled", and it is the inverse of the
+uniqueness the build is meant to hold across one page.
+
+Do instead: set the constraints once (the scale, the spacing unit, the radius, the border
+weight, where the accent is allowed) and hold every section to them. A section that reads
+as assembled next to designed ones is a named recurring-finish failure
+(`critique-discipline.md` habit 7); the verifier checks cross-section consistency from the
+render (`audit-dimensions.md` dims 1, 2, 8).
+
+### Anti-pattern: vanity stat strips
+
+A row of big numbers with no context or source ("10,000+  99.9%  24/7  150+"). Common. The
+numbers are decoration: unsourced, unexplained, often invented to fill a band. It is the
+cross-vertical sibling of the SaaS "trusted by 1000+" tell, promoted here as a general
+anti-pattern.
+
+Do instead: every number names what it counts and, where it is a proof claim, who it comes
+from ("1,240 invoices reconciled for {named customer}"). If a number cannot be sourced,
+cut it; an honest two real numbers beat four invented round ones. Cross-ref
+`creative-principles.md` ("real, or honestly placeheld; never fake it").
+
+### Anti-pattern: AI-washing ("AI-powered" on a product the AI does not change)
+
+"AI-powered", "powered by AI", "AI-driven" bolted onto a product whose behaviour does not
+actually depend on a model. Universal, and now a regulated claim in several markets. **The
+test: remove the word "AI" and read the sentence again. If the product is unchanged, the
+AI is decoration, cut the word.** This matters doubly for Palate's own category, where the
+positioning has to earn the claim.
+
+Do instead: lead with the outcome, not the mechanism. If the AI is real, show it doing
+something only a model could do (the specific task, the specific input to output), and name
+that, not the buzzword. There is a flag-with-justify lint (`ai-washing-copy` below): the
+justification must name what the AI actually does.
+
+### Anti-pattern: a "native app" that is just a browser wrapper
+
+Marketing a web view packaged in Electron / Capacitor / a WKWebView as a "native app" when
+nothing about it is native (no platform conventions, no offline, no native performance).
+Field observation, lower confidence, and largely out of scope for a website build, but if a
+build's copy makes the claim, hold it to honesty: do not call a wrapper native.
+
+Do instead: describe what it actually is ("works in your browser, installs to your home
+screen"), and only claim native where the build genuinely uses native capabilities.
+
+### Anti-pattern: a token / credit pricing page that over-explains
+
+A pricing page that spends more words explaining its credit / token accounting than
+describing the value (conversion tables, "1 credit = ", tiered multipliers, a calculator the
+visitor has to operate to find out what it costs). Field observation. Over-explaining the
+unit is a tell that the pricing model is doing the talking instead of the product.
+
+Do instead: lead with what the plan lets the visitor do and a plain price; if a credit model
+is genuinely necessary, give one clear sentence and a single worked example, not a ledger.
+Cross-ref the CTA / pricing discipline in `critique-discipline.md` habit 7.
+
+### Anti-pattern: fake glossy mockups where real product UI belongs
+
+A polished, fabricated product mockup (a rendered "dashboard" that the product does not
+actually show, a hero device frame with invented UI) presented as if it were a real
+screenshot. Common. It passes the empty-frame defect (it is not blank), so only judgement
+catches it: the UI is too clean, the data too tidy, nothing matches the real product.
+
+Do instead: show the real product UI (a true screenshot), or honestly placehold it and say
+so; never ship a glossy fake as if it were real (`creative-principles.md`: "real, or honestly
+placeheld; never fake it"). The verifier's render read includes a check for fabricated
+mockups standing in for real screens (`references/visual-rubric.md`, defect 4 extended).
+
+### Anti-pattern: trust-chrome smells on a brand-new microsite
+
+The stickers a generated agency site reaches for to fake credibility it has not earned. Each
+is a field observation, low confidence alone; a cluster is the smell.
+
+- **A cookie banner on a brand-new microsite.** A single-page launch site with no analytics
+  and no third-party cookies does not need a consent banner; one bolted on is cargo-culted
+  trust chrome (and often a generated copy-paste). Add a banner only when the site actually
+  sets cookies that require consent.
+- **An "As seen on Product Hunt" badge** (or any "as seen on" sticker) with no real launch
+  or link behind it. Drop the badge; if the launch is real, link it.
+- **A dual "Book a free call" + "Get a free audit" CTA** (two competing free-X actions side
+  by side). It reads as a lead-gen funnel template and dilutes the primary action. Pick ONE
+  primary verb and let the secondary inherit it (cross-ref `critique-discipline.md` habit 7,
+  CTA-verb sprawl).
+- **A generic security flex** ("AES-256", "BYOK", "SOC 2" with nothing earned). Naming an
+  encryption standard proves nothing; everyone uses AES. State the specific guarantee that
+  matters to this buyer, or drop the flex.
+
+Do instead: earn trust with specifics, real names, real numbers, real proof, a real link.
+Drop the stickers.
 
 ---
 

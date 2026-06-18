@@ -45,14 +45,60 @@ a defect named without a location does not count and the section is not cleared.
 3. **Contrast** - body text sits below the perceptual-floor contrast on its surface
    (cross-ref `references/brand/perceptual-floors.md`; small labels on tinted, dark
    or photo bands are the usual offenders).
-4. **Missing imagery** - an empty or placeholder frame, a broken image, or a
-   wireframe-grey box. On a launch-bar site this is an automatic fail.
+4. **Missing OR fabricated imagery** - an empty or placeholder frame, a broken image,
+   or a wireframe-grey box (automatic fail on a launch-bar site). ALSO a glossy,
+   fabricated product mockup standing in for real product UI: a rendered "dashboard"
+   the product does not actually show, an invented device-frame screen. A fake passes
+   the empty-frame test (it is not blank), so judge it: if the UI is too clean, the data
+   too tidy, and it does not match the real product, it is a fake mockup, name it and the
+   section (`references/ai-slop-tells.md`, "fake glossy mockups vs real screenshots").
 5. **Mobile hero legibility** - the hero headline / subhead is unreadable at 390px
    (truncation, overlap on the photo, or below the contrast floor where the mobile
    stack pushed the text onto the brightest part of the image).
+6. **Default / genre-cliche accent in the render** - the accent reads as a raw framework
+   default (the Tailwind indigo / "that one shade of purple", cyan-on-dark, the emerald
+   SaaS green, the friendly beige + teal) or the category cliche, even when the hex was
+   not caught by the lint. Name the surface where it shows. This is the render-side
+   complement to the `accent-*` lint rules.
+7. **Decorative tell shape in the render** - any of these visible in the pixels, each
+   needs a location:
+   - **Glassmorphism as decoration** - frosted-blur panels on nav / cards / modals used
+     for look, not for a real overlay, and especially where it drops body text below the
+     contrast floor.
+   - **Bento grid as decoration** - mixed-size tiles where the sizes do NOT encode real
+     priority (equal-weight content dressed as a bento); it is a plain card grid wearing
+     a trendy name.
+   - **The universal feature-card shape** - a row of cards each with a small rounded-square
+     icon tile above a heading, three across, symmetric; the template SaaS component.
+   - **Decorative motion** - cursor-followers, hover that hides the button it decorates,
+     scroll-jacking, parallax that fights reading; motion the page would be better without
+     (the motion budget catches cost, this catches the taste failure).
+   - **Inconsistent visual language across sections** - the type scale, spacing, radius,
+     border weight or accent usage shifts band to band, so sections read as different
+     sites (cross-ref `audit-dimensions.md` dims 1, 2, 8; `critique-discipline.md` habit 7).
 
 A non-zero `console_errors` count in `.palate-shots/errors.json` is an automatic
 `visual: fail` regardless of the axis scores - a thrown build cannot pass.
+
+## The AI-slop Quick QA pass (run before emit, augments the axes + defect checklist)
+
+Walk the Quick QA list at the foot of `references/ai-slop-tells.md` over the render. It
+overlaps the axes and the defects on purpose, it is the field guide's own fast check.
+**Tick more than two and the build has regressed to the AI default**: name the failing
+items, revise the named sections, re-render. The list covers gradient-text headlines,
+untuned / genre accents, Instrument-Serif-or-serif-italic-by-reflex, the untouched
+eyebrow-pill centred-hero formula, rounded-icon-tile cards / side-border cards, feature
+pill rows, bento / glassmorphism as decoration, sections that look like different sites,
+the stock pricing / tapestry / contrast-framing copy, the trust-chrome stickers (cookie
+banner on a new microsite, Product Hunt badge, dual free-call CTA), glossy mockups where
+real screenshots belong, and the AI-washing test.
+
+<!-- ux-lint-disable ai-washing-copy the AI-washing phrase is named here to define the render-side test, quoted not used -->
+The **remove-the-word-"AI" test** is part of this pass: read any "AI-powered" / "powered
+by AI" claim in the render, remove the word "AI", and re-read the sentence. If the
+product is unchanged, the AI is decoration, that is a Specificity / Substance fail, name
+it. (The `ai-washing-copy` lint flags the phrase; this is the render-side judgement that
+the claim is earned.)
 
 ## The commission check (augments the axes + defect checklist, does not replace them)
 
