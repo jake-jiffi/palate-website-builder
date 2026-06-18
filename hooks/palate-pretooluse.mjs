@@ -12,6 +12,13 @@
  * calls), and reads/Edits/config/non-source always pass.
  *
  * Escape hatch: PALATE_GATE_OFF=1.
+ *
+ * DELIBERATELY DEPTH-ONLY: this hook does NOT run the "done" gate (gate-done.sh). The
+ * done gate judges a RENDER (the visual loop + verifier read screenshots and a built
+ * preview), and at write-time nothing is rendered yet - so a done check here would
+ * trap every mid-build source write. "Done" enforcement belongs at Stop
+ * (hooks/palate-stop.mjs), where a preview exists. Do NOT duplicate gate-done.sh into
+ * this hook.
  */
 import fs from "node:fs";
 import path from "node:path";
