@@ -109,7 +109,19 @@ the transformation, a 3-beat arc, one named feeling. Run the Story Engine's
 DIVERGE -> CONVERGE first (research -> the one true thing -> sample N concepts wide
 with self-tagged conventionality -> score on originality + craft-feasibility ->
 advance the best 1-2), then spread the variants that elaborate those concepts
-across the ambition spectrum. Ground each concept in the MCP concept layer
+across the ambition spectrum.
+
+**The variants elaborate the commission** (`references/build-commission.md`), which
+was issued at A.3.5 from the converged concept + the resolved brand. Hold every
+variant to the commission's Awwwards / FWA ambition bar ("competent is a fail"). The
+commission's chosen mechanisms (from the toolkit register, each grounded in its
+`references/motion-and-3d.md` recipe + MCP precedent) are spread across the variant
+set to FIT each direction - not ticked off in every variant. Fit over familiarity is
+the rule (the same rule as type): a mechanism appears in a variant only where that
+direction actually needs it, and the restraint clause governs the spread (match
+intensity to the brand; maximal motion is not the bar). A safe-warm variant may sit
+on the Tier 0 floor while a one-of-a-kind variant earns a shader hero - the same
+spread the ambition spectrum below already calls for. Ground each concept in the MCP concept layer
 (`refs_insights { topic: "mechanics" }` / `{ topic: "emotion" }`,
 `refs_search { register, device, intensity }`), then execute its craft via the
 organ-transplant method (`reference-library-usage.md`).

@@ -58,6 +58,12 @@ function blank() {
     // signature_move); every pass/fail is machine-checked, never self-claimed.
     diverge: null, // { ran, concepts:[{id, mechanic, lens, analogical_seed, conventionality:0..1, self_tag}], n }
     converge: null, // { ran, scored:[{id, originality:0..5, craft_feasibility:0..5, combined:0..5}], advanced:[id,...] }
+    // COMMISSION (the build commission, A.3.5): the ambition bar + the chosen toolkit
+    // made explicit after CONVERGE and before EXPLORE, then carried + checked by the
+    // verifier. AGENT-set DESCRIPTIVE fields only; the bar's pass/fail stays computed
+    // by the gates + the verifier, never self-claimed. Nullable: its absence never
+    // blocks a build (fail-open, no hard trap).
+    commission: null, // { bar, concept, vision, chosen_mechanisms:[{ name, recipe, precedent_slug, astro_recipe_pulled:bool, fit_reason }], proof:{ viewports:["1440","390"], read_pixels:bool, read_console:bool, mobile_friendly:bool, holds_60fps:bool, honours_reduced_motion:bool }, restraint_note }
     variants: [], // [{ id, route, name, concept_id, donor_slugs:[], html_path }]
     visual: null, // { ran, pass, iterations:[{i, shots:{desktop_full,mobile_full,sections:{}}, axes:{philosophy..variety}, defects:[{type,location}], score}], console_errors:int }
     novelty: null, // { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
@@ -110,6 +116,7 @@ function main() {
   if ((m.schema ?? 1) < 3) {
     m.diverge ??= null;
     m.converge ??= null;
+    m.commission ??= null;
     if (!Array.isArray(m.variants)) m.variants = [];
     m.visual ??= null;
     m.novelty ??= null;
@@ -117,6 +124,10 @@ function main() {
     m.buildability ??= null;
     m.schema = 3;
   }
+  // commission is an additive schema-3 block; backfill it on an already-schema-3
+  // manifest written before it existed, via the same null-default guard. This keeps
+  // every older manifest readable without a schema bump or a hard trap.
+  if (!("commission" in m)) m.commission = null;
 
   if (tool.startsWith("mcp__palate__")) {
     const slugs = new Set();

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "palate-website-builder",
-  "version": "1.2.0",
-  "description": "The Palate website builder. Builds production-grade Astro websites grounded by the Palate MCP (real design taste from deeply-analysed reference sites) and converts brand assets into a four-format design-token package. Bundles the skill, the survey/verify agents, and the depth + done enforcement hooks (the divergent concept spine, the screenshot-grounded visual loop, the novelty/buildability gates). Connect the Palate MCP with one `claude mcp add` command (your token from app.palatemcp.com).",
+  "version": "1.3.0",
+  "description": "The Palate website builder. Builds production-grade Astro websites grounded by the Palate MCP (real design taste from deeply-analysed reference sites) and converts brand assets into a four-format design-token package. Bundles the skill, the survey/verify agents, and the depth + done enforcement hooks (the divergent concept spine, the build commission, the screenshot-grounded visual loop, the novelty/buildability gates). Connect the Palate MCP with one `claude mcp add` command (your token from app.palatemcp.com).",
   "author": { "name": "Jiffi", "url": "https://palatemcp.com" },
   "homepage": "https://palatemcp.com/docs",
   "repository": "https://github.com/jake-jiffi/palate-website-builder",

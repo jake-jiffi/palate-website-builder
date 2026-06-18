@@ -54,6 +54,37 @@ a defect named without a location does not count and the section is not cleared.
 A non-zero `console_errors` count in `.palate-shots/errors.json` is an automatic
 `visual: fail` regardless of the axis scores - a thrown build cannot pass.
 
+## The commission check (augments the axes + defect checklist, does not replace them)
+
+When a commission was recorded (`manifest.commission`,
+`references/build-commission.md`), the verifier ALSO judges the built result against
+it. This is an additional arm of the judgement, not a new set of axes - the six axes
+above and the defect checklist stand; the commission adds the ambition bar, the proof
+contract and the restraint clause.
+
+- **The proof contract.** The render must be captured at **both 1440 and 390**, the
+  **pixels and the console** read (zero console errors), the page **mobile-friendly**
+  (the 390 shot clears the defect checklist), **holds ~60fps** (no jank: one RAF loop,
+  `client:visible` islands, the LCP static not a canvas - cross-ref
+  `references/motion-and-3d.md`), and it **honours `prefers-reduced-motion`** (each
+  Tier-1 / Tier-2 mechanism has its JS guard + static poster; the reduced-motion state
+  is the finished state).
+- **The ambition bar.** "Competent" is a fail. A clean-but-generic render that would
+  not place in its category on Awwwards / FWA does not clear the bar even with no
+  defect found; name what keeps it competent and what would lift it.
+- **The restraint clause (part of the judgement, not a motion count).** Maximal motion
+  is not the bar; fit is. A janky WebGL hero fails; flawless restraint matched to an
+  anxious brand can win. Judge intensity against the commission's stated brand fit, not
+  against the toolkit register. Do not penalise a calm commission for being calm.
+- **Mechanism vs record.** Each mechanism named in `commission.chosen_mechanisms[]` is
+  present in the render and built from a recorded precedent + recipe (cross-check
+  `manifest.buildability`); a claimed mechanism that is absent, thrown, janky, or
+  missing its reduced-motion fallback is a fail with the section named.
+
+This check is **fail-open**: if no commission was recorded or the build cannot be
+served / shot, it is skipped gracefully (`commission: skip`) - doctrine + recorded
+evidence, never a hard trap.
+
 ## Loop guardrails (the anti-rubber-stamp rules)
 
 The loop is the discipline. Follow these verbatim:
@@ -89,7 +120,7 @@ done-gate reads computed evidence, not narration):
 
 ```json
 { "verdict": "pass|fail",
-  "gates": { "depth":"pass", "uniqueness":"pass", "anti_slop":"pass", "provenance":"pass", "visual":"pass", "real_astro":"pass" },
+  "gates": { "depth":"pass", "uniqueness":"pass", "anti_slop":"pass", "provenance":"pass", "visual":"pass", "commission":"pass|fail|skip", "real_astro":"pass" },
   "visual": { "ran": true, "pass": true, "console_errors": 0,
     "iterations": [ { "i": 1, "axes": { "philosophy": 4, "hierarchy": 4, "execution": 4, "specificity": 4, "restraint": 4, "variety": 4 },
       "defects": [ { "type": "overflow", "location": "v1-hero mobile" } ], "score": 24,

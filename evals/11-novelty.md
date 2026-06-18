@@ -56,6 +56,30 @@ recent build / riding a recurring display face (novelty gate).
       (the advanced set's mean conventionality is at or below
       `PALATE_MAX_CONVENTIONALITY`, default 0.6).
 
+#### The build commission was issued and carried (manifest.commission)
+
+Fail-open: a calm brief writes a calm commission and its absence never blocks a build,
+so check it only on the audacious set (these briefs name an ambitious moment, so a
+commission with a real bar + chosen mechanisms is expected). Descriptive-only - the
+ambition bar's pass/fail is the verifier's, judged from the render, not a manifest
+boolean.
+
+- [ ] `commission.bar` states the Awwwards / FWA ambition target ("competent is a
+      fail"); `commission.concept` and `commission.vision` are present and match the
+      advanced concept (the commission was written FROM the converged concept, not a
+      fresh spine).
+- [ ] `commission.chosen_mechanisms` names a FEW mechanisms (not the whole toolkit
+      register), each with a `recipe` (a `references/motion-and-3d.md` recipe) and a
+      `precedent_slug` that appears in `references_surveyed` (chosen to FIT and grounded
+      in a real precedent, not ticked off from memory).
+- [ ] `commission.proof` records the contract (viewports 1440 + 390, read pixels +
+      console, mobile-friendly, holds 60fps, honours reduced-motion), and the rendered
+      variants visibly elaborate the commission's chosen mechanisms spread across the
+      set (not the same mechanism in every variant).
+- [ ] The verifier's `verify-report.json` `gates.commission` is `pass` (or `skip` only
+      when the build could not be served / shot) - the build cleared the ambition bar +
+      the restraint clause against the render, augmenting the 6 axes.
+
 #### The signature move is sourced, and the build is novel (output)
 
 - [ ] The signature move is sourced from a surveyed reference
@@ -99,4 +123,9 @@ unrelated briefs (the no-opinion default tell - `gate-novelty` must block it); t
 variants that share hero pattern AND skin (uniqueness must block). A diverge/converge
 block present but with no effect on the variants (the spine ran on paper, the build
 ignored it) is the subtlest regression: the variants must visibly elaborate the
-advanced concepts, not the discarded safe anchor.
+advanced concepts, not the discarded safe anchor. A commission that lists the whole
+toolkit register rather than a few mechanisms chosen to fit (familiarity over fit, the
+exact failure the doctrine guards against), names mechanisms with no precedent in
+`references_surveyed` (claimed but un-grounded), or is recorded but never realised in
+the render (the verifier's `gates.commission` should catch this) is the commission
+analogue of the spine-on-paper regression.

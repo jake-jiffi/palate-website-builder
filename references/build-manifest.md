@@ -28,6 +28,7 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   // scripts/manifest-merge.mjs. The hook NEVER sets a pass/fail.
   "diverge": null,      // { ran, n, concepts:[{ id, mechanic, lens, analogical_seed, conventionality:0..1, self_tag }] }
   "converge": null,     // { ran, scored:[{ id, originality:0..5, craft_feasibility:0..5, combined:0..5 }], advanced:[id,...] }
+  "commission": null,   // A.3.5: { bar, concept, vision, chosen_mechanisms:[{ name, recipe, precedent_slug, astro_recipe_pulled, fit_reason }], proof:{ viewports, read_pixels, read_console, mobile_friendly, holds_60fps, honours_reduced_motion }, restraint_note } - agent-set descriptive only
   "variants": [],       // [{ id, route, name, concept_id, donor_slugs:[], html_path }]
   "visual": null,       // SCRIPT-set: { ran, pass, iterations:[{ i, shots:{...}, axes:{...}, defects:[{type,location}], score }], console_errors:int }
   "novelty": null,      // SCRIPT-set: { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
@@ -45,15 +46,22 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   telemetry (e.g. a declared signature move's `source_slug` must appear in
   `references_surveyed`).
 - **The schema-3 evidence blocks** record the divergent-then-convergent concept spine
-  (`diverge`, `converge`), the Explore variants and their donors (`variants`), the
-  buildability oracle (`buildability`), and the COMPUTED verdicts of the visual loop,
-  the novelty check and the verifier (`visual`, `novelty`, `verifier`). The agent sets
-  the descriptive parts (concepts, scores, donor slugs); the `pass`/`fail` inside
-  `visual`/`novelty`/`verifier` is set ONLY by a script reading a real artefact
-  (screenshots, rendered HTML, a gate's exit code), never by an LLM boolean. This is
-  the anti-reward-hacking rule: "done" is machine-checkable, not self-claimed.
-- A schema-1/2 manifest is upgraded in place on the next hook write: the new blocks are
-  added (null / empty) without touching any existing field, and `schema` becomes 3.
+  (`diverge`, `converge`), the **build commission** (`commission`, the ambition bar +
+  the chosen toolkit made explicit at A.3.5 - `references/build-commission.md`), the
+  Explore variants and their donors (`variants`), the buildability oracle
+  (`buildability`), and the COMPUTED verdicts of the visual loop, the novelty check and
+  the verifier (`visual`, `novelty`, `verifier`). The agent sets the descriptive parts
+  (concepts, scores, donor slugs, the commission's bar / concept / vision / chosen
+  mechanisms / proof requirements); the `pass`/`fail` inside `visual`/`novelty`/`verifier`
+  is set ONLY by a script reading a real artefact (screenshots, rendered HTML, a gate's
+  exit code), never by an LLM boolean. The commission's ambition bar is likewise judged
+  by the verifier from the render, not self-claimed in the manifest. This is the
+  anti-reward-hacking rule: "done" is machine-checkable, not self-claimed.
+- A schema-1/2 manifest is upgraded in place on the next hook write: the new blocks
+  (including `commission`) are added (null / empty) without touching any existing field,
+  and `schema` becomes 3. `commission` is additive within schema 3: a schema-3 manifest
+  written before it existed gets `commission: null` backfilled on the next hook write,
+  no schema bump.
 - Note: the manifest `sections` field is the section -> donor provenance map (which
   donor each section came from). It is UNRELATED to the `refs_get` `layer` arg, which
   is the renamed retrieval selector (concept / pages / tokens / signature_moves / ...).

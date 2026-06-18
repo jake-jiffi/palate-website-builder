@@ -67,10 +67,43 @@ reads). Do not write or edit any source file - you gate, you do not build.
         walk the defect checklist section by section.
       - **Cap at 2-3 iterations, then escalate** (do not loop forever, do not lower the bar).
 
-6. **Structural verifier** (it is a real Astro build, not a mockup):
+6. **The commission check** (judge the built result AGAINST the build commission -
+   this AUGMENTS the 6 axes + defect checklist in step 5, it does not replace them).
+   Read `manifest.commission` (`references/build-commission.md`). If a commission was
+   recorded, check the built render and the manifest against it:
+   - **The proof contract.** The render was captured at **both 1440 and 390** (the
+     desktop + mobile shots from step 5), the **pixels and the console** were read
+     (zero console errors in `.palate-shots/errors.json`), the page is
+     **mobile-friendly** (the 390 shot clears the defect checklist, no overflow / no
+     mobile-hero illegibility), it **holds ~60fps** (no jank signal: one RAF loop,
+     `client:visible` islands, the LCP is static not a canvas - cross-ref the motion
+     budget in `references/motion-and-3d.md`), and it **honours
+     `prefers-reduced-motion`** (every Tier-1 / Tier-2 mechanism has its JS guard /
+     static poster; the reduced-motion state is the finished state, never a stuck
+     `opacity:0`).
+   - **The ambition bar.** "Competent" is a fail. A clean-but-generic render that
+     would not place in its category on Awwwards / FWA does NOT clear the bar even if
+     no defect is found - name what keeps it at competent and what would lift it.
+   - **The restraint clause is part of the judgement, not a motion count.** Maximal
+     motion is not the bar; fit is. A janky WebGL hero FAILS (jank, a thrown console
+     error, a missing reduced-motion fallback); flawless restraint matched to an
+     anxious brand can WIN. Do not penalise a calm commission for being calm, and do
+     not reward motion that does not fit the brand. Judge intensity against the
+     commission's stated brand fit, not against the toolkit register.
+   - **Mechanism buildability matches the record.** Each mechanism named in
+     `commission.chosen_mechanisms[]` is actually present in the render and was built
+     from a recorded precedent + recipe (cross-check `manifest.buildability`); a
+     mechanism claimed in the commission but absent from the page, or present but
+     thrown / janky / without its reduced-motion fallback, is a fail with the section
+     named.
+   This check is **fail-open**: if no commission was recorded (`manifest.commission`
+   is null) or the build cannot be served / shot, skip it gracefully and record
+   `commission: skip` - it is doctrine + recorded evidence, never a hard trap.
+
+7. **Structural verifier** (it is a real Astro build, not a mockup):
    `bash scripts/verify-is-real-astro.sh` where applicable.
 
-7. **Write `verify-report.json`** at the project root (this is the computed-evidence
+8. **Write `verify-report.json`** at the project root (this is the computed-evidence
    artefact the done-gate reads; you MAY NOT return `visual: pass` without it). Record
    the per-iteration visual evidence and the gate verdicts (schema in
    `references/visual-rubric.md`). You MAY NOT set `visual: pass` without at least one
@@ -91,6 +124,7 @@ VERDICT: pass | fail
 - anti-slop:   pass|fail  (any patterns / AI-tells found)
 - provenance:  pass|fail  (donor spread; the dominant-donor share)
 - visual:      pass|fail  (the 6 axis scores; the named defect + location; any floor violation; console errors)
+- commission:  pass|fail|skip  (proof contract @1440+390 / 60fps / reduced-motion; the ambition bar; the restraint clause; mechanism vs record)
 - real-astro:  pass|fail
 FIX (if fail): the named sections to revise and how, prioritised.
 ```
