@@ -19,7 +19,7 @@ file - it is created on the first build that runs on a machine.
 
 ## What gets logged
 
-One entry per build, appended at Phase A.3 (Compose), the moment the canonical
+One entry per build, appended at Phase A.6 (Compose), the moment the canonical
 home page is written:
 
 ```json
@@ -41,7 +41,7 @@ signals. The other fields are useful for the post-mortem read.
 
 ## How the Explore stage uses the log
 
-At Phase A.2 (Explore) plan checkpoint, read the last 5 entries. Apply two
+At Phase A.4 (Explore) plan checkpoint, read the last 5 entries. Apply two
 hard rules when generating the variant set:
 
 1. **No hero pattern repeated from the last 3 builds.** If the most recent

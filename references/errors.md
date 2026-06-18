@@ -13,7 +13,7 @@ The build never deploys on a logic-class error. Better to halt with a clear mess
 
 ## The verify-fail self-healing loop
 
-Every phase ends with one or more gates: the structural `verify-*.sh` scripts (e.g. `verify-is-real-astro.sh`), the aesthetic `scripts/ux-lint.sh`, and at Phase A.4 the interpretive reviewer pass against `references/audit-dimensions.md`. When ANY gate FAILS, do not stop at the first failure and do not push past it - run this loop:
+Every phase ends with one or more gates: the structural `verify-*.sh` scripts (e.g. `verify-is-real-astro.sh`), the aesthetic `scripts/ux-lint.sh`, and at Phase A.10 the interpretive reviewer pass against `references/audit-dimensions.md`. When ANY gate FAILS, do not stop at the first failure and do not push past it - run this loop:
 
 1. **Read** the verify script's output. It names what is wrong.
 2. **Diagnose** - map it to the taxonomy above. A `logic`-class failure (build / type error) is the generated code; a `config`-class failure is an input or env var.

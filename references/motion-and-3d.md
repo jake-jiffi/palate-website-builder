@@ -55,7 +55,7 @@ the finished state with no animation.
 
 ### Recipe 6 - View Transitions
 - **When:** SPA-feel page-to-page on the MPA, shared-element morphs (a gallery
-  thumbnail growing into the detail hero). Highest leverage-per-effort move on Astro.
+  thumbnail growing into the detail hero). Highest payoff-per-effort move on Astro.
 - **Implementation:** `<ClientRouter />` (already in `BaseLayout.astro`) plus
   `transition:name="..."` on the shared element on both pages.
 - **Budget:** near-zero; Astro handles it. Cross-document VT support is ~92%.

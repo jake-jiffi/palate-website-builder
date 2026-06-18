@@ -1,7 +1,7 @@
 # The build commission - the ambition bar + the toolkit, made explicit
 
-The short brief the skill issues to ITSELF, once, at the moment of maximum
-leverage: after the Story Engine has fixed the concept (the divergent spine,
+The short brief the skill issues to ITSELF, once, at the highest-impact
+moment: after the Story Engine has fixed the concept (the divergent spine,
 `references/story-engine.md`) and the brand is resolved, and BEFORE Explore. It
 is the ambition bar and the toolkit made explicit, so award-tier mechanisms are
 reached for **on purpose**, not left to chance, and then carried through Explore,

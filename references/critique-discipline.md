@@ -8,8 +8,8 @@ page and a default-shaped one.
 
 ## 1. Design Read - one sentence before any code
 
-Before generating a variant (Phase A.2) or composing the canonical page
-(Phase A.3), state the read out loud, in this exact shape:
+Before generating a variant (Phase A.4) or composing the canonical page
+(Phase A.6), state the read out loud, in this exact shape:
 
 > Reading this as: a {page kind} for {audience}, with a {vibe} language,
 > leaning toward {design direction}.
@@ -228,15 +228,15 @@ mobile hero, never on desktop.
 
 ## Where these apply
 
-- Before Phase A.2 (Explore): every variant generation begins with a Design
+- Before Phase A.4 (Explore): every variant generation begins with a Design
   Read; the variant is rejected if the Design Read is missing or generic.
-- Before Phase A.3 (Compose): the 6-axis critique is scored on the proposed
+- Before Phase A.6 (Compose): the 6-axis critique is scored on the proposed
   composition; revise before emit if any axis is below 3.
-- Before Phase A.3 (Compose) emit: the anti-default detector runs on the
+- Before Phase A.6 (Compose) emit: the anti-default detector runs on the
   composition; if it is default-shaped with no reproduced signature move, redo.
-- Before Phase A.2 (Explore) and A.3 (Compose): the feel gate, on every concept
+- Before Phase A.4 (Explore) and A.6 (Compose): the feel gate, on every concept
   and on the composed page; if the visitor would feel nothing, redo.
-- At Phase A.3 (Compose) and Phase A.4 (Finalise reviewer pass): the
+- At Phase A.6 (Compose) and Phase A.10 (Finalise reviewer pass): the
   Conceptual Grounding Test on every section.
 - Whenever Claude narrates the build: the vague-word ban.
 

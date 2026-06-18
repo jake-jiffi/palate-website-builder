@@ -83,10 +83,10 @@ coverage; a senior reviewer would flag these in the first scroll.
 
 ## How Explore applies these
 
-At Phase A.2, before the variant set is generated, Claude reads the brief,
+At Phase A.4, before the variant set is generated, Claude reads the brief,
 identifies the industry, loads the matching block from this file, and treats
 each anti-pattern as a hard "do not generate this" rule for the variant set.
-At Compose (A.3), the same rules are applied to the canonical page. If a
+At Compose (A.6), the same rules are applied to the canonical page. If a
 client explicitly asks for a banned pattern ("we want the team grid"), the
 client preference wins, but Claude states the deviation in the variant
 write-up.
