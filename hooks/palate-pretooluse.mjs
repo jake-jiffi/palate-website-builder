@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 /**
- * hooks/palate-pretooluse.mjs - block the first real code write until the build
- * has actually researched the library (PreToolUse).
+ * hooks/palate-pretooluse.mjs - nudge a build toward the library before it writes
+ * uninformed source (PreToolUse).
  *
- * Registered at the user level, matched on `Write|MultiEdit`. It only gates NEW
- * source content (.astro/.ts/.css/...); reads, Edits of existing files, config,
- * the manifest itself, and non-source files pass (the Explore / tiny-reversible
- * carve-outs), so it never deadlocks scaffolding. When it does gate, it runs the
- * portable depth gate and denies with that gate's specific reason.
+ * Registered at the user level, matched on `Write|MultiEdit`. NON-BLOCKING by
+ * default: it allows every write (the depth nudge is delivered by the skill and the
+ * Stop hook), so it can never trap a session whose Palate MCP is not connected, who
+ * is editing an existing app, or who surveyed in a subagent. Set PALATE_GATE_STRICT=1
+ * to make it HARD-BLOCK the first uninformed NEW source write (.astro/.ts/.css/...);
+ * even then it fails OPEN when the gate cannot be satisfied (no manifest / no MCP
+ * calls), and reads/Edits/config/non-source always pass.
  *
  * Escape hatch: PALATE_GATE_OFF=1.
  */
@@ -57,6 +59,12 @@ const input = p.tool_input || {};
 const fp = input.file_path || input.filePath || input.path || "";
 if (!SOURCE.test(fp)) allow(); // non-source: scaffolding, config, notes, the manifest
 if (CONFIG.test(fp)) allow();
+
+// Public default: NEVER block a write. The depth gate is a nudge, not a wall —
+// hard-blocking a write traps anyone whose Palate MCP is not connected, who is
+// editing an existing app, or who surveyed in a subagent. Opt into hard enforcement
+// (block the first uninformed source write) with PALATE_GATE_STRICT=1.
+if (process.env.PALATE_GATE_STRICT !== "1") allow();
 
 const cwd = p.cwd || process.cwd();
 try {

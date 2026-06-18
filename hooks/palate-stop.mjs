@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * hooks/palate-stop.mjs - don't let the agent finish a build that never reached
- * MCP depth (Stop hook).
+ * hooks/palate-stop.mjs - nudge a build that never reached MCP depth (Stop hook).
  *
  * Registered at the user level. Guards against loops with `stop_hook_active`. It
  * only acts on a real build (a build-manifest.json that recorded source writes);
- * non-build sessions pass untouched. On a real build it runs the portable depth
- * gate: pass -> allow + record the build to cross-build memory; fail -> block
- * with the gate's reason so the agent keeps going.
+ * non-build sessions pass untouched. On a real build it runs the portable depth gate
+ * (which itself fails OPEN when it cannot be satisfied): pass -> allow + record the
+ * build to cross-build memory; fail -> by DEFAULT allow finishing with a non-blocking
+ * reminder, or HARD-BLOCK when PALATE_GATE_STRICT=1 so the agent keeps going.
  *
- * Escape hatch: PALATE_GATE_OFF=1.
+ * Escape hatch: PALATE_GATE_OFF=1. Hard enforcement: PALATE_GATE_STRICT=1.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -84,7 +84,14 @@ try {
 } catch (e) {
   const reason =
     (e.stderr ? e.stderr.toString() : "").trim() ||
-    "MCP-depth gate failed: the build did not draw on the library deeply enough to finish.";
-  process.stdout.write(JSON.stringify({ decision: "block", reason }));
+    "MCP-depth gate: this build did not draw on the library deeply enough.";
+  // Hard enforcement is opt-in. By DEFAULT never block finishing — blocking traps a
+  // session that cannot satisfy the gate (MCP not connected, surveyed in a subagent).
+  // Surface a non-blocking reminder instead so the build is still nudged toward depth.
+  if (process.env.PALATE_GATE_STRICT === "1") {
+    process.stdout.write(JSON.stringify({ decision: "block", reason }));
+    process.exit(0);
+  }
+  process.stderr.write(`[palate] ${reason}\n(Set PALATE_GATE_STRICT=1 to enforce this as a hard gate.)\n`);
   process.exit(0);
 }

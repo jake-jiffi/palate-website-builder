@@ -8,11 +8,12 @@
 #
 # Exit 0 = pass, 2 = block (with a specific, actionable reason on stderr).
 #
-# Thresholds are overridable via env. These DEFAULTS are the gentle public-plugin
-# bar (enough to guarantee a build actually drew on the library, without blocking a
-# quick site). Raise PALATE_MIN_REFS / PALATE_MIN_INNER for a stricter bar;
-# PALATE_GATE_OFF=1 disables the gate entirely.
-# Overridable: PALATE_MIN_REFS, PALATE_MIN_INNER, PALATE_MIN_TOOLS, PALATE_MIN_RICH_LAYER.
+# This script only DECIDES depth (exit 0 pass / 2 block). Whether a block is enforced
+# is up to the caller: the Stop/PreToolUse hooks NUDGE by default and only hard-block
+# when PALATE_GATE_STRICT=1. It also fails OPEN when it cannot be satisfied (see below),
+# so it never traps a session. PALATE_GATE_OFF=1 disables the gate entirely.
+# Thresholds overridable via env: PALATE_MIN_REFS, PALATE_MIN_INNER, PALATE_MIN_TOOLS,
+# PALATE_MIN_RICH_LAYER. Raise them for a stricter bar.
 set -euo pipefail
 
 MANIFEST="${1:-build-manifest.json}"
@@ -22,9 +23,16 @@ MIN_TOOLS="${PALATE_MIN_TOOLS:-3}"
 MIN_RICH="${PALATE_MIN_RICH_LAYER:-1}"
 
 fail() { echo "MCP-depth gate FAILED: $1" >&2; exit 2; }
+skip() { echo "MCP-depth gate skipped: $1"; exit 0; }
 
-command -v jq >/dev/null 2>&1 || fail "jq is not installed (the gate needs it). Run scripts/install.sh or 'brew install jq'."
-[ -f "$MANIFEST" ] || fail "no $MANIFEST - the build did no MCP research. Survey the library (refs_search across verticals, refs_get the donors) before writing code."
+# Fail OPEN, never closed, when there is nothing to gate. The gate enforces DEPTH
+# only once the Palate MCP is actually in use; it must never trap a session that
+# cannot satisfy it: no jq, no manifest, or zero recorded MCP calls (the MCP is not
+# connected, or the survey ran in a subagent whose calls never reach this manifest).
+command -v jq >/dev/null 2>&1 || skip "jq is not installed; not gating."
+[ -f "$MANIFEST" ] || skip "no $MANIFEST (no tracked build, or the Palate MCP is not in use)."
+mcpcalls=$(jq '((.mcp_calls // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
+[ "${mcpcalls:-0}" -ge 1 ] || skip "no Palate MCP calls recorded (MCP not connected, or surveyed in a subagent)."
 
 refs=$(jq '(.references_surveyed // []) | unique | length' "$MANIFEST")
 inner=$(jq '(.inner_pages_viewed // []) | length' "$MANIFEST")

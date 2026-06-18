@@ -46,14 +46,17 @@ A website build calls the brand build in-process when the client has no brand pa
   returns a DESIGN.md), refs_get_tokens, refs_get_astro_recipe, refs_get_screenshot, refs_insights,
   refs_match_brief, refs_similar, refs_list_verticals). Added once with `claude mcp add` (your token
   is baked into your Claude Code config, no env var).
-- Three **enforcement hooks** (`hooks/hooks.json`) that make a build actually use the library:
-  - **PreToolUse** blocks writing source files until you have surveyed the library.
-  - **Stop** blocks finishing until the build reached real MCP depth.
+- Three **depth hooks** (`hooks/hooks.json`) that nudge a build to actually use the library:
+  - **PreToolUse** / **Stop**: by DEFAULT they NUDGE (a non-blocking reminder), they do not block.
+    So the plugin can't trap you when the Palate MCP isn't connected, when you're editing an existing
+    app, or when the survey ran in a subagent. Set `PALATE_GATE_STRICT=1` to make them HARD-BLOCK an
+    under-researched build instead (for agencies/CI that want enforcement).
   - **PostToolUse** records real tool telemetry to `build-manifest.json` (the gate reads this, so
-    depth cannot be faked).
-  The gate is a plain script (`scripts/gate-mcp-depth.sh`), so it also runs in CI / pre-commit. Its
-  public defaults are gentle (5 refs, 2 inner pages, 1 deep read, 1 rich layer); raise them for
-  agency-strict builds (`PALATE_MIN_REFS=8 PALATE_MIN_INNER=3`), or disable with `PALATE_GATE_OFF=1`.
+    depth is measured, not claimed).
+  The gate is a plain script (`scripts/gate-mcp-depth.sh`), so it also runs in CI / pre-commit. It
+  fails OPEN whenever it cannot be satisfied (no manifest, no `jq`, or zero recorded Palate MCP
+  calls). Depth thresholds default to 5 refs / 2 inner pages / 1 deep read / 1 rich layer; raise
+  them (`PALATE_MIN_REFS=8 PALATE_MIN_INNER=3`) or disable entirely with `PALATE_GATE_OFF=1`.
 
 ### Updating
 
