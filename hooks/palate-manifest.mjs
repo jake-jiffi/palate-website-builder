@@ -39,7 +39,7 @@ function load() {
 
 function blank() {
   return {
-    schema: 2,
+    schema: 3, // was 2
     created_at: new Date().toISOString(),
     business: null,
     signature_move: null,
@@ -49,6 +49,20 @@ function blank() {
     layers_read: [], // R2: intent-named refs_get layers actually pulled (depth signal)
     files_written: [],
     sections: [],
+    // --- schema 3 evidence blocks (agent/verifier/script-set, NOT hook-set) ---
+    // ANTI-REWARD-HACKING: the hook NEVER sets visual.pass, novelty.pass or
+    // verifier.pass. Those pass/fail verdicts are computed by SCRIPTS from real
+    // artefacts (PNGs, rendered HTML, gate exit codes) and folded in by
+    // scripts/manifest-merge.mjs. The agent may set the DESCRIPTIVE fields it
+    // genuinely knows (diverge.concepts, converge.scored, variants[].donor_slugs,
+    // signature_move); every pass/fail is machine-checked, never self-claimed.
+    diverge: null, // { ran, concepts:[{id, mechanic, lens, analogical_seed, conventionality:0..1, self_tag}], n }
+    converge: null, // { ran, scored:[{id, originality:0..5, craft_feasibility:0..5, combined:0..5}], advanced:[id,...] }
+    variants: [], // [{ id, route, name, concept_id, donor_slugs:[], html_path }]
+    visual: null, // { ran, pass, iterations:[{i, shots:{desktop_full,mobile_full,sections:{}}, axes:{philosophy..variety}, defects:[{type,location}], score}], console_errors:int }
+    novelty: null, // { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
+    verifier: null, // { ran, pass, verdict, report_path }
+    buildability: null, // MOVE 4: { ran, mechanics:[{name, precedent_slug, astro_recipe_pulled:bool, feasible:bool, fallback}] }
   };
 }
 
@@ -90,6 +104,19 @@ function main() {
 
   const m = load() ?? blank();
   if (!Array.isArray(m.layers_read)) m.layers_read = []; // back-compat with schema 1 manifests
+  // Upgrade a schema-1/2 manifest in place: add the schema-3 evidence blocks
+  // without disturbing any existing field. Never invents a pass; the blocks
+  // start null/[] and are filled by the agent/scripts later.
+  if ((m.schema ?? 1) < 3) {
+    m.diverge ??= null;
+    m.converge ??= null;
+    if (!Array.isArray(m.variants)) m.variants = [];
+    m.visual ??= null;
+    m.novelty ??= null;
+    m.verifier ??= null;
+    m.buildability ??= null;
+    m.schema = 3;
+  }
 
   if (tool.startsWith("mcp__palate__")) {
     const slugs = new Set();

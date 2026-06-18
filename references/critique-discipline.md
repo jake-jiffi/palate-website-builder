@@ -53,12 +53,20 @@ it is a hard gate applied to the **rendered page**, because a build looks differ
 than it reads in code. After Compose (and for each Explore variant before it is
 shown), RENDER and SCREENSHOT the page, then score the screenshot on the six axes:
 
-1. Take a real screenshot of the built page, desktop **and** mobile (the preview
-   deploy, `scripts/serve-preview.sh`, or a headless shot of the route). View the
-   pixels, do not score from the code or from memory.
-2. Score all six axes 1 to 5 against what you SEE. Apply the perceptual floors
-   (`references/brand/perceptual-floors.md`) at the same time: body-on-dark contrast,
-   44px tap targets, the type scale, the motion floor.
+1. Take a real screenshot of the built page, desktop **and** mobile, with the real
+   driver: serve the project (`bash scripts/serve-preview.sh <project-dir>`, parse
+   `SERVE_URL=`), then `node scripts/reference-capture/screenshot-build.mjs --url
+   <SERVE_URL> --out .palate-shots --label <variant-or-index> --sections`. It writes
+   retina (2x) full-page desktop + mobile PNGs, per-section clips keyed by
+   `data-section-id`, and an `errors.json` (any console error is an automatic visual
+   fail). View the pixels with Read; do not score from the code or from memory.
+2. Score all six axes 1 to 5 against what you SEE, using the FIXED rubric and defect
+   checklist in `references/visual-rubric.md` (the single source the verifier scores
+   against). Apply the perceptual floors (`references/brand/perceptual-floors.md`) at
+   the same time: body-on-dark contrast, 44px tap targets, the type scale, the motion
+   floor. Follow the loop guardrails in that file: a revision is accepted only if the
+   score improves; name a defect + its location before passing an axis below 5; "no
+   issues found" is suspect; cap 2-3 iterations then escalate.
 3. **Gate (the standard we hold to): every axis must be >=4, no axis below 3, no
    floor violation, and no unresolved placeholder imagery.** Any axis at 3 or below,
    any floor violation, or a section that still reads as a wireframe -> it has NOT

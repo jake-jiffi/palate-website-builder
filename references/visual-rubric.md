@@ -1,0 +1,98 @@
+# The visual rubric (fixed) - what the verifier scores the RENDER against
+
+This is the single fixed source the visual loop scores against, so the rubric does
+not drift build to build. It judges the RENDERED page (the PNGs from
+`scripts/reference-capture/screenshot-build.mjs`), not the code or the agent's
+memory. The deterministic floors (`scripts/ux-lint.sh`,
+`references/brand/perceptual-floors.md`, the console-error count, the uniqueness
+gate) catch the mechanical failures; this rubric catches the craft failures a VLM
+is better at seeing. Both arms must pass.
+
+The screenshot driver is the real script (it targets localhost, captures retina
+full-page + per-section PNGs, and records console errors):
+
+```
+bash scripts/serve-preview.sh <project-dir>          # prints SERVE_URL=...
+node scripts/reference-capture/screenshot-build.mjs \
+  --url <SERVE_URL> --out .palate-shots --label <variant-or-index> --sections
+```
+
+## The six axes (fixed)
+
+Score the screenshot on six axes, 1 to 5 each. These are the exact axes from
+`references/critique-discipline.md` section 2; do not improvise new ones.
+
+| Axis | What 5 looks like |
+|------|-------------------|
+| Philosophy | The page has a clear, defensible thesis about what it values (speed, depth, irreverence, restraint) and every choice supports it. |
+| Hierarchy | The visual / reading order makes the most important thing land first; the second-most second; nothing competes. |
+| Execution | Spacing, type pairing, alignment, transitions are deliberate. No "close enough" defaults. |
+| Specificity | Copy and imagery name the actual product / user / situation. No generic stock phrases or stock images. |
+| Restraint | Everything earns its place; nothing is decorative-by-default. The page would be worse if you added more. |
+| Variety | The composition reproduces a named, located signature move from the lead reference (re-skinned), and does not fall back to the standard hero+three-cards+CTA shape unless that shape is itself the deliberate, reproduced move. |
+
+**The bar: every axis >=4, no axis below 3.** Anything at 3 or below on any axis
+means revise the named section, re-render, and re-score.
+
+## The defect checklist (fixed, name-and-locate)
+
+Walk this closed list for EVERY section shot. Each is a yes/no. When the answer is
+"yes", a location string is REQUIRED (e.g. `v3-hero mobile`, `pricing desktop`) -
+a defect named without a location does not count and the section is not cleared.
+
+1. **Overflow** - text or an element bleeds past its container or the viewport edge.
+2. **Overlap** - two elements collide (a z-index / positioning bug).
+3. **Contrast** - body text sits below the perceptual-floor contrast on its surface
+   (cross-ref `references/brand/perceptual-floors.md`; small labels on tinted, dark
+   or photo bands are the usual offenders).
+4. **Missing imagery** - an empty or placeholder frame, a broken image, or a
+   wireframe-grey box. On a launch-bar site this is an automatic fail.
+5. **Mobile hero legibility** - the hero headline / subhead is unreadable at 390px
+   (truncation, overlap on the photo, or below the contrast floor where the mobile
+   stack pushed the text onto the brightest part of the image).
+
+A non-zero `console_errors` count in `.palate-shots/errors.json` is an automatic
+`visual: fail` regardless of the axis scores - a thrown build cannot pass.
+
+## Loop guardrails (the anti-rubber-stamp rules)
+
+The loop is the discipline. Follow these verbatim:
+
+- **A revision is accepted only if the rubric score improves.** "Improves" means the
+  sum of the six axes is strictly greater than the previous iteration's, OR a named
+  defect from the checklist is resolved with no new defect introduced. A revision
+  that does not improve the score is rejected and re-attempted - do not accept lateral
+  churn as progress.
+- **The critic must name a concrete defect with a location before any axis may pass
+  below 5**, and must name the single weakest section even on an otherwise-passing
+  render. A clean first read of a freshly generated page is statistically unlikely;
+  **"looks good" / "no issues found" with no located observation is treated as
+  SUSPECT** and forces one more critic pass at higher scrutiny - look again, walk the
+  defect checklist section by section.
+- **Cap at 2-3 iterations, then escalate** to the human with the manifest, the gate
+  output, and the screenshots attached. Do not loop forever; do not lower the bar to
+  pass.
+
+## What the verifier records
+
+Per iteration, the verifier records (and writes to `verify-report.json` so the
+done-gate reads computed evidence, not narration):
+
+- `shots` - the PNG paths captured this iteration (`desktop_full`, `mobile_full`,
+  and the per-section clips when `--sections` ran).
+- `axes` - the six axis scores 1..5.
+- `defects[]` - each `{ type, location }` from the fixed checklist that was found.
+- `score` - the iteration score (the sum of the axes), so the next iteration can be
+  checked for improvement.
+
+`verify-report.json` shape (project root):
+
+```json
+{ "verdict": "pass|fail",
+  "gates": { "depth":"pass", "uniqueness":"pass", "anti_slop":"pass", "provenance":"pass", "visual":"pass", "real_astro":"pass" },
+  "visual": { "ran": true, "pass": true, "console_errors": 0,
+    "iterations": [ { "i": 1, "axes": { "philosophy": 4, "hierarchy": 4, "execution": 4, "specificity": 4, "restraint": 4, "variety": 4 },
+      "defects": [ { "type": "overflow", "location": "v1-hero mobile" } ], "score": 24,
+      "shots": { "desktop_full": ".palate-shots/desktop-full.png", "mobile_full": ".palate-shots/mobile-full.png" } } ] },
+  "shots_dir": ".palate-shots" }
+```
