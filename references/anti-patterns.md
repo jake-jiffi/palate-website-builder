@@ -304,6 +304,78 @@ full sweep.
 
 ---
 
+## The tracked-mono "eyebrow" kicker
+
+### Anti-pattern: the tracked-mono eyebrow kicker
+
+Tiny section labels set in **monospace + ALL CAPS + wide letter-spacing (>=0.1em)**,
+usually in the accent colour, floating above a heading (e.g. `THE LIBRARY`,
+`GET STARTED`, `WATCH THE TASTE ARRIVE`). This trio is one of the loudest
+AI / template tells. It reads as a code comment dressed up as editorial, and it
+is **absent from the flagship tier** of the reference library.
+
+**Why it reads as AI.** Genuinely high-craft editorial and studio sites do the
+opposite. They either drop the kicker entirely and let a confident display
+heading carry the section (coffee-collective, jiffi.co), or they keep a **small
+CASED label in the page's own brand sans** at medium weight with near-zero
+tracking (aesop's section primitive; the type-foundry november). Grounded in our
+own library via `mcp__palate`:
+
+- **aesop** (photo-driven-consumer, craft 77): the section-title primitive is a
+  small cased / lightly-cased label set in the same humanist body sans (Suisse
+  Intl), never a mono. The notes call it "the cheapest 'this is a section'
+  affordance" and state hierarchy is "by size + colour + case, never weight
+  contrast", with "no accent CTA colour".
+- **coffee-collective** (editorial-serif-modern, craft 76): one neo-grotesque;
+  the signature is the contrast between tight negative-tracked headings and small
+  labels. Positive tracking is reserved only for genuinely tiny nav micro-labels;
+  it never uses a mono + uppercase + wide kicker as a section primitive.
+- **november / nvmbr.in** (type-foundry, craft 81): the most type-disciplined
+  cluster in the library labels sections with the page's own type at small size,
+  not a tracked mono eyebrow.
+
+Cross-corpus signal from `refs_insights(trends)`: roughly 70% of flagship sites
+lead with one distinctive face and let it do the work; the tracked-mono eyebrow
+is absent from the flagship tier. Jake's taste refs agree: jiffi.co opens with a
+huge confident serif and no tracked kickers; leoleo.studio uses bold maximal type
+and minimal cased labels.
+
+**The rule.** Never combine uppercase + wide tracking + monospace. Pick at most
+one device per label selector. Default to:
+
+- `text-transform: none` (keep the source sentence / Title case, do not uppercase
+  in CSS and do not rewrite the copy to caps; the cased reading is the whole point),
+- the brand **sans or serif display** (not mono),
+- `letter-spacing` near 0 (<=0.01em),
+- ~13px / weight 500,
+- inherit the per-section colour from a utility rather than hardcoding accent.
+
+If a section needs more punctuation than a cased label, add a short hairline rule
+or dot in `currentColor` **as an opt-in marker on section kickers only** (never on
+footer column headers or inline step labels: a leading rule there reads as a stray
+divider or a broken list bullet). Better still on hero / flagship sections: delete
+the kicker and let the heading stand alone. The intentional-craft move is a small
+cased label in the brand sans (the sibling of the display heading, an editorial
+caption), not a template chip.
+
+The mechanical floor for this anti-pattern is enforced two ways. The inline-style
+markup variant (all three properties on one element) is caught by the per-line
+rule below. The far more common multi-line CSS-block variant (each property on its
+own declaration line inside one `{ ... }` rule) cannot be expressed as a per-line
+regex, so it is enforced by the dedicated brace-block check
+`ai-tell-tracked-eyebrow` baked into `scripts/ux-lint.sh` (same severity, same TSV
+output, same `ux-lint-disable ai-tell-tracked-eyebrow` escape on the rule's
+opening line). Keep both in step if you tune the threshold.
+
+### Rule: ai-tell-tracked-eyebrow-inline
+- Severity: High
+- Mode: always
+- Files: *.astro,*.html
+- Pattern: `style="[^"]*text-transform\s*:\s*uppercase[^"]*(mono|monospace|font-mono)[^"]*letter-spacing\s*:\s*0?\.(1[0-9]|[2-9])[^"]*"`
+- Fix: This is the tracked-mono eyebrow kicker as an inline style: uppercase + a mono font + letter-spacing >=0.1em on one element. It is a top AI / template tell. Set `text-transform:none`, swap to the brand sans (not mono), drop letter-spacing to <=0.01em, or delete the kicker and let the heading carry the section. See the section above for the grounded alternative.
+
+---
+
 ## How to extend
 
 Add a `### Rule: <slug-id>` heading and the metadata block. Keep `Pattern`

@@ -143,6 +143,45 @@ run_rule() {
   ' "$file" "$rule" "$severity" "$regex" 2>&1
 }
 
+# Block-aware check: the tracked-mono "eyebrow" kicker.
+#
+# The markdown rules above match one line at a time, so they cannot catch a CSS
+# rule block where uppercase, the mono font and the wide tracking each sit on
+# their own declaration line (the way every such kicker is actually authored).
+# This reads brace-delimited rule blocks and flags the co-occurrence of all
+# three tell-properties: text-transform:uppercase + a mono font-family +
+# letter-spacing >= 0.1em. It also flags any eyebrow / kicker / overline class
+# still set in a mono font. Emits the same TSV as run_rule so it flows through
+# the existing severity / exit logic. Documented as `ai-tell-tracked-eyebrow` in
+# references/anti-patterns.md. Escape a block with `ux-lint-disable
+# ai-tell-tracked-eyebrow` on its opening line.
+run_tracked_eyebrow() {
+  local file="$1" rule="ai-tell-tracked-eyebrow" severity="High"
+  awk -v file="$file" -v rule="$rule" -v severity="$severity" '
+    BEGIN { RS="}"; IGNORECASE=1; line=1 }
+    {
+      block=$0;
+      start=line;                         # line of this blocks first declaration
+      line += gsub(/\n/, "\n", block);    # advance the line counter past this block
+      if (block ~ /ux-lint-disable-all/) next;
+      if (block ~ /ux-lint-disable[[:space:]]+ai-tell-tracked-eyebrow/) next;
+
+      has_upper = (block ~ /text-transform[[:space:]]*:[[:space:]]*uppercase/);
+      has_mono  = (block ~ /font-family[^;{}]*(mono|monospace|JetBrains|--pl-font-mono|--font-mono)/);
+      has_wide  = (block ~ /letter-spacing[[:space:]]*:[[:space:]]*(0?\.(1[0-9]|[2-9])[0-9]*|[1-9][0-9]*(\.[0-9]+)?)[[:space:]]*em/);
+      is_kicker_class = (block ~ /\.(eyebrow|tracked-label|pl-eyebrow|kicker|overline)/);
+
+      if (has_upper && has_mono && has_wide) {
+        sel=block; sub(/\{.*/, "", sel); gsub(/^[[:space:]\n]+|[[:space:]\n]+$/, "", sel); gsub(/[[:space:]]*\n[[:space:]]*/, " ", sel);
+        printf("%s\t%d\t%s\t%s\t%s\n", file, start, severity, rule, "tracked-mono uppercase kicker -> " sel " { uppercase + mono + letter-spacing>=0.1em }");
+      } else if (is_kicker_class && has_mono) {
+        sel=block; sub(/\{.*/, "", sel); gsub(/^[[:space:]\n]+|[[:space:]\n]+$/, "", sel); gsub(/[[:space:]]*\n[[:space:]]*/, " ", sel);
+        printf("%s\t%d\t%s\t%s\t%s\n", file, start, severity, rule, "eyebrow/kicker class still set in a mono font -> " sel);
+      }
+    }
+  ' "$file" 2>/dev/null
+}
+
 TMP=$(mktemp)
 trap "rm -f $TMP" EXIT
 
@@ -163,6 +202,20 @@ while IFS=$'\t' read -r RULE_ID SEVERITY MODE FILES_GLOB REGEX; do
     run_rule "$f" "$RULE_ID" "$SEVERITY" "$REGEX" >> "$TMP"
   done < <(list_files "$FILES_GLOB" "$PROJECT_DIR")
 done < <(parse_rules)
+
+# Block-aware rules (cannot be expressed as a per-line markdown Pattern).
+# ai-tell-tracked-eyebrow: High, mode always. Honour --disable and --severity.
+if [ "$(severity_rank High)" -ge "$SHOW_RANK" ]; then
+  case ",$DISABLED," in
+    *",ai-tell-tracked-eyebrow,"*) : ;;
+    *)
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        run_tracked_eyebrow "$f" >> "$TMP"
+      done < <(list_files "*.css" "$PROJECT_DIR")
+      ;;
+  esac
+fi
 
 VIOLATIONS=$(wc -l < "$TMP" | tr -d ' ')
 if [ "$VIOLATIONS" -gt 0 ]; then
