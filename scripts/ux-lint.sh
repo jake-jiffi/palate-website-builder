@@ -118,7 +118,8 @@ list_files() {
 # Run one rule against one file via perl PCRE. Emits TSV: file\tline\tseverity\trule\ttext
 #
 # requires_reason (5th arg, default 0): for the JUSTIFY-OR-FLAG rules (the banned-display-*
-# faces plus the trendy-default faces, the raw untuned accent colours, gradient-overuse,
+# faces incl. the trendy-default faces and this skill's own reflex pairing
+# Bricolage Grotesque + Hanken Grotesk, the raw untuned accent colours, gradient-overuse,
 # decorative glassmorphism, the serif-italic-in-a-heading treatment and AI-washing copy),
 # a `ux-lint-disable <rule>` directive only suppresses the finding when it is ACCOMPANIED
 # by a one-line reason (non-trivial text after the rule id). A bare disable with no reason
@@ -219,6 +220,147 @@ run_tracked_eyebrow() {
   ' "$file" 2>/dev/null
 }
 
+# Block-aware check: the sentence-case STATUS PILL / badge above the hero heading.
+#
+# DOCTRINE: the eyebrow / kicker PATTERN is the tell (see the tracked-eyebrow check
+# above and the doctrine in references/anti-patterns.md). The tracked-mono variant is
+# the worst STYLED case; the STATUS PILL is the worst PLACED case - a short label in a
+# rounded pill (a border-radius + a border or background), often with a small status
+# dot, sitting immediately above the hero <h1>. Jake's directive: on the HERO it must
+# not appear at all, so this is a hard HIGH flag (hero-scoped, not every pill on the
+# page). The eyebrow lint above only catches the uppercase+mono+tracked variant, so a
+# sentence-case status pill slips through; this closes that gap.
+#
+# FALSE-POSITIVE DISCIPLINE: it fires ONLY when ALL hold, so an ordinary rounded button
+# or a pill chip elsewhere on the page does not trip it:
+#   - the element is a pill SHAPE: a `rounded-full` / `rounded-pill` class, a
+#     pill/badge/chip/eyebrow/tag class, OR an inline border-radius of 999px+/9999px,
+#   - it carries a border OR a background (`border`/`bg-`/`background`/`border:`),
+#   - it sits within a short window (<= WINDOW lines) IMMEDIATELY BEFORE the FIRST <h1>
+#     in the file (the hero heading), AND after the most recent <section/<header/<main,
+#   - it is NOT an <a>/<button> (those are CTAs/links, not eyebrow chrome),
+#   - its own text is short (a label, not a paragraph).
+# Only the FIRST <h1> is considered, so legitimate pills lower down never fire.
+# Emits the same TSV as run_rule. Documented as `hero-status-pill` in
+# references/anti-patterns.md. Escape with `ux-lint-disable hero-status-pill` on the
+# pill's line or the line before it.
+run_hero_status_pill() {
+  local file="$1" rule="hero-status-pill" severity="High" window="${HERO_PILL_WINDOW:-12}"
+  awk -v file="$file" -v rule="$rule" -v severity="$severity" -v WINDOW="$window" '
+    BEGIN { IGNORECASE=1; n=0 }
+    { n++; L[n]=$0 }
+    END {
+      # Find the first <h1>.
+      h1=0;
+      for (i=1; i<=n; i++) { if (L[i] ~ /<h1[ >]/) { h1=i; break } }
+      if (h1==0) exit 0;
+      # Walk back from just above the h1, but stop at the section boundary so we only
+      # look inside the hero block, and cap at WINDOW lines.
+      lo = (h1-WINDOW > 1) ? h1-WINDOW : 1;
+      for (i=h1-1; i>=lo; i--) {
+        if (L[i] ~ /<(section|header|main|article)[ >]/) break;  # left the hero block
+        line=L[i];
+        if (line ~ /ux-lint-disable-all/) continue;
+        if (line ~ /ux-lint-disable[[:space:]]+hero-status-pill/) continue;
+        prev = (i>1) ? L[i-1] : "";
+        if (prev ~ /ux-lint-disable[[:space:]]+hero-status-pill/) continue;
+
+        # Must be an opening tag for a non-link, non-button element.
+        if (line !~ /<(div|span|p|small)[ >]/) continue;
+        if (line ~ /<(a|button)[ >]/) continue;
+
+        # NB: BSD/macOS awk has no \b word boundary, so use [[:space:]"] anchors and
+        # plain substrings (matches the portable style of run_tracked_eyebrow above).
+        is_pill = (line ~ /rounded-full|rounded-pill/) \
+               || (line ~ /class="[^"]*(pill|badge|chip|eyebrow|tag|status|kicker|overline)/) \
+               || (line ~ /border-radius[[:space:]]*:[[:space:]]*(9999|999|100|50)/);
+        if (!is_pill) continue;
+
+        has_edge = (line ~ /(^|[[:space:]"])border([-:[:space:]"]|$)/) \
+                || (line ~ /[[:space:]"]bg-/) \
+                || (line ~ /background/);
+        if (!has_edge) continue;
+
+        # Short text only: strip the tag(s) on this line; a long paragraph is not a pill.
+        txt=line; gsub(/<[^>]*>/, "", txt); gsub(/^[[:space:]]+|[[:space:]]+$/, "", txt);
+        if (length(txt) > 60) continue;
+
+        sel=line; gsub(/^[[:space:]]+|[[:space:]]+$/, "", sel);
+        printf("%s\t%d\t%s\t%s\t%s\n", file, i, severity, rule, "status pill / badge above the hero heading -> " sel " { a rounded pill label above the hero h1 (often with a status dot) is the worst-placed eyebrow tell - on the hero it must not appear at all; delete it and let the heading carry the hero }");
+        break;  # one finding per file is enough
+      }
+    }
+  ' "$file" 2>/dev/null
+}
+
+# Block-aware check: the two-tone (two SOLID colours) hero heading.
+#
+# DOCTRINE: a heading whose inner spans use two or more DISTINCT solid text colours
+# fakes hierarchy with colour instead of carrying it with weight / size / composition
+# (references/ai-slop-tells.md, "two-tone, gradient or italic-and-colour headings").
+# Gradient-clipped text is already caught by gradient-text-clip; this is the SOLID
+# two-colour sibling that the gradient rule misses. JUSTIFY-OR-FLAG (a genuine brand
+# two-colour wordmark passes with a one-line reason).
+#
+# It reads each <h1>...</h1> (joined across lines) and collects the distinct text
+# colours its inner elements set, via three idioms:
+#   - inline `color:#hex` / `color:rgb(...)` / `color:var(--token)`,
+#   - Tailwind arbitrary `text-[#hex]` / `text-[var(--token)]`,
+#   - Tailwind `text-{hue}-{shade}` utility classes (e.g. text-indigo-500).
+# Two or more DISTINCT such colours inside one <h1> => flag. A single accent word, or
+# the same colour repeated, does not fire (low false-positive). Documented as
+# `two-tone-heading` in references/anti-patterns.md; escape with
+# `ux-lint-disable two-tone-heading` on the heading's opening line or the line above it.
+run_two_tone_heading() {
+  local file="$1" rule="two-tone-heading" severity="Medium"
+  awk -v file="$file" -v rule="$rule" -v severity="$severity" '
+    BEGIN { IGNORECASE=1; n=0 }
+    { n++; L[n]=$0 }
+    END {
+      for (i=1; i<=n; i++) {
+        if (L[i] !~ /<h1[ >]/) continue;
+        # Join from this <h1 to its </h1> (heading rarely spans many lines; cap at 12).
+        blk=""; startline=i; opens=i;
+        for (j=i; j<=n && j<i+12; j++) { blk = blk " " L[j]; if (L[j] ~ /<\/h1>/) break }
+
+        if (blk ~ /ux-lint-disable-all/) { i=j; continue }
+        if (blk ~ /ux-lint-disable[[:space:]]+two-tone-heading/) { i=j; continue }
+        prev = (startline>1) ? L[startline-1] : "";
+        if (prev ~ /ux-lint-disable[[:space:]]+two-tone-heading/) { i=j; continue }
+
+        delete seen; c=0;
+        # inline color:... (hex, rgb, var)
+        s=blk;
+        while (match(s, /color[[:space:]]*:[[:space:]]*(#[0-9a-fA-F]{3,8}|rgba?\([^)]*\)|var\(--[a-z0-9-]+\))/)) {
+          tok=substr(s, RSTART, RLENGTH); sub(/^color[[:space:]]*:[[:space:]]*/, "", tok); tok=tolower(tok);
+          if (!(tok in seen)) { seen[tok]=1; c++ }
+          s=substr(s, RSTART+RLENGTH);
+        }
+        # Tailwind arbitrary text-[...]
+        s=blk;
+        while (match(s, /text-\[(#[0-9a-fA-F]{3,8}|var\(--[a-z0-9-]+\))\]/)) {
+          tok=substr(s, RSTART, RLENGTH); tok=tolower(tok);
+          if (!(tok in seen)) { seen[tok]=1; c++ }
+          s=substr(s, RSTART+RLENGTH);
+        }
+        # Tailwind text-{hue}-{shade}
+        s=blk;
+        while (match(s, /text-(slate|gray|grey|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]{2,3}/)) {
+          tok=substr(s, RSTART, RLENGTH); tok=tolower(tok);
+          if (!(tok in seen)) { seen[tok]=1; c++ }
+          s=substr(s, RSTART+RLENGTH);
+        }
+
+        if (c >= 2) {
+          hl=L[startline]; gsub(/^[[:space:]]+|[[:space:]]+$/, "", hl);
+          printf("%s\t%d\t%s\t%s\t%s\n", file, startline, severity, rule, "two-tone hero heading: " c " distinct solid text colours inside one <h1> -> " hl " { two solid colours in a heading fake hierarchy - carry it with weight, size and composition, not a second colour; gradient text is already a separate flag }");
+        }
+        i=j;  # skip past this h1
+      }
+    }
+  ' "$file" 2>/dev/null
+}
+
 TMP=$(mktemp)
 trap "rm -f $TMP" EXIT
 
@@ -242,6 +384,7 @@ while IFS=$'\t' read -r RULE_ID SEVERITY MODE FILES_GLOB REGEX; do
   case "$RULE_ID" in
     banned-display-inter|banned-display-roboto|banned-display-arial|banned-display-space-grotesk) REQUIRES_REASON=1 ;;
     banned-display-instrument-serif|banned-display-geist) REQUIRES_REASON=1 ;;
+    banned-display-bricolage|banned-body-hanken) REQUIRES_REASON=1 ;;
     accent-indigo-default|accent-tailwind-class|accent-cyan-on-dark|accent-emerald-cta|accent-friendly-teal) REQUIRES_REASON=1 ;;
     gradient-overuse|glassmorphism-decorative|reseed-serif-italic-heading|ai-washing-copy) REQUIRES_REASON=1 ;;
   esac
@@ -262,6 +405,34 @@ if [ "$(severity_rank High)" -ge "$SHOW_RANK" ]; then
         [ -z "$f" ] && continue
         run_tracked_eyebrow "$f" >> "$TMP"
       done < <(list_files "*.css" "$PROJECT_DIR")
+      ;;
+  esac
+fi
+
+# hero-status-pill: High, mode always. The sentence-case status pill above the hero
+# heading (a gap the tracked-mono eyebrow rule misses). Markup files only.
+if [ "$(severity_rank High)" -ge "$SHOW_RANK" ]; then
+  case ",$DISABLED," in
+    *",hero-status-pill,"*) : ;;
+    *)
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        run_hero_status_pill "$f" >> "$TMP"
+      done < <(list_files "*.astro,*.html,*.tsx" "$PROJECT_DIR")
+      ;;
+  esac
+fi
+
+# two-tone-heading: Medium, mode always. The solid two-colour hero heading (gradient
+# text is a separate flag). Markup files only.
+if [ "$(severity_rank Medium)" -ge "$SHOW_RANK" ]; then
+  case ",$DISABLED," in
+    *",two-tone-heading,"*) : ;;
+    *)
+      while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        run_two_tone_heading "$f" >> "$TMP"
+      done < <(list_files "*.astro,*.html,*.tsx" "$PROJECT_DIR")
       ;;
   esac
 fi

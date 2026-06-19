@@ -86,6 +86,80 @@ ec=$?
 if [ "$ec" -eq 0 ]; then echo "ok   - fresh face vs same history -> pass"; pass=$((pass+1));
 else echo "FAIL - fresh face vs same history -> pass (exit $ec, want 0)"; fail=$((fail+1)); fi
 
+# --- --require-diverge MODE-AWARE mirror (the done-time copy of the PreToolUse wall) ---
+# The gate reads the brand mode from .palate-skill-state.json beside the manifest. These
+# assert the same mode-aware bar as scripts/test/pretooluse-diverge.test.sh, but via the
+# gate's exit code (0 = pass, 2 = block).
+RD="$TMP/rd"; mkdir -p "$RD"
+
+# A brand-CREATION-valid manifest (>=8 concepts, spread, tail, colour+type varied >=3 each).
+write_rd_creation_manifest() { # <path>
+  cat > "$1" <<'JSON'
+{ "schema":3,
+  "diverge": { "ran":true, "n":8, "mode":"brand-creation",
+    "axes_varied":["colour","type","mood","layout","motion"],
+    "concepts": [
+    {"id":"c1","lens":"worst-moment","analogical_seed":"tide chart","conventionality":0.1,"colourway":"ink + bone + signal-red","type":"grotesk display + serif body"},
+    {"id":"c2","lens":"founder","analogical_seed":"signage","conventionality":0.25,"colourway":"forest + cream","type":"slab display + grotesk body"},
+    {"id":"c3","lens":"object","analogical_seed":"architecture","conventionality":0.4,"colourway":"cobalt + chalk + amber","type":"humanist serif + mono caption"},
+    {"id":"c4","lens":"after","analogical_seed":"film","conventionality":0.5,"colourway":"ink + bone + signal-red","type":"grotesk display + serif body"},
+    {"id":"c5","lens":"refuses","analogical_seed":"map","conventionality":0.6,"colourway":"forest + cream","type":"slab display + grotesk body"},
+    {"id":"c6","lens":"worst-moment","analogical_seed":"relay baton","conventionality":0.7,"colourway":"cobalt + chalk + amber","type":"humanist serif + mono caption"},
+    {"id":"c7","lens":"founder","analogical_seed":"instrument","conventionality":0.8,"colourway":"ink + bone + signal-red","type":"grotesk display + serif body"},
+    {"id":"c8","lens":"object","analogical_seed":"games","conventionality":0.55,"colourway":"forest + cream","type":"slab display + grotesk body"} ] },
+  "converge": { "ran":true, "advanced":["c1","c2"] } }
+JSON
+}
+
+# A brand-PROVIDED-valid manifest (locked colour/type, >=6 distinct layout/motion skins).
+write_rd_provided_manifest() { # <path>
+  cat > "$1" <<'JSON'
+{ "schema":3,
+  "diverge": { "ran":true, "n":8, "mode":"brand-provided",
+    "axes_varied":["layout","motion","density"],
+    "locked": { "colour": true, "type": true, "palette_source": "@palate/brand@2.1.0", "faces": ["soehne","tiempos"] },
+    "concepts": [
+    {"id":"c1","lens":"a","analogical_seed":"p","conventionality":0.1,"layout":"split","motion":"rise"},
+    {"id":"c2","lens":"b","analogical_seed":"q","conventionality":0.2,"layout":"stack","motion":"fade"},
+    {"id":"c3","lens":"c","analogical_seed":"r","conventionality":0.3,"layout":"grid","motion":"slide"},
+    {"id":"c4","lens":"d","analogical_seed":"s","conventionality":0.4,"layout":"rail","motion":"pin"},
+    {"id":"c5","lens":"e","analogical_seed":"t","conventionality":0.5,"layout":"canvas","motion":"draw"},
+    {"id":"c6","lens":"f","analogical_seed":"u","conventionality":0.6,"layout":"index","motion":"tilt"},
+    {"id":"c7","lens":"g","analogical_seed":"v","conventionality":0.7,"layout":"poster","motion":"wipe"},
+    {"id":"c8","lens":"h","analogical_seed":"w","conventionality":0.8,"layout":"feed","motion":"snap"} ] },
+  "converge": { "ran":true, "advanced":["c1"] } }
+JSON
+}
+
+# brand-creation marker + creation-valid manifest -> PASS (exit 0)
+echo '{"schemaVersion":"1.2","stage":"preview","brandMode":"brand-creation"}' > "$RD/.palate-skill-state.json"
+write_rd_creation_manifest "$RD/build-manifest.json"
+check "require-diverge: brand-creation valid -> pass" 0 --require-diverge --manifest "$RD/build-manifest.json"
+
+# brand-creation marker + the creation manifest stripped of colour/type variation -> BLOCK (exit 2)
+RD2="$TMP/rd2"; mkdir -p "$RD2"
+echo '{"schemaVersion":"1.2","stage":"preview","brandMode":"brand-creation"}' > "$RD2/.palate-skill-state.json"
+write_rd_provided_manifest "$RD2/build-manifest.json"   # provided-shaped manifest under a creation marker
+check "require-diverge: creation marker, no colour/type variation -> block" 2 --require-diverge --manifest "$RD2/build-manifest.json"
+
+# brand-provided marker + provided-valid manifest -> PASS (exit 0)
+RD3="$TMP/rd3"; mkdir -p "$RD3"
+echo '{"schemaVersion":"1.2","stage":"preview","brandMode":"brand-provided"}' > "$RD3/.palate-skill-state.json"
+write_rd_provided_manifest "$RD3/build-manifest.json"
+check "require-diverge: brand-provided valid -> pass" 0 --require-diverge --manifest "$RD3/build-manifest.json"
+
+# brand-provided marker + a manifest that varies colour (brand drift) -> BLOCK (exit 2)
+RD4="$TMP/rd4"; mkdir -p "$RD4"
+echo '{"schemaVersion":"1.2","stage":"preview","brandMode":"brand-provided"}' > "$RD4/.palate-skill-state.json"
+write_rd_creation_manifest "$RD4/build-manifest.json"   # creation-shaped (colour in axes_varied, mode mismatch) under a provided marker
+check "require-diverge: provided marker, brand drift / mode mismatch -> block" 2 --require-diverge --manifest "$RD4/build-manifest.json"
+
+# legacy marker with NO brandMode + creation-valid manifest -> PASS (back-compat default)
+RD5="$TMP/rd5"; mkdir -p "$RD5"
+echo '{"schemaVersion":"1.1","stage":"preview"}' > "$RD5/.palate-skill-state.json"
+write_rd_creation_manifest "$RD5/build-manifest.json"
+check "require-diverge: legacy marker (no brandMode) + valid creation -> pass" 0 --require-diverge --manifest "$RD5/build-manifest.json"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

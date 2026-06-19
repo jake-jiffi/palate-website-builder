@@ -117,6 +117,29 @@ disable does not.
 - Pattern: `font-family\s*:\s*['"]?Geist(?!\s+Mono)`
 - Fix: Geist (Vercel's default sans) is the new Inter - the no-opinion geometric sans of the v0 / Next starter, named in the field guide alongside Inter. Justify with a one-line brand reason on a `ux-lint-disable banned-display-geist`, or replace it with a more committed face the brand chose. (Pattern excludes "Geist Mono", which is a legitimate code face, not a display tell.)
 
+The pair below is THIS skill's own de-facto default: across recent builds the model
+kept reaching for **Bricolage Grotesque** (display) + **Hanken Grotesk** (body) when it
+had no opinion, so they have become the 2025-2026 Palate reflex pairing, the exact
+self-tell this skill must break. Same JUSTIFY-OR-FLAG model as the faces above, a
+`ux-lint-disable banned-display-<face>` with a one-line brand reason passes; a bare
+disable does not. If the build cannot state why THIS brand chose Bricolage or Hanken,
+it is the reflex, not a decision: choose the face fresh for the brand's voice and the
+website vision (`references/type-selection.md`).
+
+### Rule: banned-display-bricolage
+- Severity: High
+- Mode: always
+- Files: *.css,*.ts,*.tsx,*.astro,*.mjs
+- Pattern: `font-family\s*:\s*['"]?Bricolage Grotesque`
+- Fix: Bricolage Grotesque has become this skill's reflex display face, reached for build after build with no brand reason - the current Palate self-tell, exactly the kind of recurring face the type doctrine warns against. Justify it with a one-line brand reason on a `ux-lint-disable banned-display-bricolage` (the brand calls for it because ...) only if the type system carries real contrast and craft, or replace it with a display face the brand actually chose. Treat type like colour: decide the face per brief.
+
+### Rule: banned-body-hanken
+- Severity: Medium
+- Mode: always
+- Files: *.css,*.ts,*.tsx,*.astro,*.mjs
+- Pattern: `font-family\s*:\s*['"]?Hanken Grotesk`
+- Fix: Hanken Grotesk is the body half of this skill's reflex pairing (with Bricolage Grotesque as display) - the face the model defaults to for body text when it has no opinion. Justify it with a one-line brand reason on a `ux-lint-disable banned-body-hanken`, or replace it with a body face the brand decided on. The recurring face is the smell, not the family.
+
 ---
 
 ## Banned visual defaults
@@ -173,6 +196,26 @@ disable does not.
 - Files: *.css,*.ts,*.tsx,*.astro
 - Pattern: `(?i)(backdrop-filter\s*:\s*[^;{}]*blur|\bbackdrop-blur(-(sm|md|lg|xl|2xl|3xl|none))?\b)`
 - Fix: Frosted-glass panels (`backdrop-filter: blur`, Tailwind `backdrop-blur`) used as decoration are a named tell, now in backlash, and routinely drop body text below the contrast floor. Reserve a blur for a genuine overlay where the layer beneath must read through (a sticky nav over a photo). If glass is a brand decision, justify it on a `ux-lint-disable glassmorphism-decorative` with a one-line reason, and keep it off body copy. See the glassmorphism doctrine below.
+
+### Anti-pattern: the two-tone (two solid colours) hero heading
+
+A hero `<h1>` whose inner spans use **two or more DISTINCT solid text colours** to fake
+hierarchy (`<h1><span class="text-slate-900">Give your AI</span> <span
+class="text-indigo-500">a palate</span></h1>`). It is the solid-colour sibling of the
+gradient-clipped headline, named in the field guide ("two-tone, gradient or
+italic-and-colour headings", `references/ai-slop-tells.md`). Gradient text is already a
+hard / flag-with-justify rule (`gradient-text-clip`); this catches the two-SOLID-colour
+variant that the gradient rule misses. The tell is the same: hierarchy reached for with
+a second colour instead of with weight, size and composition.
+
+Carry the emphasis with the page's real type system (weight, size, the leading, the
+line break), not a recolour of part of the heading. This is JUSTIFY-OR-FLAG, enforced by
+the block-aware check `two-tone-heading` in `scripts/ux-lint.sh`: it reads each `<h1>`
+and counts the distinct solid colours its inner elements set (inline `color:`, Tailwind
+arbitrary `text-[#hex]`, or `text-{hue}-{shade}` utility classes); two or more distinct
+colours flag. A single accent word, or one colour repeated, does not fire. A genuine
+two-colour brand wordmark passes with `ux-lint-disable two-tone-heading` plus a one-line
+reason on the heading's opening line or the line above it.
 
 ---
 
@@ -607,6 +650,27 @@ regex, so it is enforced by the dedicated brace-block check
 `ai-tell-tracked-eyebrow` baked into `scripts/ux-lint.sh` (same severity, same TSV
 output, same `ux-lint-disable ai-tell-tracked-eyebrow` escape on the rule's
 opening line). Keep both in step if you tune the threshold.
+
+### Anti-pattern: the status pill / badge above the hero heading (the worst-PLACED case)
+
+Where the tracked-mono eyebrow is the worst-STYLED kicker, the **status pill above the
+hero heading** is the worst-PLACED one: a short sentence-case label (`Now in beta`,
+`Backed by Y Combinator`, `New: feature X`) inside a **rounded pill** (a `rounded-full`
+class or a large `border-radius`, plus a border or a background), very often with a
+small **status dot**, sitting immediately above the hero `<h1>`. It is the exact chip
+v0 / Lovable / Bolt emit at the top of the default hero, so it reads as "started from
+the template and never touched the hero". The tracked-mono eyebrow rule above misses it
+because it is sentence-case and not mono.
+
+**On the HERO it must not appear at all.** Delete it and let the heading carry the hero.
+If the announcement genuinely matters, give it a real home (a sentence in the subhead, a
+banner above the nav, a dedicated changelog link), not a pill stuck above the h1. This
+is a hard High flag, enforced by the dedicated block-aware check `hero-status-pill`
+baked into `scripts/ux-lint.sh`: it fires only when a pill-shaped, bordered/backed,
+short-text, non-link element sits within a short window immediately before the FIRST
+`<h1>` (the hero), so an ordinary rounded button or a pill chip lower down the page does
+not trip it. Escape a genuine exception with `ux-lint-disable hero-status-pill` on the
+pill's line or the line above it.
 
 ### Rule: ai-tell-tracked-eyebrow-inline
 - Severity: High

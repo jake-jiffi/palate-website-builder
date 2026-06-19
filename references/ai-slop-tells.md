@@ -39,6 +39,10 @@ Ratings: **Universal** (named by nearly every source) / **Very common** / **Comm
 - Instrument Serif / any of-the-moment display serif as the header font. Universal.
 - Sans body with a serif-italic accent word. Very common.
 - Two-tone, gradient, or italic-and-colour headings (faking hierarchy). Very common.
+- **Bricolage Grotesque (display) + Hanken Grotesk (body)** as the default pairing.
+  This is THIS skill's own 2025-2026 reflex: the faces the model reaches for build
+  after build when it has no opinion, so they now read as the Palate self-tell. The
+  recurring face is the smell, not the family; decide the face per brief.
 - One font for everything, raw Inter or Geist at three sizes. Universal as a root
   pattern.
 - AI-invented typographic hierarchy (e.g. five distinct type styles in a single

@@ -62,6 +62,28 @@ a defect named without a location does not count and the section is not cleared.
    complement to the `accent-*` lint rules.
 7. **Decorative tell shape in the render** - any of these visible in the pixels, each
    needs a location:
+   - **Eyebrow / status pill above the hero heading** - a small label, in a rounded
+     pill (often with a status dot), sitting above the hero `<h1>` (`Now in beta`,
+     `Backed by ...`, `WHAT WE DO`). On the HERO this is an automatic fail: it must not
+     appear at all (Jake's directive). Name the location and fail. Lower-down kicker
+     labels are the milder tell; the hero pill is the worst-placed one. (The
+     deterministic complement is the `hero-status-pill` lint check.)
+   - **Two-tone OR gradient hero heading** - a hero `<h1>` whose words use two distinct
+     solid colours, OR gradient-clipped text, to fake hierarchy. Either is a fail; name
+     the heading. Hierarchy is carried by weight / size / composition, not a recolour.
+     (The deterministic complements are `two-tone-heading` and `gradient-text-clip`.)
+   - **The recurring default face (MODE-AWARE)** - read `.palate-skill-state.json`
+     `brandMode` first. In **brand-creation** mode (no brand was provided, the skill chose
+     the identity) the display face being a known reflex default with no brand rationale is
+     a tell: this skill's own Bricolage Grotesque + Hanken Grotesk pairing, or Instrument
+     Serif / Geist / Space Grotesk / Inter reached for out of habit. If the face reads as
+     the unconsidered default and the build has no stated brand reason for it, that is a
+     Variety / Philosophy fail, name the face and the surface. In **brand-provided** mode
+     the face IS the brand's deliberate choice, so do NOT flag it for being a default (the
+     pill-above-hero and two-tone/gradient-heading tells still fail in both modes; only the
+     face is mode-gated). (The deterministic complements are the `banned-display-*` /
+     `banned-body-hanken` lint rules and the cross-build type-face-recurrence check in
+     `scripts/gate-novelty.mjs`.)
    - **Glassmorphism as decoration** - frosted-blur panels on nav / cards / modals used
      for look, not for a real overlay, and especially where it drops body text below the
      contrast floor.

@@ -52,8 +52,18 @@ const STYLE_MAX = Number(process.env.PALATE_NOVELTY_STYLE ?? 0.72);
 const DONOR_MAX = Number(process.env.PALATE_NOVELTY_DONOR ?? 0.6);
 const FACE_RECUR_N = Number(process.env.PALATE_FACE_RECUR_N ?? 3);
 
+// Thresholds for the --require-diverge mode (the done-time mirror of the PreToolUse
+// DIVERGE wall). Same env names + defaults as hooks/palate-pretooluse.mjs so write-time
+// and done-time agree on what a "valid diverge" is.
+const MIN_DIVERGE = Number(process.env.PALATE_MIN_DIVERGE ?? 8);
+const MIN_DISTINCT_SIGS = Number(process.env.PALATE_MIN_DISTINCT_SIGS ?? 6);
+const MIN_CONV_SPREAD = Number(process.env.PALATE_MIN_CONV_SPREAD ?? 0.4);
+const LOW_TAIL_MAX = Number(process.env.PALATE_LOW_TAIL_MAX ?? 0.3);
+const MIN_AXIS_DISTINCT = Number(process.env.PALATE_MIN_AXIS_DISTINCT ?? 3);
+
 const args = process.argv.slice(2);
 const arg = (k) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
+const has = (k) => args.includes(k);
 const list = (k) => {
   const i = args.indexOf(k);
   if (i < 0) return [];
@@ -64,6 +74,7 @@ const list = (k) => {
 
 const manifestPath = arg("--manifest");
 const variantFiles = list("--variants");
+const requireDiverge = has("--require-diverge");
 
 function fail(msg) { console.error(`novelty gate FAILED: ${msg}`); process.exit(2); }
 function skip(msg) { console.log(`novelty gate skipped: ${msg}`); process.exit(0); }
@@ -145,6 +156,84 @@ function loadHistory() {
 // ============================================================================
 // CONCEPT pre-check: did CONVERGE advance only safe concepts?
 // ============================================================================
+// divergeValid: the same MODE-AWARE predicate as the PreToolUse DIVERGE wall
+// (hooks/palate-pretooluse.mjs). Used by the --require-diverge mode so the done-gate
+// can catch a BUILD SITE that skipped DIVERGE (gate-done.sh invokes it ONLY when the
+// build-site marker is present, so non-build sessions stay fail-open). Kept BYTE-IDENTICAL
+// in logic with the hook's copy by sharing the PALATE_MIN_* env thresholds above; the
+// `mode` arg is read from the marker beside the manifest (default brand-creation, the
+// stricter bar, for back-compat). See the hook for the full doctrine on the two modes.
+function divergeValid(m, mode = "brand-creation") {
+  if (!m || typeof m !== "object") return false;
+  const d = m.diverge, c = m.converge;
+  if (!d || d.ran !== true || !Array.isArray(d.concepts)) return false;
+  if (d.concepts.length < MIN_DIVERGE) return false;
+  if (d.mode && d.mode !== mode) return false;
+  const ok = d.concepts.filter((x) =>
+    x && typeof x === "object" &&
+    typeof x.conventionality === "number" &&
+    (x.mechanic || x.lens || x.analogical_seed),
+  );
+  if (ok.length < MIN_DIVERGE) return false;
+  const convs = ok.map((x) => x.conventionality);
+  const spread = Math.max(...convs) - Math.min(...convs);
+  if (spread < MIN_CONV_SPREAD) return false;
+  if (!convs.some((v) => v <= LOW_TAIL_MAX)) return false;
+  const axes = new Set((Array.isArray(d.axes_varied) ? d.axes_varied : []).map((a) => String(a).toLowerCase().trim()));
+  const hasColour = axes.has("colour") || axes.has("colourway") || axes.has("color");
+  const hasType = axes.has("type") || axes.has("faces") || axes.has("typography");
+  const distinctOf = (key) => new Set(
+    ok.map((x) => String(x[key] || "").toLowerCase().trim()).filter((s) => s.length > 0),
+  ).size;
+  if (mode === "brand-provided") {
+    if (hasColour || hasType) return false;
+    if (!d.locked || d.locked.colour !== true || d.locked.type !== true) return false;
+    if (distinctOf("colourway") > 1) return false;
+    if (distinctOf("type") > 1) return false;
+    const allowed = ["layout", "composition", "section_logic", "motion", "density", "art_direction"];
+    const declaredAllowed = allowed.filter((a) => axes.has(a));
+    if (declaredAllowed.length < 2) return false;
+    const skins = new Set(
+      ok.map((x) => allowed.map((a) => String(x[a] || "").toLowerCase().trim()).join("|"))
+        .filter((s) => s.replace(/\|/g, "").length > 0),
+    );
+    if (skins.size < MIN_DISTINCT_SIGS) return false;
+  } else {
+    if (!hasColour) return false;
+    if (!hasType) return false;
+    if (distinctOf("colourway") < MIN_AXIS_DISTINCT) return false;
+    if (distinctOf("type") < MIN_AXIS_DISTINCT) return false;
+    const sigs = new Set(
+      ok.map((x) =>
+        `${String(x.lens || "").toLowerCase().trim()}|${String(x.analogical_seed || "").toLowerCase().trim()}`,
+      ),
+    );
+    if (sigs.size < MIN_DISTINCT_SIGS) return false;
+  }
+  if (!c || c.ran !== true || !Array.isArray(c.advanced) || c.advanced.length < 1) return false;
+  return true;
+}
+
+// Read the build's brand mode from the marker beside the manifest (so it cannot be
+// tampered with by a manifest write). Default brand-creation when absent/unreadable.
+function modeFromMarker(manifestPath) {
+  try {
+    const st = JSON.parse(readFileSync(path.join(path.dirname(manifestPath), ".palate-skill-state.json"), "utf8"));
+    if (st.brandMode === "brand-provided" || st.brandMode === "brand-creation") return st.brandMode;
+  } catch { /* default */ }
+  return "brand-creation";
+}
+
+// NOTE on the division of labour with the PreToolUse DIVERGE wall: the front gate
+// (hooks/palate-pretooluse.mjs divergeValid) is the STRICTER one - it enforces the
+// concept COUNT (>= 8), the conventionality SPREAD, the low-typicality tail and the
+// MODE-AWARE distinctness (brand-creation: >= 3 distinct colourways + type directions;
+// brand-provided: locked colour/type + >= 6 within-brand layout/motion skins) before the
+// first source write of a build site. The --require-diverge mode above is the done-time
+// mirror of exactly that predicate (same modeFromMarker read), run by gate-done.sh ONLY
+// for an active build site. conceptPreCheck below stays the fail-open backstop that keeps
+// the conventionality-MEAN check (did CONVERGE advance only safe concepts) without
+// re-enforcing count/spread/distinctness.
 function conceptPreCheck(m) {
   const diverge = m.diverge;
   const converge = m.converge;
@@ -264,6 +353,38 @@ let _manifestVariantDonors = null;
 
 // ============================================================================
 function main() {
+  // Mode R: --require-diverge --manifest <f> is the done-time mirror of the PreToolUse
+  // DIVERGE wall, invoked by gate-done.sh ONLY when an active build-site marker exists.
+  // Unlike the fail-open concept pre-check, this mode is HARD: an active build site that
+  // skipped (or only thinly faked) DIVERGE is caught here, not silently passed. The
+  // caller's marker guard keeps non-build sessions fail-open.
+  if (requireDiverge) {
+    if (!manifestPath) fail("--require-diverge needs --manifest <f>.");
+    if (!existsSync(manifestPath)) {
+      fail(
+        `--require-diverge: no manifest at ${manifestPath}, so DIVERGE cannot have run. ` +
+        `A Palate BUILD SITE must diverge into 8-10 directions and record manifest.diverge/converge before it is done.`,
+      );
+    }
+    let m;
+    try { m = JSON.parse(readFileSync(manifestPath, "utf8")); }
+    catch { fail("--require-diverge: manifest is not valid JSON; DIVERGE evidence cannot be read."); }
+    const mode = modeFromMarker(manifestPath);
+    if (!divergeValid(m, mode)) {
+      const axesLine = mode === "brand-provided"
+        ? "colour + type LOCKED (locked.colour/type = true, NOT in axes_varied) and >= " + MIN_DISTINCT_SIGS + " distinct layout/motion skins within the brand"
+        : ">= " + MIN_AXIS_DISTINCT + " distinct colourways AND >= " + MIN_AXIS_DISTINCT + " distinct type directions (colour + type in axes_varied), with distinct lens|seed signatures";
+      fail(
+        `this ${mode} build site skipped DIVERGE (or recorded a thin / clustered / wrong-mode set). ` +
+        `manifest.diverge must record >= ${MIN_DIVERGE} genuinely different concepts (a conventionality spread, ` +
+        `a low-typicality tail at <= ${LOW_TAIL_MAX}, ${axesLine}) and manifest.converge must advance >= 1. ` +
+        "DIVERGE is step one of a build, not optional polish: sample 8-10 directions wide on the axes for this brand mode, then converge to the best 1-2. " +
+        "See references/story-engine.md.",
+      );
+    }
+    pass(`DIVERGE valid (${mode}): >= ${MIN_DIVERGE} distinct concepts + a converged advance recorded.`);
+  }
+
   // Mode A: --manifest drives the concept pre-check, and (if it has a variants[]
   // block with html_path + donor_slugs) the build-level check too.
   if (manifestPath) {

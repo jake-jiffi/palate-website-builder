@@ -15,6 +15,19 @@ are the independent check.** You have `Write` for ONE purpose only: to emit
 `verify-report.json` at the project root (the computed-evidence artefact the done-gate
 reads). Do not write or edit any source file - you gate, you do not build.
 
+## First: read the build's brand mode (it makes the type checks mode-aware)
+
+Read `.palate-skill-state.json` `brandMode` at the project root (default `brand-creation`
+if absent). It tells you whether a brand was PROVIDED:
+
+- **brand-creation** (no brand was provided, the skill invented the identity): a recurring
+  REFLEX DEFAULT FACE used with no brand rationale is a tell, so flag it (see 3c and
+  4(iii) below).
+- **brand-provided** (a brand package / real tokens / stated colours+fonts): the face IS
+  the brand's deliberate choice, so do NOT flag the face for being "a default" - it is the
+  brand. (The pill / badge / eyebrow above the hero (i) and the two-tone / gradient hero
+  heading (ii) are ALWAYS fails regardless of mode; only the face check (iii) is mode-gated.)
+
 ## What to run (in order; collect all findings, do not stop at the first fail)
 
 1. **MCP-depth gate** (the build actually drew on the library):
@@ -34,10 +47,20 @@ reads). Do not write or edit any source file - you gate, you do not build.
    the full tell catalogue it links, `references/ai-slop-tells.md`). Flag a gradient hero,
    gradient-clipped headline text, three-card value props, a centred stack over a stock
    photo, feature-grid sameness, repeated section order, the AI-tell vocabulary, and the
-   new flag-with-justify findings (trendy default faces, raw untuned accent colours,
+   flag-with-justify findings (trendy default faces, raw untuned accent colours,
    gradient-overuse, decorative glassmorphism, the serif-italic-in-a-heading treatment,
    AI-washing copy). A justify-or-flag finding passes ONLY with a `ux-lint-disable` plus a
-   real one-line brand reason; a bare disable is itself the tell and still fires.
+   real one-line brand reason; a bare disable is itself the tell and still fires. **Three
+   self-tell findings are now first-class lint rules: hunt them explicitly.** (a) the
+   status pill / badge above the hero heading (`hero-status-pill`, a hard High - on the
+   hero it must not appear at all, BOTH modes); (b) the two-tone solid-colour hero heading
+   (`two-tone-heading`) alongside the gradient-text one (`gradient-text-clip`, BOTH modes);
+   (c) the reflex DEFAULT FACE - **MODE-AWARE**: in brand-CREATION mode flag a known reflex
+   default face used with no brand rationale (Bricolage Grotesque + Hanken Grotesk via
+   `banned-display-bricolage` / `banned-body-hanken`, plus Instrument Serif / Geist /
+   Space Grotesk / Inter, justify-or-flag); in brand-PROVIDED mode the face is the brand's
+   deliberate choice, so do NOT flag the face for being a default (the lint rules carry a
+   `ux-lint-disable <rule> the brand specifies this face` with the brand reason).
 
 4. **Provenance mixing** (Brief 5's "compose from at least three donors", enforced):
    read `build-manifest.json` `references_surveyed`, `signature_move`, `layers_read`,
@@ -59,9 +82,18 @@ reads). Do not write or edit any source file - you gate, you do not build.
       Specificity / Restraint / Variety) 1 to 5 each against `references/visual-rubric.md`
       - the FIXED rubric and the fixed defect checklist (overflow, overlap, contrast,
       missing OR fabricated imagery, mobile hero legibility, default / genre-cliche accent
-      in the render, and the decorative tell shapes: glassmorphism / bento as decoration,
-      the universal icon-tile feature-card row, cursor-chasing or hover-hides motion,
-      inconsistent visual language across sections), plus the perceptual floors
+      in the render, and the decorative tell shapes). **From the RENDER, hunt the three
+      self-tell defects and FAIL the build:** (i) a pill / badge / eyebrow label above the
+      hero heading (on the hero it must not appear at all) - FAIL in BOTH modes; (ii) a
+      two-tone (two solid colours) OR gradient hero heading faking hierarchy - FAIL in BOTH
+      modes; (iii) the recurring default display face - **MODE-AWARE**: in brand-CREATION
+      mode, FAIL if the face is a known reflex default (Bricolage Grotesque, Hanken Grotesk,
+      Instrument Serif, Geist) reached for with no brand rationale; in brand-PROVIDED mode
+      the face is the brand's deliberate choice, so do NOT flag it for being a default (it
+      IS the brand). Then
+      the remaining decorative tells: glassmorphism / bento as decoration, the universal
+      icon-tile feature-card row, cursor-chasing or hover-hides motion, inconsistent
+      visual language across sections, plus the perceptual floors
       (`references/brand/perceptual-floors.md`). Do NOT score from `critique-discipline.md`
       prose alone. Then run the **AI-slop Quick QA pass** from `references/visual-rubric.md`
       (the field guide's own list, `references/ai-slop-tells.md`): tick more than two and

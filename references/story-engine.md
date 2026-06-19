@@ -36,6 +36,45 @@ right?" Then surprise them.
 
 ## DIVERGE - sample wide before you narrow (Verbalized Sampling)
 
+### First, detect the brand mode
+
+DIVERGE is mode-aware, so the FIRST thing it does is decide whether a brand was
+provided, because that sets WHICH axes the directions diverge on. A brand is
+**PROVIDED** if any of these hold: a brand package resolves
+(`scripts/detect-brand-repo.sh` returns `EXISTS:...`, or `--vendor-brand` points at a
+real brand repo); real brand tokens / assets exist (a brand PDF / skill / token file,
+or, for a redesign, the capture engine extracted real `tokens.raw.json` +
+`typography.raw.json` from the client's site); or the brief states explicit colours AND
+fonts. Otherwise the brand is **NOT provided** (brand-creation): the skill is inventing
+the identity. A partial brand (colours but no fonts, or a logo only) counts as provided:
+LOCK the provided half and choose the missing half to fit it. Pure `--vendor-brand`
+defaults with no real source count as brand-creation, because the skill is choosing the
+identity. The mode is recorded at state-init as `.palate-skill-state.json` `brandMode`
+and MUST equal `manifest.diverge.mode`.
+
+The axes you diverge on follow the mode:
+
+- **brand-creation** (no brand provided): you are helping CREATE the brand, so diverge
+  across the FULL identity space: **colourway** (vary it), **type / faces** (vary them),
+  **mood**, **layout**, **composition**, **motion**, **density**. Set
+  `diverge.axes_varied` to include colour and type (they are REQUIRED varied axes), and
+  record each concept's `colourway` and `type`. The validity gate needs `>= 3` distinct
+  colourways AND `>= 3` distinct type directions across the set, so do not reach for one
+  default pairing.
+- **brand-provided** (a brand exists): LOCK the brand colour + type + identity. Do NOT
+  vary colour or fonts away from the brand: set `diverge.locked = { colour: true, type:
+  true }` and record the palette source + faces, and do NOT put colour or type in
+  `axes_varied`. Diverge ONLY within the brand, on **layout**, **composition**, **section
+  logic**, **motion**, **density**, **art direction**. The validity gate judges
+  distinctness on those axes (`>= 6` distinct layout/motion skins), never on a face or
+  colour the brand already fixed.
+
+This is enforced: the PreToolUse wall and the done gate both read `brandMode` from the
+marker and block the build until `manifest.diverge` is valid FOR THIS MODE. Full field
+shape + thresholds in `references/build-manifest.md`.
+
+### Then sample wide
+
 A single "best concept" collapses to the category mode: the safe, typical idea
 the model reaches for first. Do not narrow yet. From the one true thing (stage 4)
 and the spine (stage 5), generate **N candidate concepts (N = 6-8) in one pass,
@@ -68,7 +107,8 @@ as before, PLUS three tags:
 `conventionality` concepts unless one is genuinely needed as the safe-warm anchor.
 The bold and one-of-a-kind slots MUST come from the low-typicality tail; aim for
 at least two concepts at `conventionality <= 0.3`. Write the sampled set to
-`manifest.diverge` (`{ ran: true, n, concepts: [...] }`).
+`manifest.diverge` (`{ ran: true, n, mode, axes_varied, locked, concepts: [...] }`, the
+mode-aware shape above).
 
 The split that governs everything downstream: **reference = craft + buildability
 (the HOW and the CAN); the concept layer + this DIVERGE pass = novelty (the

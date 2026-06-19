@@ -72,6 +72,18 @@ if ! depth_err="$(bash "$DEPTH_GATE" "$MANIFEST" 2>&1 1>/dev/null)"; then
   fail "MCP-depth gate did not pass. ${depth_err}"
 fi
 
+# --- DIVERGE wall (build-site-scoped): a BUILD SITE that skipped DIVERGE is CAUGHT,
+# not silently fail-open. This mirrors the PreToolUse write-gate at done-time. It is
+# scoped to an ACTIVE BUILD SITE by the .palate-skill-state.json marker (written only
+# by the BUILD SITE flow), so a non-build session, a BUILD BRAND session or an ordinary
+# edit is NEVER trapped (no marker => the block is skipped, the existing fail-open holds).
+# gate-novelty.mjs --require-diverge is the done-time mirror of the write-gate predicate.
+if [ -f "$PROJ/.palate-skill-state.json" ] && [ -f "$NOVELTY_GATE" ]; then
+  if ! diverge_err="$(node "$NOVELTY_GATE" --require-diverge --manifest "$MANIFEST" 2>&1 1>/dev/null)"; then
+    fail "DIVERGE gate did not pass. ${diverge_err}"
+  fi
+fi
+
 # --- EVIDENCE 1: the VISUAL LOOP ran AND passed (read the artefacts) -----------
 # Read verify-report.json (computed by the verifier from real pixels), NOT a manifest
 # boolean. The render itself is double-checked against the on-disk screenshots and the

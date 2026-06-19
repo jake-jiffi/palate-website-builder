@@ -56,7 +56,22 @@ function blank() {
     // scripts/manifest-merge.mjs. The agent may set the DESCRIPTIVE fields it
     // genuinely knows (diverge.concepts, converge.scored, variants[].donor_slugs,
     // signature_move); every pass/fail is machine-checked, never self-claimed.
-    diverge: null, // { ran, concepts:[{id, mechanic, lens, analogical_seed, conventionality:0..1, self_tag}], n }
+    // NOTE: diverge/converge are read by TWO gates, not one. The Stop-time novelty
+    // gate (scripts/gate-novelty.mjs) reads them at done-time, and the PreToolUse
+    // DIVERGE wall (hooks/palate-pretooluse.mjs) reads them at write-time to decide
+    // whether a build site may write its first source file. Both judge validity
+    // MODE-AWARE off the marker's brandMode, so the agent's diverge.mode / axes_varied /
+    // locked / per-concept axis tags below are load-bearing. Do not drop these blocks.
+    // diverge is MODE-AWARE (the brand mode comes from .palate-skill-state.json brandMode):
+    //   mode: "brand-creation" | "brand-provided" (MUST equal the marker's brandMode)
+    //   axes_varied: the axes this set diverged on. brand-creation REQUIRES colour + type
+    //     (the full identity space); brand-provided MUST NOT list colour/type (they are locked).
+    //   locked: { colour, type, palette_source?, faces? } - true/true in brand-provided.
+    //   concepts: each carries conventionality + a creative axis tag, PLUS the per-concept
+    //     axis fingerprints distinctness is judged on: brand-creation reads colourway + type
+    //     (>= 3 distinct each); brand-provided reads layout/composition/section_logic/motion/
+    //     density/art_direction (>= 6 distinct skins, colourway/type constant).
+    diverge: null, // { ran, n, mode, axes_varied:[...], locked:{...}, concepts:[{id, mechanic, lens, analogical_seed, conventionality:0..1, colourway, type, layout, motion, density, art_direction}] }
     converge: null, // { ran, scored:[{id, originality:0..5, craft_feasibility:0..5, combined:0..5}], advanced:[id,...] }
     // COMMISSION (the build commission, A.3.5): the ambition bar + the chosen toolkit
     // made explicit after CONVERGE and before EXPLORE, then carried + checked by the
