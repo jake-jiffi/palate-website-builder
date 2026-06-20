@@ -172,6 +172,13 @@ website vision (`references/type-selection.md`).
 - Pattern: `gradient\((?:[^,()]|\([^)]*\))*,(?:[^,()]|\([^)]*\))*,(?:[^,()]|\([^)]*\))*,(?:[^,()]|\([^)]*\))*,`
 - Fix: A gradient with four or more colour stops reads as a sticker. Two stops at most for marketing surfaces; three only if the brand documents it. (Pattern counts only top-level commas, so an `rgba()`/`hsl()`/`calc()` colour's internal commas do not falsely trip a 2-stop scrim or vignette.)
 
+### Rule: inline-style-hex
+- Severity: Medium
+- Mode: always
+- Files: *.astro,*.tsx,*.html
+- Pattern: `style=["'][^"']*#[0-9a-fA-F]{3,6}`
+- Fix: A hard-coded hex in an inline `style` bypasses the brand tokens and drifts from the system. Use a `brand-*` utility or a `var(--brand-*)` token; if a one-off colour is genuinely needed, add it to the brand package.
+
 ---
 
 ## Gradient-text, gradient-overuse and glassmorphism (JUSTIFY-OR-FLAG)
@@ -516,6 +523,20 @@ framing, therapy-mode openers and the exact stock pricing / free-tier phrases
 - Pattern: `<input(?![^>]*\bname=)[^>]*>`
 - Fix: Inputs without `name` cannot be submitted. Add a `name`; pair it with `id` and a `<label for=...>`.
 
+### Rule: input-missing-type
+- Severity: High
+- Mode: always
+- Files: *.astro,*.tsx,*.html
+- Pattern: `<input(?![^>]*\btype=)[^>]*>`
+- Fix: An input with no `type` falls back to `text`, so the wrong mobile keyboard and the wrong validation apply. Set the real type (`email`, `tel`, `search`, `number`, `checkbox`, ...), and add `inputmode` where the keyboard matters.
+
+### Rule: placeholder-as-label
+- Severity: High
+- Mode: always
+- Files: *.astro,*.tsx,*.html
+- Pattern: `<input(?![^>]*aria-label)(?![^>]*\bid=)[^>]*\bplaceholder=`
+- Fix: An input with a placeholder but no `id` (so no `<label for>` can target it) and no `aria-label` is using the placeholder as its label - the text vanishes on focus and fails screen readers. Add a visible `<label for>` above the field (give the input an `id`), or an `aria-label`. A correctly-labelled input has an `id`, so it does not trip this rule.
+
 ### Rule: brand-name-needs-translate-no
 - Severity: Medium
 - Mode: always
@@ -557,6 +578,24 @@ framing, therapy-mode openers and the exact stock pricing / free-tier phrases
 - Files: *.astro,*.tsx
 - Pattern: `<button(?![^>]*\btype=)[^>]*>`
 - Fix: Inside a `<form>`, a button without `type` defaults to `submit` and accidentally submits. Always set `type="button" | "submit" | "reset"`.
+
+---
+
+## Accessibility and state
+
+### Rule: img-missing-alt
+- Severity: High
+- Mode: always
+- Files: *.astro,*.tsx,*.html
+- Pattern: `<img(?=[\s/>])(?![^>]*\balt=)[^>]*>`
+- Fix: Every `<img>` needs an `alt`. Describe the content for meaningful images; use `alt=""` for purely decorative ones so screen readers skip them. (The `(?=[\s/>])` guard means it does not falsely trip on SVG `<image>`.)
+
+### Rule: disabled-opacity-half
+- Severity: High
+- Mode: always
+- Files: *.astro,*.tsx,*.html,*.css
+- Pattern: `disabled:opacity-50\b`
+- Fix: Match the disabled-state floor in `references/brand/perceptual-floors.md`: use `disabled:opacity-40`, not 50, so disabled reads as disabled rather than as a loading state.
 
 ---
 
@@ -896,6 +935,17 @@ is a field observation, low confidence alone; a cluster is the smell.
 
 Do instead: earn trust with specifics, real names, real numbers, real proof, a real link.
 Drop the stickers.
+
+---
+
+## Landing pages
+
+### Rule: lp-uses-full-nav-layout
+- Severity: High
+- Mode: compose-time
+- Files: src/pages/lp*.astro,src/pages/landing/**/*.astro
+- Pattern: `import .*BaseLayout`
+- Fix: A landing page is single-focus: no global site nav competing with the one action you want. Use `LandingLayout` (it omits the header/nav slot) instead of `BaseLayout`. Scoped to the `lp*` / `landing/` route convention; for differently-named landing routes the "Landing conversion" dimension in `references/audit-dimensions.md` applies instead.
 
 ---
 

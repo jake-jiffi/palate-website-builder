@@ -53,7 +53,10 @@ explicit progress.
 Forms render their error states deliberately (per-field message, accessible
 to a screen reader, not red-on-red); fetch failures degrade to the `content.ts`
 fallback rather than a blank section; 404 and 500 routes exist and feel like
-they belong to the site, not generic Astro defaults.
+they belong to the site, not generic Astro defaults. Validation fires on blur
+for a filled field and on submit for an empty required one, never mid-typing;
+the form has explicit submitting, success and failure states with visible,
+announced feedback.
 
 ### 7. Dark mode (only if the brand supports it)
 
@@ -70,7 +73,9 @@ for power users, breathing room for narrative / consumer pages.
 ### 9. Accessibility (WCAG 2.2 AA minimum)
 
 Visible focus on every interactive element. Colour contrast >= 4.5:1 for body,
->= 3:1 for large text. Forms have labels and `aria-describedby` for errors.
+>= 3:1 for large text. Forms have labels and `aria-describedby` for errors;
+each label sits above its field (a placeholder is never the only label), and
+inputs carry the right `type` / `inputmode` / `autocomplete`.
 No motion that violates `prefers-reduced-motion`. Headings descend in order
 without skipping levels.
 
@@ -111,6 +116,17 @@ system is High. Identity-layer borrowing (exact hexes, wordmark, font files,
 photos, a trademark-grade gimmick) is also a finding - the fidelity is to the
 craft layer, never the trade dress (see the two-layer doctrine in
 `reference-library-usage.md`).
+
+### 12. Landing conversion (landing / single-action routes only)
+
+On a landing page or any single-action route, the conversion craft is its own
+dimension. One primary action, repeated down a long page rather than hunted for;
+the global site nav dropped (use `LandingLayout`, which omits the header slot,
+not `BaseLayout`); a social-proof unit next to the primary CTA, not only in the
+footer, and specific rather than vague (name three, not "trusted by 1000+"); the
+lead form kept to one or two fields. A landing page that carries the full nav,
+buries its one action, or asks for more fields than it needs is a High finding.
+This applies only to landing / conversion routes; content pages keep their nav.
 
 ---
 

@@ -16,9 +16,14 @@
                                           font-family: 'Inter', sans-serif;
                                           background: linear-gradient(to right, purple, pink);
                                           transition: all 200ms;
-/tmp/eval-uxlint-bad/src/page.astro     contains <input> without autocomplete
-                                          and without name; <button> without type;
+/tmp/eval-uxlint-bad/src/page.astro     contains <input> without autocomplete,
+                                          without name, and without type; an
+                                          <input> with a placeholder but no id or
+                                          aria-label; an <img> without alt; a class
+                                          with disabled:opacity-50; an inline
+                                          style="...#hex"; <button> without type;
                                           a centred stock-hero stack
+/tmp/eval-uxlint-bad/src/pages/lp1.astro  a landing page that imports BaseLayout
 ```
 
 ### Expected behaviour
@@ -35,6 +40,12 @@ least one finding against this fixture.
 - [ ] `transition-all` finding on `src/styles.css`.
 - [ ] `input-missing-autocomplete` finding on `src/page.astro`.
 - [ ] `input-missing-name` finding on `src/page.astro`.
+- [ ] `input-missing-type` finding on `src/page.astro`.
+- [ ] `placeholder-as-label` finding on `src/page.astro`.
+- [ ] `img-missing-alt` finding on `src/page.astro`.
+- [ ] `disabled-opacity-half` finding on `src/page.astro`.
+- [ ] `inline-style-hex` finding on `src/page.astro`.
+- [ ] `lp-uses-full-nav-layout` finding on `src/pages/lp1.astro`.
 - [ ] `ai-tell-leverage` finding on `src/copy.md`.
 - [ ] `ai-tell-fast-paced` finding on `src/copy.md`.
 - [ ] `ai-tell-let-dive` finding on `src/copy.md`.
