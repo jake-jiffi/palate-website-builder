@@ -16,6 +16,8 @@ Two short steps, no environment variables to manage.
    ```
    /plugin install palate-website-builder@palate
    ```
+   Then run `/reload-plugins` (or restart Claude Code) so the website-builder skill loads. A freshly
+   installed plugin is not active until you do.
 2. Connect the Palate MCP. Two paths, pick one. Both add the connector once and store everything in
    your Claude Code config (no environment variables).
 
@@ -31,8 +33,8 @@ Two short steps, no environment variables to manage.
    ```bash
    claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp
    ```
-   Claude Code opens your browser to sign in to Palate and click **Allow** (or run `/mcp` and choose
-   Authenticate).
+   Adding the server does not open the browser by itself; it shows `! Needs authentication`. Finish in
+   Claude Code: run `/mcp`, select `palate`, choose **Authenticate**, and click **Allow**.
 
    **`--scope user` is required either way.** Without it, `claude mcp add` defaults to local (project)
    scope, so `palate` only exists in the directory where you ran the command. The skill builds client

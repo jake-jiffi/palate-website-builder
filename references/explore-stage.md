@@ -121,7 +121,16 @@ the rule (the same rule as type): a mechanism appears in a variant only where th
 direction actually needs it, and the restraint clause governs the spread (match
 intensity to the brand; maximal motion is not the bar). A safe-warm variant may sit
 on the Tier 0 floor while a one-of-a-kind variant earns a shader hero - the same
-spread the ambition spectrum below already calls for. Ground each concept in the MCP concept layer
+spread the ambition spectrum below already calls for. **The restraint clause cuts both
+ways** (`references/build-commission.md`, "The bold mandate"): if the brand is
+high-intensity (a label, a maximalist consumer brand, a creative studio, a launch, a
+culture / type brand) the bold mandate applies and a flat, safe variant set FAILS the
+brief - reach into the bold-donor cluster (utsubo, thingy-and-thingy, mat-voyce, spline,
+oddcommon, huge, gymbox, microdot, stas-bondar), not only the restrained flagships
+(aesop / the-modern-house / leoleo / linear), and make the bold variants commit (one
+declared feeling, a hero INTERACTION not a banner, a custom cursor, scroll-as-timeline,
+a rare accent that detonates), each still shipping its no-JS / reduced-motion finished
+state. Ground each concept in the MCP concept layer
 (`refs_insights { topic: "mechanics" }` / `{ topic: "emotion" }`,
 `refs_search { register, device, intensity }`), then execute its craft via the
 organ-transplant method (`reference-library-usage.md`).

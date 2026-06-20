@@ -145,10 +145,35 @@ if absent). It tells you whether a brand was PROVIDED:
    is null) or the build cannot be served / shot, skip it gracefully and record
    `commission: skip` - it is doctrine + recorded evidence, never a hard trap.
 
-7. **Structural verifier** (it is a real Astro build, not a mockup):
+7. **The rendered bug-class gate** (the BOLD-build defects that a still and the code
+   cannot catch - `references/rendered-bug-classes.md`). Serve the build (reuse the
+   `serve-preview.sh` URL from step 5) and run:
+   `bash scripts/verify-rendered.sh $SERVE_URL --routes /,<other key routes>`
+   It loads the site at 390 / 834 / 1440 in a real browser AND tests the paths a
+   reduced-motion / `scrollTo` screenshot pass MASKS: a REAL `mouse.wheel` scroll with
+   JS ON and motion ON, and a JS-OFF pass. Exit 1 = a High finding; exit 3 = browser
+   BLOCKED (surface it, never a silent pass - same fail-open contract as the visual
+   loop). It catches the recurring bold bug classes by construction:
+   - **(a) no-JS / LCP-is-never-a-canvas** - with JS disabled the hero must show a
+     FINISHED static state (no JS-dismissed preloader covering it, no blank `<canvas>`
+     with no poster).
+   - **(b) motion-on reveal stuck** - a real wheel scroll (JS on, motion on) must leave
+     0 content sections at `opacity:0` / `visibility:hidden`. (3 of 4 bold demos shipped
+     55-79% of the body invisible to normal visitors; reduced-motion forcing visibility
+     hid it. This is the single most important check to run on the DEFAULT motion path.)
+   - **(c) pinned scene never releases** - no fixed hero-scale element overprints the
+     footer / last section at the bottom of the page.
+   - **(f) heavy WebGL on mobile** - no above-the-fold `<canvas>` at 390 (it must degrade
+     to the poster on touch / low-end).
+   (Bug-classes **(d) mid-word kinetic heading** and **(e) eyebrow / console-chrome /
+   placard creep** are caught by `ux-lint.sh` in step 3 - `kinetic-heading-char-split`,
+   `hero-status-pill`, `ai-tell-tracked-eyebrow` - and by the render-side defects in
+   step 5.) A High finding here is a `visual: fail` with the named class and route.
+
+8. **Structural verifier** (it is a real Astro build, not a mockup):
    `bash scripts/verify-is-real-astro.sh` where applicable.
 
-8. **Write `verify-report.json`** at the project root (this is the computed-evidence
+9. **Write `verify-report.json`** at the project root (this is the computed-evidence
    artefact the done-gate reads; you MAY NOT return `visual: pass` without it). Record
    the per-iteration visual evidence and the gate verdicts (schema in
    `references/visual-rubric.md`). You MAY NOT set `visual: pass` without at least one
@@ -170,6 +195,7 @@ VERDICT: pass | fail
 - provenance:  pass|fail  (donor spread; the dominant-donor share)
 - visual:      pass|fail  (the 6 axis scores; the named defect + location; any floor violation; console errors)
 - commission:  pass|fail|skip  (proof contract @1440+390 / 60fps / reduced-motion; the ambition bar; the restraint clause; mechanism vs record)
+- rendered:    pass|fail|blocked  (the bug-class gate: no-JS finished state, motion-on reveal, pin release, mobile WebGL; the named class + route)
 - real-astro:  pass|fail
 FIX (if fail): the named sections to revise and how, prioritised.
 ```

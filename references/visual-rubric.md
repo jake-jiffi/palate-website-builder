@@ -62,12 +62,23 @@ a defect named without a location does not count and the section is not cleared.
    complement to the `accent-*` lint rules.
 7. **Decorative tell shape in the render** - any of these visible in the pixels, each
    needs a location:
-   - **Eyebrow / status pill above the hero heading** - a small label, in a rounded
-     pill (often with a status dot), sitting above the hero `<h1>` (`Now in beta`,
-     `Backed by ...`, `WHAT WE DO`). On the HERO this is an automatic fail: it must not
-     appear at all (Jake's directive). Name the location and fail. Lower-down kicker
-     labels are the milder tell; the hero pill is the worst-placed one. (The
-     deterministic complement is the `hero-status-pill` lint check.)
+   - **Eyebrow / status pill / console-chrome / placard above a heading** - a small
+     label sitting above a heading, in ANY costume: a rounded pill (often with a status
+     dot - `Now in beta`, `Backed by ...`, `WHAT WE DO`), a mono **console label** /
+     fake terminal prompt, a **placard**, an HUD overline, a tracked-caps "section
+     marker". The styling does not matter; the PATTERN is the tell, and on a bold /
+     motion-heavy build it comes back disguised as "functional chrome"
+     (`references/rendered-bug-classes.md` (e)). On the HERO this is an automatic fail:
+     it must not appear at all (Jake's directive). Name the location and fail. Lower-down
+     kicker labels are the milder tell; the hero pill / console label is the worst-placed
+     one. (The deterministic complements are the `hero-status-pill` and
+     `ai-tell-tracked-eyebrow` lint checks.)
+   - **Kinetic / split heading breaks MID-WORD** - a per-character split or
+     variable-font kinetic heading where a WORD wraps across two lines ("NOCTUR" /
+     "NE"), usually visible at 390px. A per-char split needs per-WORD wrappers
+     (`white-space:nowrap`); name the heading and the viewport
+     (`references/rendered-bug-classes.md` (d); the deterministic complement is the
+     `kinetic-heading-char-split` lint check).
    - **Two-tone OR gradient hero heading** - a hero `<h1>` whose words use two distinct
      solid colours, OR gradient-clipped text, to fake hierarchy. Either is a fail; name
      the heading. Hierarchy is carried by weight / size / composition, not a recolour.
@@ -101,6 +112,18 @@ a defect named without a location does not count and the section is not cleared.
 
 A non-zero `console_errors` count in `.palate-shots/errors.json` is an automatic
 `visual: fail` regardless of the axis scores - a thrown build cannot pass.
+
+**The motion-path bug classes (run the rendered gate, do not trust the still).** The
+screenshot pass above captures a STILL, and on a bold / motion-heavy build the worst
+defects only appear on the live, default motion path (and a reduced-motion / `scrollTo`
+pass MASKS them). So the verifier ALSO runs `scripts/verify-rendered.sh` (see
+`agents/palate-verifier.md` step 7, `references/rendered-bug-classes.md`), which drives a
+REAL `mouse.wheel` scroll with JS ON + motion ON, and a JS-OFF pass, to catch: (a) a
+hero that is blank / canvas-only / preloader-covered with JS disabled; (b) reveal
+elements stuck at `opacity:0` for normal visitors after a real scroll; (c) a pinned hero
+that overprints the footer; (f) heavy WebGL mounted on mobile instead of degrading to a
+poster. A High finding there is a `visual: fail` with the named class and route, exactly
+like a console error.
 
 ## The AI-slop Quick QA pass (run before emit, augments the axes + defect checklist)
 

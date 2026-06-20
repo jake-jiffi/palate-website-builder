@@ -544,6 +544,13 @@ framing, therapy-mode openers and the exact stock pricing / free-tier phrases
 - Pattern: `<Canvas(?![^>]*frameloop)[^>]*>`
 - Fix: An R3F `<Canvas>` without `frameloop` runs a free RAF loop and drains mobile battery / GPU. Set `frameloop="demand"` (and `"never"` under reduced motion) per the motion budget (`references/motion-and-3d.md`). The Tier-2 island MUST also gate on `prefers-reduced-motion` in JS and render a static poster - the global CSS switch cannot stop a three.js draw loop. ux-lint-disable r3f-frameloop-always to opt out for a deliberately animated above-the-fold hero with a poster fallback.
 
+### Rule: kinetic-heading-char-split
+- Severity: High
+- Mode: always
+- Files: *.ts,*.tsx,*.astro,*.mjs
+- Pattern: `(?i)SplitText[^;]*\btype\s*:\s*["'](?:chars|characters)["']`
+- Fix: A per-CHARACTER split with NO word grouping (`SplitText({ type: "chars" })`) lets a kinetic / variable-font heading break MID-WORD ("NOCTUR\\nNE") because each character is free to wrap (`references/rendered-bug-classes.md` (d)). Split into WORDS first - `type: "words,chars"` - so characters stagger but words never split, and keep the per-word wrapper at `white-space:nowrap` / `display:inline-block`. A hand-rolled char split needs the same per-word wrapper. ux-lint-disable kinetic-heading-char-split only if the element is a single word (no wrap is possible) and you say so.
+
 ### Rule: button-without-type
 - Severity: Medium
 - Mode: always
@@ -588,6 +595,16 @@ wide tracking). That trio is still the worst case and still flagged, but the kic
 PATTERN itself - a small label above a heading, however tastefully styled - is the
 thing to avoid. When a section genuinely needs more than its heading, prefer a short
 standfirst sentence below the heading, or a hairline rule, over a label above it.
+
+**In the BOLD register the eyebrow comes back wearing a costume - hunt it as "chrome".**
+On high-intensity / motion-heavy builds the label does not disappear, it re-skins as
+"functional chrome": a mono **console label** ("SYS://READY", a fake terminal prompt),
+a **placard** above a section, an HUD overline, a tracked-caps "section marker". It is
+the same tell. Three of four bold demos shipped one (`references/rendered-bug-classes.md`
+(e)). Console chrome, a placard and a status marker above a heading are eyebrows; drop
+them and let the heading carry the section. The deterministic floor (`hero-status-pill`,
+`ai-tell-tracked-eyebrow`) still fires on the worst-placed and worst-styled cases; the
+render-side defect in `references/visual-rubric.md` catches the costumed rest.
 
 ### Anti-pattern: the tracked-mono eyebrow kicker (the worst case of the above)
 

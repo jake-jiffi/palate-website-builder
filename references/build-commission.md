@@ -40,9 +40,75 @@ COMMISSION
 - Proof: verify the built result with headless Chrome at 1440 and 390. Screenshot and read
   the pixels plus the console. It must be mobile-friendly, hold 60fps, and honour
   prefers-reduced-motion.
-- Restraint clause: ambition is in the idea and its execution, not in maximal motion. Match
-  intensity to the brand (whisper-quiet for an anxious category, spectacle for a launch). A
-  janky WebGL hero fails the bar; flawless restraint can win it.
+- Restraint clause (it CUTS BOTH WAYS): ambition is in the idea and its execution, not in
+  maximal motion. **Match intensity to the brand** - and read both directions. A calm,
+  anxious category (a conveyancer, a clinic) demands whisper-quiet; a HIGH-INTENSITY brand (a
+  label, a maximalist consumer brand, a creative studio, a launch, a culture / type brand)
+  DEMANDS bold motion, and serving it a safe, flat page is failing the brief just as surely as
+  over-motioning a calm one. A janky WebGL hero fails the bar; so does a tasteful-but-inert
+  page on a brand that wanted to detonate. See "The bold mandate" below for what a
+  high-intensity commission must require.
+
+## The bold mandate (when the brand is high-intensity, the commission must commit)
+
+This is the high-intensity half of the restraint clause, made explicit so it cannot be read
+one-directionally. The restraint clause has a known failure mode: read only as "calm down",
+it produces clean, gated, emotionally INERT pages on brands that were asking to detonate (a
+real session shipped four such demos before this was written: safe, same-same, flat). The
+clause is symmetric. A calm brief writes a calm commission; **a high-intensity brief writes a
+BOLD commission, and a flat one is a failed brief.**
+
+Detect intensity at COMMISSION time from the brand and the converged concept. A brand reads
+HIGH-INTENSITY when it is a label / record / fashion drop, a maximalist consumer brand, a
+creative or design studio, a product launch, or a culture / type / art brand - anything whose
+whole job is to make the visitor FEEL something and remember it. For a high-intensity brand
+the commission MUST require (these are commitments, not options to tick):
+
+- **One committed feeling, declared up front and never diluted.** Name it in the commission
+  ("after-dark", "weird-joyful", "kinetic-precise") and hold every choice to it.
+- **Copy that RISKS something.** Irreversible, specific voice, not reversible corporate lines.
+  "It is late. The room is dark." / "Soda that bobs." beats "Premium quality you can trust".
+  A line you could paste onto a competitor's site is a failed line.
+- **ONE signature focal object that is the hero INTERACTION, not a banner.** The whole page
+  orbits it and the visitor DOES something to it (clicks a gate, spins a thing, scrubs type
+  that reflows). Build it as a REAL WebGL / Three.js / R3F element where the brand earns it
+  (Recipe 1 / 2 / the Tier-2 R3F hero recipe in `references/motion-and-3d.md`; procedural
+  geometry + premium materials so no external GLB is needed), or as a hand-built
+  morphing-SVG-behind-a-glow (SMIL / GSAP path-morph) where 3D would be overkill. The emotion
+  is ART DIRECTION + COMMITMENT, not GPU: the strongest bold builds use only GSAP +
+  ScrollTrigger + Lenis + one hand-built SVG morph + one custom cursor. WebGL is amplification
+  where it fits, not the price of admission.
+- **A custom reactive cursor + tactile micro-physics on every interactive element**
+  (press-shadows, tilt-toward-cursor, magnetic pull, spring `linear()` easing).
+- **ONE signature easing token used everywhere** + an entrance ritual (a preloader, a
+  typewriter, a pop-in) + a film-grain `feTurbulence` overlay + a rich-dark surface (NOT pure
+  black) + a warm off-white + ONE rare accent that DETONATES (a single hot colour used
+  sparingly, never a pastel spread across everything).
+- **Scroll as a TIMELINE** (Lenis + pinned / scrubbed ScrollTrigger) and **kinetic masked
+  type** (a hero wordmark that reflows / displaces under scroll).
+
+The bold mandate is still governed by fit and the proof contract: every requirement above
+ships its no-JS / reduced-motion finished state and holds the mobile budget (the bug-class
+gates in `references/rendered-bug-classes.md` exist because the first bold builds slipped on
+exactly these). Bold is not an excuse for jank; it is a higher bar that still has to pass.
+
+### Bold-donor awareness (reach past the restrained flagships when the brief is bold)
+
+The first flat demos were grounded in the RESTRAINED flagships (aesop, the-modern-house,
+leoleo, linear) - excellent donors for a calm brief, the wrong well for a bold one. When the
+commission is high-intensity, the surveyor and Explore should reach into the experimental /
+kinetic / immersive cluster (all in the MCP) so the borrowed craft matches the ambition:
+
+- **WebGL-cinematic / immersive 3D**: utsubo, spline, stas-bondar, fiddle-digital, oddcommon.
+- **Maximalist-playful**: thingy-and-thingy, yellow-fellow, polecat.
+- **Kinetic type**: mat-voyce (the portfolio IS a type specimen), clay-boan, sun-hung.
+- **Cursor / hover detonation**: huge (custom cursor + a rare colour that detonates), cyphr.
+- **Scroll choreography**: double-play, microdot (scrub filmstrip), geex-arts.
+- **Bold but conversion-ready**: gymbox (near-black + electric accent, real booking / pricing).
+
+This is awareness, not a checklist: pick the donor that fits the one feeling, the same
+fit-over-familiarity rule as everything else. The point is only that a bold brief must not
+default to the quiet-luxury well.
 
 ## The mechanisms on hand (the award-tier toolkit)
 
@@ -109,10 +175,12 @@ same way a type face is chosen to fit and never reached for out of habit
   failure, exactly as a system sans standing in for a type decision is the failure.
 - **A few, not all.** The commission names the handful of mechanisms this concept
   needs, not the whole register. More mechanisms is not more ambition.
-- **Maximal motion is not the bar; fit is.** The restraint clause is part of the
-  judgement, not a footnote: ambition lives in the idea and its execution, matched
-  in intensity to the brand. A janky WebGL hero fails the bar; flawless restraint
-  can win it. The verifier judges the built result against this clause, not against
+- **Maximal motion is not the bar; FIT is - and fit cuts both ways.** The restraint
+  clause is part of the judgement, not a footnote: ambition lives in the idea and its
+  execution, matched in intensity to the brand. A janky WebGL hero fails the bar;
+  flawless restraint can win it on a calm brand - AND a safe, flat page fails the bar
+  on a high-intensity brand that wanted to detonate (the bold mandate above). The
+  verifier judges the built result against this clause in both directions, not against
   a motion count (`references/visual-rubric.md`, `agents/palate-verifier.md`).
 
 ## Where the commission is carried (the spine)

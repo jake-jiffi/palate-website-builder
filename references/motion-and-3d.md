@@ -133,6 +133,64 @@ budget). The example island is `components/ThreeScene.tsx`.
 - **Reduced motion:** the island renders its static poster image and never mounts the
   canvas (see `ThreeScene.tsx`).
 
+### Recipe 1b - the proven interactive R3F hero (spin / scroll-explode), with the mobile-perf lazy-split
+
+The hardened, shipped version of Recipe 1 for a high-intensity brand's hero INTERACTION
+(`references/build-commission.md`, "The bold mandate"): a real R3F object the visitor
+drag-spins and scroll-explodes (shipped as the Axis demo: live Lighthouse mobile P93 /
+A11y100 after the split below). Reach for it when the bold mandate calls for a hero
+interaction and 3D earns its weight; use a hand-built morphing-SVG-behind-a-glow instead
+when it does not.
+
+- **Deps (proven, pinned):** `three@^0.169.0` + `@react-three/fiber@^9` +
+  `@react-three/drei@^10` + `@astrojs/react` + React 19. `astro.config` `output:"static"`;
+  `tsconfig` needs `jsx:"react-jsx"`, `jsxImportSource:"react"`, `types:["@types/three"]`.
+  These are the opt-in Tier-2 packages, added only for the variant that needs 3D.
+
+- **The lazy-split is the whole perf win (do this, it is not optional).** The heavy
+  `three` / R3F / drei imports MUST live in a SEPARATE module (e.g. `HeroScene.tsx`) that
+  the wrapper (`Hero.tsx`, which imports NO three) loads with
+  `React.lazy(() => import("./HeroScene"))` ONLY on the desktop path. Mount the wrapper
+  `client:only="react"` (three trips SSR). Gate the lazy import to
+  `!reduced && matchMedia("(hover:hover)").matches && matchMedia("(pointer:fine)").matches
+  && matchMedia("(min-width:768px)").matches`. On mobile / touch / reduced-motion the gate
+  is false: the static **poster `<img>` is the LCP, the no-JS state, the mobile state and the
+  reduced-motion state**, and the ~900KB-plus three chunk NEVER downloads. Before this split
+  the shipped demo scored mobile Perf 49 (TBT 4200ms); after, 93 (TBT 0ms). This is bug-class
+  (f) closed by construction (`references/rendered-bug-classes.md`).
+
+- **The shared-scroll-CSS-var -> `useFrame` pattern (never per-frame React state).** The
+  page's GSAP ScrollTrigger (`scrub`) writes a 0..1 progress to a CSS var on `<html>` (e.g.
+  `--hero-explode`); the R3F `useFrame` reads it via `getComputedStyle` and lerps each part
+  along its blast vector. One source of truth keeps the DOM and the 3D in sync, and nothing
+  re-renders React per frame (per-frame `setState` is the jank source the proof contract
+  fails on).
+
+- **`frameloop` + dpr.** `frameloop="always"` while the canvas is in view, `"never"`
+  off-screen (toggle via an IntersectionObserver) so the draw loop pauses off-screen for the
+  perf budget; `dpr={[1,2]}` (cap DPR at 2).
+
+- **Object-design gotchas (hours of iteration, recorded so the next build skips them):**
+  (1) the EXPLODE must be CENTROID-BALANCED and CAPPED (~0.86) or parts fly off-frame - fan
+  them up / down / left / right, not all one way. (2) A near-front camera looking INTO a
+  tipped concave object reads as a flat disc / orb, not the object - tip it only ~0.6rad and
+  raise the camera to look slightly down. (3) `MeshTransmissionMaterial` glass goes GREEN
+  from a cool fill + emissive bleed - warm the `attenuationColor` (~`#ffe8c8`), drop
+  `chromaticAberration` to ~0.015, warm / dim the fill light. (4) Capture the static poster
+  by screenshotting the LIVE `#stage-canvas` (hide the headline / HUD / grain first) - far
+  better than a hand-drawn SVG, and it IS the LCP.
+
+- **Reduced motion / no-JS:** the gate above never mounts the canvas; the poster is the
+  finished state. The pinned ScrollTrigger that drives the explode must RELEASE (a proper
+  `end` + `pinSpacing`, or `position:sticky` in a bounded container) so the pinned hero never
+  overprints later sections (bug-class (c), `references/rendered-bug-classes.md`).
+
+- **The vanilla (non-React) Three.js variant works the same way.** For a marketing hero that
+  does not want React in the bundle, raw `three` in a `client:only` / `client:visible` island
+  follows the identical contract: separate heavy module, desktop-and-fine-pointer-and-motion
+  gate, static poster as LCP, shared scroll CSS var -> the render loop, one canvas, dpr
+  capped, pause off-screen. (Shipped this way in the Nocturne and Kern demos.)
+
 ### Recipe 2 - GLSL shader hero (the lowest-cost ceiling effect)
 - **When:** a flagship shader surface (fluid-distortion, gradient-mesh, noise,
   refraction-on-hover). The 2026 hero ceiling.
