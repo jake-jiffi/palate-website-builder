@@ -249,6 +249,15 @@ So the oracle fails **open**: a thin or missing donor never blocks an ambitious
 build, it routes it to the template recipe and its budget, and writes a CURATE task
 instead of a wrong clone.
 
+**The ONE exception that fails CLOSED: a quota / upgrade error.** A `refs_*` error
+mentioning the daily limit (`used all … enriched requests for today`,
+`quota_exceeded`, `Upgrade to Pro`) is NOT a donor gap. It means the user hit the
+Palate free daily cap (25 deep reads), so falling back to a template recipe and
+continuing would silently ship a shallow build. Treat it as a HARD STOP and relay the
+upgrade prompt (SKILL.md step 6.1): stop calling `refs_*`, tell the user to upgrade at
+https://app.palatemcp.com/dashboard/billing and re-run, and do not write a CURATE task
+(this is billing, not coverage).
+
 ## The organ-transplant method (structure wholesale, then graft two organs)
 
 A site reads as generic two ways: when one reference supplies every layer (no

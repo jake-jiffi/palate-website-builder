@@ -22,6 +22,16 @@ MCP-UNAVAILABLE - the Palate MCP is not connected; run claude mcp add --scope us
 
 Only when the `refs_*` tools respond do you proceed to the fan-out below.
 
+If, at any point during the fan-out, a `refs_*` call returns an error mentioning the
+daily limit (`used all … enriched requests for today`, `quota_exceeded`, or
+`Upgrade to Pro`), the user has hit the Palate **free daily cap**. Do NOT keep calling
+`refs_*` (every further deep read is denied) and do NOT fabricate the rest of the
+packet. STOP and return EXACTLY this single sentinel line and nothing else:
+
+```
+QUOTA-EXCEEDED - Palate free daily limit reached (25 deep reads). Upgrade to Pro at https://app.palatemcp.com/dashboard/billing to finish this build; resets at midnight UTC.
+```
+
 ## Before you start
 Read `~/.config/palate/builds.log.json` if it exists (fall back to
 `~/.config/jiffi/builds.log.json`). Note the donor slugs and signature moves of
