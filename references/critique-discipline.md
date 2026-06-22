@@ -92,6 +92,17 @@ If the sentence does not finish without filler ("...because it looks nice",
 "...because heroes have features"), the element is decorative-by-default and
 gets deleted. Apply at Compose and again in the reviewer pass.
 
+The SIGNATURE MOVE / motion gets the test too, at a harder bar: it must finish
+"this MOVES because {a specific reason the ICP would feel}", never "because it looks
+premium" or "because the hero should feel alive". Spectacle that only finishes with a
+generic premium reason is decorative-by-default however well executed: ground it in the
+buyer's actual story or cut it. (Arc Medical: an abstract WebGL particle arc read as
+decoration for a 400k specialist hire; re-grounded as the doctor's real career
+trajectory, Fellowship to Consultant to VMO to Leadership, lighting up as it draws, it
+earned its place AND demonstrated the domain fluency that is the differentiator.) The
+commission names the demonstrative mechanic; it must also name what that motion MEANS to
+the buyer, not only what it does.
+
 Source: anti-slop-ui `SKILL.md` Step 1.
 
 ## 4. The vague-word ban (on Claude's own narration)

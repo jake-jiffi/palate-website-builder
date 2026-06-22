@@ -112,7 +112,7 @@ list_files() {
     else
       find "$proj" -type f -name "$g" 2>/dev/null
     fi
-  done | grep -v -E '/(node_modules|\.git|dist|\.astro|\.vercel|\.wrangler|\.output|_explore-archive)/' | sort -u
+  done | grep -v -E '/(node_modules|\.git|\.claude|dist|\.astro|\.vercel|\.wrangler|\.output|_explore-archive)/' | sort -u
 }
 
 # Run one rule against one file via perl PCRE. Emits TSV: file\tline\tseverity\trule\ttext
