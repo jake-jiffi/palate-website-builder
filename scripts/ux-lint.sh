@@ -383,7 +383,7 @@ while IFS=$'\t' read -r RULE_ID SEVERITY MODE FILES_GLOB REGEX; do
   REQUIRES_REASON=0
   case "$RULE_ID" in
     banned-display-inter|banned-display-roboto|banned-display-arial|banned-display-space-grotesk) REQUIRES_REASON=1 ;;
-    banned-display-instrument-serif|banned-display-geist) REQUIRES_REASON=1 ;;
+    banned-display-instrument-serif|banned-display-geist|banned-display-fraunces) REQUIRES_REASON=1 ;;
     banned-display-bricolage|banned-body-hanken) REQUIRES_REASON=1 ;;
     accent-indigo-default|accent-tailwind-class|accent-cyan-on-dark|accent-emerald-cta|accent-friendly-teal) REQUIRES_REASON=1 ;;
     gradient-overuse|glassmorphism-decorative|reseed-serif-italic-heading|ai-washing-copy) REQUIRES_REASON=1 ;;

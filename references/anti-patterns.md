@@ -97,8 +97,8 @@ and decide the FACE per brief.
 - Pattern: `font-family\s*:\s*['"]?system-ui['"]?\s*[,;]`
 - Fix: `system-ui` as the FIRST family in a display stack means the page renders different fonts on different OSes; do not use as primary. Acceptable only at the tail of a stack as a safety net.
 
-The two faces below are the CURRENT of-the-moment defaults (the 2025-2026 successors
-to Space Grotesk): the trendy display serif and the trendy geometric sans a model now
+The faces below are the CURRENT of-the-moment defaults (the 2025-2026 successors
+to Space Grotesk): the trendy display serifs and the trendy geometric sans a model now
 reaches for when it has no opinion. Same JUSTIFY-OR-FLAG model as the four above, a
 `ux-lint-disable banned-display-<face>` with a one-line brand reason passes; a bare
 disable does not.
@@ -109,6 +109,13 @@ disable does not.
 - Files: *.css,*.ts,*.tsx,*.astro,*.mjs
 - Pattern: `font-family\s*:\s*['"]?Instrument Serif`
 - Fix: Instrument Serif is the current of-the-moment display serif and a named 5-second AI giveaway (`references/ai-slop-tells.md`) - the face bolted onto a generic sans body by reflex. Justify it with a one-line brand reason on a `ux-lint-disable banned-display-instrument-serif` (the brand calls for it because ...) only if the type system carries real contrast and craft, or replace it with an editorial serif the brand actually chose.
+
+### Rule: banned-display-fraunces
+- Severity: High
+- Mode: always
+- Files: *.css,*.ts,*.tsx,*.astro,*.mjs
+- Pattern: `font-family\s*:\s*['"]?Fraunces`
+- Fix: Fraunces is a current of-the-moment display serif that now reads as a recognisable AI-build / "Opus" tell (the giveaway F letterforms); Palate dropped it from its own brand for exactly this reason. Justify it with a one-line brand reason on a `ux-lint-disable banned-display-fraunces` (the brand calls for it because ...) only if the type system carries real contrast and craft, or replace it with an editorial serif the brand actually chose.
 
 ### Rule: banned-display-geist
 - Severity: Medium
@@ -240,8 +247,8 @@ accent band (400-600). The render-side complement is the visual rubric defect
 - Severity: Medium
 - Mode: always
 - Files: *.css,*.ts,*.tsx,*.astro,*.mjs
-- Pattern: `(?i)--[a-z-]*(accent|primary|brand|cta)[a-z-]*\s*:\s*#?(6366f1|818cf8|8b5cf6|a855f7|7c3aed|6d28d9)\b`
-- Fix: The raw Tailwind indigo / violet hex (#6366F1 and its family) assigned to an accent / primary / brand / cta custom property is "that one shade of purple" - the single most universal visual AI tell (`references/ai-slop-tells.md`). Tune a real brand accent. If the brand genuinely owns this purple, justify it on a `ux-lint-disable accent-indigo-default` with a one-line reason.
+- Pattern: `(?i)--[a-z-]*(accent|primary|brand|cta)[a-z-]*\s*:\s*#?(6366f1|818cf8|8b5cf6|a855f7|7c3aed|6d28d9|3b82f6|2563eb)\b`
+- Fix: The raw Tailwind indigo / violet / blue hex (#6366F1, #3B82F6, #2563EB and family) assigned to an accent / primary / brand / cta custom property is "that one shade of purple", or Tailwind's default blue (the `bg-indigo-500` successor) - the single most universal visual AI tell (`references/ai-slop-tells.md`). Tune a real brand accent. If the brand genuinely owns this colour, justify it on a `ux-lint-disable accent-indigo-default` with a one-line reason.
 
 ### Rule: accent-tailwind-class
 - Severity: Medium
