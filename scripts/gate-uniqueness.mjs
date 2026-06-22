@@ -18,7 +18,8 @@
  * named on stderr. Thresholds via env: PALATE_UNIQ_STRUCT (default 0.82),
  * PALATE_UNIQ_STYLE (default 0.72) - a pair fails only if it exceeds BOTH.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 const STRUCT_MAX = Number(process.env.PALATE_UNIQ_STRUCT ?? 0.82);
 const STYLE_MAX = Number(process.env.PALATE_UNIQ_STYLE ?? 0.72);
@@ -28,6 +29,24 @@ if (files.length < 2) {
   console.error("uniqueness gate: pass 2+ rendered variant HTML files. (A single variant cannot be checked for variety.)");
   process.exit(2);
 }
+
+// A brand-PROVIDED build locks the palette / type / radius, so the style axis is ~1.0
+// by construction and the gate would collapse to structure-only, flagging coherent
+// variants that SHOULD share one mandated design system as duplicates (the retro's
+// real false positive: structure 0.91 read as a dup). In that mode raise the structural
+// bar so only a near-identical SHAPE is a true duplicate when the skin cannot differ by
+// design. An explicit env threshold always wins.
+function brandProvided(fromFile) {
+  let dir = dirname(fromFile);
+  for (let i = 0; i < 5; i++) {
+    const p = join(dir, ".palate-skill-state.json");
+    try { if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8")).brandMode === "brand-provided"; } catch { /* ignore */ }
+    const up = dirname(dir); if (up === dir) break; dir = up;
+  }
+  return false;
+}
+const BRAND_PROVIDED = brandProvided(files[0]);
+const STRUCT_EFF = process.env.PALATE_UNIQ_STRUCT != null ? STRUCT_MAX : (BRAND_PROVIDED ? 0.92 : STRUCT_MAX);
 
 // STRUCTURAL signature: the sequence of block tags + their first class token, lower-
 // cased. Captures the layout/section shape while ignoring copy and exact values.
@@ -75,7 +94,7 @@ for (let i = 0; i < variants.length; i++) {
     const st = jaccard(variants[i].struct, variants[j].struct);
     const sy = jaccard(variants[i].style, variants[j].style);
     rows.push({ a: variants[i].f, b: variants[j].f, st, sy });
-    const dup = st > STRUCT_MAX && sy > STYLE_MAX;
+    const dup = st > STRUCT_EFF && sy > STYLE_MAX;
     if (dup && (!worst || st + sy > worst.st + worst.sy)) worst = { a: variants[i].f, b: variants[j].f, st, sy };
   }
 }
@@ -84,7 +103,7 @@ for (const r of rows) {
   console.error(`  ${base(r.a)} <-> ${base(r.b)}: structure ${r.st.toFixed(2)}, style ${r.sy.toFixed(2)}`);
 }
 if (worst) {
-  console.error(`\nuniqueness gate FAILED: ${base(worst.a)} and ${base(worst.b)} are near-duplicates (structure ${worst.st.toFixed(2)} > ${STRUCT_MAX} AND style ${worst.sy.toFixed(2)} > ${STYLE_MAX}). They share the same section shape and the same palette/type skin - that is ritual variation, not range. Lead them from DIFFERENT references (vary the backbone), reproduce a different signature move, and re-skin from a different donor's tokens.`);
+  console.error(`\nuniqueness gate FAILED: ${base(worst.a)} and ${base(worst.b)} are near-duplicates (structure ${worst.st.toFixed(2)} > ${STRUCT_EFF}${BRAND_PROVIDED ? " [brand-provided: style axis is locked, so the structural bar is raised]" : ""} AND style ${worst.sy.toFixed(2)} > ${STYLE_MAX}). They share the same section shape and the same palette/type skin - that is ritual variation, not range. Lead them from DIFFERENT references (vary the backbone), reproduce a different signature move${BRAND_PROVIDED ? "" : ", and re-skin from a different donor's tokens"}.`);
   process.exit(2);
 }
 console.log(`uniqueness gate passed: ${variants.length} variants, no near-duplicate pair (every pair differs in structure or skin).`);
