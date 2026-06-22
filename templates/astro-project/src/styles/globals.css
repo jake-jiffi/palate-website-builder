@@ -7,6 +7,27 @@
 @import "tailwindcss";
 @config "../../tailwind.config.ts";
 
+/*
+ * Remove Tailwind's stock chromatic "accent" palettes (the blue / sky / indigo
+ * / violet / purple / fuchsia / pink / rose / cyan families a model reaches for
+ * as a default accent). A stray `bg-indigo-500` / `bg-blue-600` then becomes a
+ * no-op instead of only being flagged by ux-lint after the fact - the negative
+ * feedback a lint cannot give. Neutrals (slate/gray/zinc/neutral/stone),
+ * white/black, the semantic state colours (red/amber/green/emerald) and the
+ * brand-* colours from the brand preset are all kept.
+ */
+@theme {
+  --color-blue-*: initial;
+  --color-sky-*: initial;
+  --color-indigo-*: initial;
+  --color-violet-*: initial;
+  --color-purple-*: initial;
+  --color-fuchsia-*: initial;
+  --color-pink-*: initial;
+  --color-rose-*: initial;
+  --color-cyan-*: initial;
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
