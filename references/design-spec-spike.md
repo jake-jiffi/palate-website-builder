@@ -55,22 +55,36 @@ preserve commission's fail-open contract: its absence never blocks a build.
 ## The measurement (the FLOOR, not a maximand)
 
 `scripts/reference-capture/measure-drift.mjs` (built for this spike) loads a built
-page and reports the distinct values each section uses for the constraint set, plus
-a transparent `driftScore` (lower = one system held across sections):
+page and scores drift by CROSS-SECTION RECURRENCE, not raw distinct count:
 
 ```
 node scripts/reference-capture/measure-drift.mjs --url http://localhost:PORT
 ```
 
-Validated on fixtures: a coherent page (one scale, one radius, one accent) scored
-`driftScore 6`; a piecemeal page (many sizes, radii, accents, uneven rhythm) scored
-`18.25`. It is REPORT-ONLY.
+A value (a type size, radius, border weight, accent colour) that recurs across
+>=2 sections is "the system"; one used in a single section is "local" - exactly
+the "shifts band to band" the anti-pattern names. `driftScore` counts the LOCAL
+values (+ section-rhythm variance), so a RICH-but-coherent page (one system
+reused, plus a hero flourish) scores low, while a piecemeal page with the SAME
+distinct count but nothing shared scores high. REPORT-ONLY; `aggregate()` is pure
+and unit-tested (`measure-drift.test.mjs`, run `node --test`).
 
-CRITICAL: low drift is necessary-but-NOT-sufficient. A page of generic defaults
-(one Tailwind scale, one radius, one accent) is maximally consistent AND maximally
-slop. So drift is a FLOOR read ALONGSIDE the Variety / Philosophy axes, never a
-quality target to minimise. Minimising drift alone manufactures the very sameness
-Palate exists to fight (source 1's explicit warning).
+Why recurrence, not distinct count: the first cut counted raw distinct values and,
+measured against the 8 real demo builds, it conflated RICHNESS with drift (a bold
+demo scored 18-24, indistinguishable from genuine slop). A probe showed the noise:
+incidental element sizes inherited by containers, and warm-grey browns + single-use
+gradient stops counted as "accents". The recurrence model + a ~16% chroma cut on
+accents fixed it: the same 4 demos re-scored 6.3-13.1, re-ranked correctly, and the
+signal became diagnostic (e.g. aught/kern carry type drift, 8-9 section-unique sizes,
+but disciplined palettes; zoop carries palette drift, 6 section-local accents).
+
+CRITICAL: low drift is still necessary-but-NOT-sufficient. A single section, a
+trivially-uniform page, or a page of generic defaults all score ~0, consistent yet
+possibly slop. So drift is a FLOOR read ALONGSIDE the Variety / Philosophy axes,
+never a target to minimise; minimising it alone manufactures the sameness Palate
+fights. Known limit: measured at a fixed 1440px viewport, so fluid clamp() type
+resolves to one value per role (no fluid inflation here), but a per-route hero can
+still read as a small, legitimate "local".
 
 ## The A/B (run before graduating)
 

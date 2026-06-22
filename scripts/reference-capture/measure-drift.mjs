@@ -25,6 +25,7 @@
  */
 import { chromium } from 'playwright';
 import { writeFileSync } from 'fs';
+import { fileURLToPath } from 'url';
 
 // GPU off: this measures layout/type/colour, no WebGL needed (fast path).
 const LAUNCH_ARGS = ['--disable-gpu', '--disable-dev-shm-usage', '--disable-software-rasterizer'];
@@ -43,6 +44,50 @@ function parseArgs(argv) {
 
 const uniq = (arr) => Array.from(new Set(arr));
 const round = (n, step) => Math.round(n / step) * step;
+
+// Pure aggregation of per-section raw measurements into the drift dimensions.
+// Exported so the scoring logic is unit-tested without a browser. Each raw
+// section is { padY:number, fonts:number[], radii:number[], borders:number[],
+// accents:string[] }.
+//
+// Drift is measured by CROSS-SECTION RECURRENCE, not raw distinct count. A value
+// (a type size, radius, border weight, accent) is "shared" when it recurs across
+// >=2 sections (the design system held band to band) and "local" when only one
+// section uses it (a value that section invented and no other reuses - exactly
+// the "shifts band to band" the anti-pattern names). driftScore counts the LOCAL
+// values, so a RICH-but-coherent page (one system reused, plus a hero flourish)
+// scores low while a piecemeal page with the SAME number of distinct values but
+// none shared scores high. `*Distinct` counts are reported for context only.
+// Still a FLOOR: a trivially-uniform page also scores 0, so read with Variety.
+export function aggregate(raw) {
+  const pads = raw.map((s) => s.padY).filter((p) => p > 0);
+  const mean = pads.length ? pads.reduce((a, b) => a + b, 0) / pads.length : 0;
+  const spacingCV = mean ? Math.sqrt(pads.reduce((a, b) => a + (b - mean) ** 2, 0) / pads.length) / mean : 0;
+
+  const recurrence = (key) => {
+    const inSections = new Map(); // value -> number of sections it appears in
+    for (const s of raw) for (const v of new Set(s[key] || [])) inSections.set(v, (inSections.get(v) || 0) + 1);
+    let distinct = 0, local = 0;
+    for (const [, n] of inSections) { distinct++; if (n === 1) local++; }
+    return { distinct, local };
+  };
+  const type = recurrence('fonts'), radii = recurrence('radii'),
+        border = recurrence('borders'), accent = recurrence('accents');
+
+  // Cross-section drift is undefined for <2 sections (nothing to shift between),
+  // so only rhythm variance (also 0 there) contributes.
+  const localTotal = raw.length >= 2 ? type.local + radii.local + border.local + accent.local : 0;
+  const dims = {
+    sections: raw.length,
+    typeScaleSteps: type.distinct, typeLocal: type.local,
+    spacingDistinct: uniq(pads).length, spacingCV: Number(spacingCV.toFixed(2)),
+    radiiDistinct: radii.distinct, radiiLocal: radii.local,
+    borderWidthsDistinct: border.distinct, borderLocal: border.local,
+    accentColorsDistinct: accent.distinct, accentLocal: accent.local,
+  };
+  dims.driftScore = Number((localTotal + spacingCV * 5).toFixed(2));
+  return dims;
+}
 
 async function main() {
   const args = parseArgs(process.argv);
@@ -76,7 +121,10 @@ async function main() {
   await page.waitForTimeout(300);
 
   const raw = await page.evaluate(() => {
-    const isNeutral = (r, g, b) => (Math.max(r, g, b) - Math.min(r, g, b)) < 16; // greyscale = neutral
+    // Neutral = low chroma: greys AND warm/cool near-greys (browns, taupes). The
+    // <16 cut leaked dark browns (e.g. 96,80,64 spread 32) in as fake accents; a
+    // ~16% channel-spread cut keeps only genuinely chromatic palette colours.
+    const isNeutral = (r, g, b) => (Math.max(r, g, b) - Math.min(r, g, b)) < 40;
     const parseRGB = (s) => { const m = (s || '').match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(',').map((x) => parseFloat(x)); if (p.length >= 4 && p[3] === 0) return null; return p; };
     const sections = Array.from(document.querySelectorAll('main > section, [data-section-id], main > div > section, body > section'));
     const perSection = [];
@@ -102,35 +150,12 @@ async function main() {
   await ctx.close();
   await browser.close();
 
-  // Aggregate the distinct-value counts across all sections (the drift signal).
-  const allFonts = raw.flatMap((s) => s.fonts);
-  const allRadii = raw.flatMap((s) => s.radii);
-  const allBorders = raw.flatMap((s) => s.borders);
-  const allAccents = raw.flatMap((s) => s.accents);
-  const pads = raw.map((s) => s.padY).filter((p) => p > 0);
-  const mean = pads.length ? pads.reduce((a, b) => a + b, 0) / pads.length : 0;
-  const spacingCV = mean ? Math.sqrt(pads.reduce((a, b) => a + (b - mean) ** 2, 0) / pads.length) / mean : 0;
-
-  const dims = {
-    sections: raw.length,
-    typeScaleSteps: uniq(allFonts).length,             // distinct font sizes page-wide
-    spacingDistinct: uniq(pads).length,                 // distinct section paddings
-    spacingCV: Number(spacingCV.toFixed(2)),            // section-rhythm variance
-    radiiDistinct: uniq(allRadii).length,               // distinct corner radii
-    borderWidthsDistinct: uniq(allBorders).length,      // distinct border weights
-    accentColorsDistinct: uniq(allAccents).length,      // distinct non-neutral colours
-  };
-  // Transparent composite: excess distinct values + scaled rhythm variance. Lower
-  // = one system held across sections. NOT a threshold; compare A vs B builds.
-  dims.driftScore = Number((
-    dims.typeScaleSteps + dims.radiiDistinct + dims.borderWidthsDistinct +
-    dims.accentColorsDistinct + dims.spacingCV * 5
-  ).toFixed(2));
-
+  const dims = aggregate(raw);
   const report = { tool: 'measure-drift.mjs', url: args.url, note: 'report-only FLOOR; read with Variety/Philosophy, never maximise', ...dims };
   console.log(JSON.stringify(report, null, 2));
   if (args.out) writeFileSync(args.out, JSON.stringify(report, null, 2) + '\n');
   process.exit(0);
 }
 
-main();
+// Only drive the browser when run directly; importing (e.g. the test) does not.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
