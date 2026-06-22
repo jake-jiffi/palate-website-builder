@@ -108,24 +108,38 @@ function parallax() {
 }
 
 /**
- * initMotion - the single entry. Call once. Honours reduced motion (early
- * return), boots the singletons and the named recipes, and re-arms after a
- * View-Transition swap.
+ * setupPage - the PER-PAGE arming. Re-runs on every View-Transition navigation
+ * (Motion.astro re-calls initMotion on astro:page-load), so EVERY page animates,
+ * not just the first. It kills the previous page's ScrollTriggers before
+ * re-creating them for the incoming DOM, so triggers never leak or point at
+ * swapped-out nodes, then refreshes and resets scroll to the top of the new page.
  */
-export function initMotion() {
-  if (booted) return;
-  if (prefersReducedMotion()) return; // THE ONE LAW: no JS motion under reduced motion.
-  booted = true;
-
-  gsap.registerPlugin(ScrollTrigger);
-  bootLenis();
+function setupPage() {
+  ScrollTrigger.getAll().forEach((t) => t.kill());
   revealOnScroll();
   pinnedScroll();
   parallax();
+  ScrollTrigger.refresh();
+  lenis?.scrollTo(0, { immediate: true });
+}
 
-  // View Transitions (Recipe 6): re-measure triggers and reset scroll on swap.
-  document.addEventListener("astro:after-swap", () => {
-    ScrollTrigger.refresh();
-    lenis?.scrollTo(0, { immediate: true });
-  });
+/**
+ * initMotion - the entry. Called on first load AND on every astro:page-load
+ * (Motion.astro). Honours reduced motion (early return). The SINGLETONS (Lenis,
+ * the ScrollTrigger plugin) boot ONCE; the per-page recipes re-arm EVERY call.
+ *
+ * This split is the View-Transitions fix: the previous `booted` guard returned
+ * early on page 2+, so the reveal / pin / parallax recipes never re-ran for the
+ * swapped-in DOM and only the first (cinematic) page animated. Booting the
+ * singletons once and re-arming the recipes per page makes motion survive
+ * client-side navigation.
+ */
+export function initMotion() {
+  if (prefersReducedMotion()) return; // THE ONE LAW: no JS motion under reduced motion.
+  if (!booted) {
+    booted = true;
+    gsap.registerPlugin(ScrollTrigger);
+    bootLenis();
+  }
+  setupPage();
 }

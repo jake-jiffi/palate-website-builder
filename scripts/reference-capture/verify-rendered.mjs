@@ -252,6 +252,56 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
   await context.close();
 }
 
+// (g) VIEW-TRANSITION navigation re-inits motion: client-side navigate by CLICKING an
+// in-app link (Astro ClientRouter does a VT swap, not a fresh load), then assert the
+// destination's scroll reveals fire. A not-VT-aware motion module (one that guards behind
+// a boot-once flag) animates only the first page, so reveals on the swapped-in page stay
+// stuck at opacity:0 - the "only the cinematic page animates" bug. Only fires when there
+// is a second internal route to click; a site without client routing reloads and passes.
+{
+  const context = await browser.newContext({ viewport: VIEWPORTS.desktop });
+  const page = await context.newPage();
+  try {
+    await page.goto(base + '/', { waitUntil: 'load', timeout: 20000 });
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 400)));
+    const target = await page.evaluate(() => {
+      for (const a of document.querySelectorAll('a[href]')) {
+        let u; try { u = new URL(a.href, location.href); } catch { continue; }
+        if (u.origin === location.origin && u.pathname !== location.pathname && u.pathname !== '/' && !a.hash && !a.target) {
+          a.setAttribute('data-vt-probe', '1'); // tag it so we click the right one regardless of href shape (relative / root-absolute / full)
+          return u.pathname;
+        }
+      }
+      return null;
+    });
+    if (target) {
+      await page.click('a[data-vt-probe="1"]', { timeout: 5000 }).catch(() => {});
+      await page.waitForFunction((p) => location.pathname === p, target, { timeout: 8000 }).catch(() => {});
+      const navigated = await page.evaluate((p) => location.pathname === p, target);
+      if (navigated) {
+        await page.evaluate(() => new Promise((r) => setTimeout(r, 500)));
+        await realWheelScroll(page);
+        await page.evaluate(() => new Promise((r) => setTimeout(r, 350)));
+        const stuck = await page.evaluate(() => {
+          let n = 0;
+          for (const el of document.querySelectorAll('section, main > *, [data-reveal], [data-animate], [class*="reveal"], article')) {
+            const r = el.getBoundingClientRect();
+            if (r.width < 80 || r.height < 40) continue;
+            if ((el.innerText || '').trim().length < 8) continue;
+            const s = getComputedStyle(el);
+            if (parseFloat(s.opacity || '1') < 0.02 || s.visibility === 'hidden') n++;
+          }
+          return n;
+        });
+        if (stuck > 0) add('High', target + ' (via client-nav)', 'desktop', stuck + ' reveal(s) stuck at opacity:0 / hidden after a View-Transition navigation (clicked an in-app link to ' + target + ', not a fresh load). Motion did not re-init on the swapped-in page: the motion module must re-arm its per-page recipes on astro:page-load, never guard behind a boot-once flag (src/lib/motion.ts setupPage; references/rendered-bug-classes.md).');
+      }
+    }
+  } catch (e) {
+    add('Medium', '(client-nav)', 'desktop', 'could not test View-Transition navigation: ' + (e && e.message ? e.message : e));
+  }
+  await context.close();
+}
+
 // (a) NO-JS / LCP-is-never-a-canvas: load the home route with JavaScript DISABLED and
 // assert the hero shows a FINISHED static state - text is present, no fixed full-viewport
 // overlay covers it (a JS-dismissed preloader), and the largest above-the-fold element is
