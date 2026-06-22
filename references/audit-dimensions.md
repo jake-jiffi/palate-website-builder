@@ -19,6 +19,15 @@ there exactly one Z1 element per screen, or are several fighting? A typical
 failure: the hero, the nav CTA and a feature card all use the brand accent at
 the same weight.
 
+PLACEMENT, not only weight. Is the focal element where attention actually lands,
+or stranded in the dead bottom-left fallow with the eye led away from the action?
+This is the composition/attention floor (`references/composition-and-attention.md`):
+a stranded hero focal, a weight-vs-focal mismatch, or a divorced / orphaned key
+element is a High finding (the deterministic complement is
+`scripts/reference-capture/measure-composition.mjs`). It is a floor against broken
+composition, not a centring rule, a bold off-centre hero that still leads the eye to
+the action passes.
+
 ### 2. Spacing rhythm
 
 Is vertical spacing on a documented scale (8 / 12 / 16 / 24 / 32 / 48 / 80),

@@ -35,7 +35,7 @@ axis forces a revision pass before emit.
 | Axis | What 5 looks like |
 |------|-------------------|
 | Philosophy | The page has a clear, defensible thesis about what it values (speed, depth, irreverence, restraint) and every choice supports it. |
-| Hierarchy | The visual / reading order makes the most important thing land first; the second-most second; nothing competes. |
+| Hierarchy | The most important thing lands first; the second-most second; nothing competes; AND it sits where attention lands (focal in a usable zone, not the dead bottom-left fallow; the eye path leads to the action; meaning-linked elements integrated, none orphaned). Placement, not only weight (`references/composition-and-attention.md`). |
 | Execution | Spacing, type pairing, alignment, transitions are deliberate. No "close enough" defaults. |
 | Specificity | Copy and imagery name the actual product / user / situation. No generic stock phrases or stock images. |
 | Restraint | Everything earns its place; nothing is decorative-by-default. The page would be worse if you added more. |

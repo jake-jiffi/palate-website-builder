@@ -21,20 +21,51 @@
  * Exit: 0 always (report-only; the gate reads the JSON). 2 = bad args / no ffmpeg.
  */
 import { spawnSync } from 'child_process';
-import { writeFileSync } from 'fs';
+import { writeFileSync, readFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const COLS = 24, ROWS = 16; // ~3:2, the squint resolution
 
 function parseArgs(argv) {
-  const a = { shot: '', focal: '', out: '' };
+  const a = { shot: '', focal: '', out: '', manifest: '' };
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--shot') a.shot = argv[++i];
     else if (argv[i] === '--focal') a.focal = argv[++i];
     else if (argv[i] === '--out') a.out = argv[++i];
+    else if (argv[i] === '--manifest') a.manifest = argv[++i];
   }
-  if (!a.shot) { console.error('usage: node measure-composition.mjs --shot <png> [--focal "cx,cy"] [--out <json>]'); process.exit(2); }
+  if (!a.shot && !a.manifest) { console.error('usage: measure-composition.mjs (--shot <png> [--focal "cx,cy"] | --manifest <screenshot manifest.json>) [--out <json>]'); process.exit(2); }
   return a;
+}
+
+// Gate mode: score every per-section clip a screenshot-build manifest lists, write
+// composition.json beside it, and exit 2 if any section is a High (a stranded focal),
+// so gate-done can block. Sections without a focal box still get weight/balance flags.
+function runManifest(manifestPath) {
+  let man;
+  try { man = JSON.parse(readFileSync(manifestPath, 'utf8')); } catch (e) { console.error('measure-composition: cannot read manifest:', e.message || String(e)); process.exit(2); }
+  const dir = dirname(manifestPath);
+  const sections = Array.isArray(man.sections) ? man.sections : [];
+  const results = [];
+  for (const s of sections) {
+    if (!s.file) continue;
+    const grid = squintGrid(join(dir, s.file));
+    if (!grid) continue;
+    const r = aggregate(grid, s.focal || null);
+    results.push({ viewport: s.viewport, sid: s.sid, severity: r.severity, flags: r.flags, weightCentroid: r.weightCentroid, bottomWeight: r.bottomWeight, focal: r.focal });
+  }
+  const rank = { none: 0, Cosmetic: 1, Medium: 2, High: 3 };
+  const worst = results.reduce((m, r) => (rank[r.severity] > rank[m] ? r.severity : m), 'none');
+  const highs = results.filter((r) => r.severity === 'High');
+  const report = { tool: 'measure-composition.mjs', mode: 'manifest', note: 'FLOOR against broken composition; read with Variety/Philosophy', sectionsScored: results.length, severity: worst, highCount: highs.length, sections: results };
+  console.log(JSON.stringify(report, null, 2));
+  try { writeFileSync(join(dir, 'composition.json'), JSON.stringify(report, null, 2) + '\n'); } catch {}
+  if (highs.length > 0) {
+    console.error(`composition: ${highs.length} High finding(s): ` + highs.map((h) => `${h.viewport}/${h.sid} [${h.flags.filter((f) => f.severity === 'High').map((f) => f.id).join(',')}]`).join('; '));
+    process.exit(2);
+  }
+  process.exit(0);
 }
 
 // ffmpeg: downscale + blur the screenshot to a COLSxROWS grayscale grid (the squint).
@@ -95,6 +126,7 @@ function round(n) { return Number(n.toFixed(3)); }
 
 function main() {
   const args = parseArgs(process.argv);
+  if (args.manifest) return runManifest(args.manifest);
   const grid = squintGrid(args.shot);
   if (!grid) { console.error('measure-composition: ffmpeg could not read the shot (need ffmpeg + a valid PNG).'); process.exit(2); }
   let focal = null;

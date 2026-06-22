@@ -25,7 +25,7 @@ Score the screenshot on six axes, 1 to 5 each. These are the exact axes from
 | Axis | What 5 looks like |
 |------|-------------------|
 | Philosophy | The page has a clear, defensible thesis about what it values (speed, depth, irreverence, restraint) and every choice supports it. |
-| Hierarchy | The visual / reading order makes the most important thing land first; the second-most second; nothing competes. |
+| Hierarchy | The most important thing lands first; the second-most second; nothing competes; AND it sits where attention lands. The focal element is in a usable zone (not stranded in the dead bottom-left fallow), the eye path leads toward the primary action (not away from it), elements that share one meaning are integrated (not divorced into separate rooms), and no key element is orphaned. Placement, not only weight (`references/composition-and-attention.md`). |
 | Execution | Spacing, type pairing, alignment, transitions are deliberate. No "close enough" defaults. |
 | Specificity | Copy and imagery name the actual product / user / situation. No generic stock phrases or stock images. |
 | Restraint | Everything earns its place; nothing is decorative-by-default. The page would be worse if you added more. |
@@ -109,6 +109,18 @@ a defect named without a location does not count and the section is not cleared.
    - **Inconsistent visual language across sections** - the type scale, spacing, radius,
      border weight or accent usage shifts band to band, so sections read as different
      sites (cross-ref `audit-dimensions.md` dims 1, 2, 8; `critique-discipline.md` habit 7).
+8. **Composition / attention (per section)** - the section's focal element (its headline,
+   primary CTA, or signature move) is stranded in the dead bottom-left fallow, the eye
+   path leads AWAY from the primary action, the visual weight is piled away from the focal,
+   or an element that shares the section's meaning is divorced / orphaned. HIGH when it is
+   the HERO's focal (a stranded hero must not pass). This is a FLOOR against BROKEN
+   composition, NOT a centring rule: a bold, off-centre hero where the eye still resolves to
+   the action is fine, name a fault only when the eye is genuinely led astray. Compare each
+   section against the donor's matching page via `refs_get_screenshot { slug, page }` and
+   judge whether the focal placement and the headline-to-signature-move integration hold up.
+   The deterministic complement is `scripts/reference-capture/measure-composition.mjs` (the
+   squint: focal-in-fallow / weight-misaligned / bottom-heavy), folded into the done gate
+   (`references/composition-and-attention.md`).
 
 A non-zero `console_errors` count in `.palate-shots/errors.json` is an automatic
 `visual: fail` regardless of the axis scores - a thrown build cannot pass.

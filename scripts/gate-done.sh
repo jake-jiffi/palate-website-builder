@@ -113,6 +113,22 @@ if [ -f "$SHOTS_MANIFEST" ]; then
 fi
 [ "${console_errors:-0}" -eq 0 ] || fail "Visual loop has $console_errors console error(s) on the rendered page (see $SHOTS_ERRORS). A thrown build cannot pass; fix the runtime error and re-render."
 
+# --- EVIDENCE 1b: the COMPOSITION FLOOR (references/composition-and-attention.md) ---
+# A stranded focal (the page's most important element in the dead bottom-left fallow),
+# or a section whose visual weight is piled away from its focal, is a High composition
+# finding. The squint metric scores every per-section clip the driver captured; a High
+# blocks done, so an obviously unbalanced hero cannot pass under "no Critical or High".
+# It is a FLOOR against BROKEN composition, never a centring rule (a bold, off-centre
+# hero where the eye resolves to the action passes). Fail-open: only runs when
+# per-section clips + focals exist (older shots without sections simply skip it).
+COMPOSITION="$HERE/reference-capture/measure-composition.mjs"
+if [ -f "$SHOTS_MANIFEST" ] && [ -f "$COMPOSITION" ] \
+   && [ "$(jq -r '((.sections // []) | length)' "$SHOTS_MANIFEST" 2>/dev/null || echo 0)" -ge 1 ]; then
+  if ! comp_err="$(node "$COMPOSITION" --manifest "$SHOTS_MANIFEST" 2>&1 1>/dev/null)"; then
+    fail "Composition floor did not pass. ${comp_err} The most important element of the section must sit where attention lands, not stranded in the dead bottom-left fallow (references/composition-and-attention.md). Re-place the focal, re-render, re-verify."
+  fi
+fi
+
 [ "$vpass" = "true" ] || fail "Visual loop did not pass: verify-report.json .visual.pass is not true. An axis fell below the bar or a defect was found - revise the named section, re-render, and re-verify (cap 2-3 iterations then escalate)."
 
 # --- EVIDENCE 2: the VERIFIER ran AND passed -----------------------------------

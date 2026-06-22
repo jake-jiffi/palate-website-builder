@@ -233,7 +233,23 @@ async function shootViewport(browser, args, manifest, name) {
         // Element screenshot scrolls the element into view and clips to it, so it
         // works for sections below the fold (a viewport clip rect does not).
         await h.screenshot({ path: join(secDir, `${sid}.png`), timeout: 12000 });
-        manifest.sections.push({ viewport: name, sid, file: `${name}/${sid}.png` });
+        // The section's focal element (largest heading, else the largest CTA) as a
+        // normalised centre WITHIN the section box, for the composition floor
+        // (measure-composition.mjs): is the most important thing where attention lands?
+        const focal = await h.evaluate((el) => {
+          const er = el.getBoundingClientRect();
+          if (er.width < 1 || er.height < 1) return null;
+          let best = null, bestA = 0;
+          const pick = (sel) => { for (const c of el.querySelectorAll(sel)) { const r = c.getBoundingClientRect(); const a = r.width * r.height; if (a > bestA && r.width > 0 && r.height > 0) { bestA = a; best = r; } } };
+          pick('h1,h2,h3');
+          if (!best) pick('a,button,[role="button"]');
+          if (!best) return null;
+          return {
+            cx: Math.round((((best.left + best.width / 2) - er.left) / er.width) * 1000) / 1000,
+            cy: Math.round((((best.top + best.height / 2) - er.top) / er.height) * 1000) / 1000,
+          };
+        }).catch(() => null);
+        manifest.sections.push({ viewport: name, sid, file: `${name}/${sid}.png`, focal });
       } catch (e) {
         manifest.notes.push(`${name} section ${sid} clip failed: ` + (e.message || String(e)).split('\n')[0]);
       }
