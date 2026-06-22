@@ -62,12 +62,45 @@ const add = (sev, route, vp, msg) => findings.push({ sev, route, vp, msg });
 const RANK = { High: 3, Medium: 2, Cosmetic: 1 };
 
 // --------------------------------------------------------------- launch ----
+// GPU off is the FAST default. --disable-software-rasterizer also kills CPU
+// WebGL, so a WebGL hero would render blank; the pre-detect below switches the
+// audit to software WebGL only when the home route actually mounts a <canvas>.
+const GPU_OFF_ARGS = ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-software-rasterizer'];
+// Software WebGL (ANGLE + SwiftShader). --use-angle=swiftshader-webgl AND
+// --enable-unsafe-swiftshader are both required on current (post-Chrome-139)
+// Chromium, where the automatic SwiftShader WebGL fallback was removed.
+const WEBGL_ARGS = ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader-webgl', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'];
+
+// One cheap pre-detect launch: does the home route mount a substantial <canvas>?
+// If so the whole audit runs under software WebGL so its screenshots are truthful
+// (the per-route assertions are GPU-agnostic). Detecting first keeps the slow
+// software path off the many non-WebGL builds and the multi-route audit.
+async function detectWebGL() {
+  let b;
+  try {
+    b = await chromium.launch({ headless: true, channel: 'chromium', args: GPU_OFF_ARGS });
+    const page = await (await b.newContext({ viewport: VIEWPORTS.desktop })).newPage();
+    await page.goto(base + '/', { waitUntil: 'load', timeout: 20000 });
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 800)));
+    return await page.evaluate(() => {
+      for (const c of document.querySelectorAll('canvas')) {
+        const r = c.getBoundingClientRect();
+        if (r.width > 200 && r.height > 160) return true;
+      }
+      return false;
+    });
+  } catch { return false; }
+  finally { try { if (b) await b.close(); } catch {} }
+}
+
 let browser;
 try {
+  const webgl = await detectWebGL();
+  if (webgl) console.error('verify-rendered: WebGL/canvas hero detected; running the audit under software WebGL (SwiftShader).');
   browser = await chromium.launch({
     headless: true,
     channel: 'chromium',
-    args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-software-rasterizer'],
+    args: webgl ? WEBGL_ARGS : GPU_OFF_ARGS,
   });
 } catch (e) {
   console.error('verify-rendered: could not launch a browser (' + (e && e.message ? e.message : e) + ').');

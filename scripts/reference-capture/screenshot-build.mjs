@@ -37,13 +37,24 @@ const VIEWPORTS = {
 };
 // Same launch discipline as capture.mjs. The sandbox stays ON by default; this
 // driver targets a trusted local server, but the flag exists for contained CI.
-const LAUNCH_ARGS = ['--disable-gpu', '--disable-dev-shm-usage', '--disable-software-rasterizer'];
-if (process.env.PALATE_CAPTURE_NO_SANDBOX === '1') LAUNCH_ARGS.unshift('--no-sandbox');
-const LAUNCH = {
-  headless: true,
-  channel: 'chromium', // the full Chromium build; the headless_shell segfaults in-sandbox
-  args: LAUNCH_ARGS,
-};
+// GPU off is the FAST default (most builds have no WebGL); --disable-software-
+// rasterizer also kills CPU WebGL, so a Three.js / R3F / WebGL hero paints blank
+// here. main() detects a <canvas> hero and relaunches once under WEBGL_ARGS.
+const GPU_OFF_ARGS = ['--disable-gpu', '--disable-dev-shm-usage', '--disable-software-rasterizer'];
+// Software-WebGL (ANGLE + SwiftShader). --use-angle=swiftshader-webgl AND
+// --enable-unsafe-swiftshader are BOTH required on current (post-Chrome-139)
+// Chromium, where the automatic SwiftShader WebGL fallback was removed; the
+// fast args above are dropped so a WebGL context can actually create.
+const WEBGL_ARGS = ['--use-gl=angle', '--use-angle=swiftshader-webgl', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'];
+function makeLaunch(webgl) {
+  const args = (webgl ? WEBGL_ARGS : GPU_OFF_ARGS).slice();
+  if (process.env.PALATE_CAPTURE_NO_SANDBOX === '1') args.unshift('--no-sandbox');
+  return {
+    headless: true,
+    channel: 'chromium', // the full Chromium build; the headless_shell segfaults in-sandbox
+    args,
+  };
+}
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
            '(KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const NAV_TIMEOUT = 30000;
@@ -165,6 +176,32 @@ async function shootViewport(browser, args, manifest, name) {
   await dismissOverlays(page);
   await autoScroll(page, 6000); // triggers data-animate reveals + Lenis, then returns to top
 
+  // Detect a WebGL / canvas hero (a substantial <canvas>), mirroring the rendered
+  // gate's signal (verify-rendered.mjs). When present the GPU-off shot is blank,
+  // so main() relaunches once under software WebGL and re-shoots. The health read
+  // (renderer string) lets the verifier tell a software-rendered hero from a
+  // genuinely broken one rather than just "blank".
+  const glProbe = await page.evaluate(() => {
+    let hero = false, renderer = '';
+    for (const c of document.querySelectorAll('canvas')) {
+      const r = c.getBoundingClientRect();
+      if (r.width > 200 && r.height > 160) {
+        hero = true;
+        try {
+          const ctx = c.getContext('webgl2') || c.getContext('webgl');
+          const dbg = ctx && ctx.getExtension('WEBGL_debug_renderer_info');
+          if (dbg) renderer = String(ctx.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
+        } catch { /* context already owned by the app */ }
+        break;
+      }
+    }
+    return { hero, renderer };
+  }).catch(() => ({ hero: false, renderer: '' }));
+  if (glProbe.hero) {
+    manifest.webgl = { detected: true, viewport: name, renderer: glProbe.renderer || null,
+      software: /swiftshader|angle/i.test(glProbe.renderer) };
+  }
+
   // Tag the sections from the settled, scrolled state BEFORE freezing.
   let sids = [];
   if (args.sections) sids = await tagSections(page);
@@ -204,6 +241,7 @@ async function shootViewport(browser, args, manifest, name) {
   }
 
   try { await ctx.close(); } catch {}
+  return { webglDetected: glProbe.hero };
 }
 
 // -------------------------------------------------------------------- main ----
@@ -225,9 +263,10 @@ async function main() {
     notes: [],
   };
 
+  let webgl = false;
   let browser;
   try {
-    browser = await chromium.launch(LAUNCH);
+    browser = await chromium.launch(makeLaunch(webgl));
   } catch (e) {
     manifest.status = 'error';
     manifest.notes.push('browser launch failed: ' + (e.message || String(e)).split('\n')[0]);
@@ -237,8 +276,20 @@ async function main() {
   }
 
   try {
-    // Desktop first (it reads), then mobile (where the hero most often fails).
-    await shootViewport(browser, args, manifest, 'desktop');
+    // Desktop first (it reads). If it carries a WebGL/canvas hero, the GPU-off
+    // shot is blank, so relaunch ONCE under software WebGL and re-shoot desktop.
+    // Detecting first keeps the slow SwiftShader path off the many non-WebGL builds.
+    const det = await shootViewport(browser, args, manifest, 'desktop');
+    if (det.webglDetected && !webgl) {
+      manifest.notes.push('WebGL/canvas hero detected; re-capturing desktop under software WebGL (SwiftShader)');
+      try { await browser.close(); } catch {}
+      // The GPU-off desktop pass is thrown away; drop its console noise so it is
+      // not double-counted (it ran before mobile, so the list is desktop-only here).
+      manifest.console_errors_list.length = 0;
+      webgl = true;
+      browser = await chromium.launch(makeLaunch(webgl));
+      await shootViewport(browser, args, manifest, 'desktop');
+    }
     await shootViewport(browser, args, manifest, 'mobile');
     manifest.console_errors = manifest.console_errors_list.length;
     manifest.status = (manifest.shots.desktop_full || manifest.shots.mobile_full) ? 'captured' : 'error';
