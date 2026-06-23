@@ -82,7 +82,9 @@ if absent). It tells you whether a brand was PROVIDED:
       Specificity / Restraint / Variety) 1 to 5 each against `references/visual-rubric.md`
       - the FIXED rubric and the fixed defect checklist (overflow, overlap, contrast,
       missing OR fabricated imagery, mobile hero legibility, default / genre-cliche accent
-      in the render, and the decorative tell shapes). **From the RENDER, hunt the three
+      in the render, static-defensive mobile (a motionless 390 on a brand that warranted
+      motion, fit-governed - defect 9), and the decorative tell shapes). **From the RENDER,
+      hunt the three
       self-tell defects and FAIL the build:** (i) a pill / badge / eyebrow label above the
       hero heading (on the hero it must not appear at all) - FAIL in BOTH modes; (ii) a
       two-tone (two solid colours) OR gradient hero heading faking hierarchy - FAIL in BOTH
@@ -119,8 +121,11 @@ if absent). It tells you whether a brand was PROVIDED:
    - **The proof contract.** The render was captured at **both 1440 and 390** (the
      desktop + mobile shots from step 5), the **pixels and the console** were read
      (zero console errors in `.palate-shots/errors.json`), the page is
-     **mobile-friendly** (the 390 shot clears the defect checklist, no overflow / no
-     mobile-hero illegibility), it **holds ~60fps** (no jank signal: one RAF loop,
+     **mobile-friendly** in the full sense (the 390 shot clears the defect checklist, no
+     overflow / no mobile-hero illegibility, AND on a brand that warrants motion the 390
+     render shows designed, compositor-cheap mobile motion, not merely the absence of
+     breakage - a motionless phone on a brand that wanted motion is defect 9,
+     static-defensive mobile, `references/visual-rubric.md`), it **holds ~60fps** (no jank signal: one RAF loop,
      `client:visible` islands, the LCP is static not a canvas - cross-ref the motion
      budget in `references/motion-and-3d.md`), and it **honours
      `prefers-reduced-motion`** (every Tier-1 / Tier-2 mechanism has its JS guard /

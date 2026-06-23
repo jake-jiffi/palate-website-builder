@@ -32,7 +32,10 @@ Score the screenshot on six axes, 1 to 5 each. These are the exact axes from
 | Variety | The composition reproduces a named, located signature move from the lead reference (re-skinned), and does not fall back to the standard hero+three-cards+CTA shape unless that shape is itself the deliberate, reproduced move. |
 
 **The bar: every axis >=4, no axis below 3.** Anything at 3 or below on any axis
-means revise the named section, re-render, and re-score.
+means revise the named section, re-render, and re-score. Score the axes on BOTH the 1440
+AND the 390 render: Variety and Execution especially are judged on the phone too, not the
+desktop alone, so a strong desktop score cannot carry an inert or generic mobile layout (see
+defect 9, static-defensive mobile).
 
 ## The defect checklist (fixed, name-and-locate)
 
@@ -122,6 +125,17 @@ a defect named without a location does not count and the section is not cleared.
    squint: focal-in-fallow / weight-misaligned / bottom-heavy), folded into the done gate
    (`references/composition-and-attention.md`).
 
+9. **Static-defensive mobile (FIT-GOVERNED)** - on a brand that warrants motion, the 390
+   render shows NO designed motion: it is clean but inert, the mobile twin of the flat-page
+   tell, passing only because nothing is broken. Read `.palate-skill-state.json` `brandMode`
+   and judge it the way the commission's restraint clause cuts both ways (the same shape as
+   the recurring-face check): a calm or anxious brand gets calm mobile and this is NOT a
+   defect; a brand that warranted motion but shipped a motionless 390 IS one (80% of traffic
+   is the phone, so it is a primary surface, not a fallback). What clears it is
+   compositor-cheap mobile-native motion (scroll-snap, sticky-scrub, transform/opacity
+   reveals, view transitions), never main-thread or WebGL by default, and the reduced-motion
+   / no-JS state is still the static finished state. Name the surface (e.g. `v2-hero mobile`).
+
 A non-zero `console_errors` count in `.palate-shots/errors.json` is an automatic
 `visual: fail` regardless of the axis scores - a thrown build cannot pass.
 
@@ -166,8 +180,10 @@ above and the defect checklist stand; the commission adds the ambition bar, the 
 contract and the restraint clause.
 
 - **The proof contract.** The render must be captured at **both 1440 and 390**, the
-  **pixels and the console** read (zero console errors), the page **mobile-friendly**
-  (the 390 shot clears the defect checklist), **holds ~60fps** (no jank: one RAF loop,
+  **pixels and the console** read (zero console errors), the page **mobile-friendly** in
+  the full sense (the 390 shot clears the defect checklist AND, on a brand that warrants
+  motion, shows designed compositor-cheap mobile motion, not merely the absence of breakage
+  - defect 9), **holds ~60fps** (no jank: one RAF loop,
   `client:visible` islands, the LCP static not a canvas - cross-ref
   `references/motion-and-3d.md`), and it **honours `prefers-reduced-motion`** (each
   Tier-1 / Tier-2 mechanism has its JS guard + static poster; the reduced-motion state

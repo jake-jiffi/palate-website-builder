@@ -38,8 +38,14 @@ COMMISSION
   and refs_get_astro_recipe of the closest real precedent, so it is built from how a real
   award-tier site did it, not from memory.
 - Proof: verify the built result with headless Chrome at 1440 and 390. Screenshot and read
-  the pixels plus the console. It must be mobile-friendly, hold 60fps, and honour
-  prefers-reduced-motion.
+  the pixels plus the console. It must hold 60fps and honour prefers-reduced-motion, and the
+  390 render must be mobile-friendly in the FULL sense: it clears the defect checklist (no
+  overflow, hero legible) AND, on a brand that warrants motion, it shows designed,
+  compositor-cheap mobile motion (scroll-snap, transform/opacity reveals, view transitions),
+  not merely the absence of breakage. 80% of traffic is mobile, so the phone is a primary
+  deliverable, not a fallback. Keep the motion compositor-cheap (transform / opacity / native
+  scroll), never main-thread or WebGL by default, so the perf floor holds; reduced-motion
+  users still get the static finished state.
 - Restraint clause (it CUTS BOTH WAYS): ambition is in the idea and its execution, not in
   maximal motion. **Match intensity to the brand** - and read both directions. A calm,
   anxious category (a conveyancer, a clinic) demands whisper-quiet; a HIGH-INTENSITY brand (a
@@ -90,7 +96,12 @@ the commission MUST require (these are commitments, not options to tick):
 The bold mandate is still governed by fit and the proof contract: every requirement above
 ships its no-JS / reduced-motion finished state and holds the mobile budget (the bug-class
 gates in `references/rendered-bug-classes.md` exist because the first bold builds slipped on
-exactly these). Bold is not an excuse for jank; it is a higher bar that still has to pass.
+exactly these). And the phone is part of the mandate, not a degraded fallback: on a
+high-intensity brand a static, motionless 390 render is a failed brief the same way a flat
+1440 is, just carried in compositor-cheap mobile-native motion (scroll-snap galleries,
+sticky-scrub, transform/opacity reveals, view transitions, kinetic type) rather than a ported
+desktop WebGL hero. Bold is not an excuse for jank; it is a higher bar that still has to pass,
+on the phone as much as the desktop.
 
 ### Bold-donor awareness (reach past the restrained flagships when the brief is bold)
 

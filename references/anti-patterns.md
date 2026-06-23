@@ -620,7 +620,7 @@ framing, therapy-mode openers and the exact stock pricing / free-tier phrases
 - Mode: always
 - Files: src/components/**/*.astro,src/components/**/*.tsx
 - Pattern: `>\s*[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]\s*<`
-- Fix: Emoji as section / feature icons signals AI shortcut. Use SVGs from the brand package, Lucide, or commissioned marks.
+- Fix: Emoji as section / feature icons signals AI shortcut. Use SVGs from the brand package, Lucide, or commissioned marks. Do NOT default every build to Lucide, though: one icon set reused build-to-build is its own genericness tell, the same as a recurring display face. Pick a set that FITS the brand from the open-source Iconify catalogue (https://iconify.design, ~250k icons across 200+ sets: Phosphor reads friendly, Tabler technical, Solar / Remix editorial, Material Symbols product), and ship the chosen glyphs as inline SVG (commit the SVG or use an offline component), never Iconify's runtime API loader. Treat icons like type and colour: chosen to fit, not reached for by default.
 
 ---
 

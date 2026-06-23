@@ -239,7 +239,9 @@ toolchain it does not use, which violates the lean-default invariant. So:
 
 ## Reach (document, do not pre-build)
 - **WebGPU + TSL** (`three/webgpu`, automatic WebGL2 fallback) as the Recipe-1 / 2
-  upgrade path now WebGPU is baseline (incl. Safari / iOS, Sept 2025).
+  upgrade path. WebGPU shipped in Safari 26 / iOS 26 (Sept 2025) and Chrome 121+ on
+  Android, but mobile support is still gated and uneven by OS / GPU tier, so treat it as
+  an enhancement behind the automatic WebGL2 fallback, not a baseline you can assume.
 - **GSAP SplitText** (now free) for character-stagger kinetic type.
 - **Rive** for data-driven vector UI motion alongside GSAP.
 
