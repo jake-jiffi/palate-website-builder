@@ -1,7 +1,7 @@
 # CRO + Ads autopilot for {{CLIENT_NAME}}
 
-This site has the Jiffi CRO module installed. Four sub-skills live in .claude/skills.
-They are DORMANT until Humblytics reports >= {{THRESHOLD}} sessions (see .jiffi-cro-config.json).
+This site has the Palate CRO module installed. Four sub-skills live in .claude/skills.
+They are DORMANT until Humblytics reports >= {{THRESHOLD}} sessions (see .palate-cro-config.json).
 
 ## The sub-skills
 - cro-funnel-reporter: weekly funnel + drop-off report from Humblytics
@@ -10,7 +10,7 @@ They are DORMANT until Humblytics reports >= {{THRESHOLD}} sessions (see .jiffi-
 - cro-ad-expert: reads Google + Meta ad spend, ties spend to Humblytics conversions
 
 ## Activation
-Once the traffic threshold is met, set activated:true in .jiffi-cro-config.json.
+Once the traffic threshold is met, set activated:true in .palate-cro-config.json.
 Until then the reporters return "insufficient traffic" and the optimizers refuse to launch.
 
 ## Guardrails

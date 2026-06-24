@@ -4,7 +4,7 @@
 # Usage: provision-github.sh <slug>
 set -euo pipefail
 SLUG="${1:?slug}"
-REPO="jiffi-projects/${SLUG}"
+REPO="palate-projects/${SLUG}"
 
 if gh repo view "$REPO" >/dev/null 2>&1; then
   echo "repo $REPO exists; checking empty..."
@@ -36,7 +36,7 @@ gh api -X PUT "repos/${REPO}/branches/main/protection" \
   -F "required_pull_request_reviews[required_approving_review_count]=1" \
   -F "restrictions=null" >/dev/null 2>&1 || echo "  (branch protection needs repo admin; skipped)"
 
-echo "granting jiffi-engineering team push..."
-gh api -X PUT "orgs/jiffi-projects/teams/jiffi-engineering/repos/${REPO}" -f permission=push >/dev/null 2>&1 || echo "  (team grant skipped; team may not exist yet)"
+echo "granting palate-engineering team push..."
+gh api -X PUT "orgs/palate-projects/teams/palate-engineering/repos/${REPO}" -f permission=push >/dev/null 2>&1 || echo "  (team grant skipped; team may not exist yet)"
 
 echo "GITHUB_PROVISIONED:${REPO}"

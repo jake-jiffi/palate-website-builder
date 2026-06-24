@@ -25,8 +25,8 @@ else
   # production preflight HERE so a missing credential fails loudly and early with
   # its remediation, rather than dying mid-provision inside provision-sanity.sh.
   # Mirror the build flow: production targets the chosen host (default vercel).
-  export JIFFI_HOST="${JIFFI_HOST:-vercel}"
-  echo "running the production preflight before promoting (host: ${JIFFI_HOST})..."
+  export PALATE_HOST="${PALATE_HOST:-vercel}"
+  echo "running the production preflight before promoting (host: ${PALATE_HOST})..."
   bash "$SCRIPT_DIR/preflight.sh" || {
     echo "REFUSING TO PROMOTE: the production preflight failed." >&2
     echo "Fix the missing credential it reported above, then re-run promotion." >&2

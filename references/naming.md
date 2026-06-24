@@ -1,6 +1,6 @@
 # Naming and slug derivation
 
-The slug drives everything: the worker name (`{slug}-site`), the GitHub repo (`jiffi-projects/{slug}`), the brand repo (`jiffi-projects/{slug}-brand`), and resource tags.
+The slug drives everything: the worker name (`{slug}-site`), the GitHub repo (`palate-projects/{slug}`), the brand repo (`palate-projects/{slug}-brand`), and resource tags.
 
 ## Derivation
 Run `scripts/derive-slug.sh "Client Name"`. It lowercases, strips non-alphanumerics, collapses spaces to hyphens, trims to 32 chars.
@@ -12,7 +12,7 @@ Cloudflare worker names and npm scopes must start with a letter. A client like "
 Check all four namespaces:
 - Cloudflare: worker name `{slug}-site` not taken on the account
 - Sanity: Studio hostname `{slug}` globally unique (this is the strict one; Sanity Studio hostnames are unique across ALL of Sanity, not just the org)
-- GitHub: `jiffi-projects/{slug}` and `jiffi-projects/{slug}-brand` available (or empty)
+- GitHub: `palate-projects/{slug}` and `palate-projects/{slug}-brand` available (or empty)
 - If any conflict, append a discriminator (`-web`, `-au`) consistently and re-check all four.
 
 ## Consistency rule

@@ -37,7 +37,7 @@ for target in production preview development; do
   upsert_env SANITY_PROJECT_ID    "${SANITY_PROJECT_ID:-}"            "$target"
   upsert_env SANITY_DATASET       "${SANITY_DATASET:-production}"     "$target"
   upsert_env SANITY_API_READ_TOKEN "${SANITY_API_READ_TOKEN:-}"        "$target"
-  # REQUIRED so Vercel's build can `npm ci` the private @jiffi-projects brand
+  # REQUIRED so Vercel's build can `npm ci` the private @palate-projects brand
   # package - the committed .npmrc reads ${GITHUB_PACKAGES_TOKEN}. Empty (e.g.
   # --vendor-brand) is skipped by upsert_env.
   upsert_env GITHUB_PACKAGES_TOKEN "${GITHUB_PACKAGES_TOKEN:-}"        "$target"

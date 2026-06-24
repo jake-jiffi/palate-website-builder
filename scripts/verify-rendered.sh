@@ -5,7 +5,7 @@
 # deploy-preview.sh Vercel URL) in a real browser at phone / tablet / desktop and
 # asserts what only shows up when it RENDERS. It is the rendered counterpart to
 # ux-lint.sh (mechanical, reads code) and the visual loop / reviewer pass
-# (interpretive). It extends the jiffi rendered gate (overflow / console / blank /
+# (interpretive). It extends the rendered gate (overflow / console / blank /
 # focus ring / 404) with the BOLD-build bug-class checks from
 # references/rendered-bug-classes.md:
 #   (a) no-JS / LCP-is-never-a-canvas - the hero shows a finished static state with

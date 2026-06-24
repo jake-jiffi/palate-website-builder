@@ -9,16 +9,16 @@ for a in "$@"; do case "$a" in --include-brand) INCLUDE_BRAND=1;; --yes) CONFIRM
 
 echo "ROLLBACK PLAN for ${SLUG}:"
 echo "  - delete Cloudflare worker ${SLUG}-site"
-echo "  - delete Sanity project (tagged jiffi:project-slug=${SLUG})"
-echo "  - delete GitHub repo jiffi-projects/${SLUG}"
-[ "$INCLUDE_BRAND" = "1" ] && echo "  - archive brand repo jiffi-projects/${SLUG}-brand + unpublish package"
+echo "  - delete Sanity project (tagged palate:project-slug=${SLUG})"
+echo "  - delete GitHub repo palate-projects/${SLUG}"
+[ "$INCLUDE_BRAND" = "1" ] && echo "  - archive brand repo palate-projects/${SLUG}-brand + unpublish package"
 [ "$CONFIRM" = "1" ] || { echo "DRY RUN. Re-run with --yes to execute."; exit 0; }
 
-echo "deleting GitHub repo..."; gh repo delete "jiffi-projects/${SLUG}" --yes 2>/dev/null || echo "  (skip)"
+echo "deleting GitHub repo..."; gh repo delete "palate-projects/${SLUG}" --yes 2>/dev/null || echo "  (skip)"
 echo "deleting Cloudflare worker..."; wrangler delete --name "${SLUG}-site" 2>/dev/null || echo "  (skip/manual)"
 echo "Sanity project deletion is manual via the management API (safety)."
 if [ "$INCLUDE_BRAND" = "1" ]; then
-  gh repo archive "jiffi-projects/${SLUG}-brand" --yes 2>/dev/null || echo "  (brand archive skip)"
+  gh repo archive "palate-projects/${SLUG}-brand" --yes 2>/dev/null || echo "  (brand archive skip)"
   echo "  package unpublish has time limits; do manually if within window."
 fi
 echo "ROLLBACK_DONE"

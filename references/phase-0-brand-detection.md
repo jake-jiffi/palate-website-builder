@@ -50,7 +50,7 @@ in state.brand.packageVersion. The site's package.json gets this exact string.
 
 ## Cross-skill resume handshake
 If the in-process BUILD BRAND step gets interrupted: its state lives in
-`.jiffi-brand-state.json` in the brand repo. Record the brand repo path in this
+`.palate-brand-state.json` in the brand repo. Record the brand repo path in this
 skill's state. On resume, if phase brandAsCode is in_progress, cd to the brand
 repo, run `brand-state-resume.sh`, finish the brand build, then return and
 continue to Phase A.

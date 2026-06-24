@@ -8,11 +8,11 @@ Generated at the end of every build. Plain, scannable, action-oriented.
 ## Live
 - Site: https://{domain} (and https://{worker}.workers.dev)
 - Studio (CMS): https://{domain}/studio  (embedded - same site)
-- Repo: https://github.com/jiffi-projects/{slug}
+- Repo: https://github.com/palate-projects/{slug}
 
 ## Brand
-- Package: @jiffi-projects/{slug}-brand@{exact-version}
-- To update: npm install @jiffi-projects/{slug}-brand@latest, review, deploy
+- Package: @palate-projects/{slug}-brand@{exact-version}
+- To update: npm install @palate-projects/{slug}-brand@latest, review, deploy
 
 ## What's wired
 - Sanity CMS (editors invited: {emails})
@@ -43,7 +43,7 @@ This is a real Astro project (the production codebase), not a mockup.
 ## See it now
   {the live URL from serve-preview.sh, e.g. http://localhost:4321}
 It is already running. Just open the link.
-(To stop it later: kill $(cat {project-dir}/.jiffi-devserver.pid). To restart: serve-preview.sh {project-dir}.)
+(To stop it later: kill $(cat {project-dir}/.palate-devserver.pid). To restart: serve-preview.sh {project-dir}.)
 
 ## What's built
 - {N} pages as real .astro components

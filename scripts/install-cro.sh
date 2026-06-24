@@ -15,7 +15,7 @@ find .claude/skills -name "SKILL.md.tpl" | while read -r f; do
   mv "$f" "${f%.tpl}"
 done
 
-cat > .jiffi-cro-config.json <<JSON
+cat > .palate-cro-config.json <<JSON
 {
   "enabled": true,
   "dormantUntilSessions": ${THRESHOLD},

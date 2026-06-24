@@ -1,6 +1,6 @@
-# Creative principles - how Jiffi thinks about a build
+# Creative principles - how Palate thinks about a build
 
-These are the directing instincts behind every Jiffi site, the lens the Story
+These are the directing instincts behind every Palate site, the lens the Story
 Engine (`story-engine.md`) and the critique gates (`critique-discipline.md`)
 apply. Internalise them; they are the difference between refined-but-generic and
 something a client has never seen.

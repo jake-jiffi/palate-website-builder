@@ -8,8 +8,8 @@ human.**
 ## What changed, and why
 
 Earlier guidance told the user production "can't run from a chat" and needed a
-separate "Jiffi environment." Both were wrong and both cost trust. There is no
-"Jiffi environment" - the user's own Mac, with its installed CLIs, is it. And in
+separate, dedicated build environment. Both were wrong and both cost trust. There is no
+such environment - the user's own Mac, with its installed CLIs, is it. And in
 Cowork, Claude can drive that Mac's Terminal directly. Delete that framing
 wherever it appears; use this instead.
 

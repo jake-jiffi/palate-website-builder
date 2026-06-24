@@ -34,7 +34,7 @@ for this brand reads this file first.
 ## What this package exports
 
 tokens.css, fonts.css, tailwind.preset, tokens.json, tokens (ts), components/*.
-Consumers (like a jiffi-website-builder site) import these and pin an exact version.
+Consumers (like a palate-website-builder site) import these and pin an exact version.
 
 ## Calibration examples
 

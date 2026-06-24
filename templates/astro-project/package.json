@@ -14,7 +14,7 @@
     "publish-all": "tsx scripts/publish-all.mjs"
   },
   "dependencies": {
-    "@jiffi-projects/{{SLUG}}-brand": "{{BRAND_VERSION}}",
+    "@palate-projects/{{SLUG}}-brand": "{{BRAND_VERSION}}",
     "astro": "6.4.4",
     "@astrojs/vercel": "10.0.8",
     "@astrojs/sitemap": "^3.7.2",

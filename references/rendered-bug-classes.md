@@ -9,7 +9,7 @@ pattern and the gate that now catches it, so a future bold build gets them right
 first time.
 
 The deterministic counterpart to this doc is **`scripts/verify-rendered.sh`** (the
-rendered, multi-viewport, real-wheel, JS-on AND JS-off gate). It extends the jiffi
+rendered, multi-viewport, real-wheel, JS-on AND JS-off gate). It extends the base
 rendered gate (overflow / console / blank / focus / 404) with the motion-path and
 no-JS checks below. Run it after Compose / before hand-off, alongside the visual loop.
 The interpretive counterpart is the defect-checklist additions in

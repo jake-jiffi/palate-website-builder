@@ -4,11 +4,11 @@
 # Prints: EXISTS:<repo>:<version> | MISSING:<repo>
 set -euo pipefail
 SLUG="${1:?slug required}"
-REPO="jiffi-projects/${SLUG}-brand"
+REPO="palate-projects/${SLUG}-brand"
 
 if gh repo view "$REPO" >/dev/null 2>&1; then
   # Latest published package version, via the npm registry
-  version=$(npm view "@jiffi-projects/${SLUG}-brand" version --registry=https://npm.pkg.github.com 2>/dev/null || echo "")
+  version=$(npm view "@palate-projects/${SLUG}-brand" version --registry=https://npm.pkg.github.com 2>/dev/null || echo "")
   [ -z "$version" ] && version="unpublished"
   echo "EXISTS:${REPO}:${version}"
 else

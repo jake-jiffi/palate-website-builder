@@ -132,7 +132,7 @@ gh auth login
 # A build consumes the private brand package, so it needs a read:packages token in ~/.npmrc.
 export GITHUB_PACKAGES_TOKEN=ghp_...   # classic PAT, read:packages scope (consuming the brand package)
 cat >> ~/.npmrc <<NPMRC
-@jiffi-projects:registry=https://npm.pkg.github.com
+@palate-projects:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=\${GITHUB_PACKAGES_TOKEN}
 NPMRC
 

@@ -1,8 +1,8 @@
 # Build memory - cross-build diversification
 
-A single per-Jiffi log of every build, so the Explore stage actively
+A single per-Palate log of every build, so the Explore stage actively
 diversifies the variant set away from what was shipped recently. Stops the
-slow drift toward a "Jiffi house structure" that would emerge if every
+slow drift toward a "Palate house structure" that would emerge if every
 project's variants were generated from the same blank slate.
 
 ## Where the log lives
@@ -45,7 +45,7 @@ At Phase A.4 (Explore) plan checkpoint, read the last 5 entries. Apply two
 hard rules when generating the variant set:
 
 1. **No hero pattern repeated from the last 3 builds.** If the most recent
-   three Jiffi builds all used a "centred display + image-right" hero, the
+   three Palate builds all used a "centred display + image-right" hero, the
    variant set for this build cannot include another centred display + image
    right hero. Pick from the long tail.
 2. **No identical macrostructure from any of the last 5 builds.** The
@@ -60,7 +60,7 @@ three entries, the rules are inert and Explore proceeds normally.
 
 ## Why it lives outside the skill
 
-The diversification signal is Jiffi-wide, not per-project. A log inside any
+The diversification signal is Palate-wide, not per-project. A log inside any
 single project would only track that project's own variants. The shared file
 in `~/.config/palate/` is read and written by every build on the machine, so a
 team running multiple builds in a week diversifies across all of them.

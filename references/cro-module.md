@@ -7,7 +7,7 @@ Optional (--with-cro). Adds per-ad landing pages and autonomous conversion optim
 - DynamicHero: swaps hero copy by ?variant= or utm_campaign
 - Four sub-skills in .claude/skills: cro-funnel-reporter, cro-optimizer, cro-ab-test-generator, cro-ad-expert
 - AGENTS.md describing them
-- .jiffi-cro-config.json with the traffic threshold
+- .palate-cro-config.json with the traffic threshold
 
 ## The warm-up (important)
 The sub-skills install but stay DORMANT until Humblytics reports >= the threshold (default 500 sessions). Below threshold:

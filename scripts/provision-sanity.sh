@@ -4,15 +4,13 @@
 # and CORS for the site origin. The Studio is EMBEDDED in the site via
 # @sanity/astro (route /studio) - there is no separate Studio to deploy.
 # Uses the Management API via curl (more reliable than sanity init --no-interactive).
-# Requires: SANITY_AUTH_TOKEN (manage scope), SANITY_ORG_ID (your Sanity org id;
-# JIFFI_SANITY_ORG_ID is accepted as a fallback for existing setups).
+# Requires: SANITY_AUTH_TOKEN (manage scope), SANITY_ORG_ID (your Sanity org id).
 # Usage: provision-sanity.sh <slug> <display-name> <site-domain> [editors-csv]
 set -euo pipefail
 SLUG="${1:?slug}"; NAME="${2:?display name}"; SITE_DOMAIN="${3:?site domain}"; EDITORS="${4:-}"
 API="https://api.sanity.io/v2021-06-07"
 AUTH="Authorization: Bearer ${SANITY_AUTH_TOKEN:?set SANITY_AUTH_TOKEN}"
-# SANITY_ORG_ID is primary; JIFFI_SANITY_ORG_ID is the back-compat fallback.
-SANITY_ORG_ID="${SANITY_ORG_ID:-${JIFFI_SANITY_ORG_ID:-}}"
+SANITY_ORG_ID="${SANITY_ORG_ID:-}"
 
 # Idempotent (check-before-act, see references/idempotency.md): reuse an
 # existing project with this displayName rather than creating a duplicate, so a

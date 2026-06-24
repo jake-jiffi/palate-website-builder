@@ -107,7 +107,7 @@ Source: anti-slop-ui `SKILL.md` Step 1.
 
 ## 4. The vague-word ban (on Claude's own narration)
 
-In Claude's own messages about a Jiffi build - the plan checkpoint
+In Claude's own messages about a Palate build - the plan checkpoint
 descriptions, the variant write-ups, the compose summary, the handover note -
 never use these words as descriptors of the design:
 
@@ -196,7 +196,7 @@ A page that is competent, clean and correct but makes the visitor feel nothing
 fails this gate. This is the gate that catches "refined but underwhelming". See
 `story-engine.md` and `creative-principles.md`.
 
-Source: the Jiffi Story Engine.
+Source: the Palate Story Engine.
 
 ## 7. Recurring finish failures (lift the Execution / Restraint 4 to a 5)
 

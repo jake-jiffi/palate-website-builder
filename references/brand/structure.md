@@ -8,7 +8,7 @@ Every brand-as-code repo has this exact shape. Scaffold it by copying `templates
 ├── CLAUDE.md              Agent reading order + non-negotiable rules
 ├── AGENTS.md              Shim pointing to CLAUDE.md
 ├── LICENSE                Per-asset licensing notes (especially fonts)
-├── package.json           @jiffi-projects/{slug}-brand, exports tokens/css/tailwind/components
+├── package.json           @palate-projects/{slug}-brand, exports tokens/css/tailwind/components
 ├── .npmrc                 Scope mapping to GitHub Packages (no token)
 ├── .gitignore
 ├── tokens/
@@ -38,4 +38,4 @@ Every brand-as-code repo has this exact shape. Scaffold it by copying `templates
     └── team.md            Who's who
 ```
 
-The package.json exports map is what jiffi-website-builder depends on. It MUST expose: `./tokens.css`, `./fonts.css`, `./tailwind.preset`, `./components/*`, `./tokens.json`, `./tokens` (the TS). See `templates/repo-skeleton/package.json.tpl`.
+The package.json exports map is what palate-website-builder depends on. It MUST expose: `./tokens.css`, `./fonts.css`, `./tailwind.preset`, `./components/*`, `./tokens.json`, `./tokens` (the TS). See `templates/repo-skeleton/package.json.tpl`.

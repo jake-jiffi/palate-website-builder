@@ -1,6 +1,6 @@
 # Perceptual floors - cited defaults the brand cannot violate silently
 
-A set of perceptual minimums every Jiffi brand package must meet. These are
+A set of perceptual minimums every Palate brand package must meet. These are
 not opinions; they are research-grounded defaults sourced from WCAG, Material
 3, NNGroup, APCA, and the Apple HIG. The brand package can adjust them
 deliberately, but it cannot fall below them silently. `scripts/ux-lint.sh`

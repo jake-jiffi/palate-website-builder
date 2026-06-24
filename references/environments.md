@@ -17,7 +17,7 @@ eval "$(scripts/detect-environment.sh)"
 # now WORK_ROOT, OUTPUTS_DIR, ENV_KIND, HAS_NODE, NODE_OK are set
 ```
 
-`detect-environment.sh` proves writability (it actually writes a temp file) and picks WORK_ROOT by priority: an explicit `JIFFI_WORK_DIR` override, then the current directory if it is writable and not inside a skill folder, then `/mnt/user-data/outputs`, then `$HOME/jiffi-builds`, then `/workspace`, then `/tmp/jiffi-builds`. It will never choose a directory inside the skill itself (no building where SKILL.md lives). If nothing is writable it errors clearly rather than failing deep in a phase.
+`detect-environment.sh` proves writability (it actually writes a temp file) and picks WORK_ROOT by priority: an explicit `PALATE_WORK_DIR` override, then the current directory if it is writable and not inside a skill folder, then `/mnt/user-data/outputs`, then `$HOME/palate-builds`, then `/workspace`, then `/tmp/palate-builds`. It will never choose a directory inside the skill itself (no building where SKILL.md lives). If nothing is writable it errors clearly rather than failing deep in a phase.
 
 Build under `WORK_ROOT/{slug}-site`. Put final deliverables (zips, exported screenshots) under `OUTPUTS_DIR` when it differs from WORK_ROOT.
 

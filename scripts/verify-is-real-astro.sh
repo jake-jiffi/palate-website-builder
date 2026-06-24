@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Anti-freestyle gate. Confirms the working dir is a REAL Astro project built
-# from the Jiffi template, not loose hand-written HTML masquerading as a build.
+# from the Palate template, not loose hand-written HTML masquerading as a build.
 # Run at the end of Phase A (preview boundary) and before any production phase.
 # Exits 0 only if every required marker of a genuine scaffold is present.
 set -euo pipefail
@@ -21,7 +21,7 @@ grep -qE "@astrojs/(vercel|cloudflare)" astro.config.mjs \
   || fail "astro.config.mjs has no supported SSR adapter (@astrojs/vercel default, or @astrojs/cloudflare backup)"
 
 # 3. The brand package is consumed (dependency present), not inlined ad hoc
-jq -e '.dependencies | to_entries[] | select(.key | startswith("@jiffi-projects/"))' package.json >/dev/null 2>&1 \
+jq -e '.dependencies | to_entries[] | select(.key | startswith("@palate-projects/"))' package.json >/dev/null 2>&1 \
   || grep -q "vendored" .palate-skill-state.json 2>/dev/null \
   || fail "brand package not consumed and not vendored; brand system not wired"
 

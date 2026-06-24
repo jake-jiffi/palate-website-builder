@@ -6,7 +6,7 @@ A Claude Code skill that builds production-grade Astro websites, grounded by the
 
 **Build a website.** Brief plus domain in, deployed Astro site out: Sanity CMS, Vercel hosting (Cloudflare as backup), GitHub repo, CI/CD, custom domain, full SEO and AI-crawler readiness, forms, search, analytics, the client's brand package, and an optional CRO + Ads module.
 
-**Build a brand package.** Raw brand assets in, published private npm package `@jiffi-projects/{slug}-brand` out: four-format design tokens, unified fonts.css, reference components, examples, brand docs. Usable standalone (feeds Claude Design, v0, Cursor, Figma) or as the brand step of a website build.
+**Build a brand package.** Raw brand assets in, published private npm package `@palate-projects/{slug}-brand` out: four-format design tokens, unified fonts.css, reference components, examples, brand docs. Usable standalone (feeds Claude Design, v0, Cursor, Figma) or as the brand step of a website build.
 
 ## How the modes connect
 
@@ -56,7 +56,7 @@ legacy/manual path: see `INSTALL.md`.
 - **Build a website**: Vercel CLI (`vercel`), `SANITY_AUTH_TOKEN`, `SANITY_ORG_ID` (your Sanity org id, from Settings then API in the Sanity dashboard), `RESEND_API_KEY`. The brand GitHub Packages token (`GITHUB_PACKAGES_TOKEN` in `~/.npmrc`, `read:packages` scope) is **Required unless you pass `--vendor-brand`**, since a build consumes the private brand package.
 - **Build a brand package**: `GITHUB_PACKAGES_TOKEN` with `write:packages` scope (this mode publishes a package).
 
-`scripts/preflight.sh` (build) and `scripts/brand-preflight.sh` (brand) check what's needed. `JIFFI_SANITY_ORG_ID` is still accepted as a fallback for `SANITY_ORG_ID`.
+`scripts/preflight.sh` (build) and `scripts/brand-preflight.sh` (brand) check what's needed.
 
 ## The Palate MCP
 

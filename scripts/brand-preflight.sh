@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Preflight for jiffi-brand-as-code. Verifies every tool, token, and scope
+# Preflight for palate-brand-as-code. Verifies every tool, token, and scope
 # needed for a full run. Exits 0 if all pass, non-zero with remediation if not.
 set -euo pipefail
 
 fail() { echo "PREFLIGHT FAIL: $1" >&2; echo "  remediation: $2" >&2; exit 1; }
 ok() { echo "  ok: $1"; }
 
-echo "jiffi-brand-as-code preflight"
+echo "palate-brand-as-code preflight"
 
 # node
 command -v node >/dev/null 2>&1 || fail "node not found" "install Node 22+ (nvm install 22)"

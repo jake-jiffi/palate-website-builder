@@ -55,7 +55,7 @@ URL=$(vercel deploy --yes | tail -1)
 # automatic, no dashboard step. Enable automation Protection Bypass with a
 # stable per-project secret (persisted + gitignored so previously shared links
 # keep working) and append it to the URL.
-SECRET_FILE=".jiffi-vercel-bypass"
+SECRET_FILE=".palate-vercel-bypass"
 if [ -f "$SECRET_FILE" ]; then
   BYPASS="$(cat "$SECRET_FILE")"
 else

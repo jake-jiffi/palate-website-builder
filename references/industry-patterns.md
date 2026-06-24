@@ -1,6 +1,6 @@
 # Per-industry anti-patterns
 
-A short, opinionated set of design and copy rules per Jiffi-typical industry.
+A short, opinionated set of design and copy rules per Palate-typical industry.
 The Explore stage detects the industry from the brief and applies the
 matching rules as overlays to the variant generation; `scripts/ux-lint.sh`
 loads them as per-build rule additions where they can be expressed as regex.

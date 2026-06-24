@@ -17,7 +17,7 @@ onward).
 The seed below combines the named bad-actor list from Anthropic's
 frontend-design skill, the curated subset of anti-slop-ui's 34 tells, the
 Vercel `web-interface-guidelines/command.md` code-level rules (copied in, NOT
-remote-fetched), and Jiffi's house-style (no em dashes, Australian English).
+remote-fetched), and Palate's house style (no em dashes, Australian English).
 
 ---
 
@@ -28,7 +28,7 @@ remote-fetched), and Jiffi's house-style (no em dashes, Australian English).
 - Mode: always
 - Files: *.astro,*.css,*.ts,*.tsx,*.mjs,*.md,*.mdx,*.json
 - Pattern: `—`
-- Fix: Em dashes are not Jiffi house style. Replace with " - " (a spaced hyphen), a comma, parentheses, or a colon. Apply to copy and to inline comments.
+- Fix: Em dashes are not Palate house style. Replace with " - " (a spaced hyphen), a comma, parentheses, or a colon. Apply to copy and to inline comments.
 
 ### Rule: no-en-dash-as-em
 - Severity: Medium
@@ -225,7 +225,7 @@ remote-fetched), and Jiffi's house-style (no em dashes, Australian English).
 - Severity: Medium
 - Mode: always
 - Files: *.astro
-- Pattern: `(?i)(?<![\w@/."])(jiffi|sanity|cloudflare|vercel|astro|stripe|claude|anthropic)(?![\w/.-])`
+- Pattern: `(?i)(?<![\w@/."])(palate|sanity|cloudflare|vercel|astro|stripe|claude|anthropic)(?![\w/.-])`
 - Fix: Wrap brand names with `<span translate="no">` so machine translators do not mangle them. Apply once per page where the name appears; not every mention needs wrapping in body prose. (Pattern skips import paths, `*.astro` filenames and the `Astro.*` global so it only flags brand names in visible text, not code.)
 
 ### Rule: useState-for-mouse-coords

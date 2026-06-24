@@ -20,7 +20,7 @@ case "$BRAND_MODE" in brand-creation|brand-provided) ;; *) echo "brand_mode must
 cat > .palate-skill-state.json <<JSON
 {
   "schemaVersion": "1.2",
-  "skill": { "name": "jiffi-website-builder", "version": "1.1.0", "startedAt": "${TS}", "lastUpdatedAt": "${TS}" },
+  "skill": { "name": "palate-website-builder", "version": "1.1.0", "startedAt": "${TS}", "lastUpdatedAt": "${TS}" },
   "stage": "${STAGE}",
   "brandMode": "${BRAND_MODE}",
   "client": { "name": "${CLIENT}", "slug": "${SLUG}", "domain": "${DOMAIN}" },

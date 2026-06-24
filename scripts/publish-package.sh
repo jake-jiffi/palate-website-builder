@@ -17,7 +17,7 @@ content_hash=$(find tokens fonts components styles 2>/dev/null -type f -exec sha
 # Is this version already in the registry?
 if npm view "${PKG}@${VERSION}" version --registry="$REGISTRY" >/dev/null 2>&1; then
   stored_hash=""
-  [ -f .jiffi-brand-state.json ] && stored_hash=$(jq -r '.package.contentHash // ""' .jiffi-brand-state.json)
+  [ -f .palate-brand-state.json ] && stored_hash=$(jq -r '.package.contentHash // ""' .palate-brand-state.json)
   if [ "$content_hash" = "$stored_hash" ]; then
     echo "SKIP: ${PKG}@${VERSION} already published with identical content."
     exit 0

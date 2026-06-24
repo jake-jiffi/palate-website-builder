@@ -1,6 +1,6 @@
 /*
  * Global stylesheet. Tailwind v4 + the project's Tailwind config (which maps
- * the brand tokens from @jiffi-projects/{{SLUG}}-brand to `brand-*` utilities,
+ * the brand tokens from @palate-projects/{{SLUG}}-brand to `brand-*` utilities,
  * e.g. bg-brand-bg, text-brand-text). Keep this file thin - real design tokens
  * live in the brand package, not here.
  */

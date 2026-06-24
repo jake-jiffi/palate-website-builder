@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Resolve the brand repo: create jiffi-projects/{slug}-brand if absent,
+# Resolve the brand repo: create palate-projects/{slug}-brand if absent,
 # verify it is empty if it already exists. Clones it to the current parent dir.
 # Usage: resolve-repo.sh <slug>
 # Prints: CLONED:<path> on success
 set -euo pipefail
 SLUG="${1:?slug required}"
-REPO="jiffi-projects/${SLUG}-brand"
+REPO="palate-projects/${SLUG}-brand"
 DIR="${SLUG}-brand"
 
 if gh repo view "$REPO" >/dev/null 2>&1; then

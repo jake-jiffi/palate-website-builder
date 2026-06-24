@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * capture.mjs - Reference-site capture engine for the jiffi-website-builder skill.
+ * capture.mjs - Reference-site capture engine for the palate-website-builder skill.
  *
  * Drives a real headless Chromium over a top-tier website and extracts a deep,
  * structured, machine-readable record of how it is built: design tokens, the

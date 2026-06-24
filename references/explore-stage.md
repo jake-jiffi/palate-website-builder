@@ -28,7 +28,7 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    {audience}, with a {vibe} language, leaning toward {design direction}." A
    variant whose Design Read is generic or missing is rejected and regenerated.
    Read `~/.config/palate/builds.log.json` (see `references/build-memory.md`)
-   and exclude any hero pattern used in the last 3 Jiffi builds and any
+   and exclude any hero pattern used in the last 3 Palate builds and any
    macrostructure used in the last 5 - the variant set actively diversifies
    away from recent work. **Match implementation complexity to the
    aesthetic vision**: a maximalist variant uses elaborate code; a minimalist
@@ -59,7 +59,7 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    because {a specific reason}". Variant routes move to `_explore-archive/`
    (gitignored) or are removed. Append a new entry to
    `~/.config/palate/builds.log.json` (macrostructure, mode, hero pattern,
-   dominant tokens, explore picks) so the next Jiffi build diversifies away
+   dominant tokens, explore picks) so the next Palate build diversifies away
    from this one.
 5. **Pause - confirm** - re-deploy the shareable Vercel preview without
    `--explore` (`scripts/deploy-preview.sh <project-dir> <slug>`, picker off) so

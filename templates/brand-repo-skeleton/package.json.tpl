@@ -1,11 +1,11 @@
 {
-  "name": "@jiffi-projects/{{SLUG}}-brand",
+  "name": "@palate-projects/{{SLUG}}-brand",
   "version": "1.0.0",
   "description": "Brand-as-code for {{CLIENT_NAME}}",
   "private": true,
   "type": "module",
   "publishConfig": { "registry": "https://npm.pkg.github.com" },
-  "repository": { "type": "git", "url": "https://github.com/jiffi-projects/{{SLUG}}-brand.git" },
+  "repository": { "type": "git", "url": "https://github.com/palate-projects/{{SLUG}}-brand.git" },
   "exports": {
     "./tokens.css": "./tokens/tokens.css",
     "./fonts.css": "./fonts/fonts.css",

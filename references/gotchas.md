@@ -1,6 +1,6 @@
 # Gotchas
 
-- **CI brand package install needs `permissions: packages: read`.** Without it, npm ci 401s on @jiffi-projects/{slug}-brand. It's in the workflow templates; never remove it.
+- **CI brand package install needs `permissions: packages: read`.** Without it, npm ci 401s on @palate-projects/{slug}-brand. It's in the workflow templates; never remove it.
 - **Set GitHub secrets before first push.** The first CI run fires on push; if secrets aren't set, the build fails. provision-github.sh sets them before pushing.
 - **Sanity Studio hostname is globally unique** across all of Sanity, not just the org. Check availability before committing to a slug.
 - **Wrangler doesn't reliably manage custom domains via CLI.** Phase E uses the Cloudflare API directly.

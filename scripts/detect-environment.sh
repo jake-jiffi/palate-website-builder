@@ -7,7 +7,7 @@
 # Usage: eval "$(detect-environment.sh)"
 set -euo pipefail
 
-writable() { touch "$1/.__jiffi_wtest" 2>/dev/null && rm -f "$1/.__jiffi_wtest" && return 0 || return 1; }
+writable() { touch "$1/.__palate_wtest" 2>/dev/null && rm -f "$1/.__palate_wtest" && return 0 || return 1; }
 # A dir is "inside a skill" if it or an ancestor holds a SKILL.md (don't build there).
 inside_skill() {
   local d="$1"
@@ -20,10 +20,10 @@ inside_skill() {
 
 WORK_ROOT=""
 CANDIDATES=()
-[ -n "${JIFFI_WORK_DIR:-}" ] && CANDIDATES+=("$JIFFI_WORK_DIR")
+[ -n "${PALATE_WORK_DIR:-}" ] && CANDIDATES+=("$PALATE_WORK_DIR")
 # Prefer cwd only if it's writable, not root, and NOT inside the skill itself.
 if [ "$(pwd)" != "/" ] && writable "$(pwd)" && ! inside_skill "$(pwd)"; then CANDIDATES+=("$(pwd)"); fi
-CANDIDATES+=("/mnt/user-data/outputs" "$HOME/jiffi-builds" "/home/claude/jiffi-builds" "/workspace" "/tmp/jiffi-builds")
+CANDIDATES+=("/mnt/user-data/outputs" "$HOME/palate-builds" "/home/claude/palate-builds" "/workspace" "/tmp/palate-builds")
 
 for c in "${CANDIDATES[@]}"; do
   [ -z "$c" ] && continue
@@ -31,7 +31,7 @@ for c in "${CANDIDATES[@]}"; do
   mkdir -p "$c" 2>/dev/null || true
   if [ -d "$c" ] && writable "$c"; then WORK_ROOT="$c"; break; fi
 done
-[ -n "$WORK_ROOT" ] || { echo "JIFFI_ENV_ERROR=no-writable-dir"; exit 1; }
+[ -n "$WORK_ROOT" ] || { echo "PALATE_ENV_ERROR=no-writable-dir"; exit 1; }
 
 if [ -d /mnt/user-data/outputs ] && writable /mnt/user-data/outputs; then
   OUTPUTS_DIR="/mnt/user-data/outputs"

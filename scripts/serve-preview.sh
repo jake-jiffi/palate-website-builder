@@ -18,8 +18,8 @@ for a in "$@"; do case "$a" in --built|--static) MODE="built";; esac; done
 cd "$PROJ"
 
 [ -f package.json ] || { echo "SERVE_FAIL: no package.json in $PROJ (not a scaffolded site)" >&2; exit 1; }
-LOG=".jiffi-devserver.log"
-PIDFILE=".jiffi-devserver.pid"
+LOG=".palate-devserver.log"
+PIDFILE=".palate-devserver.pid"
 
 # If a previous server is recorded and alive, reuse it.
 if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then

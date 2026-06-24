@@ -20,7 +20,7 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: https://npm.pkg.github.com
-          scope: '@jiffi-projects'
+          scope: '@palate-projects'
       - name: Install (brand package authenticates via native GITHUB_TOKEN)
         run: npm ci
         env:

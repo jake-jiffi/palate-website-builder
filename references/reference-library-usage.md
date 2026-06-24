@@ -72,7 +72,7 @@ The tool-chain, in the order a build uses it:
    Re-skin the palette, never lift it.
 7. **`refs_get_astro_recipe { slug }`** - the `astro-rebuild` recipe (islands,
    motion-on-Astro, packages, pitfalls). This is the file that makes a donor
-   actionable on the Jiffi stack.
+   actionable on the Palate stack.
 8. **`refs_get_screenshot { slug, viewport }`** - VIEW the lead reference's
    actual screenshot and design from the pixels, not only the prose notes. Match
    the real composition (where the weight sits, the asymmetry, the negative
@@ -195,7 +195,7 @@ The `astro_recipe` is the terminus: `stas-bondar`, for instance, returns a full
 island strategy (a single `client:visible` WebGL island, Lenis as `client:idle`,
 the expo `cubic-bezier(0.84,0,0.16,1)`, a DPR / particle budget, and the mandatory
 static poster + reduced-motion path). That is what makes a mechanic buildable on
-the Jiffi stack rather than a guess.
+the Palate stack rather than a guess.
 
 **Step 4 - widen each donor, then assemble.** `refs_similar { slug: "<backbone>" }`
 to expand the shortlist from the best find. Compose ONE backbone for structure,
@@ -330,7 +330,7 @@ For each chosen donor, call in this order and use it for its assigned layer:
    emitting.
 
 `astro-rebuild` (via `refs_get_astro_recipe`) and the motion specs are what make
-a donor buildable on the Jiffi stack - use them, do not just read the prose.
+a donor buildable on the Palate stack - use them, do not just read the prose.
 
 ## The two-layer doctrine - reproduce the craft, protect the identity (important)
 
@@ -374,6 +374,6 @@ from range across builds, not from blanding each one.
 
 ## Posture
 
-The library is internal Jiffi intelligence. Captured screenshots and SVGs are
+The library is internal Palate intelligence. Captured screenshots and SVGs are
 reference material for understanding a site, not assets to ship. Every client
 deliverable is original work informed by references, never copied from them.

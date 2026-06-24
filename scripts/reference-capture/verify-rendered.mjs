@@ -4,7 +4,7 @@
  *
  * The mechanical gate (ux-lint.sh) and the visual loop / reviewer pass read CODE / a
  * still. This one loads the RUNNING site in a real browser at phone / tablet / desktop
- * and asserts what only shows up when it renders. It extends the jiffi rendered gate
+ * and asserts what only shows up when it renders. It extends the rendered gate
  * (no horizontal scroll, no console errors, no blank pages, a visible focus ring, a real
  * 404) with the BOLD-build bug-class checks from references/rendered-bug-classes.md:
  *

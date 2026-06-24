@@ -5,7 +5,7 @@
 set -euo pipefail
 SLUG="${1:?slug required}"
 VERSION="${2:?version required}"
-PKG="@jiffi-projects/${SLUG}-brand"
+PKG="@palate-projects/${SLUG}-brand"
 REGISTRY="https://npm.pkg.github.com"
 
 exports=$(npm view "${PKG}@${VERSION}" exports --registry="$REGISTRY" --json 2>/dev/null || echo "{}")

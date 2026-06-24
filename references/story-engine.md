@@ -3,7 +3,7 @@
 Before Explore generates a single variant, decide WHAT each one is FOR. The Story
 Engine is the research-led method that turns a business into **demonstrative
 concepts**: ideas that make a visitor FEEL the product's value rather than read
-about it. It is how Jiffi sites stop being refined-but-generic. The craft layer
+about it. It is how Palate sites stop being refined-but-generic. The craft layer
 (`reference-library-usage.md`) decides HOW a site looks and moves; the Story
 Engine decides WHAT idea it argues and WHAT it makes you feel.
 
@@ -127,7 +127,7 @@ diverged candidate on **two SEPARATE axes**, each 0-5:
   the surveyor consults) and dock a concept that repeats what you shipped last
   time. A face, a mechanic or a feeling reached for out of habit is not original
   however novel it felt in isolation.
-- **Craft-feasibility** = can the chosen donor's craft plus the Jiffi stack
+- **Craft-feasibility** = can the chosen donor's craft plus the Palate stack
   actually BUILD this? Decompose the mechanic into named parts and check each has a
   real precedent with a buildable `astro_recipe` (the buildability oracle in
   `reference-library-usage.md`). A concept with no buildable precedent scores low

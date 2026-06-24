@@ -1,6 +1,6 @@
 # Type selection - fit over familiarity
 
-The doctrine that governs how a Jiffi build chooses a typeface. It revises the
+The doctrine that governs how a Palate build chooses a typeface. It revises the
 long-standing hard font-ban (Inter / Roboto / Arial / Space Grotesk as display)
 into a justify-or-flag model. The rest of the hygiene floor (em dashes, AI-tell
 copy) is unchanged. The mechanical counterpart lives in `references/anti-patterns.md`

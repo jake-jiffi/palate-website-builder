@@ -6,8 +6,8 @@ End every run with this, adapted to mode.
 ```
 Brand repo built and published.
 
-Repo:    https://github.com/jiffi-projects/{slug}-brand
-Package: @jiffi-projects/{slug}-brand@{version}
+Repo:    https://github.com/palate-projects/{slug}-brand
+Package: @palate-projects/{slug}-brand@{version}
 
 What went in:
 - tokens/       four-format design tokens from {n} colours, {m} type styles
@@ -22,11 +22,11 @@ Brand assumptions to confirm:
 {any defaults used for missing assets}
 
 Ready to paste into Claude Design:
-"Use the brand repo at github.com/jiffi-projects/{slug}-brand as the canonical
+"Use the brand repo at github.com/palate-projects/{slug}-brand as the canonical
 design system input. On the setup screen, link this repo. Use tokens/, fonts/,
 and components/. Skip imagery if you want to supply your own. Non-negotiables
 are in CLAUDE.md: {the key ones}."
 ```
 
 ## Composed (from website-builder) hand-back
-Shorter. Update `.jiffi-brand-state.json`, update the website-builder's state with the package name and exact version, return control to Phase A. Log brand assumptions in the eventual handover.md rather than surfacing mid-flow.
+Shorter. Update `.palate-brand-state.json`, update the website-builder's state with the package name and exact version, return control to Phase A. Log brand assumptions in the eventual handover.md rather than surfacing mid-flow.

@@ -259,7 +259,7 @@ const cwd = p.cwd || process.cwd();
 // BUILD-SITE SCOPE: the DIVERGE wall only applies inside an active build-site flow.
 // state-init.sh writes .palate-skill-state.json before scaffold and before any source
 // write, and ONLY the BUILD SITE mode writes it (BUILD BRAND writes
-// .jiffi-brand-state.json; an ordinary edit writes neither). No marker => not a build
+// .palate-brand-state.json; an ordinary edit writes neither). No marker => not a build
 // => fall through to the unchanged depth nudge. This is the non-negotiable fail-open
 // scope wall. Wrapped in try/catch so a marker-read throw cannot wedge a write.
 try {

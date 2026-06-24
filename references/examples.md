@@ -3,10 +3,10 @@
 ## Fresh build with brand assets (most common)
 > "Build a site for Addikted to Ink, atink.com.au. Brand assets are at ~/Downloads/atink-brand."
 
-Phase 0 finds no brand repo, sees assets, invokes brand-as-code (composed), publishes @jiffi-projects/atink-brand, then scaffolds the site consuming it. Style inferred (service or consumer), mode inferred from the brand.
+Phase 0 finds no brand repo, sees assets, invokes brand-as-code (composed), publishes @palate-projects/atink-brand, then scaffolds the site consuming it. Style inferred (service or consumer), mode inferred from the brand.
 
 ## Existing brand repo
-> "Build the site for Acme. Brand repo already at jiffi-projects/acme-brand."
+> "Build the site for Acme. Brand repo already at palate-projects/acme-brand."
 
 Phase 0 finds the repo, verifies exports, pins the exact version, skips brand-as-code, scaffolds straight away.
 
@@ -28,6 +28,6 @@ Follows references/webflow-migration.md: inventory, map CMS to Sanity, migrate c
 ## Brand-only mode
 > "Build a brand package for Enviz. Assets at ~/Downloads/enviz-brand."
 
-Runs the BUILD BRAND mode standalone (interactive): inventories assets, generates four-format tokens, writes fonts.css and components, publishes @jiffi-projects/enviz-brand. No website. Useful when the brand package is needed for decks, Figma, or v0 before any site exists.
+Runs the BUILD BRAND mode standalone (interactive): inventories assets, generates four-format tokens, writes fonts.css and components, publishes @palate-projects/enviz-brand. No website. Useful when the brand package is needed for decks, Figma, or v0 before any site exists.
 
 (The internal library-curation mode is not part of the public skill.)

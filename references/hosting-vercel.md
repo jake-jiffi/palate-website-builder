@@ -24,7 +24,7 @@ evals) is host-agnostic and stays unchanged.
 - No cold starts (V8 isolates) vs Vercel's serverless function cold starts.
 - Workers Static Assets pricing for high-traffic marketing sites.
 
-For most Jiffi marketing sites either works; Vercel is the default and the
+For most Palate marketing sites either works; Vercel is the default and the
 person confirms the choice at the plan checkpoint.
 
 ## The template is Vercel-native
@@ -39,7 +39,7 @@ does NOT run any host switch.
 `provision-vercel.sh` makes the whole loop hands-off:
 
 - Pushes `GITHUB_PACKAGES_TOKEN` to all environments so the Vercel build can
-  `npm ci` the private `@jiffi-projects/{slug}-brand` package.
+  `npm ci` the private `@palate-projects/{slug}-brand` package.
 - Pushes every Sanity / Resend / Turnstile var per environment.
 - Runs `vercel git connect --yes`, so once the repo exists (Phase D) every push
   to `main` auto-deploys to production and every PR gets a preview deployment
@@ -101,7 +101,7 @@ tag - it Just Works on Vercel preview URLs.
 What this enables:
 - Send the client the `{preview-url}`.
 - They leave point-and-click comments on the page.
-- The Jiffi team sees the comments in the Vercel dashboard, addresses them in
+- You see the comments in the Vercel dashboard, address them in
   the next push, and the preview redeploys automatically.
 
 ### How previews are deployed and shared (`deploy-preview.sh`)
@@ -123,7 +123,7 @@ vercel project protection enable <slug>-site --protection-bypass \
 ```
 
 It generates a stable per-project secret (saved to a gitignored
-`.jiffi-vercel-bypass`, so previously shared links keep working) and appends
+`.palate-vercel-bypass`, so previously shared links keep working) and appends
 `?x-vercel-protection-bypass=<secret>&x-vercel-set-bypass-cookie=true` to the
 URL, so anyone with the link gets straight in. Logged-in reviewers can still
 leave Toolbar Comments. To revoke later:
@@ -159,7 +159,7 @@ automatic preview deployment with the Toolbar live.
 Prerequisites (one-time, account-level - everything else is automated):
 - `npm i -g vercel`
 - `vercel login` (browser auth)
-- The user has accepted the Vercel team invite for `jiffi-projects` (or
+- The user has accepted the Vercel team invite for `palate-projects` (or
   whichever team).
 - The **Vercel for GitHub app is installed** on the GitHub org so
   `vercel git connect` can link repos (install once at

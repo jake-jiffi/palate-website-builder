@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-import brandPreset from "@jiffi-projects/{{SLUG}}-brand/tailwind.preset";
+import brandPreset from "@palate-projects/{{SLUG}}-brand/tailwind.preset";
 
 export default {
   presets: [brandPreset],

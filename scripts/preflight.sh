@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Preflight for jiffi-website-builder. Verifies every tool, token, and scope.
+# Preflight for palate-website-builder. Verifies every tool, token, and scope.
 set -euo pipefail
 fail() { echo "PREFLIGHT FAIL: $1" >&2; echo "  remediation: $2" >&2; exit 1; }
 ok() { echo "  ok: $1"; }
 
-echo "jiffi-website-builder preflight"
+echo "palate-website-builder preflight"
 
 command -v node >/dev/null 2>&1 || fail "node not found" "install Node 22+"
 [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ] || fail "node too old" "upgrade to Node 22+"
@@ -14,8 +14,8 @@ command -v jq >/dev/null 2>&1 || fail "jq not found" "brew install jq"; ok "jq p
 command -v gh >/dev/null 2>&1 || fail "gh not found" "install GitHub CLI"
 gh auth status >/dev/null 2>&1 || fail "gh not authed" "gh auth login"; ok "gh authed"
 # Host preflight. Vercel is the default host; Cloudflare is the backup.
-# The build flow exports JIFFI_HOST from the chosen host (default vercel).
-HOST="${JIFFI_HOST:-vercel}"
+# The build flow exports PALATE_HOST from the chosen host (default vercel).
+HOST="${PALATE_HOST:-vercel}"
 if [ "$HOST" = "cloudflare" ]; then
   command -v wrangler >/dev/null 2>&1 || fail "wrangler not found" "npm i -g wrangler"; ok "wrangler present"
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || fail "CLOUDFLARE_API_TOKEN unset" "create a token with Workers + DNS edit, export it"
@@ -26,11 +26,9 @@ else
   vercel whoami >/dev/null 2>&1 || fail "vercel not authed" "vercel login"; ok "vercel authed"
 fi
 
-# Sanity management token + org. SANITY_ORG_ID is the primary, user-facing var;
-# JIFFI_SANITY_ORG_ID is kept as a fallback so existing Jiffi-internal setups
-# keep working.
+# Sanity management token + org.
 [ -n "${SANITY_AUTH_TOKEN:-}" ] || fail "SANITY_AUTH_TOKEN unset" "sanity login or create a management token with manage scope"
-SANITY_ORG_ID="${SANITY_ORG_ID:-${JIFFI_SANITY_ORG_ID:-}}"
+SANITY_ORG_ID="${SANITY_ORG_ID:-}"
 [ -n "${SANITY_ORG_ID:-}" ] || fail "SANITY_ORG_ID unset" "export your Sanity organisation id (Settings then API in your Sanity dashboard)"
 ok "sanity management token + org present"
 
@@ -39,9 +37,9 @@ ok "sanity management token + org present"
 
 # The local ~/.npmrc for the brand package (unless vendoring)
 if [ "${VENDOR_BRAND:-0}" != "1" ]; then
-  if ! grep -q "jiffi-projects:registry" "${HOME}/.npmrc" 2>/dev/null; then
+  if ! grep -q "palate-projects:registry" "${HOME}/.npmrc" 2>/dev/null; then
     fail "no GitHub Packages config in ~/.npmrc" \
-      "add to ~/.npmrc:\n  @jiffi-projects:registry=https://npm.pkg.github.com\n  //npm.pkg.github.com/:_authToken=\${GITHUB_PACKAGES_TOKEN}\nand export GITHUB_PACKAGES_TOKEN (read:packages PAT)"
+      "add to ~/.npmrc:\n  @palate-projects:registry=https://npm.pkg.github.com\n  //npm.pkg.github.com/:_authToken=\${GITHUB_PACKAGES_TOKEN}\nand export GITHUB_PACKAGES_TOKEN (read:packages PAT)"
   fi
   ok "~/.npmrc has GitHub Packages config"
   # The token value must be exported too: needed for the local install AND, on
