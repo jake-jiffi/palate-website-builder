@@ -30,6 +30,12 @@ not left to chance.
 
 COMMISSION
 - Bar: build a site good enough to win its category on Awwwards / FWA. "Competent" is a fail.
+- Intensity: <high | calm> - recorded machine-readably as `manifest.commission.intensity`. HIGH
+  binds the bold mandate below AND the machine gates that enforce it (the blinded pairwise gate
+  vs a library exemplar, the ambition gate, and the built-Explore requirement, all in
+  `scripts/gate-done.sh` / `agents/palate-verifier.md`); calm keeps the lighter floor (axes >=4,
+  no defects). Detect it as described under "The bold mandate" and record the single token so the
+  gates scope to it instead of guessing from prose.
 - Concept: <the one true thing + the demonstrative mechanic + the one governing feeling>
 - Vision: <one line on the experience this site should be>
 - Mechanisms on hand, CHOSEN TO FIT (a few, not all, fit over familiarity, same rule as type):
@@ -67,7 +73,11 @@ BOLD commission, and a flat one is a failed brief.**
 Detect intensity at COMMISSION time from the brand and the converged concept. A brand reads
 HIGH-INTENSITY when it is a label / record / fashion drop, a maximalist consumer brand, a
 creative or design studio, a product launch, or a culture / type / art brand - anything whose
-whole job is to make the visitor FEEL something and remember it. For a high-intensity brand
+whole job is to make the visitor FEEL something and remember it. Record the verdict as
+`manifest.commission.intensity` (`"high"` or `"calm"`) the moment you write the commission: it is
+the single machine-readable switch the v1.5 gates read to bind the bold bar (the pairwise gate +
+the ambition gate + the built-Explore requirement) to high-intensity briefs only, so a calm
+conveyancer or clinic is never held to it. For a high-intensity brand
 the commission MUST require (these are commitments, not options to tick):
 
 - **One committed feeling, declared up front and never diluted.** Name it in the commission

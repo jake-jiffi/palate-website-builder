@@ -135,6 +135,54 @@ fi
 verdict=$(jq -r '(.verdict // "fail")' "$REPORT")
 [ "$verdict" = "pass" ] || fail "Verifier verdict is '$verdict' (not pass). Fix the named gate findings in verify-report.json and re-run the fresh-context palate-verifier."
 
+# --- EVIDENCE 4 (THE BOLD BAR): v1.5 ambition gates, HIGH-INTENSITY-scoped + fail-open ---
+# A high-intensity commission (manifest.commission.intensity == "high") binds the bold bar: the
+# build must WIN a blinded pairwise vs a flagship library exemplar, CLEAR the ambition dock-list
+# (or have every remaining bar-losing gap human-accepted), and have BUILT Explore routes. These
+# bind ONLY for high-intensity builds - a calm build keeps the lighter floor and is NEVER held to
+# them. Each sub-gate is independently fail-open: ABSENT evidence SKIPS with a reminder, it never
+# traps; only an EXPLICIT loss / non-clearance / collapse blocks. Disable with PALATE_GATE_BOLD=0.
+intensity=$(jq -r '(.commission.intensity // "calm")' "$MANIFEST" 2>/dev/null || echo calm)
+iter_count=$(jq -r '((.visual.iterations // []) | length)' "$REPORT" 2>/dev/null || echo 0)
+ITER_CAP="${PALATE_ITER_CAP:-3}"
+case "$ITER_CAP" in ''|*[!0-9]*) ITER_CAP=3 ;; esac   # numeric-only, so a garbage env never errors the [ ] test
+# Item 7 escalation: at/over the cap with the bar unmet, pull the human in instead of looping.
+if [ "${iter_count:-0}" -ge "$ITER_CAP" ]; then
+  escalate="iteration $iter_count >= cap $ITER_CAP with the bar UNMET: ESCALATE to the human now with verify-report.json (the pairwise result + the dock_list) and .palate-shots/ attached; do NOT loop again."
+else
+  escalate="revise the named gap, re-render, and re-verify (cap $ITER_CAP, then escalate)."
+fi
+
+if [ "${PALATE_GATE_BOLD:-1}" = "1" ] && [ "$intensity" = "high" ]; then
+  # (a) blinded pairwise vs a flagship library exemplar (the real ambition test)
+  pw_ran=$(jq -r '(.pairwise.ran // false)' "$REPORT" 2>/dev/null || echo false)
+  if [ "$pw_ran" = "true" ]; then
+    pw_won=$(jq -r '(.pairwise.won // false)' "$REPORT" 2>/dev/null || echo false)
+    pw_against=$(jq -r '(.pairwise.against // "?")' "$REPORT" 2>/dev/null || echo "?")
+    [ "$pw_won" = "true" ] || fail "Bold bar: the build LOST the blinded pairwise vs the flagship exemplar '$pw_against' - it is not the one a designer would deliver to a client. $escalate"
+  else
+    echo "Done gate: high-intensity build but no pairwise comparison ran (.pairwise.ran != true). The bold ambition bar is UNPROVEN - run the blinded pairwise in palate-verifier step 6. (Fail-open: not blocking on its absence.)" >&2
+  fi
+
+  # (b) the ambition dock-list: cleared, or every remaining bar-losing gap is human-accepted
+  amb_clears=$(jq -r 'if .ambition == null then "absent" elif (.ambition.clears == true) then "true" else "false" end' "$REPORT" 2>/dev/null || echo absent)
+  if [ "$amb_clears" = "false" ]; then
+    unaccepted=$(jq -r '[(.ambition.dock_list // [])[] | select((.human_accepted // false) != true)] | length' "$REPORT" 2>/dev/null || echo 0)
+    [ "${unaccepted:-0}" -eq 0 ] || fail "Bold bar: the ambition bar is NOT cleared and $unaccepted dock-list gap(s) are not human-accepted - a judge would still dock this. $escalate"
+  elif [ "$amb_clears" = "absent" ]; then
+    echo "Done gate: high-intensity build but no ambition block in verify-report.json. The bold ambition bar is UNPROVEN. (Fail-open: not blocking on its absence.)" >&2
+  fi
+
+  # (c) built Explore (the surprise engine): a bold brief must not collapse to one concept
+  explore_skip=$(jq -r '(.commission.explore_skip // false)' "$MANIFEST" 2>/dev/null || echo false)
+  if [ "${PALATE_GATE_EXPLORE:-1}" = "1" ] && [ "$explore_skip" != "true" ]; then
+    MIN_VARIANTS="${PALATE_MIN_VARIANTS:-2}"
+    case "$MIN_VARIANTS" in ''|*[!0-9]*) MIN_VARIANTS=2 ;; esac   # numeric-only, so a garbage env can't wrongly block
+    nvar=$(jq -r '((.variants // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
+    [ "${nvar:-0}" -ge "$MIN_VARIANTS" ] || fail "Bold bar: Explore collapsed to concept-level - a high-intensity brief built only ${nvar:-0} variant(s) (need >= $MIN_VARIANTS). Build the distinct routes, or record commission.explore_skip=true with the named-direction reason. $escalate"
+  fi
+fi
+
 # --- EVIDENCE 3 (NOVELTY): Move 1 is wired - gate-novelty.mjs now exists ---------
 # The DIVERGE/CONVERGE spine + scripts/gate-novelty.mjs (Move 1) are live, so novelty
 # is required by DEFAULT (PALATE_GATE_NOVELTY defaults to 1). gate-novelty.mjs is
@@ -157,5 +205,7 @@ elif [ ! -f "$NOVELTY_GATE" ]; then
   novelty_note="novelty=skipped(gate-novelty.mjs not present)"
 fi
 
-echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note."
+bold_note="bold-bar=n/a(calm)"
+if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
+echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, intensity=${intensity:-calm}, $bold_note."
 exit 0

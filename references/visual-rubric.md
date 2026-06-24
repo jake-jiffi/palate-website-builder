@@ -136,6 +136,18 @@ a defect named without a location does not count and the section is not cleared.
    reveals, view transitions), never main-thread or WebGL by default, and the reduced-motion
    / no-JS state is still the static finished state. Name the surface (e.g. `v2-hero mobile`).
 
+10. **Duplication (repeated or near-identical sections / elements)** - the same section, card
+    row, or block appears twice with only trivial copy changes, or a "different" section is
+    structurally a clone of one above it (same layout, same rhythm, same component), so the page
+    pads its length rather than earning it. Name BOTH locations (e.g. `services` and `process`
+    are both the same 3-card icon row). This is a section-by-section read; a downscaled full-page
+    glance misses it, so walk the per-section clips in order.
+11. **Padding / spacing inconsistency** - the vertical rhythm or inner padding jumps band to band
+    with no intent (one section cramped, the next cavernous), gutters or card padding differ
+    across a row that should match, or an element hugs an edge where its siblings have breathing
+    room. Name the section and the neighbour it disagrees with. (This is the located, name-and-fix
+    form of an Execution miss; a single inconsistency is Cosmetic, a pattern of them is a defect.)
+
 A non-zero `console_errors` count in `.palate-shots/errors.json` is an automatic
 `visual: fail` regardless of the axis scores - a thrown build cannot pass.
 
@@ -188,9 +200,23 @@ contract and the restraint clause.
   `references/motion-and-3d.md`), and it **honours `prefers-reduced-motion`** (each
   Tier-1 / Tier-2 mechanism has its JS guard + static poster; the reduced-motion state
   is the finished state).
-- **The ambition bar.** "Competent" is a fail. A clean-but-generic render that would
-  not place in its category on Awwwards / FWA does not clear the bar even with no
-  defect found; name what keeps it competent and what would lift it.
+- **The ambition bar (emitted as structured evidence).** "Competent" is a fail. A
+  clean-but-generic render that would not place in its category on Awwwards / FWA does not
+  clear the bar even with no defect found. The verifier emits an `ambition` block
+  (`{ clears, register, dock_list:[{ gap, severity, what_would_lift_it, human_accepted }] }`)
+  in `verify-report.json`; the `dock_list` is the BAR-LOSING gaps only (not every nit). For a
+  HIGH-INTENSITY build (`manifest.commission.intensity == "high"`) `clears` is the
+  pairwise verdict below, not a self-granted adjective.
+- **The pairwise gate (HIGH-INTENSITY only).** The build is compared against a flagship-tier,
+  same-vertical / same-register library exemplar (`refs_get_screenshot { slug }`) on the question
+  "which would a senior designer be more likely to deliver to a paying client?", with the order
+  SWAPPED to kill position bias (the swap, not blinding, is the control); it must WIN (or clearly
+  tie a flagship) to clear the ambition axis. Recorded as `pairwise: { ran, won, against, consistent, question, evidence }`. This is
+  the UI-Bench method (pairwise-vs-reference beats a noisy absolute self-score). A loss is
+  `commission: fail`. (`agents/palate-verifier.md` step 6.)
+- **Built Explore (HIGH-INTENSITY only).** A bold brief must record BUILT Explore routes
+  (`manifest.variants` non-empty); `variants: []` on a high-intensity build is `commission: fail`
+  (Explore collapsed to concept-level). Recorded as `explore: { built_routes }`.
 - **The restraint clause (part of the judgement, not a motion count).** Maximal motion
   is not the bar; fit is. A janky WebGL hero fails; flawless restraint matched to an
   anxious brand can win. Judge intensity against the commission's stated brand fit, not
@@ -200,9 +226,12 @@ contract and the restraint clause.
   `manifest.buildability`); a claimed mechanism that is absent, thrown, janky, or
   missing its reduced-motion fallback is a fail with the section named.
 
-This check is **fail-open**: if no commission was recorded or the build cannot be
-served / shot, it is skipped gracefully (`commission: skip`) - doctrine + recorded
-evidence, never a hard trap.
+This check is **fail-open AND intensity-scoped**: if no commission was recorded or the build
+cannot be served / shot, it is skipped gracefully (`commission: skip`). The pairwise +
+built-Explore gates bind ONLY when `manifest.commission.intensity == "high"`; a calm build keeps
+the lighter floor (axes >=4, no defects) and those gates do not run. A high-intensity pairwise
+that cannot run (no MCP / no matched exemplar) records `pairwise: { ran: false }` and falls back
+to the dock_list judgement - never a hard trap.
 
 ## Loop guardrails (the anti-rubber-stamp rules)
 
@@ -221,7 +250,9 @@ The loop is the discipline. Follow these verbatim:
   defect checklist section by section.
 - **Cap at 2-3 iterations, then escalate** to the human with the manifest, the gate
   output, and the screenshots attached. Do not loop forever; do not lower the bar to
-  pass.
+  pass. (`scripts/gate-done.sh` now ENFORCES this: at `PALATE_ITER_CAP` iterations, default 3,
+  with the bar still unmet it returns an ESCALATE verdict with the evidence attached, rather than
+  letting the loop run on or silently accepting a sub-bar pass.)
 
 ## What the verifier records
 
@@ -244,5 +275,13 @@ done-gate reads computed evidence, not narration):
     "iterations": [ { "i": 1, "axes": { "philosophy": 4, "hierarchy": 4, "execution": 4, "specificity": 4, "restraint": 4, "variety": 4 },
       "defects": [ { "type": "overflow", "location": "v1-hero mobile" } ], "score": 24,
       "shots": { "desktop_full": ".palate-shots/desktop-full.png", "mobile_full": ".palate-shots/mobile-full.png" } } ] },
+  "ambition": { "clears": true, "register": "awwwards", "dock_list": [ { "gap": "3D credible not jaw-dropping", "severity": "med", "what_would_lift_it": "per-vertex displacement", "human_accepted": false } ] },
+  "pairwise": { "ran": true, "won": true, "against": "gymbox", "consistent": true, "question": "deliver-to-client", "evidence": "..." },
+  "explore": { "built_routes": 3 },
   "shots_dir": ".palate-shots" }
 ```
+
+The `ambition`, `pairwise` and `explore` blocks are written ONLY for HIGH-INTENSITY builds
+(`manifest.commission.intensity == "high"`); calm builds omit them and the done gate does not
+require them. All three are optional and backward-compatible (an older report without them is
+read as `null` and the bold gates fail-open).

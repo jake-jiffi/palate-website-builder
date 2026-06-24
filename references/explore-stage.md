@@ -81,11 +81,20 @@ defaults:
 | Brief shape | Explore? |
 |-------------|---------:|
 | New site or landing page (preview or production) | YES (default) |
+| HIGH-INTENSITY commission (`intensity: high`) | YES - mandatory, BUILT routes (cannot skip) |
 | "Build it like the {client} site we did last week" / direction already set | NO |
 | `--skip-explore` in the brief | NO |
 | Editing an existing scaffolded project (add a section, fix copy) | NO |
 
 If you skip Explore, jump straight to Phase A as before.
+
+**A high-intensity commission cannot skip Explore.** When `manifest.commission.intensity == "high"`
+the bold mandate requires BUILT routes (8-10 distinct directions, not a concept-level
+convergence): collapsing Explore to one concept is the documented cause of Variety-flat bold
+builds, so `scripts/gate-done.sh` fails a high-intensity build with `variants: []`. The
+named-direction / `--skip-explore` escape applies ONLY when the user explicitly asked for one
+direction; in that case record `commission.explore_skip = true` with the reason so the gate
+honours it. Calm / conversion / tiny-edit briefs are unaffected.
 
 ## Variant scope - home page + design system
 
