@@ -19,6 +19,13 @@
  *
  * It lives beside capture.mjs so it reuses the same installed Playwright + Chromium.
  *
+ * With --out set it also writes an ordered scroll-through FILMSTRIP for the home route at
+ * mobile + desktop (<out>/filmstrip/<vp>-NN.png, viewport frames evenly spaced across the
+ * scroll, captured from the SAME wheel-scroll pass - no second run). The verifier reads these
+ * IN ORDER to judge motion choreography (purposeful vs absent / janky / gratuitous; restraint
+ * counts) - the build-side analogue of the library's motionJudge, so the motion verdict rests
+ * on the actual scroll, not a single still.
+ *
  * Usage:
  *   node verify-rendered.mjs --url <base> [--routes /,/contact,/blog] [--out <dir>]
  *
@@ -144,7 +151,16 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
     // Bug-class (b): a REAL wheel scroll down the page (JS on, motion on), then settle,
     // so reveal animations actually fire on the DEFAULT path - reduced-motion / scrollTo
     // both MASK a reveal stuck at opacity:0 (references/rendered-bug-classes.md).
-    await realWheelScroll(page);
+    // On the home route at mobile + desktop, capture an ordered scroll-through filmstrip
+    // from this SAME pass (no second run) so the verifier can judge motion CHOREOGRAPHY in
+    // order, not from a single still (the motionJudge gap; see the header).
+    let filmstrip = null;
+    if (outDir && route === '/' && (vpName === 'mobile' || vpName === 'desktop')) {
+      const fdir = outDir + '/filmstrip';
+      mkdirSync(fdir, { recursive: true });
+      filmstrip = { dir: fdir, prefix: vpName, max: 6 };
+    }
+    await realWheelScroll(page, filmstrip);
     await page.evaluate(() => new Promise((r) => setTimeout(r, 350)));
 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -373,17 +389,39 @@ await browser.close();
 // ------------------------------------------------------------- helpers -----
 // A REAL wheel scroll to the bottom of the page (NOT scrollTo): this is what fires
 // scroll-reveal / ScrollTrigger on the default motion path. scrollTo and reduced-motion
-// both bypass the very code path the reveal bug lives in.
-async function realWheelScroll(page) {
+// both bypass the very code path the reveal bug lives in. When `capture` is set it also
+// shoots an ordered viewport filmstrip across the scroll (up to capture.max frames, evenly
+// spaced and including the top), so the SAME pass yields the motion-choreography evidence.
+async function realWheelScroll(page, capture = null) {
   try {
     const total = await page.evaluate(() => document.body.scrollHeight);
     const vh = await page.evaluate(() => window.innerHeight);
     const steps = Math.max(4, Math.ceil(total / Math.max(200, vh * 0.7)));
+    const stops = capture ? frameStops(steps, capture.max) : null; // scroll positions 0..steps to shoot
+    let fi = 0;
+    if (stops && stops.has(0)) await snapFrame(page, capture, fi++); // the top, before any scroll
     for (let i = 0; i < steps; i++) {
       await page.mouse.wheel(0, Math.max(200, vh * 0.7));
       await page.evaluate(() => new Promise((r) => setTimeout(r, 80)));
+      if (stops && stops.has(i + 1)) await snapFrame(page, capture, fi++);
     }
   } catch { /* a page with no scroll is fine */ }
+}
+
+// Up to `max` evenly-spaced scroll positions in [0, steps] (inclusive of the top), so a
+// long page is sampled across its whole descent and a short one just gets fewer distinct
+// frames. Returns a Set of position indices.
+function frameStops(steps, max) {
+  const n = Math.min(max, steps + 1);
+  const set = new Set();
+  for (let i = 0; i < n; i++) set.add(Math.round((i * steps) / Math.max(1, n - 1)));
+  return set;
+}
+// One ordered viewport frame (<prefix>-00.png, -01.png, ...). Viewport, NOT full-page: a
+// filmstrip is what is ON SCREEN as you scroll, so the judge reads the choreography in order.
+async function snapFrame(page, cap, i) {
+  try { await page.screenshot({ path: `${cap.dir}/${cap.prefix}-${String(i).padStart(2, '0')}.png` }); }
+  catch { /* a dropped frame is not fatal */ }
 }
 
 // --------------------------------------------------------------- report ----

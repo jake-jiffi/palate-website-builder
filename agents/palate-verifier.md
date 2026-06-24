@@ -83,7 +83,8 @@ if absent). It tells you whether a brand was PROVIDED:
       - the FIXED rubric and the fixed defect checklist (overflow, overlap, contrast,
       missing OR fabricated imagery, mobile hero legibility, default / genre-cliche accent
       in the render, static-defensive mobile (a motionless 390 on a brand that warranted
-      motion, fit-governed - defect 9), and the decorative tell shapes). **From the RENDER,
+      motion, fit-governed - defect 9; the MOTION half of defect 9 is judged from the ordered
+      390 filmstrip in step 7, not this single still), and the decorative tell shapes). **From the RENDER,
       hunt the three
       self-tell defects and FAIL the build:** (i) a pill / badge / eyebrow label above the
       hero heading (on the hero it must not appear at all) - FAIL in BOTH modes; (ii) a
@@ -123,7 +124,7 @@ if absent). It tells you whether a brand was PROVIDED:
      (zero console errors in `.palate-shots/errors.json`), the page is
      **mobile-friendly** in the full sense (the 390 shot clears the defect checklist, no
      overflow / no mobile-hero illegibility, AND on a brand that warrants motion the 390
-     render shows designed, compositor-cheap mobile motion, not merely the absence of
+     render shows designed, compositor-cheap mobile motion JUDGED FROM THE ORDERED 390 FILMSTRIP (step 7), not merely the absence of
      breakage - a motionless phone on a brand that wanted motion is defect 9,
      static-defensive mobile, `references/visual-rubric.md`), it **holds ~60fps** (no jank signal: one RAF loop,
      `client:visible` islands, the LCP is static not a canvas - cross-ref the motion
@@ -153,7 +154,7 @@ if absent). It tells you whether a brand was PROVIDED:
 7. **The rendered bug-class gate** (the BOLD-build defects that a still and the code
    cannot catch - `references/rendered-bug-classes.md`). Serve the build (reuse the
    `serve-preview.sh` URL from step 5) and run:
-   `bash scripts/verify-rendered.sh $SERVE_URL --routes /,<other key routes>`
+   `bash scripts/verify-rendered.sh $SERVE_URL --routes /,<other key routes> --out .palate-shots`
    It loads the site at 390 / 834 / 1440 in a real browser AND tests the paths a
    reduced-motion / `scrollTo` screenshot pass MASKS: a REAL `mouse.wheel` scroll with
    JS ON and motion ON, and a JS-OFF pass. Exit 1 = a High finding; exit 3 = browser
@@ -174,6 +175,22 @@ if absent). It tells you whether a brand was PROVIDED:
    placard creep** are caught by `ux-lint.sh` in step 3 - `kinetic-heading-char-split`,
    `hero-status-pill`, `ai-tell-tracked-eyebrow` - and by the render-side defects in
    step 5.) A High finding here is a `visual: fail` with the named class and route.
+
+   **Then judge the motion IN ORDER (the build-side `motionJudge`).** With `--out .palate-shots`
+   the gate also wrote an ordered scroll-through filmstrip for the home route at both widths
+   (`.palate-shots/filmstrip/desktop-NN.png` and `.palate-shots/filmstrip/mobile-NN.png` -
+   viewport frames evenly spaced across the descent, captured from the SAME wheel-scroll pass).
+   `Read` each set **in order** and judge the scroll choreography the way the library's
+   `motionJudge` does: is the motion purposeful and well-executed (reveals, parallax,
+   transitions, easing, pacing), or absent / janky / gratuitous? **RESTRAINT counts** - a calm
+   brand can score well with little motion; reward motion that elevates craft, penalise
+   motion-as-decoration. This is a judgement, not a motion count. Feed the verdict into the
+   visual motion read (step 5) and the commission proof-contract (step 6): the **mobile (390)
+   filmstrip is the evidence for defect 9 (static-defensive mobile)** - a flat phone on a brand
+   that warranted motion fails on the motion seen ACROSS the frames, not on a single still. If
+   the filmstrip is absent (gate blocked, or the page had no scroll), judge motion from the
+   stills as before and say so. (This closes the asymmetry with the library, which judges every
+   reference on an ordered motion filmstrip; the build was judged on stills + bug-class asserts.)
 
 8. **Structural verifier** (it is a real Astro build, not a mockup):
    `bash scripts/verify-is-real-astro.sh` where applicable.

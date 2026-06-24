@@ -16,6 +16,9 @@
 #   (f) heavy WebGL degrades on mobile - no above-the-fold <canvas> at 390.
 # (Bug-classes (d) mid-word heading and (e) eyebrow creep are caught by ux-lint.sh.)
 #
+# With --out set it also writes an ordered scroll-through filmstrip for the home route at
+# mobile + desktop (<out>/filmstrip/<vp>-NN.png) for the verifier's motion-choreography read.
+#
 # Usage:
 #   scripts/verify-rendered.sh <base-url> [--routes /,/contact,/blog] [--out <dir>]
 #
