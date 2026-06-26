@@ -163,6 +163,18 @@ and morphs into the detail page" decomposes to `shader-surface` (Tier-2 Recipe 2
 shared-element View Transition (Recipe 6) and `kinetic-type` (Recipe 7). The recipes
 live in `references/motion-and-3d.md`.
 
+**Interactive primitives are a SEPARATE mechanic class - resolve them to the behaviour
+layer, never rebuild the a11y from scratch.** When a decomposed mechanic is an
+interactive widget (a dialog / modal, combobox, listbox, menu, tabs, accordion,
+carousel, tooltip, toggle), its hard part is the invisible plumbing (keyboard, focus
+management, ARIA, async states), which is exactly what hand-built AI output gets wrong.
+Resolve it to `references/interactive-primitives.md` (the vetted, unstyled Zag.js
+behaviour layer: reuse the brain, re-skin every pixel in the brand's tokens), not to a
+from-scratch rebuild and not to a motion recipe. The donor still supplies the LOOK (pull
+its `component_prompts` + `do_dont`); the behaviour layer supplies the correct,
+audited interaction. Record the primitive in the build plan as
+`mechanic -> interactive-primitives.md (Zag <name>) -> donor skin`.
+
 **Step 2 - for EACH mechanic, find the closest precedent (the oracle loop).**
 Prefer the exact facet path (it returns a `coverage` signal); fall back to semantic
 where no facet exists:

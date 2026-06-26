@@ -88,6 +88,26 @@ inputs carry the right `type` / `inputmode` / `autocomplete`.
 No motion that violates `prefers-reduced-motion`. Headings descend in order
 without skipping levels.
 
+**Interaction states + interruptibility** (the invisible layer AI output omits).
+Every interactive element designs its full state set, not just its resting look:
+hover (the `>= 8%` lightness floor), a visible **pressed / `:active`** state so a tap
+does not feel dead, and a **disabled** state at the 40% floor where one applies. The
+focus ring is keyboard-only, style it on `:focus-visible`, not `:focus`, so a mouse
+click does not paint a ring. Everything is operable by keyboard in a sane tab order
+with no keyboard trap: a modal moves focus in on open, keeps Tab inside while open,
+closes on `Escape`, and returns focus to the trigger on close; a positive `tabindex`
+is a finding (`positive-tabindex` in `references/anti-patterns.md`). Animations are
+interruptible, a user input cancels or reverses an in-flight transition instead of
+queueing behind it (never `transition: all`), and they still honour
+`prefers-reduced-motion`. Governed by fit: a static page with no controls does not
+invent states it has nothing to attach them to.
+
+An interactive widget (dialog, combobox, menu, tabs, accordion, carousel, tooltip) is
+either backed by the vetted behaviour layer (`references/interactive-primitives.md`,
+which makes the keyboard / focus / ARIA correct by construction) OR it passes this full
+keyboard + focus + ARIA audit on its own. A hand-rolled widget that does neither, the
+default for AI output, is the finding: name it and route it to the behaviour layer.
+
 ### 10. Copy quality
 
 Body copy is specific (passes the Conceptual Grounding Test from

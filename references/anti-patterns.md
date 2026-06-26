@@ -604,6 +604,13 @@ framing, therapy-mode openers and the exact stock pricing / free-tier phrases
 - Pattern: `disabled:opacity-50\b`
 - Fix: Match the disabled-state floor in `references/brand/perceptual-floors.md`: use `disabled:opacity-40`, not 50, so disabled reads as disabled rather than as a loading state.
 
+### Rule: positive-tabindex
+- Severity: High
+- Mode: always
+- Files: *.astro,*.tsx,*.html
+- Pattern: `(?i)(?<![-\w])tabindex\s*=\s*["'{]?\s*[1-9]`
+- Fix: A positive `tabindex` (1 or higher) hijacks the keyboard tab order and breaks navigation (Vercel web-interface-guidelines "Keyboard works everywhere"; WCAG 2.4.3 Focus Order). Use `tabindex="0"` to put an element in the natural DOM tab order, or `tabindex="-1"` to make it focusable only programmatically; never a positive value.
+
 ---
 
 ## Anti-stock-shape rules (anti-slop-ui-derived)

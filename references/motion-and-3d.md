@@ -204,6 +204,126 @@ when it does not.
 
 ---
 
+## Mid-tier interaction textures (the recurring award-site mechanics)
+
+The 2026 award shelf is carried less by one 3D hero than by a vocabulary of mid-tier
+"texture" interactions that recur across the winners. These are the recipe FLOOR for that
+vocabulary: reach for them when the commission calls for texture, pull the live exemplar
+from the MCP (`refs_search { query: "<mechanic>" }`) where the library has one, and fall
+back to the recipe here when it fails closed. Each is a re-skinnable MECHANISM, not a look,
+and each carries the thing the copy-paste libraries (React Bits, Aceternity) do not give:
+the cliche line plus the a11y / perf gate. Most collapse onto two engines already in the
+template's reach (GSAP, now 100% free since the Webflow acquisition, and the Three.js /
+Codrops EffectShell pattern).
+
+**The law for this whole tier: one signature moment, not twenty** (Utsubo). If a page
+reaches for three of these at once it reads as a demo reel, not a brand. Pick the one that
+carries the concept and cut the rest. Each recipe MUST keep its cliche + a11y + perf line,
+or the corpus becomes a slop generator.
+
+### Recipe 9 - split-text reveal
+- **Engine / precedent:** GSAP SplitText (now free) + ScrollTrigger, or a zero-JS CSS
+  `animation-timeline` stagger. Live exemplar: `refs_search { query: "split text reveal" }`.
+- **Re-skin:** the unit (word / line / char), the stagger curve + overlap, the mask
+  (clip-path / translate / blur), the easing token.
+- **Cliche when:** every heading on the page char-staggers with the default ~0.05s step
+  and no masking. One hero reveal earns it; a page of them is slop.
+- **A11y + perf:** split into `words,chars` so a heading never breaks mid-word
+  (`kinetic-heading-char-split`); gate the whole thing on `prefers-reduced-motion` (the set
+  text is its own finished state); animate `transform` / `clip-path`, never `font-weight`.
+
+### Recipe 10 - text-scramble / decode
+- **Engine / precedent:** a small rAF loop swapping glyphs toward the target string (no
+  library needed); GSAP for the timing. Exemplar: `refs_search { query: "text scramble decode" }`.
+- **Re-skin:** the glyph set (mono symbols vs the brand's own alphabet), settle duration,
+  per-character delay, whether it fires on load, on scroll-in, or on hover.
+- **Cliche when:** the matrix-green mono "hacker" decode used as decoration on a brand that
+  is not technical. It must mean something (a reveal of the one true word), not garnish.
+- **A11y + perf:** the final string is in the DOM as real text from first paint (the scramble
+  is a visual overlay), so it is readable to a screen reader and with JS off; skip the loop
+  entirely under `prefers-reduced-motion`.
+
+### Recipe 11 - magnetic / custom cursor
+- **Engine / precedent:** pointer-move - a `ref` lerped in the animation frame (never React
+  state per move, `useState-for-mouse-coords`). Exemplar: `refs_search { query: "magnetic cursor" }`.
+- **Re-skin:** the follower (dot / ring / blob / inverted-difference), the magnet radius +
+  pull strength on interactive targets, the lag.
+- **Cliche when:** a big lagging blob on every page with no purpose; it is the loudest
+  "creative-studio template" tell when it is the only idea.
+- **A11y + perf:** NEVER replace the real cursor (Eric Bailey: a custom CSS cursor overrides
+  the OS cursor a low-vision user has enlarged / high-contrasted, and can make it vanish) -
+  augment, keep the native cursor visible, and disable the follower under
+  `prefers-reduced-motion`, on touch (`pointer:coarse`) and for keyboard users. It is decoration,
+  never the only affordance.
+
+### Recipe 12 - image distortion + image-trail
+- **Engine / precedent:** the Three.js / Codrops EffectShell pattern - a displacement /
+  RGB-shift shader on a textured plane, driven by pointer velocity. Exemplar:
+  `refs_search { query: "image distortion hover" }` / `{ query: "image trail" }`.
+- **Re-skin:** the displacement map + amplitude, the trail length / decay, whether it fires
+  on hover (distortion) or on move (trail).
+- **Cliche when:** the stock Codrops liquid-hover on a gallery that did not need it; lifted
+  one-to-one from the tutorial with the demo's own displacement texture.
+- **A11y + perf:** one WebGL context, `dpr` capped at 2, pause off-screen; a static `<img>`
+  is the LCP and the no-JS / reduced-motion state; the canvas is `display:none` under
+  `prefers-reduced-motion`.
+
+### Recipe 13 - draggable + inertia slider
+- **Engine / precedent:** GSAP Draggable + InertiaPlugin (both now free), or a CSS
+  scroll-snap track for the zero-JS version. Exemplar: `refs_search { query: "draggable inertia slider" }`.
+- **Re-skin:** the throw resistance + snap, the card overhang, the progress indicator, whether
+  the wheel / trackpad also drives it.
+- **Cliche when:** a horizontal drag-gallery used because it looks expensive, hiding content
+  that wanted a plain grid. Drag is for browsing, not for burying.
+- **A11y + perf:** it is ALSO operable without dragging - keyboard arrows move between items,
+  focus follows, and there are visible prev / next controls; respect `prefers-reduced-motion`
+  for the inertia easing; never trap the page scroll.
+
+### Recipe 14 - FLIP layout animation
+- **Engine / precedent:** GSAP Flip (free), or the View Transitions recipe (Recipe 6) for the
+  cross-document case. Exemplar: `refs_search { query: "FLIP layout transition" }`.
+- **Re-skin:** what morphs (a filtered grid reflow, a thumbnail growing into a detail hero),
+  the duration band (150-300ms per the motion floor), the easing.
+- **Cliche when:** everything animates its position on every state change, so the page never
+  settles. FLIP is for one meaningful continuity, not for constant motion.
+- **A11y + perf:** measure-then-animate `transform` only (the whole point of FLIP is no layout
+  thrash); honour `prefers-reduced-motion` with an instant cut; keep focus on the moved element.
+
+### Recipe 15 - infinite marquee (+ scroll-velocity skew)
+- **Engine / precedent:** a CSS-only translate loop for the base marquee; GSAP + ScrollTrigger
+  `velocity` to skew / speed it with scroll. Exemplar: `refs_search { query: "marquee scroll velocity" }`.
+- **Re-skin:** the content (logos / words / images), speed, direction, the skew amount mapped
+  from scroll velocity, the edge fade.
+- **Cliche when:** the "trusted by" logo marquee on autopilot, or a tracked-caps word-marquee
+  used as filler chrome. It must carry real content, not pad the page.
+- **A11y + perf:** duplicate content is `aria-hidden` so a screen reader hears the string once;
+  pause on hover / focus and under `prefers-reduced-motion`; transform-only, compositor thread.
+
+### Recipe 16 - scroll-driven SVG path-draw
+- **Engine / precedent:** CSS `animation-timeline: view()` on `stroke-dashoffset` (zero-JS),
+  or GSAP DrawSVG (free) for finer control. Exemplar: `refs_search { query: "svg path draw on scroll" }`.
+- **Re-skin:** the path (a route, a signature, a diagram, an underline), draw speed mapped to
+  scroll range, stroke weight + cap, whether fill follows.
+- **Cliche when:** a generic squiggle drawing itself next to every heading. The line should be
+  the concept (a journey, a connection), not decoration.
+- **A11y + perf:** the SVG has a `<title>` / is `aria-hidden` if purely decorative; the fully
+  drawn state is the no-JS / reduced-motion state (dashoffset 0); transform / stroke only.
+
+### Recipe 17 - page-transition vocabulary (overlay / wipe / morph)
+- **Engine / precedent:** Astro View Transitions (Recipe 6) for the shared-element morph;
+  a GSAP overlay timeline on `astro:before-swap` for an overlay / wipe. Distinct from the
+  bare View Transitions API. Exemplar: `refs_search { query: "page transition overlay wipe" }`.
+- **Re-skin:** the device (a colour wipe, a masked overlay, a shared-element morph), duration
+  (150-300ms), easing, and whether one element persists across the swap.
+- **Cliche when:** a full-screen black overlay on every navigation that just adds latency, or a
+  morph applied where a plain cut would be faster and calmer.
+- **A11y + perf:** keep it under ~300ms so it never blocks interaction; Astro disables View
+  Transitions under `prefers-reduced-motion` automatically, and a hand-built overlay must do the
+  same; move focus to the new page's `<h1>` / main on swap so keyboard + screen-reader users
+  are not stranded.
+
+---
+
 ## The performance + prefers-reduced-motion budget
 
 Ship and enforce this so ambition stays ~60fps and accessible. The full budget also

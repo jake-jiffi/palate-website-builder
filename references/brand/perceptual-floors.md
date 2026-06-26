@@ -24,6 +24,7 @@ Defaults tables, in our own voice and tuned for marketing sites.
 |----------|-------|-----------|
 | Disabled-state opacity | 40% (not 50%) | APCA contrast research; Material 3 disabled state token. Pure 50% reads as "active but dim" and breaks affordance. |
 | Hover delta (lightness) | >= 8% perceived shift | NNGroup hover discoverability research. Smaller deltas read as no change. |
+| Pressed (`:active`) state | A visible change on press: Material 3 pressed state-layer (~12%), or a transform / colour shift | Material 3 state layers. Without a pressed state a tap feels dead, especially on touch where there is no hover. |
 | Focus ring | Min 2px, contrast >= 3:1 against both backgrounds | WCAG 2.4.7 visible focus + 1.4.11 non-text contrast. |
 | Tap-target size | Min 44 x 44 px | Apple HIG; WCAG 2.5.5 (AAA, but the floor for marketing sites that hand over to clients). |
 

@@ -170,6 +170,16 @@ deliberate, grounded choice, not a hope.
   the reduced-motion state. The full performance + reduced-motion budget lives in
   that file and in `templates/astro-project/MOTION_BUDGET.md`.
 
+- **Interactive primitives resolve to the behaviour layer, not a motion recipe.** A
+  dialog / modal, combobox, listbox, menu, tabs, accordion, carousel, tooltip or
+  toggle is a behaviour problem (keyboard, focus, ARIA, async states), not a motion
+  one. Resolve it to `references/interactive-primitives.md` (the vetted, unstyled
+  Zag.js behaviour layer: reuse the brain, re-skin every pixel in the brand's tokens)
+  rather than hand-rolling the a11y. The donor still supplies the LOOK via its
+  `component_prompts` + `do_dont`; the behaviour layer supplies the correct, audited
+  interaction. It is opt-in like Tier 2 (install `@zag-js/<name>` + `@zag-js/vanilla`
+  per build, never in the default deps).
+
 - **The buildability of each chosen mechanism is grounded by the oracle in
   `references/reference-library-usage.md`.** That is the "Buildability" line of the
   commission in practice: decompose the concept into named mechanics, then per
