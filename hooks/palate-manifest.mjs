@@ -80,6 +80,11 @@ function blank() {
     // blocks a build (fail-open, no hard trap).
     commission: null, // { bar, concept, vision, chosen_mechanisms:[{ name, recipe, precedent_slug, astro_recipe_pulled:bool, fit_reason }], proof:{ viewports:["1440","390"], read_pixels:bool, read_console:bool, mobile_friendly:bool, holds_60fps:bool, honours_reduced_motion:bool }, restraint_note }
     variants: [], // [{ id, route, name, concept_id, donor_slugs:[], html_path }]
+    // EXPLORE labels (W1, gap6 item 3): every variant SHOWN in Explore (not just the
+    // pick) + the accept/edit signal, with the surface context propensity correction
+    // needs. Agent-set DESCRIPTIVE block (like variants[]); persisted to builds.log.json
+    // by palate-stop.mjs. Nullable + additive: absence never blocks (calm/edit builds).
+    explore: null, // { ran, shown:[{ id, name, donor_slug, hero_pattern, position, intensity_tier }], picks:[{ surface, variant_id }], edits:[{ surface, variant_id, note }] }
     visual: null, // { ran, pass, iterations:[{i, shots:{desktop_full,mobile_full,sections:{}}, axes:{philosophy..variety}, defects:[{type,location}], score}], console_errors:int }
     novelty: null, // { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
     verifier: null, // { ran, pass, verdict, report_path }
@@ -143,6 +148,9 @@ function main() {
   // manifest written before it existed, via the same null-default guard. This keeps
   // every older manifest readable without a schema bump or a hard trap.
   if (!("commission" in m)) m.commission = null;
+  // explore is the additive W1 block; backfill it on an older schema-3 manifest the
+  // same way, so a build that started before this field exists stays readable.
+  if (!("explore" in m)) m.explore = null;
 
   if (tool.startsWith("mcp__palate__")) {
     const slugs = new Set();

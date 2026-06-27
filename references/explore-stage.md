@@ -22,7 +22,11 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    is a real `.astro` page composed of section components, with section labels
    visible in Explore mode. The bottom-right `<ExploreSwitcher />` picker lists
    them by id + name (give each variant an evocative `name` in
-   `src/lib/variants.ts`).
+   `src/lib/variants.ts`). As each variant is registered, also record it in
+   `build-manifest.json` under `explore.shown`
+   (`{ id, name, donor_slug, hero_pattern, position }`) so every direction SHOWN
+   is captured for the taste flywheel, not just the one picked
+   (`references/build-memory.md`).
    Before generating each variant, state a **Design Read** out loud (see
    `references/critique-discipline.md`): "Reading this as: a {page kind} for
    {audience}, with a {vibe} language, leaning toward {design direction}." A
@@ -40,6 +44,11 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    what they want; mix-and-match is the default ("v3 hero, v7 features, v5
    CTA"), whole-variant or by-name shortcuts are fine ("go with Deep Trawl").
    (`--local-preview` swaps this for a local dev-server link.)
+   Record the pick in `build-manifest.json`: set `explore.ran: true` and
+   `explore.picks` (`{ surface, variant_id }` per chosen section, e.g.
+   `{ surface: "hero", variant_id: "v3" }`), plus `explore.edits` for any later
+   tweak to a picked section. The non-picked variants for each surface are the
+   rejects (`shown` minus `picks`), so they are not listed again.
 4. **Compose** - Claude builds the canonical pages (`src/pages/index.astro`,
    etc.) from the picked sections, adopting the design tokens of the variant
    that set the dominant tone (usually whichever supplied the hero). First
@@ -57,10 +66,11 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    to 5 each; revise if any axis is below 3); apply the **Conceptual Grounding
    Test** to every section - delete anything that cannot finish "This exists
    because {a specific reason}". Variant routes move to `_explore-archive/`
-   (gitignored) or are removed. Append a new entry to
-   `~/.config/palate/builds.log.json` (macrostructure, mode, hero pattern,
-   dominant tokens, explore picks) so the next Palate build diversifies away
-   from this one.
+   (gitignored) or are removed. The Stop hook appends this build to
+   `~/.config/palate/builds.log.json` automatically from the manifest once the
+   build passes its gates, carrying the `explore` labels recorded above
+   (`references/build-memory.md`), so the next Palate build diversifies away
+   from this one. Ensure `explore.picks` is set before finishing.
 5. **Pause - confirm** - re-deploy the shareable Vercel preview without
    `--explore` (`scripts/deploy-preview.sh <project-dir> <slug>`, picker off) so
    the client reviews the composed direction on a clean shareable link and
