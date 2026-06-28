@@ -269,7 +269,17 @@ The mechanic when the client says "v3 hero + v7 features + v5 cta":
    is ambiguous. Token overrides live in `src/styles/globals.css` (or the
    brand-package overrides layer) - keep them inside the brand's range.
 4. Build the rest of the site's pages (`about`, `services`, etc.) in the same
-   direction. They get the chosen tokens automatically via the brand layer.
+   direction, ONE PER PAGE in `manifest.architecture` (W16). They get the chosen tokens
+   automatically via the brand layer.
+   **Ground EVERY inner page in a page-type-matched donor (gap4 W18), not just the
+   conversion ones.** For each archetype page (about, work, case-study, team, process,
+   pricing, contact, ...), pull the best donor PAGES OF THAT TYPE via
+   `refs_search { pageType:"about" }` (W17 ranks pages-as-units by craft), VIEW the
+   matched inner-page screenshot (`refs_get_screenshot { slug, page }`), and re-skin its
+   composition for this brand. An about page built from memory regresses to a generic
+   "team + mission + values" template; an about page built from how the best about pages
+   are made does not. Record the page-type-matched donor on the page in
+   `manifest.architecture.pages[].donor_slug`.
    For every conversion section (pricing, booking, menu, services, contact) and
    every conversion-critical inner page, run the **section-build recipe**
    (`reference-library-usage.md`): facet-search 2-3 donors for THAT section, view
