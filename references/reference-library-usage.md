@@ -21,7 +21,7 @@ The tool-chain, in the order a build uses it:
 1. **`refs_match_brief { brief }`** - seed the build. Returns the dominant
    `style` / `mode` / `cluster`, three anchor references, and a playbook
    extract. Always start here.
-2. **`refs_search { vertical?, subtype?, style?, mode?, tier?, cluster?,
+2. **`refs_search { vertical?, subtype?, style?, mode?, tier?, craftBand?, cluster?,
    canvasFamily?, accentCount?, serifPresent?, hasWebgl?, register?, device?,
    intensity?, pageType?, uxPattern?, uiElement?, conversionPrimitive?, query?,
    limit, page, format, responseFormat }`** - faceted + natural-language
@@ -29,7 +29,10 @@ The tool-chain, in the order a build uses it:
    a creative studio, a type voice from a fashion house) AND, now, donors by what
    is literally on the page: `pageType` (pricing, menu, booking, contact, faq),
    `uxPattern`, `uiElement`, `conversionPrimitive` (bookable, order-online,
-   service-area, reviews-integration). `format:"detailed"` adds tokens, sections
+   service-area, reviews-integration). (`craftBand` (strong/solid/commodity, for judge
+   anchoring) and the `refs_get` `layer:"copy_voice"` (the voice fingerprint + headline
+   pattern) are FORTHCOMING on the MCP; recipes that use them fail-open if the deployed
+   server predates them.) `format:"detailed"` adds tokens, sections
    and borrow guidance; `responseFormat:"md"` returns a token-lean list; `page`
    paginates the faceted path.
    **Exploit hybrid retrieval:** search is now hybrid (dense meaning + lexical

@@ -30,7 +30,9 @@ A returning client's brand should be inherited, not re-detected. The published
 `{slug}-brand` package already carries the tokens, but the approved MOTION-INTENSITY
 BAND and VOICE used to be re-derived every build, and the redesign/captured path
 re-extracted from the live site every build. The record fixes both. It lives at
-`brand-record.json` in the brand repo (per-client, per-tenant, never pooled):
+`brand-record.json` in the brand repo (per-client, per-tenant, never pooled; for a
+`vendored` brand with no brand repo it lives alongside `.palate-skill-state.json` in the
+project root):
 
 ```json
 {

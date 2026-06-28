@@ -96,8 +96,10 @@ never held to the bold bar.
       `refs_search { vertical:<...>, craftBand:"commodity", limit:1 }`, `refs_get_screenshot
       { slug }` each, VIEW both, and state in ONE line how this build's craft compares to the
       two anchors per axis (a page as resolved as the strong anchor is a 5 on that axis; as
-      ordinary as the commodity anchor is a 2-3). **FAIL-OPEN:** if the MCP is not connected
-      or returns nothing, skip the anchors and score against the rubric prose as before, never
+      ordinary as the commodity anchor is a 2-3). **FAIL-OPEN:** if the MCP is not connected,
+      returns nothing, OR the two anchors come back IDENTICAL (a deployed server that predates the
+      `craftBand` facet ignores it and returns the same top-craft ref for both calls, so it cannot
+      bracket the scale), skip the anchors and score against the rubric prose as before, never
       block a build on the anchors. Then `Read` each PNG and score the six axes (Philosophy /
       Hierarchy / Execution / Specificity / Restraint / Variety) 1 to 5 each against
       `references/visual-rubric.md` - the FIXED rubric and the fixed defect checklist (overflow, overlap, contrast,
@@ -151,8 +153,9 @@ never held to the bold bar.
       line in that donor's register?", ORDER-SWAPPED (accept only if consistent across the swap),
       the same discipline as the visual pairwise. **FAIL-OPEN + intensity-scoped:** the four axes
       + the banlist floor run for every build; the pairwise runs only when intensity==high; if
-      the MCP is not connected, score the axes + floor and skip the pairwise. The bar: every copy
-      axis >=4, no banlist hit. (Calibrate against `evals/copy-verifier-calibration.mjs` once
+      the MCP is not connected OR the `copy_voice` layer is unavailable (a deployed server that
+      predates it returns no `voiceFingerprint`), score the axes + floor and skip the pairwise.
+      The bar: every copy axis >=4, no banlist hit. (Calibrate against `evals/copy-verifier-calibration.mjs` once
       labelled.)
 
 6. **The commission check** (judge the built result AGAINST the build commission -
@@ -285,7 +288,9 @@ never held to the bold bar.
 
 8.5. **Cross-page consistency** (multi-page builds only, gap4 W19; fail-open and SKIPPED
    for a single-page / landing build). The visual gate scored `/`; a site is more than its
-   home. Screenshot EVERY inner route in `manifest.architecture` (not just `/`), then check:
+   home. Screenshot EVERY inner route (from `manifest.architecture` if present, ELSE every built
+   `src/pages/*.astro` inner route on disk, so a multi-page build that skipped ARCHITECT is still
+   checked, not silently exempted), not just `/`, then check:
    - **Coverage:** every page in `manifest.architecture` is actually built and carries a
      `donor_slug` (W18). A page in the plan but not built, or built with no page-type donor,
      is a FAIL with the route named.

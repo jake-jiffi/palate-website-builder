@@ -39,7 +39,7 @@ exemplars pulled from the library, not a free eye: a `craftBand:"strong"` ref (t
 a `craftBand:"commodity"` ref (the 2-3 end) in the build's vertical (`refs_search` +
 `refs_get_screenshot`), and reason about the build relative to them before assigning numbers.
 Ungrounded, the base eye orders real sites by craft only at chance; anchored + reasoned it
-reaches the trust gate (gap1 W2/W3). Fail-open: no MCP, score the prose rubric as before. Score the axes on BOTH the 1440
+reaches the trust gate (gap1 W2/W3). Fail-open: no MCP, or the two anchors come back identical (a server predating the `craftBand` facet), score the prose rubric as before. Score the axes on BOTH the 1440
 AND the 390 render: Variety and Execution especially are judged on the phone too, not the
 desktop alone, so a strong desktop score cannot carry an inert or generic mobile layout (see
 defect 9, static-defensive mobile).

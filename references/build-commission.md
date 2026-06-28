@@ -78,7 +78,9 @@ make it explicit, not improvised.
   `headlinePattern` name the move ("Hero H1 uses additive equation framing"; "section headings
   are short declarations or questions"), and `marketingTellScore` flags donors that lean on
   generic filler (study the LOW-tell ones). Re-skin the PATTERN into this brand's words; never
-  reuse phrasing.
+  reuse phrasing. (Fail-open: if the deployed MCP predates the `copy_voice` layer and returns no
+  `voiceFingerprint`, write the voice spec from the brand directly, the corpus exemplars aid it,
+  they are not a dependency.)
 - **Say / do-not-say:** the concrete words this brand uses (the real product, the real user, the
   real situation) and the words it never uses (the AI-tell / marketing-filler banlist: leverage,
   seamless, solutions, empower, elevate, unlock, game-changer, ... - the same set
