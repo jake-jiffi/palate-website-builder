@@ -283,6 +283,22 @@ never held to the bold bar.
 8. **Structural verifier** (it is a real Astro build, not a mockup):
    `bash scripts/verify-is-real-astro.sh` where applicable.
 
+8.5. **Cross-page consistency** (multi-page builds only, gap4 W19; fail-open and SKIPPED
+   for a single-page / landing build). The visual gate scored `/`; a site is more than its
+   home. Screenshot EVERY inner route in `manifest.architecture` (not just `/`), then check:
+   - **Coverage:** every page in `manifest.architecture` is actually built and carries a
+     `donor_slug` (W18). A page in the plan but not built, or built with no page-type donor,
+     is a FAIL with the route named.
+   - **Token consistency (no unintended drift):** run a token-level interface inventory across
+     the inner-page renders, the SAME fonts, accent, spacing scale, radii and component
+     language as the home page. A second page that quietly switches font or accent (the
+     multi-page drift tell) is a FAIL with both routes named. Deliberate per-section variety
+     within the brand is fine; an unintended skin change is not.
+   - **Craft parity:** each inner page scores within ~1 axis-point band of the home page on the
+     six axes. An inner page that drops to a generic template while the home is crafted is a
+     FAIL (the inner-page-neglect tell). Done-gate: inner-page craft parity within band, zero
+     unintended cross-page drift, every architecture page built and donor-grounded.
+
 9. **Write `verify-report.json`** at the project root (this is the computed-evidence
    artefact the done-gate reads; you MAY NOT return `visual: pass` without it). Record
    the per-iteration visual evidence and the gate verdicts (schema in
