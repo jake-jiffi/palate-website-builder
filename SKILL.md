@@ -67,7 +67,7 @@ SKIP every checkpoint for tiny, reversible work: editing an already-scaffolded p
 Keep the plan concise - a handful of lines, not a document. Its job is to catch a wrong assumption before it costs a rebuild or real money, nothing more.
 
 ### The phases
-0. **Brand**: detect `palate-projects/{slug}-brand`. If missing and raw assets exist, run BUILD BRAND in-process (composed). For a redesign, extract the real tokens from the client's existing site with the capture engine (`references/phase-0-brand-detection.md`). If no assets, scaffold with `--vendor-brand` defaults. Capture the exact package version.
+0. **Brand**: detect `palate-projects/{slug}-brand`. For a RETURNING client, retrieve the per-client `brand-record.json` (tokens + approved type + motion-intensity band + voice) and inherit it instead of re-detecting (`references/phase-0-brand-detection.md`). If missing and raw assets exist, run BUILD BRAND in-process (composed). For a redesign, extract the real tokens from the client's existing site with the capture engine ONLY if no record exists yet, then write the record. If no assets, scaffold with `--vendor-brand` defaults. Capture the exact package version.
 A. **Scaffold + Explore + Compose** (one phase, one project, several NAMED substages). The
    stage order is the spine every gate hangs off: DIVERGE -> CONVERGE -> COMMISSION -> EXPLORE ->
    per-variant + post-compose VISUAL LOOP -> mandatory VERIFY -> gates. Each substage that produces
