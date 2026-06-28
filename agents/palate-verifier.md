@@ -87,9 +87,20 @@ never held to the bold bar.
       `data-section-id`, an `errors.json`, and a `.palate-shots/manifest.json`.
    3. Check `.palate-shots/errors.json`: ANY console error = automatic `visual: fail`
       (a thrown build cannot pass), regardless of how the page looks.
-   4. `Read` each PNG and score the six axes (Philosophy / Hierarchy / Execution /
-      Specificity / Restraint / Variety) 1 to 5 each against `references/visual-rubric.md`
-      - the FIXED rubric and the fixed defect checklist (overflow, overlap, contrast,
+   4. **Anchor the scale to the corpus, reason, then score.** The base model's eye orders
+      real sites by craft only at about chance (0.54 grounded concordance, gap1 W2); anchoring
+      the absolute scale to two real exemplars and reasoning before the number lifts that to
+      the 0.66-0.76 trust gate and fixes the otherwise anti-correlated hierarchy axis (gap1
+      W3). So BEFORE scoring: pull a HIGH and a LOW craft exemplar from the library with
+      `refs_search { vertical:<the build's vertical>, craftBand:"strong", limit:1 }` and
+      `refs_search { vertical:<...>, craftBand:"commodity", limit:1 }`, `refs_get_screenshot
+      { slug }` each, VIEW both, and state in ONE line how this build's craft compares to the
+      two anchors per axis (a page as resolved as the strong anchor is a 5 on that axis; as
+      ordinary as the commodity anchor is a 2-3). **FAIL-OPEN:** if the MCP is not connected
+      or returns nothing, skip the anchors and score against the rubric prose as before, never
+      block a build on the anchors. Then `Read` each PNG and score the six axes (Philosophy /
+      Hierarchy / Execution / Specificity / Restraint / Variety) 1 to 5 each against
+      `references/visual-rubric.md` - the FIXED rubric and the fixed defect checklist (overflow, overlap, contrast,
       missing OR fabricated imagery, mobile hero legibility, default / genre-cliche accent
       in the render, static-defensive mobile (a motionless 390 on a brand that warranted
       motion, fit-governed - defect 9; the MOTION half of defect 9 is judged from the ordered
