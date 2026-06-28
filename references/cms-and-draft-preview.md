@@ -73,6 +73,31 @@ Studio is embedded in. Same origin means no cross-site cookie problems.
 The client edits at `{preview-site}/studio`; that deployment has visual editing
 on, so Presentation shows live overlays.
 
+## Editability 1: the locked client-shaped schema (W12)
+
+The default schema lets a client break the build (delete the hero, paste an H1, blow out
+the grid). The shipped schema is LOCKED to content edits only, so the client can change words
+and swap images but cannot damage the structure or the craft:
+
+- **Structure is `readOnly` / `hidden`.** Section order, layout variant, the component a
+  block maps to, the design tokens: `readOnly: true` (visible, not editable) or `hidden` for
+  pure build config. The client reorders nothing that would break the composition.
+- **Validation on every editable field.** `Rule.required()`, `.max(n)` on every headline /
+  label so copy cannot overflow the design (a hero that fits 6 words rejects 20), `.min/.max`
+  on arrays so a 3-up card row stays 2-4, never 1 or 9.
+- **No raw rich text where prose is not wanted.** Headlines and labels are `string`, not
+  Portable Text. Where rich text IS allowed, a TRIMMED Portable Text: only the marks/styles
+  the design supports (no H1, no arbitrary block, decorators limited to bold/italic/link).
+- **Images are `image` with `options: { hotspot: true }`** so a swapped photo crops to the
+  art direction, plus a required `alt`. Preset choices (a tone, an icon, a layout flavour)
+  are `string` with a fixed `options.list` dropdown, never a free text field.
+- **A guard-railed `Content editor` role** (Sanity role): publish + edit document content,
+  but NOT create/delete documents or change types. So the client edits the site, never
+  restructures it.
+
+Done-gate: a client can edit copy and swap an image but cannot delete a section, break the
+grid, or insert an H1. Keep `src/sanity/schema/` field names in lockstep with `content.ts`.
+
 ## Build-time vs runtime environment (a Cloudflare gotcha)
 
 `@sanity/astro` resolves its config **at build time** - so these must be set in
