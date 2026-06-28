@@ -19,25 +19,45 @@ file - it is created on the first build that runs on a machine.
 
 ## What gets logged
 
-One entry per build, appended at Phase A.6 (Compose), the moment the canonical
-home page is written:
+One entry per build, appended automatically by the Stop hook
+(`hooks/palate-stop.mjs`) once the build passes its gates, not by the agent. The
+entry shape is defined in `hooks/build-log-entry.mjs`:
 
 ```json
 {
-  "slug": "lighthouse-optometry",
-  "date": "2026-05-26",
-  "macrostructure": "hero-asymmetric / proof-strip / three-services / quote / footer-mega",
-  "mode": "minimal-portfolio",
-  "style": "service",
-  "host": "vercel",
-  "hero_pattern": "asymmetric-left-text-right-image",
-  "dominant_tokens": "type=1.25-scale, density=spacious, accent=single-saturated",
-  "explore_picks": ["v3-hero", "v7-features", "v5-cta"]
+  "ts": "2026-06-27T10:00:00.000Z",
+  "business": "lighthouse-optometry",
+  "signature_move": "carried-timeline",
+  "donors": ["aesop", "leoleo"],
+  "faces": ["fraunces", "satoshi"],
+  "explore": {
+    "ran": true,
+    "shown": [
+      { "id": "v1", "name": "Deep Trawl", "donor_slug": "aesop", "hero_pattern": "centred-display", "position": 1 },
+      { "id": "v3", "name": "Low Tide", "donor_slug": "the-modern-house", "hero_pattern": "full-bleed", "position": 3 }
+    ],
+    "picks": [{ "surface": "hero", "variant_id": "v3" }, { "surface": "cta", "variant_id": "v1" }],
+    "edits": [{ "surface": "hero", "variant_id": "v3", "note": "shortened headline" }]
+  }
 }
 ```
 
-The `macrostructure` and `hero_pattern` fields are the diversification
-signals. The other fields are useful for the post-mortem read.
+`donors` and `faces` are the cross-build DIVERSIFICATION signals
+`scripts/gate-novelty.mjs` reads (donor overlap; the type-face recurrence
+smell). `explore` is the W1 taste-flywheel capture: every variant SHOWN in
+Explore (not just the pick), the accept (`picks`) and edit signal, and the
+surface context (`position`) that propensity correction needs, because the
+surfaced set is biased by what was shown. The per-surface REJECT is the
+`shown`-minus-`picks` complement, derived when the labels are read, not stored.
+`explore` is omitted on a calm / edit build that did not run Explore. These
+labels are the proprietary signal that later feeds the calibrated taste judge;
+no model is trained here yet.
+
+(Earlier drafts of this doc described per-entry `macrostructure` / `hero_pattern`
+/ `explore_picks` top-level fields. Those were never written by the hook. The
+hero-pattern signal now lives inside `explore.shown[].hero_pattern`, the shipped
+hero is the picked variant's, and the deterministic cross-build skin check is
+`gate-novelty.mjs`.)
 
 ## How the Explore stage uses the log
 
@@ -47,7 +67,8 @@ hard rules when generating the variant set:
 1. **No hero pattern repeated from the last 3 builds.** If the most recent
    three Palate builds all used a "centred display + image-right" hero, the
    variant set for this build cannot include another centred display + image
-   right hero. Pick from the long tail.
+   right hero. Pick from the long tail. (Read each recent build's shipped hero
+   from `explore.picks` and the matching `explore.shown[].hero_pattern`.)
 2. **No identical macrostructure from any of the last 5 builds.** The
    full section sequence cannot repeat verbatim.
 
