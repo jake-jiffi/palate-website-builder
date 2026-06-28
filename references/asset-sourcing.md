@@ -30,12 +30,36 @@ bad photo. Judge each asset: is it production-ready, yes or no.
 ## Production-ready vs placeholder (and the pitch)
 
 - If an asset is genuinely good enough, use it.
-- If not, use a tasteful placeholder (Unsplash, matched to the inferred vibe and
-  palette), clearly as a placeholder, and record it in a **"content we need"**
-  list in the handover, so the pitch is honest: "this is the direction, swap in
-  your real photos of X, Y and Z and it sings." Never present a placeholder as
-  the client's own work.
+- If not, run the **imagery mode router** (below) BEFORE reaching for stock. Most slots
+  that would default to an Unsplash photo are better served by a PROCEDURAL fill. Use
+  Unsplash only for a slot that genuinely needs a PHOTOGRAPH of a real subject the client
+  has not supplied, clearly as a placeholder, recorded in a **"content we need"** list in
+  the handover ("this is the direction, swap in your real photos of X, Y and Z and it
+  sings"). Never present a placeholder as the client's own work.
 - Never ship a known-bad real asset just because it is theirs.
+
+## The imagery mode router (real > procedural > generated > Unsplash-last)
+
+Decide the source for EVERY image slot in this priority order. Stock-photo-by-default is
+the generic tell Palate sells against, so it is the LAST resort, never the reflex:
+
+1. **Real** - a quality-judged client asset (above). Always first.
+2. **Procedural** - generate it in-build, a FIRST-CLASS output, not a fallback: SVG film
+   grain / noise, a gradient mesh, a parametric or duotone pattern, a CSS/canvas texture, a
+   seeded generative motif, and for a high-intensity hero a p5.js / shader field
+   (`references/motion-and-3d.md`). Procedural fills are driven by the brand tokens, so they
+   are on-brand, unique per build, zero-licence and near-zero-weight. MOST decorative,
+   texture, background and abstract-hero slots should be procedural, not photographic.
+3. **Generated** - a depicted scene the brand truly needs that procedural cannot serve (the
+   rare case). GATED behind W22 (opt-in + output-clearance + the imagery-originality gate);
+   do not reach for it at v1.
+4. **Unsplash (LAST)** - only for a slot that genuinely needs a PHOTOGRAPH of a real subject
+   (a face, a place, a product, a dish) the client has not supplied. Always a labelled
+   placeholder in the content-we-need list, matched to the inferred vibe + palette.
+
+Done-gate: zero AVOIDABLE Unsplash placeholders, a stock photo a procedural fill or a real
+asset should have replaced. A decorative blob, texture or abstract hero shipping as an
+Unsplash photo is the failure this router exists to prevent.
 
 ## Inference - read the story from the assets
 
