@@ -98,6 +98,36 @@ and swap images but cannot damage the structure or the craft:
 Done-gate: a client can edit copy and swap an image but cannot delete a section, break the
 grid, or insert an H1. Keep `src/sanity/schema/` field names in lockstep with `content.ts`.
 
+## Editability 2: seed Sanity at handoff, kill the TS fallback (W13)
+
+At handoff, SEED the Sanity dataset from `src/lib/content.ts` (a `scripts/seed.ts` run via
+`provision-sanity.sh`), so the CLIENT owns the live copy and edits it in Studio. `content.ts`
+then survives ONLY as the build-time default and the CMS-outage fallback in `loadPage`, never
+as the thing a client must email a developer to change. Without the seed, "editable" is a lie:
+the real copy lives in a TypeScript file the client cannot touch. Done-gate: a client changes a
+headline in Studio and it ships, with no builder involvement. Depends on W12 (the locked schema
+the seed populates).
+
+## Editability 3: visual editing on by default + image wiring (W14)
+
+Make Sanity Presentation the DEFAULT for every build's preview deployment
+(`PUBLIC_SANITY_VISUAL_EDITING_ENABLED=true` on preview), not an opt-in, so the client always
+gets click-to-edit. AND wire `data-sanity` stega to IMAGES and non-text elements, not only
+text: every image, CTA and swappable block carries its field reference (`stega` /
+`createDataAttribute`) so a click reaches the field. Done-gate: a client can click any text OR
+image on the preview and reach its field. Depends on W12, W13.
+
+## Editability 4: teach the handoff (W15)
+
+Generate a CLIENT-SPECIFIC editor guide at handoff (not a generic Sanity manual): the 5-8
+things THIS client will actually edit (their hero line, their hours, their photos), each with
+the exact Studio path, plus a 60-second tour, the pre-set Content-editor login, and ONE
+deliberate first-edit step ("change your hero subhead and Publish") so they succeed once before
+they are alone. Lives in the handover (`references/handover-format.md`). Done-gate (the
+editability metric): a non-dev who has never used Sanity changes a headline, swaps a hero image,
+and publishes, unaided, in under 10 minutes, layout intact. Depends on W12-W14. Behavioural;
+confirm with a real non-dev test.
+
 ## Build-time vs runtime environment (a Cloudflare gotcha)
 
 `@sanity/astro` resolves its config **at build time** - so these must be set in
