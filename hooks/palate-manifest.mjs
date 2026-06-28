@@ -89,6 +89,10 @@ function blank() {
     novelty: null, // { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
     verifier: null, // { ran, pass, verdict, report_path }
     buildability: null, // MOVE 4: { ran, mechanics:[{name, precedent_slug, astro_recipe_pulled:bool, feasible:bool, fallback}] }
+    // ARCHITECT substage (W16, gap4 item 1): the page inventory + nav + journey derived from
+    // the concept + business type BEFORE Diverge, grounded by page-type coverage. Agent-set
+    // descriptive; the done-gate checks its presence for a multi-page build (fail-open).
+    architecture: null, // { ran, pages:[{ route, pageType, purpose, donor_slug }], nav:[...], journey:"awareness->...->conversion", rationale }
   };
 }
 
@@ -151,6 +155,7 @@ function main() {
   // explore is the additive W1 block; backfill it on an older schema-3 manifest the
   // same way, so a build that started before this field exists stays readable.
   if (!("explore" in m)) m.explore = null;
+  if (!("architecture" in m)) m.architecture = null; // additive W16 block
 
   if (tool.startsWith("mcp__palate__")) {
     const slugs = new Set();
