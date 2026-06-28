@@ -79,6 +79,32 @@ write-up so the picker is aware.
 If the log file does not exist (first build on a machine) or has fewer than
 three entries, the rules are inert and Explore proceeds normally.
 
+## The positive taste profile (bias, not pin)
+
+The rules above are NEGATIVE (avoid the last few). The log ALSO carries a POSITIVE
+signal: which donors, signature moves, faces and hero patterns the operator has
+kept, from the shipped builds and the `explore` pick-rate (picks vs shown, the
+debiased preference, W1). Compute it with `node scripts/taste-profile.mjs --variants N`;
+inject the `summary` at A.2 DIVERGE and A.4 EXPLORE to **BIAS the variant set toward
+the kept choices, never to PIN it**.
+
+Three guardrails make this a bias and not a filter bubble (the differentiator Palate
+sells dies if personalization collapses to a per-operator house style):
+
+1. **Exploration budget / breadth floor.** `taste-profile.mjs` returns
+   `diversityGuard.explorationBudget`: of N variants, at least that many MUST come from
+   OUTSIDE the profile. Spend it deliberately on directions the operator has NOT kept.
+2. **The negative memory is unchanged.** `gate-novelty.mjs` still hard-fails a build that
+   repeats a recent skin or a recurring face. The positive profile only BIASES selection;
+   it cannot override the diversity gate.
+3. **A preference needs recurrence.** Only a choice kept across `>= 3` builds (and picked
+   more than half the times it was shown) becomes a preference, so a single build never
+   hardens into a house style.
+
+Per-operator (the machine-wide log is one operator's history); per-tenant and never
+pooled. The done-gate: a returning operator's builds trend to their kept choices AND the
+cross-build diversity guardrail does NOT fall.
+
 ## Why it lives outside the skill
 
 The diversification signal is Palate-wide, not per-project. A log inside any

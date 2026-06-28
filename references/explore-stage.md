@@ -34,7 +34,11 @@ the variant routes evolve into the final pages, nothing is rebuilt.
    Read `~/.config/palate/builds.log.json` (see `references/build-memory.md`)
    and exclude any hero pattern used in the last 3 Palate builds and any
    macrostructure used in the last 5 - the variant set actively diversifies
-   away from recent work. **Match implementation complexity to the
+   away from recent work. ALSO run `node scripts/taste-profile.mjs --variants N`
+   and BIAS the set toward the operator's kept choices (its `summary`), while
+   spending the returned `explorationBudget` on directions OUTSIDE the profile -
+   bias, never pin (`references/build-memory.md`, "The positive taste profile").
+   **Match implementation complexity to the
    aesthetic vision**: a maximalist variant uses elaborate code; a minimalist
    one practises restraint.
 3. **Pause - pick** - deploy a shareable Vercel preview with
