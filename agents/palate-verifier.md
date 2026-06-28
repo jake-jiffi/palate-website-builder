@@ -136,6 +136,24 @@ never held to the bold bar.
         located observation is SUSPECT** and forces one more pass at higher scrutiny -
         walk the defect checklist section by section.
       - **Cap at 2-3 iterations, then escalate** (do not loop forever, do not lower the bar).
+   6. **The copy read** (copy is half of craft; the visual axes were blind to it). Read the
+      hero headline + sub-head + the primary CTA from the render and score four axes 1 to 5
+      (gap2 W9): **Specificity** (names the actual product / user / situation, not a generic
+      claim), **Voice-fit** (matches the commission's voice spec, `references/build-commission.md`),
+      **Momentum** (the line earns the next scroll, it is not an inert slogan), **Restraint**
+      (no filler, no two clauses doing one job). A **hard banlist FLOOR**: any generic-marketing
+      filler in the hero (leverage, seamless, solutions, empower, elevate, unlock, game-changer,
+      best-in-class, supercharge, ... the same set `library` `marketingTellScore` scores) is a
+      FAIL with the word named, in BOTH modes. Apply the **remove-the-word-"AI" test** to any
+      "AI-powered" claim. For a **HIGH-INTENSITY** commission only, also run the copy PAIRWISE:
+      pull a same-register donor's hero via `refs_get { slug, layer:"copy_voice" }` (its
+      `voiceFingerprint` + `headlinePattern`) and ask "would a copywriter ship THIS hero over a
+      line in that donor's register?", ORDER-SWAPPED (accept only if consistent across the swap),
+      the same discipline as the visual pairwise. **FAIL-OPEN + intensity-scoped:** the four axes
+      + the banlist floor run for every build; the pairwise runs only when intensity==high; if
+      the MCP is not connected, score the axes + floor and skip the pairwise. The bar: every copy
+      axis >=4, no banlist hit. (Calibrate against `evals/copy-verifier-calibration.mjs` once
+      labelled.)
 
 6. **The commission check** (judge the built result AGAINST the build commission -
    this AUGMENTS the 6 axes + defect checklist in step 5, it does not replace them).
