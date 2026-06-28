@@ -65,6 +65,33 @@ hierarchy not rainbow text.
 Do instead: one disciplined accent, real neutrals, gradients only where they earn
 their place.
 
+## Imagery cliches (the 12 motifs - the imagery-originality gate, gap3 W11)
+
+Generated/stock imagery has its own tells. Walk this closed list over EVERY image slot in
+the render; any hit is a FAIL with the slot named (it pairs with the imagery mode router in
+`references/asset-sourcing.md` - the fix is usually a real asset or a procedural fill, not a
+different stock photo):
+
+1. The purple-to-blue (or teal-to-magenta) gradient blob / mesh as a hero or section background.
+2. Isometric people / tiny 3D characters at desks, the "corporate Memphis" / Alegria figures.
+3. Floating glassy 3D abstract shapes (spheres, toruses, ribbons) with no meaning.
+4. Generic diverse-team-at-laptop / handshake / "business people pointing at a screen" stock.
+5. A glowing AI brain / neural-network / circuit-board motif for anything "AI".
+6. Hexagon / connected-dots "network" or "blockchain" background texture.
+7. A lone founder-ish portrait that is obviously a stock model, not the real person.
+8. Mock device frames (a laptop/phone) wrapping a fabricated dashboard the product does not show.
+9. Hand-holding-phone / over-the-shoulder generic lifestyle filler.
+10. A world map with glowing connection arcs for "global".
+11. Overly-perfect flat-lay or "founder's desk" arranged props that read as a stock set.
+12. The same generic abstract texture reused across multiple slots (no per-slot intent).
+
+Also flag **trademark / likeness**: a recognisable third-party logo, mascot, or a real
+identifiable face that is NOT the client's (a likeness/IP risk), named and removed.
+
+The heavier half of this gate (a DINO / pHash near-stock-copy check and a mean pairwise
+set-consistency threshold over the build's images) needs image-embedding infrastructure and
+is the W11 measurement follow-up; the 12-motif checklist + the trademark flag are the v1 gate.
+
 ## Layout and structure
 
 - Untouched starter-template bones (v0 / Lovable / Bolt / Next starters). Universal
