@@ -116,6 +116,42 @@ function collectFromMcpResult(result, out) {
   }
 }
 
+// sec-49r.20: detect the MCP's quota_exceeded refusal in a tool result. The free tier caps
+// DEEP READS (enriched/screenshot); search stays free. Without this the build keeps fanning
+// doomed deep-read calls. Returns the structured signal { resetAt, upgradeUrl, ... } or null.
+function detectQuota(result) {
+  if (!result || typeof result !== "object") return null;
+  if (result.structuredContent && result.structuredContent.error === "quota_exceeded") return result.structuredContent;
+  const blocks = Array.isArray(result.content) ? result.content : [];
+  for (const b of blocks) {
+    if (b && b.type === "text" && typeof b.text === "string") {
+      try { const j = JSON.parse(b.text); if (j && j.error === "quota_exceeded") return j; } catch { /* not JSON */ }
+    }
+  }
+  let found = null;
+  (function walk(n) { if (found || !n || typeof n !== "object") return; if (n.error === "quota_exceeded") { found = n; return; } for (const v of Object.values(n)) walk(v); })(result);
+  return found;
+}
+
+// The hard-stop directive (PostToolUse decision:"block" feeds `reason` to the model).
+// Copy signed off (sec-49r.20). Data-driven from the MCP signal where present.
+// Aligns with SKILL.md 6.1's verbatim stop. The hook is the DETERMINISTIC backstop to that
+// prompt instruction: 6.1 tells the model what to say, this makes the model actually stop.
+function quotaStopDirective(q) {
+  const pricing = (q && q.upgradeUrl) || "https://palatemcp.com/pricing";
+  return [
+    "⛔ PALATE FREE-TIER LIMIT REACHED — STOP DEEP READS.",
+    "",
+    "This Palate call was refused: you have used the free tier's daily deep-read cap (25 deep reference reads). Search is still unlimited, but finishing a full build needs more deep reads. Further deep-read calls (refs_get, refs_get_tokens, refs_get_screenshot, refs_get_astro_recipe) will keep failing until the cap resets at midnight UTC.",
+    "",
+    "DO THIS NOW:",
+    "1. Stop making Palate deep-read calls — do not retry them in a loop.",
+    `2. Tell the user, plainly: they have reached Palate's free daily limit; to finish this build now, upgrade to Pro at https://app.palatemcp.com/dashboard/billing (pricing: ${pricing}), then re-run the build.`,
+    "3. Search stays FREE and unlimited (refs_search, refs_for_business, refs_match_brief) — only deep reads are capped.",
+    "4. Continue only with the references already gathered, or pause until the user upgrades or the cap resets.",
+  ].join("\n");
+}
+
 function main() {
   const p = readStdin();
   if (!p) return;
@@ -182,6 +218,14 @@ function main() {
     fs.writeFileSync(MANIFEST, JSON.stringify(m, null, 2) + "\n");
   } catch {
     /* never wedge a build over a manifest write */
+  }
+
+  // sec-49r.20 hard-stop: if THIS palate call was refused for quota, feed the model a
+  // forceful STOP directive so it does not keep fanning doomed deep-read calls. Only fires
+  // on a real quota_exceeded signal; every other call stays silent (exit 0).
+  if (tool.startsWith("mcp__palate__")) {
+    const q = detectQuota(result);
+    if (q) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(q) }));
   }
 }
 
