@@ -33,6 +33,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { buildLogEntry } from "./build-log-entry.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
@@ -103,13 +104,9 @@ function recordBuild(manifest) {
         /* variant file gone; skip */
       }
     }
-    entries.push({
-      ts: new Date().toISOString(),
-      business: m.business ?? null,
-      signature_move: m.signature_move ?? null,
-      donors: m.references_surveyed ?? [],
-      faces: [...faces],
-    });
+    // Entry shape (incl. the W1 Explore labels) lives in build-log-entry.mjs so it is
+    // unit-testable without faking a whole passing build.
+    entries.push(buildLogEntry(m, [...faces]));
     fs.writeFileSync(log, JSON.stringify(entries, null, 2) + "\n");
   } catch {
     /* memory is best-effort; never block finishing over it */

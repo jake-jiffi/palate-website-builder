@@ -38,6 +38,8 @@ COMMISSION
   gates scope to it instead of guessing from prose.
 - Concept: <the one true thing + the demonstrative mechanic + the one governing feeling>
 - Vision: <one line on the experience this site should be>
+- Voice: <the copy register in one line + the say / do-not-say lists> - see "The voice spec"
+  below. Copy is half of craft; a generic hero line fails the bar as surely as a generic layout.
 - Mechanisms on hand, CHOSEN TO FIT (a few, not all, fit over familiarity, same rule as type):
   <pick from the toolkit register the ones this concept actually needs>
 - Buildability: for each chosen mechanism, ground it in the MCP. refs_search the mechanic
@@ -60,6 +62,38 @@ COMMISSION
   over-motioning a calm one. A janky WebGL hero fails the bar; so does a tasteful-but-inert
   page on a brand that wanted to detonate. See "The bold mandate" below for what a
   high-intensity commission must require.
+
+## The voice spec (the copy register, grounded in the corpus)
+
+The commission's `Voice` line is backed by a short voice spec, recorded the same way the
+concept and mechanisms are. Copy is the half of craft the build verifier was blind to, so
+make it explicit, not improvised.
+
+- **Principles (3-5):** what this brand's copy values (specific over hyperbolic, plain over
+  clever, institutional over chummy...). Derive them from the brand, not a template.
+- **Tone matrix:** place the voice on 2-3 axes that matter for this brand, e.g. warm..clinical,
+  plain..ornate, understated..declarative. One point per axis; the headlines must sit there.
+- **Exemplar lines, from the corpus (ground it):** pull the voice layer of 2-3 donors in this
+  register with `refs_get { slug, layer:"copy_voice" }` - the `voiceFingerprint` and
+  `headlinePattern` name the move ("Hero H1 uses additive equation framing"; "section headings
+  are short declarations or questions"), and `marketingTellScore` flags donors that lean on
+  generic filler (study the LOW-tell ones). Re-skin the PATTERN into this brand's words; never
+  reuse phrasing. (Fail-open: if the deployed MCP predates the `copy_voice` layer and returns no
+  `voiceFingerprint`, write the voice spec from the brand directly, the corpus exemplars aid it,
+  they are not a dependency.)
+- **Say / do-not-say:** the concrete words this brand uses (the real product, the real user, the
+  real situation) and the words it never uses (the AI-tell / marketing-filler banlist: leverage,
+  seamless, solutions, empower, elevate, unlock, game-changer, ... - the same set
+  `copy-voice` scores as the marketing tell).
+
+**Verbalized Sampling on the hero headline (the same move DIVERGE makes on concepts).** Do not
+write the first headline that comes to mind (the low-perplexity, expected one the base model
+reaches for). Sample 5-8 headline directions wide in one pass, each self-tagging its
+`typicality` (0..1, how expected it is for the category), then advance one from the LOW-typicality
+tail that still says the true thing. A headline that could sit on any competitor's site is the
+copy equivalent of the default hero+three-cards layout. Record the chosen line + its typicality
+tag in the commission. Fail-open: a calm conversion brief still writes a specific headline, it
+just does not need the full spread.
 
 ## The bold mandate (when the brand is high-intensity, the commission must commit)
 

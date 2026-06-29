@@ -30,6 +30,8 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   "converge": null,     // { ran, scored:[{ id, originality:0..5, craft_feasibility:0..5, combined:0..5 }], advanced:[id,...] }
   "commission": null,   // A.3.5: { bar, intensity:"high"|"calm", concept, vision, chosen_mechanisms:[{ name, recipe, precedent_slug, astro_recipe_pulled, fit_reason }], proof:{ viewports, read_pixels, read_console, mobile_friendly, holds_60fps, honours_reduced_motion }, restraint_note, explore_skip?:bool } - agent-set descriptive only; intensity arms the v1.5 bold bar in scripts/gate-done.sh (high -> pairwise + ambition + built-Explore enforced); explore_skip records a named-direction Explore exemption
   "variants": [],       // [{ id, route, name, concept_id, donor_slugs:[], html_path }]
+  "explore": null,      // W1 labels: { ran, shown:[{ id, name, donor_slug, hero_pattern, position }], picks:[{ surface, variant_id }], edits:[{ surface, variant_id, note }] } - persisted to builds.log.json by palate-stop.mjs
+  "architecture": null, // W16: { ran, pages:[{ route, pageType, purpose, donor_slug }], nav, journey, rationale } - the page inventory, read by the verifier's cross-page check (8.5)
   "visual": null,       // SCRIPT-set: { ran, pass, iterations:[{ i, shots:{...}, axes:{...}, defects:[{type,location}], score }], console_errors:int }
   "novelty": null,      // SCRIPT-set: { ran, pass, closest_pair, struct, style, category_distance, recent_build_distance }
   "verifier": null,     // SCRIPT-set: { ran, pass, verdict, report_path }

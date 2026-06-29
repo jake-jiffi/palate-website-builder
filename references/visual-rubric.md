@@ -32,7 +32,14 @@ Score the screenshot on six axes, 1 to 5 each. These are the exact axes from
 | Variety | The composition reproduces a named, located signature move from the lead reference (re-skinned), and does not fall back to the standard hero+three-cards+CTA shape unless that shape is itself the deliberate, reproduced move. |
 
 **The bar: every axis >=4, no axis below 3.** Anything at 3 or below on any axis
-means revise the named section, re-render, and re-score. Score the axes on BOTH the 1440
+means revise the named section, re-render, and re-score.
+
+**Anchor the 1-5 scale to the corpus (calibrated judge).** Score the axes against two real
+exemplars pulled from the library, not a free eye: a `craftBand:"strong"` ref (the 5 end) and
+a `craftBand:"commodity"` ref (the 2-3 end) in the build's vertical (`refs_search` +
+`refs_get_screenshot`), and reason about the build relative to them before assigning numbers.
+Ungrounded, the base eye orders real sites by craft only at chance; anchored + reasoned it
+reaches the trust gate (gap1 W2/W3). Fail-open: no MCP, or the two anchors come back identical (a server predating the `craftBand` facet), score the prose rubric as before. Score the axes on BOTH the 1440
 AND the 390 render: Variety and Execution especially are judged on the phone too, not the
 desktop alone, so a strong desktop score cannot carry an inert or generic mobile layout (see
 defect 9, static-defensive mobile).

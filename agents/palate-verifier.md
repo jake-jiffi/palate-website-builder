@@ -87,9 +87,22 @@ never held to the bold bar.
       `data-section-id`, an `errors.json`, and a `.palate-shots/manifest.json`.
    3. Check `.palate-shots/errors.json`: ANY console error = automatic `visual: fail`
       (a thrown build cannot pass), regardless of how the page looks.
-   4. `Read` each PNG and score the six axes (Philosophy / Hierarchy / Execution /
-      Specificity / Restraint / Variety) 1 to 5 each against `references/visual-rubric.md`
-      - the FIXED rubric and the fixed defect checklist (overflow, overlap, contrast,
+   4. **Anchor the scale to the corpus, reason, then score.** The base model's eye orders
+      real sites by craft only at about chance (0.54 grounded concordance, gap1 W2); anchoring
+      the absolute scale to two real exemplars and reasoning before the number lifts that to
+      the 0.66-0.76 trust gate and fixes the otherwise anti-correlated hierarchy axis (gap1
+      W3). So BEFORE scoring: pull a HIGH and a LOW craft exemplar from the library with
+      `refs_search { vertical:<the build's vertical>, craftBand:"strong", limit:1 }` and
+      `refs_search { vertical:<...>, craftBand:"commodity", limit:1 }`, `refs_get_screenshot
+      { slug }` each, VIEW both, and state in ONE line how this build's craft compares to the
+      two anchors per axis (a page as resolved as the strong anchor is a 5 on that axis; as
+      ordinary as the commodity anchor is a 2-3). **FAIL-OPEN:** if the MCP is not connected,
+      returns nothing, OR the two anchors come back IDENTICAL (a deployed server that predates the
+      `craftBand` facet ignores it and returns the same top-craft ref for both calls, so it cannot
+      bracket the scale), skip the anchors and score against the rubric prose as before, never
+      block a build on the anchors. Then `Read` each PNG and score the six axes (Philosophy /
+      Hierarchy / Execution / Specificity / Restraint / Variety) 1 to 5 each against
+      `references/visual-rubric.md` - the FIXED rubric and the fixed defect checklist (overflow, overlap, contrast,
       missing OR fabricated imagery, mobile hero legibility, default / genre-cliche accent
       in the render, static-defensive mobile (a motionless 390 on a brand that warranted
       motion, fit-governed - defect 9; the MOTION half of defect 9 is judged from the ordered
@@ -125,6 +138,25 @@ never held to the bold bar.
         located observation is SUSPECT** and forces one more pass at higher scrutiny -
         walk the defect checklist section by section.
       - **Cap at 2-3 iterations, then escalate** (do not loop forever, do not lower the bar).
+   6. **The copy read** (copy is half of craft; the visual axes were blind to it). Read the
+      hero headline + sub-head + the primary CTA from the render and score four axes 1 to 5
+      (gap2 W9): **Specificity** (names the actual product / user / situation, not a generic
+      claim), **Voice-fit** (matches the commission's voice spec, `references/build-commission.md`),
+      **Momentum** (the line earns the next scroll, it is not an inert slogan), **Restraint**
+      (no filler, no two clauses doing one job). A **hard banlist FLOOR**: any generic-marketing
+      filler in the hero (leverage, seamless, solutions, empower, elevate, unlock, game-changer,
+      best-in-class, supercharge, ... the same set `library` `marketingTellScore` scores) is a
+      FAIL with the word named, in BOTH modes. Apply the **remove-the-word-"AI" test** to any
+      "AI-powered" claim. For a **HIGH-INTENSITY** commission only, also run the copy PAIRWISE:
+      pull a same-register donor's hero via `refs_get { slug, layer:"copy_voice" }` (its
+      `voiceFingerprint` + `headlinePattern`) and ask "would a copywriter ship THIS hero over a
+      line in that donor's register?", ORDER-SWAPPED (accept only if consistent across the swap),
+      the same discipline as the visual pairwise. **FAIL-OPEN + intensity-scoped:** the four axes
+      + the banlist floor run for every build; the pairwise runs only when intensity==high; if
+      the MCP is not connected OR the `copy_voice` layer is unavailable (a deployed server that
+      predates it returns no `voiceFingerprint`), score the axes + floor and skip the pairwise.
+      The bar: every copy axis >=4, no banlist hit. (Calibrate against `evals/copy-verifier-calibration.mjs` once
+      labelled.)
 
 6. **The commission check** (judge the built result AGAINST the build commission -
    this AUGMENTS the 6 axes + defect checklist in step 5, it does not replace them).
@@ -253,6 +285,24 @@ never held to the bold bar.
 
 8. **Structural verifier** (it is a real Astro build, not a mockup):
    `bash scripts/verify-is-real-astro.sh` where applicable.
+
+8.5. **Cross-page consistency** (multi-page builds only, gap4 W19; fail-open and SKIPPED
+   for a single-page / landing build). The visual gate scored `/`; a site is more than its
+   home. Screenshot EVERY inner route (from `manifest.architecture` if present, ELSE every built
+   `src/pages/*.astro` inner route on disk, so a multi-page build that skipped ARCHITECT is still
+   checked, not silently exempted), not just `/`, then check:
+   - **Coverage:** every page in `manifest.architecture` is actually built and carries a
+     `donor_slug` (W18). A page in the plan but not built, or built with no page-type donor,
+     is a FAIL with the route named.
+   - **Token consistency (no unintended drift):** run a token-level interface inventory across
+     the inner-page renders, the SAME fonts, accent, spacing scale, radii and component
+     language as the home page. A second page that quietly switches font or accent (the
+     multi-page drift tell) is a FAIL with both routes named. Deliberate per-section variety
+     within the brand is fine; an unintended skin change is not.
+   - **Craft parity:** each inner page scores within ~1 axis-point band of the home page on the
+     six axes. An inner page that drops to a generic template while the home is crafted is a
+     FAIL (the inner-page-neglect tell). Done-gate: inner-page craft parity within band, zero
+     unintended cross-page drift, every architecture page built and donor-grounded.
 
 9. **Write `verify-report.json`** at the project root (this is the computed-evidence
    artefact the done-gate reads; you MAY NOT return `visual: pass` without it). Record
