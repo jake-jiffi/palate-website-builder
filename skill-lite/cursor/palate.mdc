@@ -124,7 +124,13 @@ Research-grounded minimums (WCAG, Material 3, NNGroup, APCA, Apple HIG). Stronge
 
 ## Running the gates on any model
 
-The gates are deterministic standalone CLIs that score ARTEFACTS, not the model's self-report: `ux-lint.sh`, `gate-novelty.mjs` / `gate-uniqueness.mjs`, `verify-rendered.sh` / `gate-done.sh`. Verify-fail loop: read the output, fix the real cause (never the gate), re-run, max 3 attempts, then HALT. Never weaken a gate to pass. **For a non-Claude brain, set `PALATE_GATE_STRICT=1`** so the depth and done gates hard-block instead of nudging (they fail open by default, tuned on Claude). The gates catch mechanical failures, not taste; the model sets the ceiling.
+The deterministic floor is a real command, not a claim. **Before you tell the user the build is done, run the anti-slop gate on the project and fix what it flags:**
+
+```
+curl -fsSL https://raw.githubusercontent.com/jake-jiffi/palate-website-builder/main/scripts/bootstrap.sh | bash -s -- ./
+```
+
+It fetches `ux-lint.sh` + the `anti-patterns.md` ruleset and lints the build for the banned-as-default faces, the tracked-mono eyebrow, the status pill and the rest of the closed list. Exit 1 = a real finding: read it, fix the cause (never silence a rule without a one-line brand reason), re-run, max 3 attempts, then HALT. Set `PALATE_GATE_STRICT=1` to fail on Medium-and-up, not just High. This lint is the ONLY gate that runs locally off Claude Code; library DEPTH (did you actually survey before building) is enforced server-side by the MCP, and the visual-rubric + verifier loop is the Claude Code plugin, so for those run on honour: survey before you build, ship against the render, never weaken a gate to pass. The gates catch mechanical failures, not taste; the model sets the ceiling.
 
 ## What this is NOT
 
