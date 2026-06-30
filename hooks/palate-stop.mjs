@@ -39,7 +39,57 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
 const DONE_GATE = path.join(HERE, "..", "scripts", "gate-done.sh");
 const MERGE = path.join(HERE, "..", "scripts", "manifest-merge.mjs");
+const PHANTOM = path.join(HERE, "..", "scripts", "phantom-utility-check.mjs");
 const SOURCE = /\.(astro|svelte|vue|tsx?|jsx?|mjs|css|scss)$/i;
+const OVERFLOW_PX = 16; // a layout break, not a scrollbar/sub-pixel (clean builds read ~0)
+
+// Positive ON-DISK evidence of a REAL failure - the "enforce on evidence" layer. Unlike a
+// gate exit code (which conflates a real fail with could-not-verify, e.g. a subagent survey
+// the depth gate cannot see), every signal here fires ONLY when the evidence is PRESENT and
+// BAD, so an absent artefact is never a false trap. These BLOCK by default; the softer gate
+// failures keep nudging unless PALATE_GATE_STRICT=1. Console errors, phantom utilities and
+// verdict:fail are unambiguous; overflow is conservative (>16px) so it never trips on a clean
+// page. This is what closes the "verdict:pass shipped a broken site" gap without false-blocking.
+function positiveFailures(proj) {
+  const reasons = [];
+  const readJSON = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
+  const rep = readJSON(path.join(proj, "verify-report.json"));
+  const sm = readJSON(path.join(proj, ".palate-shots", "manifest.json"));
+
+  // 1. Runtime console errors on the rendered page (the driver's own count).
+  let consoleErrs = null;
+  if (sm && Number.isFinite(sm.console_errors)) consoleErrs = sm.console_errors;
+  else if (rep && rep.visual && Number.isFinite(rep.visual.console_errors)) consoleErrs = rep.visual.console_errors;
+  if (consoleErrs > 0) reasons.push(`${consoleErrs} runtime console error(s) on the rendered page (.palate-shots/errors.json) - a thrown build cannot ship`);
+
+  // 2. PAGE-LEVEL horizontal overflow only: the whole document wider than the viewport =
+  //    horizontal scroll = a layout break. Page-level is the robust, low-FP signal (a real
+  //    build reads ~0; a too-wide row spilling past the viewport reads hundreds of px).
+  //    Per-section internal overflow (s.overflow in the manifest) is deliberately NOT a
+  //    block: scrollWidth-clientWidth picks up shadows, decorative bleeds and sub-pixel, so
+  //    a clean section can read ~20px - that is the verifier/persona's call, not a hard gate.
+  if (sm) {
+    const pageOv = Object.entries(sm.overflow || {}).filter(([, v]) => Number(v) > OVERFLOW_PX);
+    if (pageOv.length) reasons.push(`the page scrolls horizontally (content wider than the viewport) at ${pageOv.map(([vp, v]) => `${vp} +${Math.round(v)}px`).join(", ")} - a layout break`);
+  }
+
+  // 3. Phantom/undefined utility classes (compile to nothing -> unstyled markup). Re-run the
+  //    static check against the FRESH dist only (--require-fresh SKIPs a stale oracle, so a
+  //    not-rebuilt tree never false-flags real utilities); exit 1 = real phantoms present.
+  if (fs.existsSync(path.join(proj, "dist")) && fs.existsSync(PHANTOM)) {
+    try {
+      execFileSync("node", [PHANTOM, proj, "--no-build", "--require-fresh", "--ci"], { stdio: ["ignore", "ignore", "ignore"] });
+    } catch (e) {
+      if (e && e.status === 1) reasons.push("phantom/undefined Tailwind utility classes that compile to nothing (they ship as unstyled markup) - run scripts/phantom-utility-check.mjs to list them, fix the names, rebuild");
+      /* status 2 = stale/internal = could-not-verify; never block on it */
+    }
+  }
+
+  // 4. The fresh-context verifier itself returned verdict:fail (it ran and judged it a fail).
+  if (rep && rep.verdict === "fail") reasons.push("the fresh-context verifier returned verdict:fail (see verify-report.json) - resolve the named findings");
+
+  return reasons;
+}
 
 function readStdin() {
   try {
@@ -137,6 +187,21 @@ try {
   execFileSync("node", [MERGE, "--manifest", manifest], { cwd, stdio: ["ignore", "ignore", "ignore"] });
 } catch {
   /* merge is a cache convenience; never block finishing over it */
+}
+
+// ENFORCE-ON-EVIDENCE (the fix for "verdict:pass shipped a broken site"): block by DEFAULT
+// when there is positive on-disk evidence of a real failure, independent of the gate exit
+// codes (which conflate a real fail with could-not-verify). This fires even if the verifier
+// set visual.pass:true on a hero-biased read, so a broken section/route cannot ship silently.
+// It only blocks on PRESENT+BAD evidence, so an unverifiable session is never false-trapped.
+let positive = [];
+try { positive = positiveFailures(cwd); } catch { positive = []; } // a detector bug must never trap the user
+if (positive.length) {
+  const reason =
+    "Palate gate: this build has on-disk evidence of a real failure - " + positive.join("; ") +
+    ". Fix the named issue, re-render, and re-verify before finishing. (PALATE_GATE_OFF=1 bypasses, for a deliberate exception only.)";
+  process.stdout.write(JSON.stringify({ decision: "block", reason }));
+  process.exit(0);
 }
 
 try {

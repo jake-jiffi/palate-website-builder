@@ -206,6 +206,15 @@ async function shootViewport(browser, args, manifest, name) {
   let sids = [];
   if (args.sections) sids = await tagSections(page);
 
+  // Page-level horizontal overflow: the whole document wider than the viewport means
+  // something spilled (a too-wide row, an uncapped element). Almost never intentional at
+  // the document level (intentional horizontal scroll is a CONTAINED element with its own
+  // overflow), so it is a low-FP deterministic "broken layout" signal the done gate reads.
+  try {
+    manifest.overflow[name] = await page.evaluate(() => Math.max(0,
+      Math.round(document.documentElement.scrollWidth - window.innerWidth)));
+  } catch { /* a probe failure is not fatal; absence reads as "could not verify" downstream */ }
+
   // Freeze motion, then shoot the full page.
   try { await page.addStyleTag({ content: FREEZE_CSS }); } catch {}
   await page.waitForTimeout(350);
@@ -249,7 +258,15 @@ async function shootViewport(browser, args, manifest, name) {
             cy: Math.round((((best.top + best.height / 2) - er.top) / er.height) * 1000) / 1000,
           };
         }).catch(() => null);
-        manifest.sections.push({ viewport: name, sid, file: `${name}/${sid}.png`, focal });
+        // The section's own horizontal overflow (content wider than its box), excluding a
+        // deliberate scroller (overflow-x:auto/scroll). Catches a row too wide for its
+        // column even when the page itself does not scroll. Sub-pixel noise ignored downstream.
+        const overflow = await h.evaluate((el) => {
+          const cs = getComputedStyle(el);
+          if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') return 0;
+          return Math.max(0, Math.round(el.scrollWidth - el.clientWidth));
+        }).catch(() => 0);
+        manifest.sections.push({ viewport: name, sid, file: `${name}/${sid}.png`, focal, overflow });
       } catch (e) {
         manifest.notes.push(`${name} section ${sid} clip failed: ` + (e.message || String(e)).split('\n')[0]);
       }
@@ -273,7 +290,8 @@ async function main() {
     status: 'pending',
     viewports: [],
     shots: {},          // { desktop_full, mobile_full }
-    sections: [],       // [{ viewport, sid, file }]
+    sections: [],       // [{ viewport, sid, file, overflow }]
+    overflow: {},       // { [viewport]: page-level horizontal overflow px (content wider than the viewport) }
     console_errors: 0,
     console_errors_list: [],
     notes: [],

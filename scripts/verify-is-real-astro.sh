@@ -39,4 +39,22 @@ astro_pages=$(find src/pages -name "*.astro" 2>/dev/null | wc -l | tr -d ' ')
 npm run build >/dev/null 2>&1 || fail "npm run build failed, the project does not compile"
 [ -d dist ] || fail "no dist/ after build"
 
+HERE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
+# 6. No phantom / undefined utility classes (the unstyled-404 defect). The dist is FRESH
+#    from step 5, so --no-build is safe; a class used in source that resolves to no CSS rule
+#    ships as unstyled markup. Hard block (the compiler is the oracle, so this is objective).
+if [ -f "$HERE_DIR/phantom-utility-check.mjs" ]; then
+  node "$HERE_DIR/phantom-utility-check.mjs" . --no-build \
+    || fail "phantom/undefined utility classes found (listed above): they resolve to NO CSS rule and ship as unstyled markup (e.g. bg-brand-accent against a custom preset). Fix the class names or the preset, rebuild."
+fi
+
+# 7. Astro scoped-style escapes (JS-injected DOM that renders unstyled). ADVISORY for now -
+#    the created-node narrowing removed the el.className state-toggle false positive, but it
+#    is surfaced (not hard-blocked) until a few real builds confirm it stays clean.
+if [ -f "$HERE_DIR/gate-scoped-style-escape.mjs" ]; then
+  node "$HERE_DIR/gate-scoped-style-escape.mjs" . \
+    || echo "  [advisory] scoped-style escape(s) above: client JS creates DOM styled only by a non-:global scoped <style>, so it renders UNSTYLED at runtime. Wrap the selector in :global(...) or move it to <style is:global>." >&2
+fi
+
 echo "REAL_ASTRO_BUILD_OK: $astro_pages .astro pages, astro@$astro_ver, brand wired, builds clean"
