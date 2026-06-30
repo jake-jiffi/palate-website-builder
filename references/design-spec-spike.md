@@ -1,8 +1,20 @@
 # SPIKE: a durable DESIGN.md as the build's design source of truth
 
-Status: SPIKE (sec-gj4.11 / source-triage item 5). NOT wired into the live gate.
-This file is the experiment design plus the artefact format; graduate it to a gate
-ONLY if the A/B below clears the kill criteria.
+Status: GRADUATE (LEAN) - decided 2026-06-30 (source-triage review). NOT yet wired into the
+live gate; this records the decision + the bounded scope for the build.
+
+DECISION: graduate the LEAN version - a durable per-page DESIGN.md modelled on MOTION_BUDGET.md
+(a small local artefact that travels with the code, NOT a whole-system context dump) PLUS
+graduating `measure-drift.mjs` from report-only to a COMPUTED consistency floor (a gate),
+fail-open + intensity-scoped per the house discipline. Do NOT adopt the Google-labs
+whole-system DESIGN.md form: Atlassian's own test (verified 2026-06-30) shows a whole-system
+dump costs ~92% more tokens and ~35% longer than an MCP that fetches on demand, and Palate IS
+that MCP, so the dump is the wrong shape. The lean per-page artefact is a different thing (a
+build-output constraint spec, not a context load) and closes the real gap the source-triage
+review confirmed is still open: there is a durable MOTION_BUDGET.md but no design equivalent,
+and W19 cross-page consistency is interpretive (VLM), multi-page-only, and single-page-skipped,
+not a computed floor. Build it as a focused follow-up (bead below); keep it fail-open so a calm
+single-page build is never blocked.
 
 ## The gap this tests
 
