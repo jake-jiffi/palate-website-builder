@@ -298,6 +298,17 @@ accent band (400-600). The render-side complement is the visual rubric defect
 
 ---
 
+## Interaction states and touch (JUSTIFY-OR-FLAG)
+
+### Rule: custom-cursor-not-gated
+- Severity: Medium
+- Mode: always
+- Files: *.css,*.astro,*.tsx,*.jsx,*.vue,*.svelte
+- Pattern: `(?i)(cursor\s*:\s*none\b|\bcursor-none\b)`
+- Fix: `cursor: none` hides the native cursor. A custom cursor built on it strands anyone without a fine pointer: on touch there is no cursor at all, and if the cursor script fails or the visitor is on a keyboard / assistive tech the affordance is simply gone. Gate it behind `@media (hover: hover) and (pointer: fine) { ... }` so it only applies where a real pointer exists, and keep a visible `:focus-visible` path. This is JUSTIFY-OR-FLAG (build-commission.md mandates a custom cursor; this is the touch-degradation guard for it): if it is correctly gated, or a deliberate case like a fullscreen player, justify it on a `ux-lint-disable custom-cursor-not-gated` with a one-line reason.
+
+---
+
 ## AI-tell phrases (anti-slop-ui curated subset)
 
 The lint rules below are the mechanical floor: a fixed list of the highest-signal

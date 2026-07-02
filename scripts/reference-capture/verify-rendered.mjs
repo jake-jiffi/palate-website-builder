@@ -36,7 +36,7 @@
  *   3  a browser could not be launched - the gate is BLOCKED, never a pass
  */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'fs';
+import { mkdirSync, writeFileSync } from 'fs';
 
 // ----------------------------------------------------------------- args ----
 function parseArgs(argv) {
@@ -67,6 +67,12 @@ const ignored = (s) => IGNORE.some((re) => re.test(s || ''));
 const findings = [];
 const add = (sev, route, vp, msg) => findings.push({ sev, route, vp, msg });
 const RANK = { High: 3, Medium: 2, Cosmetic: 1 };
+// OBJECTIVE, low-false-positive interaction failures for the enforce-on-evidence hook
+// (hooks/palate-stop.mjs reads <proj>/.palate-shots/interaction.json and blocks on a
+// non-empty list). Only the checks that rest on an explicit signal go here (a focusable
+// visible control with no focus ring; an aria-expanded nav that never opens / won't dismiss);
+// softer interaction signals stay advisory in findings[] for the verifier to judge.
+const interactionFailures = [];
 
 // --------------------------------------------------------------- launch ----
 // GPU off is the FAST default. --disable-software-rasterizer also kills CPU
@@ -384,7 +390,144 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
   await context.close();
 }
 
+// INTERACTION states (home route, desktop): the rest of this gate reads a scroll + a settled
+// still; this DRIVES a real pointer + keyboard the way a human triggers a state, so a deleted
+// focus ring or a hover/expand nav that never opens is caught, not just described in the
+// rubric. Two OBJECTIVE checks enforce (they rest on an explicit signal, so false positives
+// are low): keyboard focus-visible traversal (WCAG 2.4.7) and an aria-expanded hover/expand
+// nav (WCAG 1.4.13 open + Dismissible). Hover feedback stays ADVISORY (a hover can legitimately
+// change a child element or only the cursor, so it cannot safely block).
+{
+  const context = await browser.newContext({ viewport: VIEWPORTS.desktop });
+  const page = await context.newPage();
+  try {
+    await page.goto(base + '/', { waitUntil: 'load', timeout: 20000 });
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 400)));
+
+    // (1) Keyboard focus-visible. Snapshot each interactive element's RESTING style, Tab to it
+    // with a REAL key (programmatic .focus() does not reliably match :focus-visible), and
+    // assert the focused style DIFFERS from resting. ANY change counts as an indicator, so a
+    // site that shows focus with a border or a background shift is NOT false-flagged; only an
+    // element whose focused style is identical to resting has no indicator at all. A systematic
+    // miss (>=2) is a deleted focus ring (WCAG 2.4.7), so it enforces.
+    const SK = 'outlineStyle,outlineWidth,outlineColor,boxShadow,borderTopColor,borderTopWidth,borderBottomColor,backgroundColor,color,textDecorationLine';
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.mouse.move(2, 2); // park the pointer so hover does not contaminate the resting snapshot
+    await page.evaluate((keysCsv) => {
+      const keys = keysCsv.split(',');
+      const els = Array.from(document.querySelectorAll('a[href],button,input,select,textarea,[tabindex],[role="button"]')).filter((el) => {
+        const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && parseFloat(s.opacity || '1') > 0.01;
+      }).slice(0, 40);
+      window.__ixBase = {};
+      els.forEach((el, i) => { el.setAttribute('data-ixf', String(i)); const s = getComputedStyle(el); window.__ixBase[i] = keys.map((k) => s[k]).join('|'); });
+    }, SK);
+    let noRing = 0, checked = 0; const noRingEg = [];
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press('Tab');
+      const r = await page.evaluate((keysCsv) => {
+        const keys = keysCsv.split(',');
+        const el = document.activeElement;
+        if (!el || el === document.body || el === document.documentElement || !el.getAttribute) return null;
+        const id = el.getAttribute('data-ixf');
+        if (id == null || !(window.__ixBase && id in window.__ixBase)) return { known: false };
+        const s = getComputedStyle(el);
+        const changed = keys.map((k) => s[k]).join('|') !== window.__ixBase[id];
+        const cls = (el.className && typeof el.className === 'string') ? '.' + el.className.trim().split(/\s+/)[0] : '';
+        return { known: true, changed, label: el.tagName.toLowerCase() + (el.id ? '#' + el.id : cls) };
+      }, SK);
+      if (!r || !r.known) continue;
+      checked++;
+      if (!r.changed) { noRing++; if (noRingEg.length < 3) noRingEg.push(r.label); }
+    }
+    if (noRing >= 2) {
+      const msg = noRing + ' of ' + checked + ' keyboard-focusable elements show no visible change on focus (no outline, ring, border or background shift on :focus-visible), e.g. ' + noRingEg.join(', ') + '. Give focus a visible indicator (WCAG 2.4.7).';
+      add('High', '/', 'desktop', 'focus indicator missing on keyboard traversal: ' + msg);
+      interactionFailures.push({ route: '/', vp: 'desktop', check: 'focus-visible', msg });
+    }
+
+    // (2) Hover/expand nav dismissibility (WCAG 1.4.13). An aria-expanded control can be
+    // click-triggered (the common case), so a hover that does not open it proves nothing and
+    // is NOT flagged. We act only once hover has CONFIRMED opened it (aria-expanded flips
+    // true): then it must be dismissible with Escape, without moving the pointer (1.4.13
+    // Dismissible). A hover-opened disclosure Escape cannot close -> enforce. Low false
+    // positive: it fires only on a genuinely hover-opened, non-dismissible menu.
+    const navTrigger = await page.evaluate(() => {
+      const t = document.querySelector('nav [aria-expanded="false"], header [aria-expanded="false"], [aria-haspopup="true"][aria-expanded="false"]');
+      if (!t) return null;
+      const r = t.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) return null;
+      t.setAttribute('data-ix-nav', '1');
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    if (navTrigger) {
+      await page.mouse.move(navTrigger.x, navTrigger.y, { steps: 12 });
+      await page.evaluate(() => new Promise((r) => setTimeout(r, 350)));
+      const openedOnHover = await page.evaluate(() => {
+        const t = document.querySelector('[data-ix-nav="1"]');
+        return !!t && t.getAttribute('aria-expanded') === 'true';
+      });
+      if (openedOnHover) {
+        await page.keyboard.press('Escape');
+        await page.evaluate(() => new Promise((r) => setTimeout(r, 250)));
+        const dismissed = await page.evaluate(() => {
+          const t = document.querySelector('[data-ix-nav="1"]');
+          return !t || t.getAttribute('aria-expanded') !== 'true';
+        });
+        if (!dismissed) {
+          const msg = 'a nav disclosure that opens on hover cannot be dismissed with Escape (WCAG 1.4.13 Dismissible: content shown on hover or focus must be dismissible without moving the pointer).';
+          add('High', '/', 'desktop', 'hover nav not dismissible: ' + msg);
+          interactionFailures.push({ route: '/', vp: 'desktop', check: 'nav-escape-dismiss', msg });
+        }
+      }
+    }
+
+    // (3) ADVISORY hover feedback: sample primary buttons / links, drive a REAL pointer to
+    // each (CSS :hover only fires for a real pointer, not a synthetic event), and see if the
+    // computed style shifts. Only flag when the WHOLE sample is dead - hover feedback via a
+    // child element or the cursor is legitimate and not caught here, so this never enforces.
+    const sample = await page.evaluate(() => {
+      const pick = Array.from(document.querySelectorAll('button, a[href]')).filter((el) => {
+        const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+        return r.width > 40 && r.height > 20 && r.top >= 0 && r.top < window.innerHeight && s.visibility !== 'hidden' && parseFloat(s.opacity || '1') > 0.5 && (el.innerText || '').trim().length > 0;
+      }).slice(0, 6);
+      pick.forEach((el, i) => el.setAttribute('data-ix-h', String(i)));
+      return pick.map((el) => { const r = el.getBoundingClientRect(); return { i: el.getAttribute('data-ix-h'), x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+    });
+    const snap = (sel) => page.evaluate((s) => {
+      const el = document.querySelector(s); if (!el) return null; const c = getComputedStyle(el);
+      return [c.color, c.backgroundColor, c.borderColor, c.boxShadow, c.opacity, c.textDecorationLine, c.transform, c.filter, c.scale].join('|');
+    }, sel);
+    let deadHover = 0, hoverChecked = 0;
+    for (const el of sample) {
+      const sel = '[data-ix-h="' + el.i + '"]';
+      await page.mouse.move(4, 4); // park the pointer off the element
+      const before = await snap(sel);
+      if (before == null) continue;
+      await page.mouse.move(el.x, el.y, { steps: 8 });
+      await page.evaluate(() => new Promise((r) => setTimeout(r, 120)));
+      const after = await snap(sel);
+      hoverChecked++;
+      if (after === before) deadHover++;
+    }
+    if (hoverChecked >= 4 && deadHover === hoverChecked) {
+      add('Medium', '/', 'desktop', 'no hover feedback: none of ' + hoverChecked + ' sampled buttons/links changed under a real hover (colour, shadow, transform). Give interactive elements hover feedback (advisory: feedback via a child element or the cursor is not detected here).');
+    }
+  } catch (e) {
+    add('Medium', '(interaction)', 'desktop', 'interaction pass could not complete: ' + (e && e.message ? e.message : e));
+  }
+  await context.close();
+}
+
 await browser.close();
+
+// Write the objective interaction failures for the enforce-on-evidence hook (palate-stop.mjs
+// reads <proj>/.palate-shots/interaction.json). Only with --out; best-effort - the findings
+// and the exit code below still stand without the artefact.
+if (outDir) {
+  try { writeFileSync(`${outDir}/interaction.json`, JSON.stringify({ interaction_failures: interactionFailures }, null, 2)); }
+  catch { /* artefact is a convenience for the deterministic hook, never fatal */ }
+}
 
 // ------------------------------------------------------------- helpers -----
 // A REAL wheel scroll to the bottom of the page (NOT scrollTo): this is what fires

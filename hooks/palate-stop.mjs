@@ -88,6 +88,19 @@ function positiveFailures(proj) {
   // 4. The fresh-context verifier itself returned verdict:fail (it ran and judged it a fail).
   if (rep && rep.verdict === "fail") reasons.push("the fresh-context verifier returned verdict:fail (see verify-report.json) - resolve the named findings");
 
+  // 5. Interaction-state failures from the rendered interaction pass (verify-rendered.mjs
+  //    drives a real pointer / keyboard and asserts the state changed). Only the OBJECTIVE,
+  //    low-FP checks are written here (a dead hover, a deleted focus ring, a hover/expand nav
+  //    that never opens or traps Escape); the pass keeps its softer findings advisory. So a
+  //    PRESENT, non-empty list is a real, blockable failure; an absent file = the pass did
+  //    not run (never a false trap), consistent with every other signal above.
+  const ix = readJSON(path.join(proj, ".palate-shots", "interaction.json"));
+  if (ix && Array.isArray(ix.interaction_failures) && ix.interaction_failures.length) {
+    const n = ix.interaction_failures.length;
+    const sample = ix.interaction_failures.slice(0, 3).map((f) => (f && f.msg ? f.msg : String(f))).join("; ");
+    reasons.push(`${n} interaction-state failure(s) on the rendered page (.palate-shots/interaction.json): ${sample}${n > 3 ? "; ..." : ""} - drive the state, fix it, and re-verify`);
+  }
+
   return reasons;
 }
 

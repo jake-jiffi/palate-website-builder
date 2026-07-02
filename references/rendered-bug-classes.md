@@ -165,6 +165,31 @@ visual loop's 390 shot is the interpretive complement.
 
 ---
 
+## (h) INTERACTION states must actually respond (pointer + keyboard)
+
+**The bug:** the bold mandate ships custom cursors, magnetic buttons and hover/expand navs,
+but the loop only ever drove a scroll, so a hover wired to nothing, a deleted focus ring, or
+a hover menu that traps the keyboard all passed. The rubric (dim 9) described these states;
+nothing exercised them.
+
+**The rule:** every interactive element the build declares must respond the way a human
+triggers it. Focus must be visible on a keyboard `:focus-visible` (WCAG 2.4.7); a nav
+disclosure that opens on hover must be dismissible with Escape (WCAG 1.4.13); a custom
+`cursor: none` must be gated to a fine pointer so touch / keyboard are not stranded.
+
+**The gate:** `verify-rendered.sh` drives a REAL pointer and keyboard on the home route
+(desktop). It Tabs the focusable elements and compares each one's resting vs focused style
+(any outline / ring / border / background shift counts, so a border-based focus style is not
+false-flagged; only a byte-identical focused style is a missing indicator), and it hover-opens
+any `aria-expanded` nav then presses Escape. The OBJECTIVE failures (a systematic missing
+focus indicator; a hover-opened nav Escape cannot dismiss) are written to
+`.palate-shots/interaction.json` and BLOCK by default via the enforce-on-evidence layer in
+`hooks/palate-stop.mjs`; softer signals (weak hover feedback) stay advisory findings for the
+verifier. The `custom-cursor-not-gated` `ux-lint.sh` rule is the static complement. Only the
+home route, desktop, is driven today.
+
+---
+
 ## How this maps to the gates (one table)
 
 | Class | Deterministic gate | Interpretive gate |
@@ -175,6 +200,7 @@ visual loop's 390 shot is the interpretive complement.
 | (d) mid-word heading break | `ux-lint.sh` `kinetic-heading-char-split` | visual-rubric defect (390) |
 | (e) eyebrow / kicker creep | `ux-lint.sh` `hero-status-pill` + `ai-tell-tracked-eyebrow` | visual-rubric defect |
 | (f) heavy WebGL on mobile | `verify-rendered.sh` (390 canvas / chunk check) | visual-rubric defect (390) |
+| (h) dead interaction / focus / hover-nav | `verify-rendered.sh` (pointer+keyboard pass) to `.palate-shots/interaction.json` to `palate-stop.mjs`; `ux-lint.sh` `custom-cursor-not-gated` | visual-rubric defect |
 
 `verify-rendered.sh` is fail-open on a missing browser (exit 3 = BLOCKED, surfaced, never
 a silent pass) exactly like the visual loop, so it never traps a build where a browser

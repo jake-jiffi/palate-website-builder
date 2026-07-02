@@ -387,6 +387,7 @@ while IFS=$'\t' read -r RULE_ID SEVERITY MODE FILES_GLOB REGEX; do
     banned-display-bricolage|banned-body-hanken) REQUIRES_REASON=1 ;;
     accent-indigo-default|accent-tailwind-class|accent-cyan-on-dark|accent-emerald-cta|accent-friendly-teal) REQUIRES_REASON=1 ;;
     gradient-overuse|glassmorphism-decorative|reseed-serif-italic-heading|ai-washing-copy) REQUIRES_REASON=1 ;;
+    custom-cursor-not-gated) REQUIRES_REASON=1 ;;
   esac
 
   while IFS= read -r f; do

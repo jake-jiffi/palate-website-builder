@@ -262,6 +262,12 @@ never held to the bold bar.
      footer / last section at the bottom of the page.
    - **(f) heavy WebGL on mobile** - no above-the-fold `<canvas>` at 390 (it must degrade
      to the poster on touch / low-end).
+   - **(h) dead interaction states** - a real pointer + keyboard pass (home route, desktop)
+     asserts focus is visible on a keyboard `:focus-visible` (resting vs focused style differs)
+     and that an `aria-expanded` nav opened on hover is Escape-dismissible (WCAG 2.4.7, 1.4.13).
+     The objective failures are written to `.palate-shots/interaction.json` and BLOCK by default
+     via the enforce-on-evidence hook, so this is a hard gate independent of your verdict; still
+     name it in a `visual: fail` if present.
    (Bug-classes **(d) mid-word kinetic heading** and **(e) eyebrow / console-chrome /
    placard creep** are caught by `ux-lint.sh` in step 3 - `kinetic-heading-char-split`,
    `hero-status-pill`, `ai-tell-tracked-eyebrow` - and by the render-side defects in
