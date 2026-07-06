@@ -17,7 +17,7 @@ Palate builds production-grade sites that do not read as AI-made. Taste comes fr
 
 **Non-negotiable stack:** Astro 6 (SSR), Tailwind 4, self-hosted fonts, GSAP + Lenis for motion, the Vercel adapter. The references, `refs_get_astro_recipe` and the gates all ASSUME Astro; a raw-HTML, Next or Vite build cannot consume them and fails the brief. Loose `index.html` at the project root is the freestyle anti-pattern and the gate rejects it.
 
-**Scaffold FIRST, before any page work** (never hand-roll a project): `npx degit jake-jiffi/palate-website-builder/templates/astro-project .` ships the Astro config, the Tailwind + brand wiring, self-hosted fonts and `src/layouts/BaseLayout.astro`. Build pages as `.astro` under `src/pages`; never dump `.html` at the root; fonts self-host from the template, never the Google Fonts CDN.
+**Scaffold FIRST, before any page work** (never hand-roll a project). ONE command gives a real Astro 6 + Tailwind 4 + Vercel project with the gate pre-wired (a git pre-push hook + CI): `curl -fsSL https://raw.githubusercontent.com/jake-jiffi/palate-website-builder/main/scripts/create-palate.sh | bash -s -- my-site codex` (swap `codex` for `cursor`/`gemini`/`copilot`). Build pages as `.astro` under `src/pages`; never dump `.html` at the root; brand tokens are vendored in `src/styles/globals.css` (edit them, never the Google Fonts CDN).
 
 ## The reference library
 
@@ -130,7 +130,7 @@ Research-grounded minimums (WCAG, Material 3, NNGroup, APCA, Apple HIG). Stronge
 On Claude Code the hooks fire the gates for you; here YOU run them, in order, every build:
 1. **Probe + survey.** `refs_list_verticals` once, then `refs_for_business` / `refs_match_brief` -> `refs_search` -> `refs_get` the layers of the backbone + donors. No survey, no ground.
 2. **Story + DIVERGE -> CONVERGE.** Run the Story Engine, sample 8-10 concepts, score Originality x Craft-feasibility, carry the best 1-2. Record it (write a `PALATE_COMMISSION.md`) BEFORE a single source file.
-3. **Scaffold.** `degit` the Astro starter (above) before writing any page. Never freestyle root `.html`.
+3. **Scaffold.** Run `create-palate` (above) before writing any page. Never freestyle root `.html`.
 4. **Build by the section recipe.** Per conversion section: 2-3 donors -> screenshot -> `component_prompts` + `do_dont` + `pages` -> reproduce the strongest re-skinned -> check `do_dont` before emit.
 5. **Gate, then stop.** Run `palate-verify` (below) and fix what it flags. You are NOT done until it exits 0.
 6. **Fetch deeper doctrine on demand** (this file is the lite floor): `curl` `references/{stack,build-stages,motion-and-3d,visual-rubric,industry-patterns,composition-and-attention}.md` from the repo when you reach that stage.

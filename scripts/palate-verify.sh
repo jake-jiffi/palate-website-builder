@@ -64,9 +64,13 @@ if [ "${PALATE_SKIP_ASTRO:-0}" != "1" ]; then
   fi
 fi
 
-# Gate 2: anti-slop lint (bootstrap.sh = ux-lint.sh + anti-patterns.md).
-echo "palate-verify: [2/2] anti-slop lint - banned faces, the eyebrow/status pill, the closed list of tells" >&2
-if bash "$BOOT" "$TARGET"; then
+# Gate 2: anti-slop lint (bootstrap.sh = ux-lint.sh + anti-patterns.md). On a real Astro
+# project, lint src/ (the build), so the downloaded doctrine at the root (AGENTS.md /
+# PALATE_*.md, which quote the very tells the lint hunts) is not scanned as a false positive.
+LINT_TARGET="$TARGET"
+[ -d "$TARGET/src" ] && LINT_TARGET="$TARGET/src"
+echo "palate-verify: [2/2] anti-slop lint ($LINT_TARGET) - banned faces, the eyebrow/status pill, the closed list of tells" >&2
+if bash "$BOOT" "$LINT_TARGET"; then
   echo "palate-verify: [2/2] OK" >&2
 else
   echo "palate-verify: [2/2] FAILED - AI tells above" >&2
