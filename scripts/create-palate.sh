@@ -40,6 +40,20 @@ else
 fi
 cd "$DIR"
 
+# 1b. The vendored-brand marker. .palate-skill-state.json is gitignored (it is build state), so
+# it is not committed to the template and degit drops it - but the anti-freestyle gate reads it,
+# so write it here if the copy did not carry it.
+if [ ! -f .palate-skill-state.json ]; then
+  cat > .palate-skill-state.json <<'STATE'
+{
+  "brand": "vendored",
+  "stack": "astro",
+  "portable": true,
+  "note": "Portable Palate starter. Brand tokens are vendored in src/styles/globals.css. Do not delete; the anti-freestyle gate reads the vendored marker."
+}
+STATE
+fi
+
 # 2. The always-load doctrine for this tool (from skill-lite).
 case "$TOOL" in
   gemini)  DEST="GEMINI.md";                       SRC="skill-lite/gemini/GEMINI.md" ;;
