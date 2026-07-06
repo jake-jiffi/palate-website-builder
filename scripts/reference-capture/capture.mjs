@@ -109,6 +109,8 @@ function isInternalTarget(url) {
   if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);    // strip IPv6 brackets
   const mapped = host.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
   if (mapped) host = mapped[1];                                                // IPv4-mapped IPv6 -> re-check IPv4
+  if (host.startsWith('::ffff:')) return true;                                 // hex IPv4-mapped IPv6 (e.g. ::ffff:7f00:1) the dotted regex above misses
+  if (host === 'metadata.google.internal' || host === 'metadata' || host === 'metadata.goog') return true; // cloud metadata by DNS name (resolves to link-local)
   if (host === 'localhost' || host.endsWith('.localhost')) return true;
   if (host === '169.254.169.254' || host.startsWith('169.254.')) return true; // link-local + metadata
   if (host === '0.0.0.0' || host === '::' || host === '::1') return true;

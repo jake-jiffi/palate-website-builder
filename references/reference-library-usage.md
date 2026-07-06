@@ -253,12 +253,11 @@ For any mechanic where the oracle reads NO donor:
    budget (a static poster is the LCP and the no-JS / reduced-motion state). The
    recipe layer is exactly the floor that lets a build reach the ceiling even where a
    donor is thin.
-3. **Log the donor gap, do not silently absorb it.** These fail-closed mechanics are
-   the CURATE work-list - tracked for sourcing in the private `palate-library` repo
-   (the demand-ranked donor list in `docs/ambition-tier-requirements-2026-06-18.md`).
-   Recording the gap when a real build hits it is what grows the moat from real
-   demand. Sourcing the donors is library / moat work, not skill work; the skill's
-   job is to fall back cleanly and note the gap.
+3. **Log the donor gap, do not silently absorb it.** When a fail-closed mechanic has
+   no strong donor, record the gap in the build manifest and fall back to the recipe
+   layer. Recording real gaps as they surface is what prioritises future library
+   sourcing; that sourcing is library work, not skill work. The skill's job is to fall
+   back cleanly and note the gap.
 
 So the oracle fails **open**: a thin or missing donor never blocks an ambitious
 build, it routes it to the template recipe and its budget, and writes a CURATE task

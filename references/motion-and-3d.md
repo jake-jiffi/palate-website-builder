@@ -375,7 +375,6 @@ fallbacks). Until a CURATE-side audit tags and sources award-grade motion / 3D d
 / `cursor-physics` / `model-viewer-3d` mechanics and `renderer` / `shaderFamily` /
 `canvasLightness` facets), the buildability oracle will return thin or wrong
 precedents for those mechanics and MUST fall back to the recipes here. The
-demand-ranked donor work-list is recorded in
-`docs/ambition-tier-requirements-2026-06-18.md` (Part 1) and belongs to the private
-`palate-library` repo. This is the one genuine external dependency of Move 4; the
-recipe layer is the floor that keeps the build unblocked until it lands.
+demand-ranked donor work-list is tracked internally for future library sourcing.
+This is the one genuine external dependency of Move 4; the recipe layer is the floor
+that keeps the build unblocked until a donor lands.
