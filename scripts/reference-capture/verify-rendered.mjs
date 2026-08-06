@@ -40,6 +40,7 @@ import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { createRequire } from 'module';
 import { measurePage, scoreDesignFacts, DESIGN_MEASURE_VERSION, DESIGN_MEASURE_SHA } from './design-measure.mjs';
 import { measureVitals, scoreVitals, VITALS_SHA } from './vitals.mjs';
+import { score as scoreRubric } from './rubric.mjs';
 
 // ----------------------------------------------------------------- args ----
 function parseArgs(argv) {
@@ -713,6 +714,39 @@ if (designFacts.desktop || designFacts.mobile) {
   }
 }
 
+// THE PROJECTED GRADE. The plugin now runs the grader's OWN rubric arithmetic (rubric.mjs,
+// vendored and diffed byte-for-byte in palate-product's lint) over the checks it can measure,
+// so "the plugin approved this build" carries a number rather than a promise.
+//
+// It is a PROJECTION, not the grade, and the gap is stated rather than glossed. The grader
+// also runs a SigLIP appearance head and a pairwise vision ladder against library exemplars,
+// which together own most of the design dimension and which nothing here can reproduce. Those
+// checks are simply absent from this roll-up, so `measuredWeight` reports how much of the 100
+// this number actually rests on. A build that projects well can still lose points on taste;
+// what it can no longer do is lose them on anything measurable.
+let projected = null;
+if (designScored || vitalsScored) {
+  try {
+    const m = new Map();
+    for (const c of [...(designScored ?? []), ...(vitalsScored ?? [])]) {
+      if (c.raw === null || c.applicable === false) continue;
+      m.set(c.id, { id: c.id, raw: c.raw, detail: c.detail, lowConfidence: !!c.lowConfidence });
+    }
+    // Every axe rule the grader treats as a binary. One failing contrast node zeroes 22 of the
+    // accessibility dimension there, so it must zero it here or the projection flatters.
+    const axeHit = (check) => interactionFailures.some((f) => f.check === check);
+    for (const id of ['text_contrast', 'control_accessible_names', 'forms_and_errors', 'structure_and_landmarks']) {
+      if (axeHit(id)) m.set(id, { id, raw: 0, detail: 'An axe violation was found on the rendered page.', lowConfidence: false });
+    }
+    if (m.size) projected = scoreRubric(m);
+  } catch (e) {
+    add('Medium', '/', 'all', 'the projected grade could not be computed: ' + (e && e.message ? e.message : e));
+  }
+}
+if (projected) {
+  console.error(`verify-rendered: projected grade ${projected.overall}/100 (${projected.band.band}) on ${projected.measuredWeight} of the 100 weight this gate can see. The vision ladder and appearance head are NOT included and own most of the design dimension.`);
+}
+
 if (outDir) {
   try { writeFileSync(`${outDir}/interaction.json`, JSON.stringify({ interaction_failures: interactionFailures }, null, 2)); }
   catch { /* artefact is a convenience for the deterministic hook, never fatal */ }
@@ -723,6 +757,7 @@ if (outDir) {
       version: DESIGN_MEASURE_VERSION, sha: DESIGN_MEASURE_SHA, vitalsSha: VITALS_SHA,
       scored: designScored, facts: designFacts,
       vitals, vitalsScored,
+      projected,
     }, null, 2));
   } catch { /* same contract as above */ }
 }
