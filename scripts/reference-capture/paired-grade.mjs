@@ -16,9 +16,14 @@
  *   node paired-grade.mjs                       # the built-in Palate demo set vs ordinary sites
  *   node paired-grade.mjs --a <url,url> --b <url,url>
  *
- * Run 2026-08-06, 8 Palate demos vs 3 reachable ordinary small-business sites:
- *   PALATE    median 0.93   0.3 failing checks per site   6/8 with none
- *   ordinary  median 0.71   2.0 failing checks per site   0/3 with none
+ * Run 2026-08-06, 8 Palate demos vs 11 reachable ordinary small-business sites (plumbers,
+ * dentists, trades directories, a bakery: the population the grader actually receives):
+ *   PALATE    n=8   median 0.93   0.3 failing checks per site   6 of 8 with none
+ *   ordinary  n=11  median 0.68   1.6 failing checks per site   1 of 11 with none
+ *
+ * The ordinary set is NOT uniformly bad, which is what makes the comparison worth anything:
+ * smilegeneration.com scores 0.92 with no failing check. A gate that failed every site outside
+ * our own would be measuring nothing.
  *
  * The two Palate builds that failed are the useful part and neither is a false positive.
  * axis-object misses LCP, which is honest: it is the Three.js hero demo. zoop-soda leads with
@@ -54,8 +59,10 @@ const PALATE=['https://aralia-skincare.vercel.app','https://aught-site.vercel.ap
   'https://vela-analytics.vercel.app','https://zoop-soda.vercel.app'];
 // Real small-business sites of the kind the grader actually receives: the population the
 // product is sold against, not flagship marketing pages.
-const ORDINARY=['https://shortysplumbingllc.com','https://neptuneplumbing.net','https://www.sidedental.com.au',
-  'https://localplumbercolumbus.com','https://www.100westdental.com'];
+const ORDINARY=['https://shortysplumbingllc.com','https://neptuneplumbing.net','https://localplumbercolumbus.com',
+  'https://www.mrrooter.com','https://www.rotorooter.com','https://www.aptdental.com',
+  'https://www.gentledental.com','https://www.smilegeneration.com','https://www.jimsmowing.com.au',
+  'https://www.hipages.com.au','https://www.bakerdays.com'];
 const rows=[];
 for(const [k,list] of [['PALATE',PALATE],['ordinary',ORDINARY]]){
   for(const u of list){
