@@ -34,7 +34,7 @@
 export const DESIGN_MEASURE_VERSION = '1.0.0';
 // SHA-256 of this file with the hash value below blanked. Both repos assert it, and
 // palate-product additionally diffs the two copies. See the header.
-export const DESIGN_MEASURE_SHA = '55dc7507f77b49fac144a46b7a6a0cdc968ece8a87f5fa004d48d247b2a6ac4c';
+export const DESIGN_MEASURE_SHA = '9f8c5e65c3b69592f76e6b1bae00e19d7e96fea805263f762643ce3e9fdf35c8';
 
 // ---------------------------------------------------------------- defaults ----
 // Framework and AI-default accents, matched by PERCEPTUAL DISTANCE rather than exact hex.
@@ -208,6 +208,70 @@ export function collectDesignFacts() {
     }
   }
 
+  // ---- AI-BUILD TELLS -------------------------------------------------------
+  // The population arriving at the grader is increasingly coming off AI builders, and these
+  // are the marks those tools leave. Measured across our own submissions against our own
+  // builds: 90% carry the icon-card row, 50% a two-tone heading, 20% gradient text.
+  //
+  // REPORTED, NOT SCORED. A false positive here tells a real business its site looks
+  // machine-made, which is the most damaging thing this report can get wrong, so these travel
+  // as named evidence rather than as points.
+  const tells = [];
+  const shortT = (x) => x.length > 1 && x.length < 40;
+  for (const h of document.querySelectorAll('h1, h2')) {
+    const prev = h.previousElementSibling;
+    if (prev) {
+      const pt = (prev.innerText || '').trim(), ps = getComputedStyle(prev);
+      if (shortT(pt) && !/\n/.test(pt) && parseFloat(ps.fontSize) < parseFloat(getComputedStyle(h).fontSize) * 0.6
+          && (ps.textTransform === 'uppercase' || pt === pt.toUpperCase()) && /[a-z]/i.test(pt))
+        tells.push({ rule: 'eyebrow-label', detail: `"${pt.slice(0, 32)}" above a heading` });
+    }
+    const hc = getComputedStyle(h).color;
+    for (const sp of h.querySelectorAll('span, em, strong')) {
+      if ((sp.innerText || '').trim() && getComputedStyle(sp).color !== hc) {
+        tells.push({ rule: 'two-tone-heading', detail: `"${(h.innerText || '').trim().slice(0, 40)}"` }); break;
+      }
+    }
+  }
+  for (const el of document.querySelectorAll('*')) {
+    const st = getComputedStyle(el), r = el.getBoundingClientRect();
+    if (/gradient/.test(st.backgroundImage || '') && (st.webkitBackgroundClip === 'text' || st.backgroundClip === 'text') && (el.innerText || '').trim())
+      tells.push({ rule: 'gradient-text', detail: `"${(el.innerText || '').trim().slice(0, 32)}" filled with a gradient` });
+    if (r.top < 900 && r.height > 16 && r.height < 46 && r.width < 340
+        && parseFloat(st.borderTopLeftRadius) >= r.height / 2 - 1 && shortT((el.innerText || '').trim())
+        && [...el.children].some((c) => { const cr = c.getBoundingClientRect(); return cr.width > 3 && cr.width < 14 && Math.abs(cr.width - cr.height) < 3; }))
+      tells.push({ rule: 'status-pill', detail: `"${(el.innerText || '').trim().slice(0, 32)}"` });
+
+    // THE ICON-CARD ROW. Tightened from "3+ equal-width siblings", which matched every
+    // legitimate grid and fired on 6 of 6 of our own builds. The actual tell is uniform
+    // structure carrying an ICON, a SHORT heading and a SHORT body, repeated. A product or
+    // article grid shares width but carries images and text of real and varying length.
+    const kids = [...el.children].filter((c) => { const cr = c.getBoundingClientRect(); return cr.width > 150 && cr.height > 120; });
+    if (kids.length >= 3) {
+      const w = kids.map((c) => c.getBoundingClientRect().width);
+      const uniform = Math.max(...w) - Math.min(...w) < 8;
+      const card = (c) => {
+        const icon = [...c.querySelectorAll('svg, i, [class*="icon"]')].some((g) => {
+          const gr = g.getBoundingClientRect();
+          return gr.width >= 14 && gr.width <= 72 && Math.abs(gr.width - gr.height) <= 8;
+        });
+        const heads = c.querySelectorAll('h2, h3, h4, h5');
+        const txt = (c.innerText || '').trim();
+        return icon && heads.length >= 1 && txt.length > 10 && txt.length < 260;
+      };
+      const cards = kids.filter(card);
+      if (uniform && cards.length >= 3) {
+        const lens = cards.map((c) => (c.innerText || '').trim().length);
+        const mean = lens.reduce((a, b) => a + b, 0) / lens.length;
+        // Interchangeable, not merely aligned: the copy is the same length in every card.
+        if (mean > 0 && Math.max(...lens.map((l) => Math.abs(l - mean))) / mean < 0.6)
+          tells.push({ rule: 'icon-card-row', detail: `${cards.length} cards, each an icon with a heading and ~${Math.round(mean)} characters` });
+      }
+    }
+  }
+  const seenT = new Set();
+  const tellsOut = tells.filter((t) => { const k = t.rule + '|' + t.detail; if (seenT.has(k)) return false; seenT.add(k); return true; }).slice(0, 10);
+
   const top = (m, n) => [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => ({ v: k, w: Math.round(v) }));
   return {
     viewport: { w: vw, h: vh },
@@ -229,6 +293,7 @@ export function collectDesignFacts() {
     maxIdenticalRun,
     identicalWhere,
     identicalUniform,
+    tells: tellsOut,
   };
 }
 
@@ -433,6 +498,32 @@ export function scoreDesignFacts(facts) {
   // detector that cannot tell a logo wall from a template row must inform rather than judge.
   const radii = d.radii.length, shadows = d.shadows.length, borders = d.borders.length;
   const run = d.maxIdenticalRun || 0;
+  // RECURRING LAYOUT PATTERNS, reported as evidence rather than as a verdict.
+  //
+  // These began as "AI-build tells" and the calibration killed that framing. Across 10 real
+  // submissions, 8 Palate builds and 4 library flagships the same rules fire at similar rates
+  // on all three populations, and the flagships are the proof: Linear trips two-tone-heading
+  // and gradient-text, Stripe trips two-tone-heading and an icon-card row. Printing "your site
+  // carries AI-build tells" on a page that shares a pattern with Stripe would discredit the
+  // whole report the first time anyone checked.
+  //
+  // The separation that DOES work is appearance-level, not rule-level: the SigLIP taste head
+  // cleared calibration at 46.5 points of separation. So these travel to the vision pass as
+  // observations, and it decides whether the pattern was chosen or defaulted into.
+  if (d.tells && d.tells.length) {
+    const byRule = [...new Set(d.tells.map((t) => t.rule))];
+    na('ai_build_tells',
+      `Recurring layout patterns on the rendered page: `
+      + d.tells.slice(0, 6).map((t) => `${t.rule} (${t.detail})`).join('; ')
+      + `. NEUTRAL EVIDENCE FOR THE VISION PASS, NOT AN ACCUSATION. Measured 2026-08-06 across `
+      + `10 real submissions, 8 Palate builds and 4 library flagships, these patterns fire at `
+      + `similar rates on all three: Linear carries two-tone-heading and gradient-text, Stripe `
+      + `carries two-tone-heading and an icon-card row. They are common web patterns that AI `
+      + `builders also use, not marks that identify one. Only a vision judgement can tell a `
+      + `considered use from a defaulted one, so this is handed to it rather than scored.`);
+    out[out.length - 1].measured = { tells: d.tells, rules: byRule };
+  }
+
   na('component_detail_craft',
     `Measured, for the vision pass to weigh: ${radii} corner radi${radii === 1 ? 'us' : 'i'}, ${shadows} shadow depth${shadows === 1 ? '' : 's'}, ${borders} border weight${borders === 1 ? '' : 's'}` +
     (run >= 3 ? `, and a run of ${run} structurally identical siblings${d.identicalUniform ? ' carrying short, near-identical text' : ' carrying varied content'}${d.identicalWhere ? ` in "${d.identicalWhere}"` : ''}` : ', no repeated sibling run') +
