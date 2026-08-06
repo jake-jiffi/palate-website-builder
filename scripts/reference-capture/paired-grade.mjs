@@ -45,6 +45,19 @@
  *   CONFOUNDED     lcp, cls, responsiveness, js_execution_and_payload. These scale with how
  *                  much a page carries, and the ordinary set carries far more.
  *
+ * THE SURVIVING HALF IS NOW MEASURED, NOT ARGUED. Splitting the checks by whether they should
+ * be complexity-independent was reasoning; testing it was one more run. Pearson r between DOM
+ * node count and each design check, across the ordinary population spanning 5 to 15,510 nodes:
+ *
+ *   colour_accent_discipline   r = +0.18
+ *   type_system_discipline     r = -0.01
+ *   responsive_integrity       r = +0.19
+ *
+ * All near zero, and if anything faintly POSITIVE, so bigger pages do not score worse on these.
+ * The three checks measure craft rather than size, which is what the split claimed and had not
+ * shown. The four vitals checks remain confounded and no correlation test rescues them: a page
+ * carrying forty-four images is genuinely slower to paint.
+ *
  * So the defensible claim is narrower than the number looks: on the complexity-independent
  * design checks a Palate build clears the bar and most ordinary sites do not. Whether it would
  * still clear it at 1,500 nodes and 44 images is untested, and the only test that settles it is
