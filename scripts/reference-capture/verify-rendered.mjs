@@ -38,6 +38,7 @@
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { createRequire } from 'module';
+import { measurePage, scoreDesignFacts, DESIGN_MEASURE_VERSION, DESIGN_MEASURE_SHA } from './design-measure.mjs';
 
 // ----------------------------------------------------------------- args ----
 function parseArgs(argv) {
@@ -74,6 +75,10 @@ const RANK = { High: 3, Medium: 2, Cosmetic: 1 };
 // visible control with no focus ring; an aria-expanded nav that never opens / won't dismiss);
 // softer interaction signals stay advisory in findings[] for the verifier to judge.
 const interactionFailures = [];
+// Computed-style design facts, keyed by viewport. Collected on the home route only: the
+// palette, the type scale and the mobile control sizes are properties of the design system,
+// not of a route, and measuring every route would multiply the cost for the same answer.
+const designFacts = {};
 
 // ------------------------------------------------------------------ axe ----
 // The accessibility checks the GRADER scores, run locally against the same
@@ -269,6 +274,13 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
     // contrast is read on what a visitor actually sees. Skipped on a blank page, where
     // the blank IS the finding and axe would only add noise to it.
     if (textLen > 0) await runAxe(page, route, vpName);
+
+    // Design measurement, from the SAME module the public grader runs (hash-pinned in both
+    // repos). This is what stops a build passing here and scoring badly there.
+    if (textLen > 0 && route === '/' && (vpName === 'desktop' || vpName === 'mobile')) {
+      try { designFacts[vpName] = await measurePage(page); }
+      catch (e) { add('Medium', route, vpName, 'design measurement failed: ' + (e && e.message ? e.message : e)); }
+    }
 
     // (b) MOTION-ON reveal reaches the finished state: count substantial elements still
     // fully transparent or hidden after the real wheel scroll. >0 = a reveal that never
@@ -619,9 +631,59 @@ await browser.close();
 // Write the objective interaction failures for the enforce-on-evidence hook (palate-stop.mjs
 // reads <proj>/.palate-shots/interaction.json). Only with --out; best-effort - the findings
 // and the exit code below still stand without the artefact.
+// ------------------------------------------------------- design measurement ----
+// Score the facts with the grader's own module, then split the result in two.
+//
+// BLOCKING is reserved for the three findings that are objective and conformance-anchored,
+// in keeping with this file's enforce-on-evidence rule: a framework-default accent (deltaE
+// under 8 from the lead accent, which is THE tell and is not a matter of taste), a control
+// under WCAG 2.5.8's 24px, and body text under 16px on a phone. Each is a fact about the
+// rendered page that a reasonable person cannot dispute.
+//
+// EVERYTHING ELSE IS EVIDENCE, not a verdict. Spacing rhythm and the component vocabulary
+// go to the verifier and the report. That line was drawn by measurement, not preference:
+// scoring the count of hues and radii ranked Linear and Stripe below a page with no palette
+// at all, because counting measures how rich a design system is and rich is not worse.
+let designScored = null;
+if (designFacts.desktop || designFacts.mobile) {
+  designScored = scoreDesignFacts(designFacts);
+  const by = (id) => designScored.find((c) => c.id === id);
+
+  const colour = by('colour_accent_discipline');
+  if (colour && colour.raw !== null && colour.raw <= 0.3) {
+    add('High', '/', 'desktop', 'design: ' + colour.detail);
+    interactionFailures.push({ msg: '/ @desktop: design colour_accent_discipline: ' + colour.detail, route: '/', viewport: 'desktop', rule: 'framework-default-accent', check: 'colour_accent_discipline' });
+  }
+
+  const resp = by('responsive_integrity');
+  const rm = resp && resp.measured;
+  if (rm && rm.failAA > 0) {
+    add('High', '/', 'mobile', 'design: ' + rm.failAA + ' of ' + rm.controls + ' controls are under 24px on a phone, missing WCAG 2.5.8 AA.');
+    interactionFailures.push({ msg: '/ @mobile: design responsive_integrity: ' + rm.failAA + ' of ' + rm.controls + ' controls under 24px (WCAG 2.5.8 AA)', route: '/', viewport: 'mobile', rule: 'tap-target-under-24px', check: 'responsive_integrity', nodes: rm.failAA });
+  }
+  if (rm && rm.mobileBody != null && rm.mobileBody < 16) {
+    add('High', '/', 'mobile', 'design: body text sets at ' + rm.mobileBody + 'px on a phone, below the 16px floor.');
+    interactionFailures.push({ msg: '/ @mobile: design responsive_integrity: body text at ' + rm.mobileBody + 'px, below the 16px mobile floor', route: '/', viewport: 'mobile', rule: 'mobile-body-under-16px', check: 'responsive_integrity' });
+  }
+
+  for (const c of designScored) {
+    if (c.raw !== null && c.raw < 0.6 && !['colour_accent_discipline', 'responsive_integrity'].includes(c.id)) {
+      add('Medium', '/', 'desktop', 'design ' + c.id + ': ' + c.detail);
+    }
+  }
+}
+
 if (outDir) {
   try { writeFileSync(`${outDir}/interaction.json`, JSON.stringify({ interaction_failures: interactionFailures }, null, 2)); }
   catch { /* artefact is a convenience for the deterministic hook, never fatal */ }
+  // The full scored set, for the verifier and for anyone comparing this build against the
+  // grade the same page will get in public.
+  try {
+    writeFileSync(`${outDir}/design.json`, JSON.stringify({
+      version: DESIGN_MEASURE_VERSION, sha: DESIGN_MEASURE_SHA,
+      scored: designScored, facts: designFacts,
+    }, null, 2));
+  } catch { /* same contract as above */ }
 }
 
 // ------------------------------------------------------------- helpers -----
