@@ -66,13 +66,23 @@
  *   responsiveness  r = -0.56   (0.31)
  *   js payload      r = -0.35   (0.12)
  *
- * All negative, so carrying more genuinely costs a page and the confound is confirmed. But it
- * explains 7 to 31 percent of the variance, leaving 69 to 93 percent attributable to how the
- * site was BUILT rather than how much it carries. Responsiveness is the most size-driven of the
- * four and should be read most cautiously across populations of different weight; CLS is nearly
- * independent of it. So the vitals half of this result is weakened by the confound, not voided.
+ * All negative, so carrying more genuinely costs a page and the confound is confirmed.
  *
- * So the defensible claim is narrower than the number looks: on the complexity-independent
+ * AND THEN THE CONTROL WAS RUN, AND THE VITALS ADVANTAGE DID NOT SURVIVE IT. Regressing the
+ * mean vitals score on population while controlling for log media count (Frisch-Waugh-Lovell,
+ * n=19, median media 2 for Palate against 45 for ordinary):
+ *
+ *   raw vitals gap                  0.329
+ *   controlling for log(media)      0.120   se 0.093, t = 1.30
+ *   share of the raw gap surviving  36%
+ *
+ * t = 1.30 at n=19 is not significant. So roughly two thirds of the vitals gap is page weight,
+ * and what remains cannot be distinguished from zero on this sample. THE VITALS HALF OF THE
+ * PAIRED RESULT IS NOT EVIDENCE THAT PALATE BUILDS ARE FASTER. It is mostly evidence that they
+ * are lighter, which they are, and which is not the same claim.
+ *
+ * The design half is the opposite and survives on its own terms: r ~ 0 against page size across
+ * 5 to 15,510 nodes, so those checks measure craft rather than weight. * So the defensible claim is narrower than the number looks: on the complexity-independent
  * design checks a Palate build clears the bar and most ordinary sites do not. Whether it would
  * still clear it at 1,500 nodes and 44 images is untested, and the only test that settles it is
  * a real rebuild of a real trading business re-graded against its own baseline.
