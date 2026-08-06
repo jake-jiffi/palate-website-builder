@@ -39,6 +39,7 @@ import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { createRequire } from 'module';
 import { measurePage, scoreDesignFacts, DESIGN_MEASURE_VERSION, DESIGN_MEASURE_SHA } from './design-measure.mjs';
+import { measureVitals, scoreVitals, VITALS_SHA } from './vitals.mjs';
 
 // ----------------------------------------------------------------- args ----
 function parseArgs(argv) {
@@ -626,6 +627,45 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
   await context.close();
 }
 
+// Core Web Vitals, on a FRESH page under slow-4G + 4x CPU emulation. It needs its own page
+// because the observers must be installed before navigation, and its own throttled context
+// because throttling the audit pass would distort every other measurement in this file.
+// Skipped with --no-vitals for a fast inner loop; the gate says so rather than going quiet.
+let vitalsScored = null, vitals = null;
+if (args['no-vitals'] !== 'true') {
+  try {
+    const vctx = await browser.newContext({ viewport: VIEWPORTS.mobile });
+    const vpage = await vctx.newPage();
+    vitals = await measureVitals(vpage, base + '/');
+    await vctx.close();
+    vitalsScored = scoreVitals(vitals);
+    if (!vitals.applicable) {
+      add('Medium', '/', 'mobile', 'performance was not measured: ' + vitals.reason);
+    } else {
+      // LCP and CLS block; TBT and payload advise. The split is about how directly the build
+      // controls the number: a slow hero and a shifting layout are the build's, while blocking
+      // time under 4x CPU emulation moves with what third parties the site carries.
+      const by = (id) => vitalsScored.find((c) => c.id === id);
+      for (const id of ['lcp', 'cls']) {
+        const c = by(id);
+        if (c && c.raw !== null && c.raw < 0.5) {
+          add('High', '/', 'mobile', 'performance: ' + c.detail);
+          interactionFailures.push({ msg: '/ @mobile: performance ' + id + ': ' + c.detail, route: '/', viewport: 'mobile', rule: 'vitals-' + id, check: id });
+        }
+      }
+      for (const id of ['responsiveness', 'js_execution_and_payload']) {
+        const c = by(id);
+        if (c && c.raw !== null && c.raw < 0.5) add('Medium', '/', 'mobile', 'performance: ' + c.detail);
+      }
+    }
+  } catch (e) {
+    add('Medium', '/', 'mobile', 'performance measurement failed: ' + (e && e.message ? e.message : e));
+  }
+} else {
+  console.error('verify-rendered: --no-vitals set; performance is UNMEASURED (17 of the grader\'s 100 points).');
+}
+
+
 await browser.close();
 
 // Write the objective interaction failures for the enforce-on-evidence hook (palate-stop.mjs
@@ -680,8 +720,9 @@ if (outDir) {
   // grade the same page will get in public.
   try {
     writeFileSync(`${outDir}/design.json`, JSON.stringify({
-      version: DESIGN_MEASURE_VERSION, sha: DESIGN_MEASURE_SHA,
+      version: DESIGN_MEASURE_VERSION, sha: DESIGN_MEASURE_SHA, vitalsSha: VITALS_SHA,
       scored: designScored, facts: designFacts,
+      vitals, vitalsScored,
     }, null, 2));
   } catch { /* same contract as above */ }
 }
