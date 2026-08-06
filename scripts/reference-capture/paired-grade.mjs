@@ -95,9 +95,21 @@
  * cannot carry the claim that plugin-approved builds score better. It can only say the design
  * difference is not an artefact of size, which is a much smaller statement.
  *
- * THE SHARPER CONTRAST IS THE BINARY, NOT THE MEAN: 6 of 8 Palate builds have NO failing check
- * against 1 of 11 ordinary sites. A count that lopsided is far less likely to be noise than the
- * mean difference is, though the exact test was not run here and should be before it is quoted.
+ * THE BINARY WAS THEN TESTED PROPERLY, AND IT DOES NOT RESCUE THE CLAIM EITHER. Fisher exact
+ * on the zero-failing-check contrast:
+ *
+ *   ALL checks     Palate 6/8 vs ordinary 1/11    p = 0.006   significant, odds ratio 30
+ *   DESIGN only    Palate 7/8 vs ordinary 8/11    p = 0.603   no separation at all
+ *
+ * The significant result is carried ENTIRELY by vitals failures, which are the confounded half:
+ * strip them out and the binary separates no better than chance. So the one statistically
+ * significant finding in this whole comparison rests on the measurement we already showed is
+ * two thirds page weight.
+ *
+ * THE HONEST BOTTOM LINE: this data does not support the claim that plugin-approved builds
+ * score better in the grader. It supports the claim that they are LIGHTER. Those coincide often
+ * enough to be easy to confuse, and confusing them is how a product ends up believing its own
+ * marketing. The instrument is sound; the claim about what it shows is not yet earned.
  *
  * What would settle it: more builds on both sides, and a real trading business's site rebuilt
  * at real weight and re-graded against its own baseline. That last one is the only design that
