@@ -55,8 +55,22 @@
  *
  * All near zero, and if anything faintly POSITIVE, so bigger pages do not score worse on these.
  * The three checks measure craft rather than size, which is what the split claimed and had not
- * shown. The four vitals checks remain confounded and no correlation test rescues them: a page
- * carrying forty-four images is genuinely slower to paint.
+ * shown.
+ *
+ * THE VITALS CONFOUND IS REAL BUT MODERATE, and "no correlation test rescues them" was lazier
+ * than measuring it. Pearson r between media-element count and each vitals check across the
+ * ordinary population, spanning 0 to 146 media elements:
+ *
+ *   lcp             r = -0.33   (r-squared 0.11)
+ *   cls             r = -0.27   (0.07)
+ *   responsiveness  r = -0.56   (0.31)
+ *   js payload      r = -0.35   (0.12)
+ *
+ * All negative, so carrying more genuinely costs a page and the confound is confirmed. But it
+ * explains 7 to 31 percent of the variance, leaving 69 to 93 percent attributable to how the
+ * site was BUILT rather than how much it carries. Responsiveness is the most size-driven of the
+ * four and should be read most cautiously across populations of different weight; CLS is nearly
+ * independent of it. So the vitals half of this result is weakened by the confound, not voided.
  *
  * So the defensible claim is narrower than the number looks: on the complexity-independent
  * design checks a Palate build clears the bar and most ordinary sites do not. Whether it would
