@@ -10,11 +10,22 @@ set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
-if [ ! -d node_modules/playwright ]; then
-  echo "[setup] installing the playwright npm package..."
+# Every dependency is checked, not just playwright. Guarding the install on ONE package
+# means an existing install never picks up a newly added one: axe-core would have been
+# permanently absent on every machine that had already run setup, and verify-rendered
+# would have reported accessibility UNMEASURED forever with setup.sh insisting it was done.
+missing=""
+for dep in playwright axe-core; do
+  [ -d "node_modules/$dep" ] || missing="$missing $dep"
+done
+if [ -n "$missing" ]; then
+  echo "[setup] installing npm packages:$missing"
   npm install --no-audit --no-fund --silent || { echo "[setup] npm install failed" >&2; exit 1; }
+  for dep in $missing; do
+    [ -d "node_modules/$dep" ] || { echo "[setup] $dep still missing after npm install" >&2; exit 1; }
+  done
 else
-  echo "[setup] playwright npm package already present."
+  echo "[setup] npm packages already present."
 fi
 
 echo "[setup] ensuring headless chromium (cached after first run)..."

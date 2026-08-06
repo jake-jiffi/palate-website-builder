@@ -36,7 +36,8 @@
  *   3  a browser could not be launched - the gate is BLOCKED, never a pass
  */
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { createRequire } from 'module';
 
 // ----------------------------------------------------------------- args ----
 function parseArgs(argv) {
@@ -73,6 +74,87 @@ const RANK = { High: 3, Medium: 2, Cosmetic: 1 };
 // visible control with no focus ring; an aria-expanded nav that never opens / won't dismiss);
 // softer interaction signals stay advisory in findings[] for the verifier to judge.
 const interactionFailures = [];
+
+// ------------------------------------------------------------------ axe ----
+// The accessibility checks the GRADER scores, run locally against the same
+// rendered page. The rule list is explicit rather than axe's default set for two
+// reasons: the results stay deterministic across axe versions, and every rule here
+// maps to a check the grader actually weights, so a build that clears this gate
+// cannot lose those points on a re-grade.
+//
+// WHY THIS RUNS AT EVERY VIEWPORT. Our own contrast sweep ran only at 412px, where
+// the nav collapses to a burger, so the desktop nav CTA (white on persimmon, 3.74:1,
+// on every page) was never rendered and never tested. A hover-only control and a
+// closed mobile sheet hid two more. An accessibility pass only ever tests what is on
+// screen when it runs, so it runs at all three.
+//
+// Only `violations` count. Axe reports text over imagery and gradients as
+// `incomplete`, which is a request for a human look, not a failure.
+const AXE_RULES = {
+  // grader: text_contrast (3.08 overall pts). The grader reads this as a BINARY off
+  // Lighthouse's axe audit: ONE failing node anywhere zeroes 22 of the 100
+  // accessibility points. There is no partial credit, so there is no soft version.
+  'color-contrast':        { check: 'text_contrast' },
+  // grader: control_accessible_names (2.80)
+  'button-name':           { check: 'control_accessible_names' },
+  'link-name':             { check: 'control_accessible_names' },
+  'input-button-name':     { check: 'control_accessible_names' },
+  'select-name':           { check: 'control_accessible_names' },
+  // grader: forms_and_errors (1.40). Catches the programmatic label association that
+  // the placeholder-as-label and input-missing-name lints cannot see at runtime.
+  'label':                 { check: 'forms_and_errors' },
+  'form-field-multiple-labels': { check: 'forms_and_errors' },
+  // grader: structure_and_landmarks (1.96) + quotable_chunk_structure (1.96)
+  'html-has-lang':         { check: 'structure_and_landmarks' },
+  'document-title':        { check: 'structure_and_landmarks' },
+  'image-alt':             { check: 'structure_and_landmarks' },
+  'landmark-one-main':     { check: 'structure_and_landmarks' },
+  'heading-order':         { check: 'quotable_chunk_structure' },
+};
+
+// Resolve axe-core once. A MISSING DEPENDENCY IS A BLOCKED GATE, NOT A PASS: every
+// silent-skip in this product's history (the taste head gated on a capture verdict, the
+// design ladder waiting on a token nobody set, the motion probe reading only declared
+// CSS) reported a clean result while measuring nothing, and each one cost more to find
+// than it would have to fail loudly on day one.
+let axeSource = null, axeLoadError = null;
+try {
+  axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
+} catch (e) {
+  axeLoadError = e && e.message ? e.message : String(e);
+}
+
+async function runAxe(page, route, vpName) {
+  if (!axeSource) return;
+  let res;
+  try {
+    await page.addScriptTag({ content: axeSource });
+    res = await page.evaluate(
+      (rules) => window.axe.run(document, { runOnly: { type: 'rule', values: rules }, resultTypes: ['violations'] }),
+      Object.keys(AXE_RULES),
+    );
+  } catch (e) {
+    // A page that cannot be scanned has not passed. Say so.
+    add('High', route, vpName, 'accessibility scan could not run on this route (' + (e && e.message ? e.message : e) + '). This is UNMEASURED, not clean.');
+    return;
+  }
+  for (const v of res.violations || []) {
+    const meta = AXE_RULES[v.id];
+    if (!meta) continue;
+    const n = v.nodes.length;
+    // The first offending selector is what makes this actionable rather than a count.
+    const where = v.nodes[0] && v.nodes[0].target ? String(v.nodes[0].target[0]).slice(0, 120) : 'unknown element';
+    const extra = v.nodes[0] && v.nodes[0].failureSummary
+      ? ' ' + v.nodes[0].failureSummary.replace(/\s+/g, ' ').replace(/^Fix any of the following:\s*/i, '').slice(0, 200)
+      : '';
+    const msg = 'a11y ' + v.id + ' [grader: ' + meta.check + ']: ' + n + ' node' + (n === 1 ? '' : 's') + ', first at `' + where + '`.' + extra;
+    add('High', route, vpName, msg);
+    // `msg` is the field the stop hook samples when it blocks. Without it the hook
+    // prints [object Object], which blocks the build while telling the agent nothing
+    // it can act on, and an unfixable block just gets the gate switched off.
+    interactionFailures.push({ msg: route + ' @' + vpName + ': ' + msg, route, viewport: vpName, rule: v.id, check: meta.check, nodes: n, target: where });
+  }
+}
 
 // --------------------------------------------------------------- launch ----
 // GPU off is the FAST default. --disable-software-rasterizer also kills CPU
@@ -119,6 +201,14 @@ try {
   console.error('verify-rendered: could not launch a browser (' + (e && e.message ? e.message : e) + ').');
   console.error('verify-rendered: run scripts/reference-capture/setup.sh, or run this gate where a browser is available. This is BLOCKED, not a pass.');
   process.exit(3);
+}
+
+// Announced once, before the audit, so it cannot be mistaken for a clean accessibility
+// result buried in a long report.
+if (!axeSource) {
+  console.error('verify-rendered: axe-core is not installed (' + axeLoadError + '); accessibility is UNMEASURED.');
+  console.error('verify-rendered: run scripts/reference-capture/setup.sh. These checks are worth 9.2 of the 100 points the grader scores, and contrast alone zeroes 22 of the accessibility dimension on a single failing node.');
+  add('High', '-', 'all', 'accessibility was NOT measured: axe-core is not installed (' + axeLoadError + '). Run scripts/reference-capture/setup.sh. Treat this build as unverified for contrast, control names, form labels and landmarks.');
 }
 
 // --------------------------------------------------------------- audit -----
@@ -174,6 +264,11 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
 
     const textLen = await page.evaluate(() => (document.body && document.body.innerText ? document.body.innerText.trim().length : 0));
     if (textLen < 1) add('High', route, vpName, 'page renders blank (no text content)');
+
+    // Accessibility, on the settled post-scroll state so reveals have finished and
+    // contrast is read on what a visitor actually sees. Skipped on a blank page, where
+    // the blank IS the finding and axe would only add noise to it.
+    if (textLen > 0) await runAxe(page, route, vpName);
 
     // (b) MOTION-ON reveal reaches the finished state: count substantial elements still
     // fully transparent or hidden after the real wheel scroll. >0 = a reveal that never
