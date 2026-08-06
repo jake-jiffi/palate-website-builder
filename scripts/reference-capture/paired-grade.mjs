@@ -82,16 +82,26 @@
  * are lighter, which they are, and which is not the same claim.
  *
  * The design half is the opposite and survives on its own terms: r ~ 0 against page size across
- * 5 to 15,510 nodes, so those checks measure craft rather than weight. * So the defensible claim is narrower than the number looks: on the complexity-independent
- * design checks a Palate build clears the bar and most ordinary sites do not. Whether it would
- * still clear it at 1,500 nodes and 44 images is untested, and the only test that settles it is
- * a real rebuild of a real trading business re-graded against its own baseline.
+ * 5 to 15,510 nodes, so those checks measure craft rather than weight. * BOTH HALVES WERE THEN PUT THROUGH THE SAME CONTROL, AND THE HONEST ANSWER IS MODEST:
  *
- * The two Palate builds that failed are the useful part and neither is a false positive.
- * axis-object misses LCP, which is honest: it is the Three.js hero demo. zoop-soda leads with
- * #7c4dff, deltaE 4.4 from Tailwind violet-500, so one of our own bold-slate demos shipped a
- * framework default. The previous exact-hex detector could not have seen it, because the string
- * is not #8b5cf6. That is the perceptual-distance upgrade earning its place on our own work.
+ *                        raw gap   controlled   survives      t
+ *   design checks          0.089      0.096       107%       1.60
+ *   vitals checks          0.329      0.120        36%       1.30
+ *
+ * NEITHER REACHES SIGNIFICANCE AT n=19 (t would need about 2.1). The qualitative difference
+ * between them is real and is the part worth carrying: the design gap SURVIVES controlling for
+ * page weight and is if anything slightly larger once you do, while two thirds of the vitals
+ * gap simply is page weight. But "survives the control" is not "is proven", and this sample
+ * cannot carry the claim that plugin-approved builds score better. It can only say the design
+ * difference is not an artefact of size, which is a much smaller statement.
+ *
+ * THE SHARPER CONTRAST IS THE BINARY, NOT THE MEAN: 6 of 8 Palate builds have NO failing check
+ * against 1 of 11 ordinary sites. A count that lopsided is far less likely to be noise than the
+ * mean difference is, though the exact test was not run here and should be before it is quoted.
+ *
+ * What would settle it: more builds on both sides, and a real trading business's site rebuilt
+ * at real weight and re-graded against its own baseline. That last one is the only design that
+ * removes the confound rather than adjusting for it.
  */
 import {chromium} from 'playwright';
 import {measurePage, scoreDesignFacts} from './design-measure.mjs';
