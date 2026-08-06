@@ -25,6 +25,31 @@
  * smilegeneration.com scores 0.92 with no failing check. A gate that failed every site outside
  * our own would be measuring nothing.
  *
+ * THE COMPARISON IS PARTLY CONFOUNDED, AND THIS WAS MEASURED RATHER THAN CONCEDED. The two
+ * populations are not the same size of thing. Medians:
+ *
+ *              DOM nodes  controls  media  internal routes  page height
+ *   PALATE           234        29      1               10       5375px
+ *   ordinary        1508       174     44               59       5637px
+ *
+ * Six times the nodes, six times the controls, forty-four times the media. Only scroll height
+ * is comparable. So the headline gap is NOT clean evidence that Palate builds are better: some
+ * of it is that they are smaller, and a page with one image will beat a page with forty-four
+ * on LCP whoever built it.
+ *
+ * The split that survives the confound:
+ *   MOSTLY FAIR    colour_accent_discipline and type_system_discipline - a framework-default
+ *                  accent is a framework default at any page size, and so is a default-only
+ *                  type stack. responsive_integrity too, since it scores the SHARE of controls
+ *                  under 24px rather than the count, which is why it was normalised.
+ *   CONFOUNDED     lcp, cls, responsiveness, js_execution_and_payload. These scale with how
+ *                  much a page carries, and the ordinary set carries far more.
+ *
+ * So the defensible claim is narrower than the number looks: on the complexity-independent
+ * design checks a Palate build clears the bar and most ordinary sites do not. Whether it would
+ * still clear it at 1,500 nodes and 44 images is untested, and the only test that settles it is
+ * a real rebuild of a real trading business re-graded against its own baseline.
+ *
  * The two Palate builds that failed are the useful part and neither is a false positive.
  * axis-object misses LCP, which is honest: it is the Three.js hero demo. zoop-soda leads with
  * #7c4dff, deltaE 4.4 from Tailwind violet-500, so one of our own bold-slate demos shipped a
