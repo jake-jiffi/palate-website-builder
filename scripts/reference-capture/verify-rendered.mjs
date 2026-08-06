@@ -743,6 +743,35 @@ if (designScored || vitalsScored) {
     add('Medium', '/', 'all', 'the projected grade could not be computed: ' + (e && e.message ? e.message : e));
   }
 }
+/**
+ * THE SCORE GATES, AND IT SAYS WHY.
+ *
+ * Printing a number and moving on is what made the plugin and the grader two disconnected
+ * systems in the first place. A build that projects below the bar blocks, and the block names
+ * the specific checks holding it down, ranked by how many points each is worth, with the fix
+ * for each. That is what turns "you scored 57" into work an agent can actually do.
+ *
+ * The bar is 80 on the weight this gate can see. Measured: a Palate demo projects 97 and an
+ * ordinary plumber site 52, so 80 sits well clear of both without demanding perfection on a
+ * number that excludes the vision ladder entirely.
+ *
+ * PALATE_MIN_GRADE=0 turns it off for a deliberate exception; it is not silent when it does.
+ */
+const MIN_GRADE = Number(process.env.PALATE_MIN_GRADE ?? 80);
+if (projected && MIN_GRADE > 0 && projected.overall < MIN_GRADE) {
+  const gaps = (projected.findings ?? [])
+    .filter((f) => (f.recoverable ?? 0) > 0.05)
+    .slice(0, 5)
+    .map((f) => `  - ${f.label ?? f.id} (worth ${(f.recoverable ?? 0).toFixed(1)} pts): ${f.detail ?? ''} FIX: ${f.fix ?? ''}`)
+    .join('\n');
+  const msg = `projected grade ${projected.overall}/100 is below the ${MIN_GRADE} bar, on the ${projected.measuredWeight} of 100 weight this gate can measure. Biggest gaps:\n${gaps}`;
+  add('High', '/', 'all', msg);
+  interactionFailures.push({ msg, route: '/', viewport: 'all', rule: 'projected-grade-below-bar', check: 'projected_grade', score: projected.overall });
+  console.error(`verify-rendered: BLOCKED, projected grade ${projected.overall}/100 is below ${MIN_GRADE}.\n${gaps}`);
+} else if (projected && MIN_GRADE <= 0) {
+  console.error('verify-rendered: PALATE_MIN_GRADE=0, the projected-grade gate is OFF for this build.');
+}
+
 if (projected) {
   console.error(`verify-rendered: projected grade ${projected.overall}/100 (${projected.band.band}) on ${projected.measuredWeight} of the 100 weight this gate can see. The vision ladder and appearance head are NOT included and own most of the design dimension.`);
 }
