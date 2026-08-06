@@ -41,6 +41,10 @@ import { createRequire } from 'module';
 import { measurePage, scoreDesignFacts, DESIGN_MEASURE_VERSION, DESIGN_MEASURE_SHA } from './design-measure.mjs';
 import { measureVitals, scoreVitals, VITALS_SHA } from './vitals.mjs';
 import { score as scoreRubric } from './rubric.mjs';
+import {
+  HISTORY_FILE, DEFAULT_STALL_ITERS, basisOf, entryFor, readHistory, writeHistory,
+  comparableTail, compare, detectStall, blockMessage, summaryLine,
+} from './grade-loop.mjs';
 
 // ----------------------------------------------------------------- args ----
 function parseArgs(argv) {
@@ -725,6 +729,9 @@ if (designFacts.desktop || designFacts.mobile) {
 // this number actually rests on. A build that projects well can still lose points on taste;
 // what it can no longer do is lose them on anything measurable.
 let projected = null;
+// The self-heal trend for this run, written into design.json so the verifier and the human
+// see the same convergence story the agent was given.
+let gradeLoop = null;
 if (designScored || vitalsScored) {
   try {
     const m = new Map();
@@ -744,12 +751,20 @@ if (designScored || vitalsScored) {
   }
 }
 /**
- * THE SCORE GATES, AND IT SAYS WHY.
+ * THE SCORE GATES, IT SAYS WHY, AND IT SAYS WHETHER THE LAST FIX HELPED.
  *
  * Printing a number and moving on is what made the plugin and the grader two disconnected
  * systems in the first place. A build that projects below the bar blocks, and the block names
  * the specific checks holding it down, ranked by how many points each is worth, with the fix
  * for each. That is what turns "you scored 57" into work an agent can actually do.
+ *
+ * Blocking is still not HEALING. An agent that is told it failed, fixes something, and re-runs
+ * has no way to tell a real gain from the +/-2 the instrument moves on its own, so it thrashes.
+ * grade-loop.mjs persists each projection next to the build and turns the next run into a
+ * comparison: up, down, or unchanged, per gap as well as overall, and a stall once two
+ * iterations pass with no material gain. See that file for why the noise band is 2, why a run
+ * measured on a different set of checks reports NO COMPARISON instead of a delta, and why a
+ * stall escalates rather than releasing the gate.
  *
  * The bar is 80 on the weight this gate can see. Measured: a Palate demo projects 97 and an
  * ordinary plumber site 52, so 80 sits well clear of both without demanding perfection on a
@@ -757,23 +772,77 @@ if (designScored || vitalsScored) {
  *
  * PALATE_MIN_GRADE=0 turns it off for a deliberate exception; it is not silent when it does.
  */
-const MIN_GRADE = Number(process.env.PALATE_MIN_GRADE ?? 80);
-if (projected && MIN_GRADE > 0 && projected.overall < MIN_GRADE) {
-  const gaps = (projected.findings ?? [])
-    .filter((f) => (f.recoverable ?? 0) > 0.05)
-    .slice(0, 5)
-    .map((f) => `  - ${f.label ?? f.id} (worth ${(f.recoverable ?? 0).toFixed(1)} pts): ${f.detail ?? ''} FIX: ${f.fix ?? ''}`)
-    .join('\n');
-  const msg = `projected grade ${projected.overall}/100 is below the ${MIN_GRADE} bar, on the ${projected.measuredWeight} of 100 weight this gate can measure. Biggest gaps:\n${gaps}`;
-  add('High', '/', 'all', msg);
-  interactionFailures.push({ msg, route: '/', viewport: 'all', rule: 'projected-grade-below-bar', check: 'projected_grade', score: projected.overall });
-  console.error(`verify-rendered: BLOCKED, projected grade ${projected.overall}/100 is below ${MIN_GRADE}.\n${gaps}`);
-} else if (projected && MIN_GRADE <= 0) {
-  console.error('verify-rendered: PALATE_MIN_GRADE=0, the projected-grade gate is OFF for this build.');
-}
+// A garbage value must not disable the gate. `Number('eighty')` is NaN, and NaN fails BOTH
+// `> 0` and `<= 0`, so a typo used to skip the block and print nothing about it - the exact
+// silent-skip shape this file exists to prevent. Fall back to the default and SAY SO.
+const numEnv = (name, fallback) => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    console.error(`verify-rendered: ${name}="${raw}" is not a number; using the default ${fallback}. The gate is NOT off.`);
+    return fallback;
+  }
+  return n;
+};
+const MIN_GRADE = numEnv('PALATE_MIN_GRADE', 80);
+const STALL_ITERS = Math.max(1, Math.round(numEnv('PALATE_GRADE_STALL_ITERS', DEFAULT_STALL_ITERS)) || DEFAULT_STALL_ITERS);
+// The exact command to re-run, reconstructed from this invocation so the agent can copy it
+// rather than reconstruct it. A "re-run the gate" instruction with no command is an instruction
+// to guess.
+const RERUN = ['node', process.argv[1], '--url', base, '--routes', routes.join(','),
+  ...(outDir ? ['--out', outDir] : []), ...(args['no-vitals'] === 'true' ? ['--no-vitals'] : [])].join(' ');
 
 if (projected) {
-  console.error(`verify-rendered: projected grade ${projected.overall}/100 (${projected.band.band}) on ${projected.measuredWeight} of the 100 weight this gate can see. The vision ladder and appearance head are NOT included and own most of the design dimension.`);
+  const historyFile = outDir ? `${outDir}/${HISTORY_FILE}` : '';
+  // Bookkeeping problems are REPORTED, never swallowed and never fatal: losing the trend is
+  // exactly the silent skip this loop exists to prevent, but it must not fail a good build.
+  const notes = [];
+  let hist = { entries: [], error: null };
+  if (!historyFile) {
+    notes.push('NOTE: this run had no --out, so no grade history was kept and no trend can be reported. Pass --out <dir> to make the loop measurable.');
+  } else {
+    hist = readHistory(historyFile);
+    if (hist.error) notes.push(`NOTE: the grade history at ${historyFile} ${hist.error}, so this run is treated as a first measurement. The trend is LOST, not clean.`);
+  }
+
+  // The measurement CONFIGURATION, not the outcome: see basisOf() for why keying it on the
+  // scored checks made a successful fix read as NO COMPARISON.
+  const measuredWith = { routes, vitals: args['no-vitals'] !== 'true', axe: !!axeSource };
+  const basis = basisOf(measuredWith);
+  const tailBefore = comparableTail(hist.entries, basis);
+  const entry = entryFor(projected, {
+    ...measuredWith, url: base, minGrade: MIN_GRADE,
+    blocked: MIN_GRADE > 0 && projected.overall < MIN_GRADE,
+  });
+  const cmp = compare(entry, hist.entries[hist.entries.length - 1] ?? null);
+  const stall = detectStall([...tailBefore, entry], STALL_ITERS);
+
+  if (historyFile) {
+    const w = writeHistory(historyFile, hist.entries, entry);
+    if (w.error) notes.push(`NOTE: the grade history at ${historyFile} ${w.error}, so the NEXT run will not see this one and cannot report a trend.`);
+  }
+
+  if (MIN_GRADE > 0 && projected.overall < MIN_GRADE) {
+    const msg = blockMessage({ projected, cmp, stall, minGrade: MIN_GRADE, rerun: RERUN, notes });
+    add('High', '/', 'all', msg);
+    // FIRST, not appended: palate-stop.mjs samples the head of this list, and behind five axe
+    // entries the whole self-heal message would never reach the agent that has to act on it.
+    interactionFailures.unshift({
+      msg, route: '/', viewport: 'all', rule: 'projected-grade-below-bar', check: 'projected_grade',
+      score: projected.overall, bar: MIN_GRADE, trend: cmp.verdict, delta: cmp.delta,
+      iteration: stall.iterations, stalled: stall.stalled, rerun: RERUN,
+    });
+    console.error('verify-rendered: BLOCKED.\n' + msg);
+  } else if (MIN_GRADE <= 0) {
+    console.error('verify-rendered: PALATE_MIN_GRADE=0, the projected-grade gate is OFF for this build.');
+  }
+  // Printed on every run, pass or fail: an agent that has just cleared the bar still needs to
+  // know whether it cleared it by 1 point on a rising trend or by luck on a flat one.
+  console.error(summaryLine({ projected, cmp, stall, minGrade: MIN_GRADE }));
+  for (const n of notes) console.error('verify-rendered: ' + n);
+  gradeLoop = { basis, trend: cmp.verdict, delta: cmp.delta, previous: cmp.previous?.overall ?? null,
+    iteration: stall.iterations, stalled: stall.stalled, blockers: stall.blockers, rerun: RERUN, notes };
 }
 
 if (outDir) {
@@ -786,7 +855,7 @@ if (outDir) {
       version: DESIGN_MEASURE_VERSION, sha: DESIGN_MEASURE_SHA, vitalsSha: VITALS_SHA,
       scored: designScored, facts: designFacts,
       vitals, vitalsScored,
-      projected,
+      projected, gradeLoop,
     }, null, 2));
   } catch { /* same contract as above */ }
 }

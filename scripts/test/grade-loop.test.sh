@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+# The SELF-HEAL LOOP, driven end to end against a real browser and a real page.
+#
+# grade-loop.test.mjs covers the arithmetic. This covers the thing that actually has to work:
+# a deliberately generic page is served, the gate blocks it, the message tells an agent what
+# to fix and what to re-run, the page is then repaired IN PLACE at the same URL, and the next
+# run has to report the gain. Five states, in the order a real build hits them:
+#
+#   1. FIRST     - blocked, ranked gaps, the exact re-run command, no invented baseline
+#   2. UNCHANGED - the same page re-measured must NOT read as progress
+#   3. STALLED   - a third flat run stops the loop and names what is frozen
+#   4. IMPROVING - the repaired page reports the gain, and the denominator caveat with it
+#   5. REGRESSED - putting the fault back reports a regression and says to revert
+#
+# Plus the two silent-skip paths (a corrupt history, no --out), which must SPEAK, and the
+# hand-off to hooks/palate-stop.mjs, which must surface the grade message even when it is
+# buried behind other failures.
+set -uo pipefail
+DIR="$(cd "$(dirname "$0")" && pwd)"
+VR="$DIR/../reference-capture/verify-rendered.mjs"
+STOP="$DIR/../../hooks/palate-stop.mjs"
+FIX="$DIR/fixtures/grade-loop"
+PORT="${GRADE_LOOP_PORT:-8791}"
+TMP="$(mktemp -d)"; SRV="$TMP/srv"; OUT="$TMP/out"
+mkdir -p "$SRV" "$OUT"
+pass=0; fail=0
+
+check() {
+  local desc="$1" got="$2" want="$3"
+  if [ "$got" = "$want" ]; then echo "ok   - $desc"; pass=$((pass + 1));
+  else echo "FAIL - $desc (got '$got', want '$want')"; fail=$((fail + 1)); fi
+}
+has() { # has <desc> <file> <pattern>
+  grep -qE "$3" "$2" && check "$1" yes yes || check "$1" no yes
+}
+hasnt() {
+  grep -qE "$3" "$2" && check "$1" yes no || check "$1" no no
+}
+
+# A python3 that is only a licence prompt serves nothing, and a fixture server that never
+# bound is how this test would measure whatever else happens to hold the port. Resolve a
+# working interpreter and prove the fixture is being served before measuring anything.
+PY=""
+for c in python3 /opt/homebrew/bin/python3 /usr/local/bin/python3 python; do
+  command -v "$c" >/dev/null 2>&1 || continue
+  "$c" -c 'import http.server' >/dev/null 2>&1 && { PY="$c"; break; }
+done
+[ -n "$PY" ] || { echo "grade-loop.test: no working python3 with http.server; the fixture cannot be served. NOT a pass." >&2; exit 2; }
+
+cp "$FIX/generic/index.html" "$SRV/index.html"
+# `exec` so the subshell BECOMES python: without it $! is the subshell's pid, the trap kills
+# the wrapper, and the server is left holding the port for the next run of this test.
+(cd "$SRV" && exec "$PY" -m http.server "$PORT" >/dev/null 2>&1) &
+SRV_PID=$!
+trap 'kill $SRV_PID 2>/dev/null; rm -rf "$TMP"' EXIT
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  curl -fsS "http://localhost:$PORT/" 2>/dev/null | grep -q Northgate && break
+  sleep 0.5
+done
+curl -fsS "http://localhost:$PORT/" 2>/dev/null | grep -q Northgate \
+  || { echo "grade-loop.test: port $PORT is not serving the fixture (busy?). Set GRADE_LOOP_PORT. NOT a pass." >&2; exit 2; }
+
+run() { node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/$1.err"; }
+HIST="$OUT/grade-history.json"
+
+# --- 1. FIRST: blocked, with everything an agent needs to act -------------------
+run r1
+has "1. blocked below the bar"                     "$TMP/r1.err" "BLOCKED"
+has "1. names the score and the bar"               "$TMP/r1.err" "projected grade [0-9]+/100 .* is below the 80 bar"
+has "1. no invented baseline on the first run"     "$TMP/r1.err" "FIRST MEASUREMENT"
+has "1. ranked gaps carry points and a fix"        "$TMP/r1.err" "^  - .*\(worth [0-9.]+ pts\).*FIX: "
+has "1. says to fix and RE-RUN"                    "$TMP/r1.err" "RE-RUN THIS EXACT COMMAND"
+has "1. gives the exact command"                   "$TMP/r1.err" "verify-rendered\.mjs --url http://localhost:$PORT --routes / --out .* --no-vitals"
+has "1. says the vision half is excluded"          "$TMP/r1.err" "EXCLUDED here, not guessed"
+n=$(node -e "console.log(require('$HIST').entries.length)")
+check "1. one history entry persisted" "$n" "1"
+
+# The stop hook samples the head of interaction.json. The grade entry carries the whole loop,
+# so it must be first: behind five axe rows the agent never sees it.
+first=$(node -e "console.log(require('$OUT/interaction.json').interaction_failures[0].rule)")
+check "1. the grade entry leads interaction.json" "$first" "projected-grade-below-bar"
+msgok=$(node -e "const f=require('$OUT/interaction.json').interaction_failures;
+  console.log(f.every(x=>typeof x.msg==='string'&&x.msg.length>20))")
+check "1. every blocking entry still carries an actionable msg" "$msgok" "true"
+
+# --- 2. UNCHANGED: re-measuring the same page is not progress ------------------
+run r2
+has "2. a flat re-run reads UNCHANGED"             "$TMP/r2.err" "UNCHANGED: [0-9]+ -> [0-9]+, a move of 0 \(iteration 2"
+has "2. and says why a small move is noise"        "$TMP/r2.err" "noise, not progress"
+hasnt "2. never reports it as improvement"         "$TMP/r2.err" "IMPROVING"
+has "2. per-gap movement is reported"              "$TMP/r2.err" "\[unchanged since last run\]"
+
+# --- 3. STALLED: the loop is bounded ------------------------------------------
+run r3
+has "3. a third flat run is a stall"               "$TMP/r3.err" "STALLED: 3 iterations"
+has "3. tells the agent to stop iterating"         "$TMP/r3.err" "STOP ITERATING"
+has "3. names the frozen checks with a number"     "$TMP/r3.err" "stuck at [0-9.]+ across all 3 runs"
+has "3. says the checks are mechanical, not taste" "$TMP/r3.err" "MECHANICAL"
+has "3. offers the escalation, not another pass"   "$TMP/r3.err" "hand it to the human"
+has "3. and a recorded way out"                    "$TMP/r3.err" "PALATE_MIN_GRADE="
+# A stall must not release the gate: "it stopped improving" is not "it is good enough".
+stalled_block=$(node -e "const f=require('$OUT/interaction.json').interaction_failures;
+  const g=f.find(x=>x.rule==='projected-grade-below-bar'); console.log(!!g && g.stalled===true)")
+check "3. a stalled build STILL blocks" "$stalled_block" "true"
+
+# --- 4. IMPROVING: repair the page in place, at the same URL -------------------
+cp "$FIX/better/index.html" "$SRV/index.html"
+run r4
+has "4. the repaired page reports the gain"        "$TMP/r4.err" "IMPROVING: [0-9]+ -> [0-9]+, UP [0-9]+ \(iteration 4"
+has "4. and now clears the bar"                    "$TMP/r4.err" "PASSES the 80 bar"
+# Repairing the contrast violation removes text_contrast from the scored set. That must not
+# make the run incomparable (the bug this loop was rewritten to avoid), but it must be said.
+has "4. discloses the denominator change"          "$TMP/r4.err" "part of this move is the denominator"
+hasnt "4. a successful fix is never incomparable"  "$TMP/r4.err" "NO COMPARISON"
+up=$(node -e "const e=require('$HIST').entries; console.log(e[3].overall > e[2].overall + 2)")
+check "4. the persisted score really rose" "$up" "true"
+
+# --- 5. REGRESSED: put the fault back -----------------------------------------
+cp "$FIX/generic/index.html" "$SRV/index.html"
+run r5
+has "5. reports the regression"                    "$TMP/r5.err" "REGRESSED: [0-9]+ -> [0-9]+, DOWN [0-9]+ \(iteration 5"
+has "5. and says to revert"                        "$TMP/r5.err" "revert it before trying something else"
+hasnt "5. a real move after a gain is not a stall" "$TMP/r5.err" "STALLED"
+
+# --- 6. FAIL LOUD: a lost trend must never read as a clean one -----------------
+printf 'not json{' > "$HIST"
+run r6
+has "6. a corrupt history is spoken, not swallowed" "$TMP/r6.err" "The trend is LOST, not clean"
+node "$VR" --url "http://localhost:$PORT" --routes / --no-vitals >/dev/null 2>"$TMP/r7.err"
+has "7. no --out says the trend cannot be reported" "$TMP/r7.err" "no --out, so no grade history was kept"
+
+# A typo'd bar used to disable the gate in silence: NaN fails both `> 0` and `<= 0`.
+PALATE_MIN_GRADE=eighty node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/r8.err"
+has "7b. a non-numeric bar is named, not obeyed"    "$TMP/r8.err" 'PALATE_MIN_GRADE="eighty" is not a number'
+has "7b. and the gate still blocks"                 "$TMP/r8.err" "BLOCKED"
+PALATE_MIN_GRADE=0 node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/r9.err"
+has "7c. an OFF gate says so"                       "$TMP/r9.err" "the projected-grade gate is OFF"
+hasnt "7c. and never claims a pass"                 "$TMP/r9.err" "PASSES the"
+
+# --- 8. HAND-OFF: the stop hook must surface the grade message -----------------
+# Buried behind five other failures, the one message that closes the loop still has to reach
+# the agent. palate-stop samples three entries; it hoists this one explicitly.
+P="$TMP/proj"; mkdir -p "$P/.palate-shots"
+printf '{"files_written":["src/pages/index.astro"]}' > "$P/build-manifest.json"
+printf '{"console_errors":0,"overflow":{"desktop":0},"sections":[]}' > "$P/.palate-shots/manifest.json"
+printf '{"verdict":"pass","visual":{"pass":true,"console_errors":0}}' > "$P/verify-report.json"
+node -e "
+const fs=require('fs');
+const noise=[1,2,3,4,5].map(i=>({route:'/',viewport:'desktop',rule:'color-contrast',check:'text_contrast',msg:'a11y color-contrast violation number '+i}));
+const grade={route:'/',viewport:'all',rule:'projected-grade-below-bar',check:'projected_grade',score:21,stalled:false,msg:'projected grade 21/100 is below the 80 bar. NOW: fix the gaps above, rebuild, then RE-RUN THIS EXACT COMMAND'};
+fs.writeFileSync('$P/.palate-shots/interaction.json',JSON.stringify({interaction_failures:[...noise,grade]}));"
+out=$(printf '{"cwd":"%s"}' "$P" | PALATE_GATE_OFF= node "$STOP" 2>/dev/null)
+echo "$out" | grep -q '"decision":"block"' && d=block || d=allow
+check "8. the stop hook blocks" "$d" "block"
+echo "$out" | grep -q 'projected grade 21/100' && r=yes || r=no
+check "8. and surfaces the grade message from position 6" "$r" "yes"
+echo "$out" | grep -q 'RE-RUN the command in that message' && r=yes || r=no
+check "8. with the instruction to re-run" "$r" "yes"
+
+echo "----"
+echo "grade-loop.test: $pass passed, $fail failed"
+[ "$fail" -eq 0 ]

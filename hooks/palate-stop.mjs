@@ -98,15 +98,37 @@ function positiveFailures(proj) {
   //    (never a false trap), consistent with every other signal above.
   const ix = readJSON(path.join(proj, ".palate-shots", "interaction.json"));
   if (ix && Array.isArray(ix.interaction_failures) && ix.interaction_failures.length) {
-    const n = ix.interaction_failures.length;
-    const sample = ix.interaction_failures.slice(0, 3).map((f) => (f && f.msg ? f.msg : String(f))).join("; ");
-    const a11y = ix.interaction_failures.filter((f) => f && f.check).length;
+    const all = ix.interaction_failures;
+    const n = all.length;
+    // THE GRADE ENTRY IS HOISTED, not merely sampled. It carries the whole self-heal loop:
+    // the projected score against the bar, whether the last iteration improved or regressed
+    // it, the ranked gaps with a fix each, and the exact command to re-run. verify-rendered
+    // already unshifts it to the head of the list, but sampling the first three entries is a
+    // silent dependency on that ordering, and behind five axe rows the one message the agent
+    // needs to converge would never reach it. Pick it explicitly.
+    const isGrade = (f) => f && f.rule === "projected-grade-below-bar";
+    const grade = all.find(isGrade);
+    const rest = all.filter((f) => !isGrade(f));
+    const picked = [...(grade ? [grade] : []), ...rest.slice(0, grade ? 2 : 3)];
+    const sample = picked.map((f) => (f && f.msg ? f.msg : String(f))).join("; ");
+    // Accessibility only: the design and vitals entries also carry a `check`, and counting a
+    // slow LCP or a Tailwind-default accent as "an accessibility violation you must not
+    // suppress" sends the agent at the wrong file. The interaction entries (focus-visible,
+    // nav-escape-dismiss) carry no `rule` and stay counted, as they always were.
+    const NOT_A11Y = new Set(["framework-default-accent", "tap-target-under-24px", "mobile-body-under-16px"]);
+    const a11y = rest.filter((f) => f && f.check && !NOT_A11Y.has(f.rule)
+      && !String(f.rule ?? "").startsWith("vitals-")).length;
     // Contrast is the one worth naming a number against: the grader reads it as a binary,
     // so a single failing node anywhere costs 22 of the 100 accessibility points.
     const tail = a11y
       ? ` - ${a11y} of these are accessibility violations the grader scores; fix the markup or the token, do not suppress the rule`
       : " - drive the state, fix it, and re-verify";
-    reasons.push(`${n} rendered-page failure(s) (.palate-shots/interaction.json): ${sample}${n > 3 ? "; ..." : ""}${tail}`);
+    const heal = grade && grade.stalled
+      ? " - the projected grade has STALLED: stop iterating and escalate the named structural gaps to the human"
+      : grade
+        ? " - fix the ranked gaps above, rebuild, and RE-RUN the command in that message so the next run reports whether it moved"
+        : "";
+    reasons.push(`${n} rendered-page failure(s) (.palate-shots/interaction.json): ${sample}${n > picked.length ? "; ..." : ""}${tail}${heal}`);
   }
 
   return reasons;
