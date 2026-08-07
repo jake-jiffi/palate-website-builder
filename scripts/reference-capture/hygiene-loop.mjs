@@ -93,10 +93,29 @@ export const HISTORY_VERSION = 1;
 /** Keep the tail bounded; a build that has run 20 iterations has a different problem. */
 export const HISTORY_MAX = 20;
 /**
- * One sd of run-to-run spread on an UNCHANGED page, measured over five consecutive grades
- * (76, 78, 80, 81, 76). Anything inside this band is the instrument, not the build.
+ * Run-to-run spread on an UNCHANGED page. Anything inside this band is the instrument, not the
+ * build.
+ *
+ * MEASURED ON THIS INSTRUMENT, 2026-08-07. It previously read 2, inherited from five runs of the
+ * PUBLIC GRADER (76, 78, 80, 81, 76) and applied here without being re-measured. That was the
+ * wrong number for the wrong instrument: the public grade carries a vision ladder and an
+ * appearance head, and their disagreement is most of its spread. The hygiene score makes no
+ * model calls at all, so the only thing that can move it is timing.
+ *
+ *   no-vitals, local fixture   97 97 97 97 97      range 0
+ *   vitals ON, local fixture   98 98 98 98 98      range 0
+ *   vitals ON, palatemcp.com   60 61 60 60         range 1   (LCP 1620-1724ms)
+ *
+ * So 1, not 2. At 2 a real two-point repair reported as "unchanged", which is the one thing this
+ * band must never do: it exists to stop the loop celebrating noise, not to stop it noticing
+ * progress. At 1 the only observed jitter (a single point, from LCP variance on a real network)
+ * still reads as unchanged.
+ *
+ * The remote case is the one that governs, because a build is graded on a preview URL. If a
+ * future change adds a model call or a sampled measurement to this tier, re-measure: this
+ * constant is only as good as the instrument it was taken on, which is the mistake it replaces.
  */
-export const NOISE_BAND = 2;
+export const NOISE_BAND = 1;
 /** Iterations with no material gain before the loop is called stalled. */
 export const DEFAULT_STALL_ITERS = 2;
 /** A check is "not moving" when its raw score sits inside this band across the window. */

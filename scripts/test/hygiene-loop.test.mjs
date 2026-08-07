@@ -34,18 +34,22 @@ const entry = (overall, checks, ctx = ON) => entryFor(proj(overall, checks), ctx
 
 // ------------------------------------------------------------- the band ----
 test('the noise band is what the instrument actually does, tested from both sides', () => {
-  assert.equal(NOISE_BAND, 2, 'one sd of run-to-run spread on an unchanged page is 2.3 points');
+  // Asserted RELATIVE to the constant, not against a literal. The band is a measurement of the
+  // instrument (range 0 locally, 1 against a real site over the network) and will change again if
+  // the instrument does; a test that hard-codes it fails for the wrong reason when someone
+  // correctly re-measures. What must hold is the BEHAVIOUR at the edges.
+  const b = NOISE_BAND;
   const a = entry(78);
-  assert.equal(compare(entry(80), a).verdict, 'unchanged', '+2 is inside the noise floor');
-  assert.equal(compare(entry(81), a).verdict, 'improved', '+3 is the first move worth reporting');
-  assert.equal(compare(entry(76), a).verdict, 'unchanged', '-2 is inside the noise floor');
-  assert.equal(compare(entry(75), a).verdict, 'regressed', '-3 is the first regression worth reporting');
+  assert.equal(compare(entry(78 + b), a).verdict, 'unchanged', 'a move of exactly the band is inside it');
+  assert.equal(compare(entry(78 + b + 1), a).verdict, 'improved', 'one past the band is the first move worth reporting');
+  assert.equal(compare(entry(78 - b), a).verdict, 'unchanged', 'a drop of exactly the band is inside it');
+  assert.equal(compare(entry(78 - b - 1), a).verdict, 'regressed', 'one past the band is the first regression worth reporting');
   assert.equal(compare(entry(78), a).verdict, 'unchanged', 'an identical score is not progress');
 });
 
 test('an unchanged verdict still carries the real delta, so nothing is hidden', () => {
-  const c = compare(entry(80), entry(78));
-  assert.equal(c.delta, 2);
+  const c = compare(entry(78 + NOISE_BAND), entry(78));
+  assert.equal(c.delta, NOISE_BAND);
   assert.match(trendLine(c, 2), /UNCHANGED/);
   assert.match(trendLine(c, 2), /noise, not progress/);
 });
@@ -111,8 +115,17 @@ test('a stall is judged on the BEST since the anchor, not the last', () => {
   // 61 -> 75 -> 62 is an agent that found something real and then broke it again. Telling it
   // to stop iterating there would throw away the one lead it has.
   assert.equal(detectStall([entry(61), entry(75), entry(62)]).stalled, false);
-  assert.equal(detectStall([entry(61), entry(62), entry(63)]).stalled, true, 'three points across three runs is noise');
-  assert.equal(detectStall([entry(61), entry(61), entry(64)]).stalled, false, '+3 clears the noise band');
+  // Band-relative, for the same reason as the noise test above: what must hold is that a best
+  // gain INSIDE the band is a stall and one PAST it is not, whatever the band currently is.
+  const b = NOISE_BAND;
+  assert.equal(
+    detectStall([entry(61), entry(61), entry(61 + b)]).stalled, true,
+    'a best gain of exactly the band is noise, not progress',
+  );
+  assert.equal(
+    detectStall([entry(61), entry(61), entry(61 + b + 1)]).stalled, false,
+    'one point past the band is a real lead and must not be called a stall',
+  );
 });
 
 test('the stall window widens with PALATE_HYGIENE_STALL_ITERS', () => {
