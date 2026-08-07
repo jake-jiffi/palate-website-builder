@@ -27,15 +27,24 @@ const request = () =>
     system: SYSTEM,
   });
 
-/** Judgements where every exemplar gets the same verdict in both orderings. */
+/**
+ * Judgements where every exemplar gets the same verdict in both orderings.
+ *
+ * Ids are read from the REQUEST rather than reconstructed, which is also the discipline the
+ * protocol asks of the caller: copy `comparisonId` verbatim. Reconstructing them here would
+ * defeat the run-token binding these fixtures exist to exercise.
+ */
+const REQ = request();
 function unanimous(verdict, { signature = false } = {}) {
   const out = [];
-  for (const e of EXEMPLARS) {
-    for (const pos of ['candidate-first', 'reference-first']) {
+  for (const c of REQ.comparisons) {
+    {
+      const e = { slug: c.exemplar };
+      const pos = c.candidateIs === 'A' ? 'candidate-first' : 'reference-first';
       out.push({
-        comparisonId: `${e.slug}:${pos}`,
+        comparisonId: c.id,
         verdict,
-        candidate_is: pos === 'candidate-first' ? 'A' : 'B',
+        candidate_is: c.candidateIs,
         evidence: 'the accent is #123456',
         signature_move: signature,
         signature_move_note: signature ? 'a real idea' : 'nothing qualifies',
@@ -47,11 +56,13 @@ function unanimous(verdict, { signature = false } = {}) {
 }
 
 const scored = (judgements, opts = {}) => {
-  const req = request();
+  const req = REQ;
   const v = validateJudgements(req, judgements);
   assert.equal(v.ok, true, 'fixture should validate: ' + v.errors.join('; '));
   return scoreLadder({ request: req, byComparison: v.byComparison, ...opts });
 };
+/** Find a judgement by exemplar + which image the candidate was, without knowing the token. */
+const jFind = (j, slug, cand) => j.find((x) => x.comparisonId.startsWith(slug + ':') && x.candidate_is === cand);
 const originality = (s) => s.checks.find((c) => c.id === 'originality_vs_template');
 const signature = (s) => s.checks.find((c) => c.id === 'signature_move_present');
 
@@ -75,8 +86,8 @@ test('always asks for three exemplars judged twice each', () => {
 
 test('the swap really swaps: A and B change places and candidateIs follows', () => {
   const r = request();
-  const first = r.comparisons.find((c) => c.id === 'alpha:candidate-first');
-  const second = r.comparisons.find((c) => c.id === 'alpha:reference-first');
+  const first = r.comparisons.find((c) => c.exemplar === 'alpha' && c.candidateIs === 'A');
+  const second = r.comparisons.find((c) => c.exemplar === 'alpha' && c.candidateIs === 'B');
   assert.equal(first.imageA, '/tmp/hero.png');
   assert.equal(first.imageB, '/tmp/alpha.png');
   assert.equal(second.imageA, '/tmp/alpha.png');
@@ -104,15 +115,15 @@ test('the reference rules and the measurements reach the judge', () => {
 
 test('a missing judgement is a hard failure, not a shorter ladder', () => {
   const j = unanimous('comparable').slice(0, 5);
-  const v = validateJudgements(request(), j);
+  const v = validateJudgements(REQ, j);
   assert.equal(v.ok, false);
-  assert.match(v.errors.join(' '), /no judgement returned for comparison "gamma:reference-first"/);
+  assert.match(v.errors.join(' '), /no judgement returned for comparison "gamma:reference-first@/);
 });
 
 test('an unknown comparison id is rejected', () => {
   const j = unanimous('comparable');
   j.push({ comparisonId: 'delta:candidate-first', verdict: 'better', candidate_is: 'A' });
-  const v = validateJudgements(request(), j);
+  const v = validateJudgements(REQ, j);
   assert.equal(v.ok, false);
   assert.match(v.errors.join(' '), /unknown comparison/);
 });
@@ -120,7 +131,7 @@ test('an unknown comparison id is rejected', () => {
 test('an invalid verdict is rejected rather than coerced', () => {
   const j = unanimous('comparable');
   j[0].verdict = 'quite good actually';
-  const v = validateJudgements(request(), j);
+  const v = validateJudgements(REQ, j);
   assert.equal(v.ok, false);
   assert.match(v.errors.join(' '), /is not one of/);
 });
@@ -129,8 +140,8 @@ test('a judge that answered about the wrong image is caught', () => {
   // If candidate_is comes back copied rather than following the swap, the position-bias control
   // did not actually run.
   const j = unanimous('comparable');
-  j.find((x) => x.comparisonId === 'alpha:reference-first').candidate_is = 'A';
-  const v = validateJudgements(request(), j);
+  jFind(j, 'alpha', 'B').candidate_is = 'A';
+  const v = validateJudgements(REQ, j);
   assert.equal(v.ok, false);
   assert.match(v.errors.join(' '), /candidate_is is "A" but the candidate was image B/);
 });
@@ -138,7 +149,7 @@ test('a judge that answered about the wrong image is caught', () => {
 test('duplicate judgements for one comparison are rejected', () => {
   const j = unanimous('comparable');
   j.push({ ...j[0] });
-  const v = validateJudgements(request(), j);
+  const v = validateJudgements(REQ, j);
   assert.equal(v.ok, false);
   assert.match(v.errors.join(' '), /two judgements returned/);
 });
@@ -169,7 +180,7 @@ test('scores from the MEAN of the comparisons, not the median rung', () => {
 
 test('swapped judgements that disagree collapse to the LOWER rung', () => {
   const j = unanimous('comparable');
-  j.find((x) => x.comparisonId === 'alpha:reference-first').verdict = 'clearly_worse';
+  jFind(j, 'alpha', 'B').verdict = 'clearly_worse';
   const s = scored(j);
   // alpha collapses to 0.15, beta and gamma stay 0.7 -> mean 0.5166..
   assert.equal(Math.round(originality(s).raw * 1e4) / 1e4, 0.5167);
@@ -177,7 +188,7 @@ test('swapped judgements that disagree collapse to the LOWER rung', () => {
 
 test('a two-rung disagreement marks the check low confidence', () => {
   const j = unanimous('comparable');
-  j.find((x) => x.comparisonId === 'alpha:reference-first').verdict = 'clearly_worse';
+  jFind(j, 'alpha', 'B').verdict = 'clearly_worse';
   const s = scored(j);
   assert.equal(originality(s).lowConfidence, true);
   assert.equal(signature(s).lowConfidence, true);
@@ -185,7 +196,7 @@ test('a two-rung disagreement marks the check low confidence', () => {
 
 test('a one-rung disagreement takes the lower rung but is NOT called unstable', () => {
   const j = unanimous('comparable');
-  j.find((x) => x.comparisonId === 'alpha:reference-first').verdict = 'somewhat_worse';
+  jFind(j, 'alpha', 'B').verdict = 'somewhat_worse';
   const s = scored(j);
   assert.equal(originality(s).lowConfidence, false);
   assert.equal(Math.round(originality(s).raw * 1e4) / 1e4, 0.6);
@@ -230,7 +241,7 @@ test('the signature move is a fraction with the old endpoints intact', () => {
 
 test('a split vote lands in between instead of stepping a whole 4.2 points', () => {
   const j = unanimous('comparable', { signature: false });
-  for (const x of j) if (x.comparisonId.startsWith('alpha')) x.signature_move = true;
+  for (const x of j) if (x.comparisonId.startsWith('alpha:')) x.signature_move = true;
   const s = scored(j);
   // 1 of 3 -> 0.15 + (1/3)(0.7) = 0.3833
   assert.equal(Math.round(signature(s).raw * 1e4) / 1e4, 0.3833);
@@ -239,7 +250,7 @@ test('a split vote lands in between instead of stepping a whole 4.2 points', () 
 
 test('one ordering seeing a move and the other not does not count as one', () => {
   const j = unanimous('comparable', { signature: false });
-  j.find((x) => x.comparisonId === 'alpha:candidate-first').signature_move = true;
+  jFind(j, 'alpha', 'A').signature_move = true;
   const s = scored(j);
   assert.equal(signature(s).raw, 0.15);
 });
@@ -248,7 +259,7 @@ test('the note never argues with the score', () => {
   // A report that scores "nothing a template could not have produced" and then quotes a judge
   // describing a signature move is one a reader stops trusting.
   const j = unanimous('comparable', { signature: false });
-  for (const x of j) if (x.comparisonId.startsWith('alpha')) { x.signature_move = true; x.signature_move_note = 'THE POSITIVE NOTE'; }
+  for (const x of j) if (x.comparisonId.startsWith('alpha:')) { x.signature_move = true; x.signature_move_note = 'THE POSITIVE NOTE'; }
   const s = scored(j);
   assert.match(signature(s).detail, /^Nothing here a template could not have produced/);
   assert.ok(!signature(s).detail.includes('THE POSITIVE NOTE'), 'a negative verdict must not quote a positive note');
@@ -341,4 +352,24 @@ test('the pass path is where the caveat goes, and the measurement says why', () 
   for (const p of [56.6, 73.4, 92.4, 99.3]) {
     assert.equal(flatteryOf({ applicable: true, percentile: p }, 91), null, `p${p} must state its number`);
   }
+});
+
+test('judgements written for a DIFFERENT run cannot be scored against this one', () => {
+  // Two runs in the same vertical produce the same exemplar slugs and the same positions. Without
+  // the per-run token their ids are identical, so yesterday's judgements would validate cleanly
+  // against today's request and be scored as though they described this page - a complete,
+  // well-formed ladder describing the wrong site. That is the worst way for it to be wrong.
+  const other = buildLadderRequest({
+    heroPath: '/tmp/hero.png', exemplars: EXEMPLARS, domain: 'candidate.example',
+    vertical: 'health', measurements: '- lead colour #123456', system: SYSTEM,
+  });
+  assert.notEqual(other.runToken, REQ.runToken, 'each run must mint its own token');
+  const v = validateJudgements(other, unanimous('comparable'));
+  assert.equal(v.ok, false);
+  assert.match(v.errors.join(' '), /unknown comparison/);
+});
+
+test('a request carries its token, and every comparison id is bound to it', () => {
+  assert.ok(REQ.runToken, 'the request must record its token');
+  for (const c of REQ.comparisons) assert.ok(c.id.endsWith("@" + REQ.runToken), `${c.id} must carry the token`);
 });

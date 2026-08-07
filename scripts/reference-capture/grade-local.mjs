@@ -56,7 +56,7 @@
  * has a long history of silent skips reporting clean results while measuring nothing.
  */
 import { chromium } from 'playwright';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
@@ -257,6 +257,35 @@ async function runAxe(page, axeSource) {
   }
 }
 
+/**
+ * Is this file actually a decodable image, by its magic bytes and a sane floor on size?
+ *
+ * Cheap on purpose: the point is to catch a truncated write, an HTML error body saved under a
+ * .png name, or a zero-byte file, not to fully validate a codec. A 1KB floor is well under any
+ * real 1440x900 screenshot (the smallest library hero is 16KB) and well over any error page.
+ */
+function looksLikeImage(path) {
+  try {
+    if (statSync(path).size < 1024) return false;
+    const head = Buffer.alloc(4);
+    // `require` does not exist in an ESM module. Reaching for it here would have thrown a
+    // ReferenceError that this function's own catch swallowed, declaring EVERY image invalid,
+    // dropping all three exemplars and taking the ladder down - while reporting only "could not
+    // be fetched". A catch-all around a provenance check is its own silent-skip risk.
+    const fd = openSync(path, 'r');
+    try {
+      readSync(fd, head, 0, 4, 0);
+    } finally {
+      closeSync(fd);
+    }
+    const png = head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
+    const jpeg = head[0] === 0xff && head[1] === 0xd8;
+    return png || jpeg;
+  } catch {
+    return false;
+  }
+}
+
 /** A compact, factual brief for the judge, so it reasons about numbers rather than impressions. */
 function measurementsText(designFacts, vitals) {
   const d = designFacts.desktop || designFacts.mobile;
@@ -297,6 +326,18 @@ async function phaseRequest() {
   const errors = [];
   const heroPath = join(OUT_DIR, 'local-grade-hero.png');
   let heroSettle = null;
+
+  /**
+   * DELETE ANY PREVIOUS HERO BEFORE CAPTURING, so the existence check below can only be
+   * satisfied by THIS run.
+   *
+   * `if (!existsSync(heroPath)) die(...)` looks like a guard and is not one when a stale file
+   * sits at that path. A capture that timed out would leave the previous run's hero in place,
+   * the guard would pass, and the appearance head would score yesterday's page while every
+   * number in the report described today's. The taste head cannot tell you it was handed the
+   * wrong page - that is precisely why the check has to be about provenance, not existence.
+   */
+  if (existsSync(heroPath)) rmSync(heroPath, { force: true });
 
   try {
     for (const [name, vp] of Object.entries(VIEWPORTS)) {
@@ -443,10 +484,21 @@ async function phaseRequest() {
     for (const ex of pack.exemplars) {
       const imagePath = join(exDir, `${ex.slug}.png`);
       try {
+        // THE CACHE IS VALIDATED, NOT TRUSTED. `existsSync` alone means a truncated download
+        // from an interrupted run, or a file the disk filled up on, is accepted forever: the
+        // judge is then handed a broken image and still returns a verdict on it. A cached file
+        // that is not a decodable image is deleted and re-fetched rather than reused.
+        if (existsSync(imagePath) && !looksLikeImage(imagePath)) {
+          say(`grade-local: cached exemplar "${ex.slug}" is not a valid image; re-fetching.`);
+          rmSync(imagePath, { force: true });
+        }
         if (!existsSync(imagePath)) {
           const res = await fetch(ex.image, { signal: AbortSignal.timeout(30_000) });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          writeFileSync(imagePath, Buffer.from(await res.arrayBuffer()));
+          const bytes = Buffer.from(await res.arrayBuffer());
+          writeFileSync(imagePath, bytes);
+          // Re-read from disk rather than trusting the buffer: this is what the judge will open.
+          if (!looksLikeImage(imagePath)) throw new Error('the fetched bytes are not a PNG or JPEG');
         }
         exemplars.push({ ...ex, imagePath });
       } catch (e) {

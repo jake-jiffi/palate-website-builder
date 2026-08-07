@@ -60,15 +60,29 @@ const RUNG_GAP = (RUNGS[RUNGS.length - 1].raw - RUNGS[0].raw) / (RUNGS.length - 
  *
  * `heroPath` and each exemplar's `imagePath` are absolute so the caller can open them directly.
  */
-export function buildLadderRequest({ heroPath, exemplars, domain, vertical, measurements, system }) {
+export function buildLadderRequest({ heroPath, exemplars, domain, vertical, measurements, system, runToken }) {
   if (!heroPath) throw new Error('buildLadderRequest: no hero screenshot');
   if (!Array.isArray(exemplars) || !exemplars.length) throw new Error('buildLadderRequest: no exemplars');
   if (!system) throw new Error('buildLadderRequest: no judging system prompt (it comes from palate_grade_pack, never invented locally)');
 
+  /**
+   * EVERY COMPARISON ID CARRIES A PER-RUN TOKEN, so a judgement set cannot be validated against
+   * a request it was not written for.
+   *
+   * Without it the ids are just `<slug>:<position>`, and two runs in the same vertical produce
+   * IDENTICAL ids. Judgements written for yesterday's site would then validate cleanly against
+   * today's request and be scored as though they described this page. The validator would report
+   * a complete, well-formed ladder, which is the worst possible way for it to be wrong.
+   *
+   * It costs the caller nothing: the instruction already says to copy `comparisonId` verbatim
+   * from the request, so the binding enforces itself through validation that already exists.
+   */
+  const token = runToken ?? Math.random().toString(36).slice(2, 8);
+
   const comparisons = [];
   for (const ex of exemplars.slice(0, 3)) {
     for (const candidateIsA of [true, false]) {
-      const id = `${ex.slug}:${candidateIsA ? 'candidate-first' : 'reference-first'}`;
+      const id = `${ex.slug}:${candidateIsA ? 'candidate-first' : 'reference-first'}@${token}`;
       comparisons.push({
         id,
         exemplar: ex.slug,
@@ -84,6 +98,7 @@ export function buildLadderRequest({ heroPath, exemplars, domain, vertical, meas
 
   return {
     version: 1,
+    runToken: token,
     domain,
     vertical: vertical ?? null,
     heroPath,
@@ -185,8 +200,12 @@ export function scoreLadder({ request, byComparison, tastePercentile = null, ind
   const results = [];
 
   for (const ex of request.exemplars.slice(0, 3)) {
-    const a = byComparison.get(`${ex.slug}:candidate-first`);
-    const b = byComparison.get(`${ex.slug}:reference-first`);
+    // Rebuilt with the request's own token, so this can only ever pair up judgements that were
+    // written for THIS request. A request from before the token existed has none, and the
+    // suffix collapses to empty, which keeps old artefacts readable.
+    const suffix = request.runToken ? `@${request.runToken}` : '';
+    const a = byComparison.get(`${ex.slug}:candidate-first${suffix}`);
+    const b = byComparison.get(`${ex.slug}:reference-first${suffix}`);
     if (!a || !b) continue;
     const i1 = rungIndex(a.verdict);
     const i2 = rungIndex(b.verdict);
