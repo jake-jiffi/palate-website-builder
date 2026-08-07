@@ -26,6 +26,11 @@
  * over 7. The vision half is what tracks the grade. A number without it cannot, and that is this
  * one's permanent condition by construction.
  *
+ * The sharpest version of that: on the same seven, the taste percentile ALONE tracks the certified
+ * grade at r = 0.90, better than tier 2's whole composite at 0.83. The appearance head out-predicts
+ * the thing it is a component of. So it is not "vision plus hygiene beats hygiene" - it is vision,
+ * and mixing hygiene into it currently dilutes the signal.
+ *
  * So my own retraction over-corrected. "The grade is mostly design" is now the better-supported
  * explanation rather than an unproven one. What HAS gone stale is the other half of the sentence:
  * design can no longer be called unrunnable locally, because local-grade runs both the head and
@@ -396,18 +401,42 @@ export function blockMessage({ scored, cmp, stall, minScore, rerun, notes = [] }
   ].join('\n');
 }
 
+/**
+ * What clearing the floor does NOT mean, stated at the one moment it matters.
+ *
+ * The block path is not where this number is dangerous. An agent reading a block is still
+ * working. The danger is the PASS: it clears 80, reads that as quality, and stops - which is
+ * the exact failure the loop was built to prevent, arriving through the front door.
+ *
+ * And the gap is not vague. `originality_vs_template` (30 points) and `signature_move_present`
+ * (15) are 45 of the design dimension's 100, and both are judgements no local computation can
+ * make, so the projection scores design over 32 points of denominator and is structurally blind
+ * to whether the page is a template. The design ceiling in rubric.mjs (overall <= design + 15)
+ * therefore never binds here. Measured on this repo's own tidy-template fixture - three
+ * identical bordered card grids, stock marketing copy, no idea in it anywhere - build hygiene
+ * scores 97/100 with a design dimension of 97 on 3 of 11 checks. That number is the honest
+ * summary of what this instrument is, so it is quoted rather than paraphrased.
+ */
+const NOT_A_QUALITY_VERDICT =
+  'CLEARING THIS FLOOR IS NOT A QUALITY VERDICT. "Designed, not templated" (30 pts) and "One ' +
+  'considered idea" (15) are 45 of the design dimension and neither is measurable here, so this ' +
+  'score cannot see whether the page is a template. A tidy template with no idea in it scores 97. ' +
+  'If nothing is left to fix here, the remaining work is DESIGN, and it is judged elsewhere.';
+
 /** The one-line summary printed on every run, pass or fail, so the trend is never invisible. */
 export function summaryLine({ scored, cmp, stall, minScore }) {
   const projected = scored;
   // With the gate off there is no floor to clear, and saying "CLEARS the 0 floor" would read as
   // an endorsement of a build nothing judged.
+  const clears = minScore > 0 && projected.overall >= minScore;
   const state = minScore > 0
-    ? `${projected.overall >= minScore ? 'CLEARS' : 'is BELOW'} the ${minScore} floor`
+    ? `${clears ? 'CLEARS' : 'is BELOW'} the ${minScore} floor`
     : 'is UNGATED (PALATE_MIN_HYGIENE=0), so nothing here passed or failed';
   return (
     `verify-rendered: build hygiene ${projected.overall}/100 ${state}, ` +
     `on ${projected.measuredWeight} of the 100 weight measurable locally. ${trendLine(cmp, stall.iterations)} ` +
-    'HYGIENE ONLY: measured to disagree substantially with the public grade, and most of the design ' +
-    'dimension is a vision judgement not included here. Real grade: mcp__palate__palate_grade.'
+    'HYGIENE ONLY: measured to disagree substantially with the public grade. ' +
+    (clears ? NOT_A_QUALITY_VERDICT + ' ' : 'Most of the design dimension is a vision judgement not included here. ') +
+    'Real grade: mcp__palate__palate_grade.'
   );
 }

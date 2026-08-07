@@ -119,6 +119,14 @@ has "4. discloses the denominator change"          "$TMP/r4.err" "part of this m
 hasnt "4. a successful fix is never incomparable"  "$TMP/r4.err" "NO COMPARISON"
 up=$(node -e "const e=require('$HIST').entries; console.log(e[3].overall > e[2].overall + 2)")
 check "4. the persisted score really rose" "$up" "true"
+# THE FIXTURE THAT CLEARS THE FLOOR IS A TIDY TEMPLATE: three identical bordered card grids,
+# stock marketing copy, no idea in it anywhere. It scores in the 90s because the two checks that
+# detect templating (originality 30, signature move 15) cannot be computed locally. That is the
+# instrument's real limit, so the pass message has to say so at the moment an agent would stop.
+has "4. the pass says it is not a quality verdict" "$TMP/r4.err" "NOT A QUALITY VERDICT"
+has "4. and names templating as unmeasured"        "$TMP/r4.err" "cannot see whether the page is a template"
+has "4. and sends the remaining work to design"    "$TMP/r4.err" "the remaining work is DESIGN"
+hasnt "4. the block path stays free of it"         "$TMP/r1.err" "NOT A QUALITY VERDICT"
 
 # --- 5. REGRESSED: put the fault back -----------------------------------------
 cp "$FIX/generic/index.html" "$SRV/index.html"

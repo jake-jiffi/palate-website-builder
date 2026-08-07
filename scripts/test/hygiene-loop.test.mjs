@@ -278,6 +278,28 @@ test('the rubric BAND never reaches a message or the history', () => {
   assert.equal((msg.match(/predicted grade/gi) ?? []).length, 1, 'the only mention is the prohibition');
 });
 
+test('clearing the floor is NOT reported as a quality verdict', () => {
+  // The block path is not where this number is dangerous; an agent reading a block is still
+  // working. The PASS is. `originality_vs_template` (30) and `signature_move_present` (15) are 45
+  // of the design dimension and neither is computable here, so the score is structurally blind to
+  // templating and the rubric's design ceiling never binds. Measured: this repo's own tidy-template
+  // fixture scores 97. If that sentence ever leaves the pass message, an agent can read 80 as
+  // "good" and stop exactly where the remaining work is design.
+  const p = proj(97);
+  const cur = entryFor(p, ON);
+  const pass = summaryLine({ scored: p, cmp: compare(cur, null), stall: detectStall([cur]), minScore: 80 });
+  assert.match(pass, /CLEARS the 80 floor/);
+  assert.match(pass, /NOT A QUALITY VERDICT/);
+  assert.match(pass, /cannot see whether the page is a template/);
+  assert.match(pass, /A tidy template with no idea in it scores 97/);
+  assert.match(pass, /the remaining work is DESIGN/);
+
+  // And it must NOT appear on the block path, where it would be noise on top of a list of fixes.
+  const fail = summaryLine({ scored: proj(61), cmp: compare(entry(61), null), stall: detectStall([entry(61)]), minScore: 80 });
+  assert.match(fail, /is BELOW the 80 floor/);
+  assert.doesNotMatch(fail, /NOT A QUALITY VERDICT/);
+});
+
 test('the summary line is printed on a PASS too, so a lucky pass is still visible as one', () => {
   const p = proj(84);
   const cur = entryFor(p, ON);
