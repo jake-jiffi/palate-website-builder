@@ -82,10 +82,16 @@ Measured 2026-08-07, seven sites spanning 36 to 90 on the certified instrument.
 | hightownpharmacy.co.uk | 41 | 58 | **+17** | 52 | somewhat worse | p22 |
 | properly.sg | 36 | 62 | **+26** | 51 | somewhat worse | p43 |
 
-**r = +0.83, Spearman rho = +0.86, mean absolute gap 10.0 points, SD of the gap 12.6.** The
-hygiene score that preceded this — the same rubric without the appearance head or the ladder —
-measured **r = −0.074 over 23 sites**. So the vision half does transfer, and it is what carries
-the correlation.
+**r = +0.83 (95% CI roughly [0.21, 0.97] at n = 7), Spearman rho = +0.86, mean absolute gap 10.0
+points, SD of the gap 12.6.** Carry the interval wherever the number goes: directionally strong,
+numerically vague. The hygiene score that preceded this — the same rubric without the appearance
+head or the ladder — measured **r = −0.074 over 23 sites**. So the vision half does transfer,
+and it is what carries the correlation.
+
+**The appearance head alone beats the whole local grade.** Across these seven, r(taste
+percentile, certified) = **0.90**, against r(local grade, certified) = 0.83. That is consistent
+with the head's 0.738 concordance against founder labels versus the ladder's 0.716: the head is
+the better signal and combining it with the ladder currently dilutes it. Not acted on, recorded.
 
 **THE ERROR IS NOT SPREAD EVENLY, AND WHERE IT LANDS IS THE PROBLEM.**
 
@@ -113,6 +119,25 @@ exactly the direction that hurts.
 **This has NOT been tuned away, deliberately.** Widening the pull threshold would move these two
 numbers and prove nothing. It is a finding, not a defect to paper over.
 
+**Instead, the number is WITHHELD where it is known to flatter.** When the appearance head puts
+a page below the library median (p50), `grade-local.mjs` refuses to publish a point estimate. It
+prints the computed number as suspect, the honest range (the computed score minus the 17-to-26
+over-score measured in that band), the findings, and an instruction to get the certified grade
+before concluding anything.
+
+The gate is on the **taste percentile, not the score**, and that is the whole trick: the failure
+mode is that the score is too *high*, so the two flattered sites came out 58 and 62 — comfortably
+mid-table and invisible to any threshold on the score itself. The head is the only signal
+available at grade time that separates them, and it earns the job by out-predicting the grade.
+
+On both measured sites the published range contained the certified score (properly.sg: range
+36–45, certified 36; hightownpharmacy: range 32–41, certified 41). Two observations, and the
+message says so.
+
+**Why this matters more than a calibration issue:** this is a self-check for someone deciding
+whether their site needs rebuilding. Flattering a bad site is the one error that costs them the
+decision — they read 62, conclude they are mid-pack, and do nothing.
+
 **Two caveats on the measurement itself.**
 
 - **The certified side was measuring design on 4 of its 11 checks** when this ran, because
@@ -132,6 +157,15 @@ Exceptional" against "B Strong" on one page.
   broken capture is named and dropped. 33 of the 2,194 library heroes never rendered and this
   head scores them at a median percentile of 86.7, so an ungated head reports a blank page as
   top-13% taste.
+- **It waits for the page to stop moving, and says whether it did.** A fixed delay is not a
+  settle. The first version shot the hero 1400ms after load; linear.app needs **7,349ms**, and
+  came back with its headline still blurred mid-entrance and its cards as empty outlines. No gate
+  could catch it — right aspect, varied pixels — so the head scored a frame of an animation as
+  though it were the design, and it landed 15 percentiles low (p41 against the settled p57). The
+  capture now shoots repeatedly and compares encoded bytes. A page that never settles
+  (palatemcp.com, whose reel animates continuously) is **reported as unsettled**, not silently
+  scored. This generalises: a fixed delay that happens to produce a plausible-looking frame is
+  the silent-skip shape this codebase keeps getting caught by.
 - **It never scores a missing check as zero.** Anything it could not measure leaves the
   denominator, and `measuredWeight` reports how much of the 100 the number rests on.
 - **It does not measure content, technical foundations or AI readiness** — 34 of the 100

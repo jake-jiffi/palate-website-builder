@@ -289,3 +289,46 @@ test('the rung scale matches the grader exactly', () => {
     ],
   );
 });
+
+// ------------------------------------------------------------ the flattery band ----
+//
+// Where the instrument is measured to over-score, it must not publish a point estimate.
+// These pin the one piece of judgement in grade-local.mjs that is not the rubric's.
+import { flatteryOf, FLATTERY_TASTE_FLOOR, FLATTERY_OVERSCORE } from '../reference-capture/grade-local.mjs';
+
+test('withholds the number below the corpus median, where it is known to flatter', () => {
+  // hightownpharmacy: taste p21.6, local 58, certified 41.
+  const f = flatteryOf({ applicable: true, percentile: 21.6 }, 58);
+  assert.ok(f, 'a below-median site must be flagged');
+  assert.equal(f.risk, true);
+  // The certified 41 has to fall inside the range we publish, or the range is decoration.
+  assert.ok(f.honestRange[0] <= 41 && 41 <= f.honestRange[1], `41 must sit inside ${JSON.stringify(f.honestRange)}`);
+});
+
+test('the published range contained the certified score on BOTH measured sites', () => {
+  // properly.sg: taste p42.9, local 62, certified 36.
+  const p = flatteryOf({ applicable: true, percentile: 42.9 }, 62);
+  assert.ok(p.honestRange[0] <= 36 && 36 <= p.honestRange[1], `36 must sit inside ${JSON.stringify(p.honestRange)}`);
+});
+
+test('states the number normally above the median', () => {
+  // linear.app at p56.6 was within 4 points; nothing to withhold.
+  assert.equal(flatteryOf({ applicable: true, percentile: 56.6 }, 56), null);
+  assert.equal(flatteryOf({ applicable: true, percentile: 99.3 }, 91), null);
+  assert.equal(flatteryOf({ applicable: true, percentile: FLATTERY_TASTE_FLOOR }, 70), null, 'the floor itself is safe');
+});
+
+test('does NOT withhold when the appearance head could not run', () => {
+  // Without the head there is no evidence either way, and inventing a caveat is its own lie.
+  // The grade already reports the head as unmeasured in that case.
+  assert.equal(flatteryOf({ applicable: false, reason: 'taste-lookup-failed' }, 58), null);
+  assert.equal(flatteryOf(null, 58), null);
+  assert.equal(flatteryOf({ applicable: true, percentile: null }, 58), null);
+});
+
+test('the range is stated as a range, with its sample size', () => {
+  const f = flatteryOf({ applicable: true, percentile: 10 }, 60);
+  assert.equal(f.honestRange[0], 60 - FLATTERY_OVERSCORE.max);
+  assert.equal(f.honestRange[1], 60 - FLATTERY_OVERSCORE.min);
+  assert.equal(FLATTERY_OVERSCORE.n, 2, 'n must travel with the correction, it is two observations');
+});

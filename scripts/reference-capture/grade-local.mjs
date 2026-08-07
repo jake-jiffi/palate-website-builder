@@ -58,6 +58,7 @@
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { measurePage, scoreDesignFacts } from './design-measure.mjs';
 import { measureVitals, scoreVitals } from './vitals.mjs';
@@ -111,6 +112,46 @@ class GradeFailure extends Error {
 const die = (msg, remedy) => {
   throw new GradeFailure(msg, remedy);
 };
+
+/* ---------------------------------------------------------------------------
+ * THE FLATTERY BAND: where this instrument is known to over-score, it does not
+ * publish a point estimate.
+ *
+ * Measured over seven sites against fresh certified grades. Sorted by the appearance head's
+ * percentile, the error is not noise, it is a step:
+ *
+ *   taste p22  hightownpharmacy   certified 41   local 58   +17
+ *   taste p43  properly.sg        certified 36   local 62   +26
+ *   ------------------------------------------------- p50 -------
+ *   taste p57  linear.app         certified 60   local 56    -4
+ *   taste p73  palatemcp.com      certified 83   local 75    -8
+ *   taste p92  nocturne-label     certified 90   local 95    +5
+ *   taste p94  jiffi.co           certified 73   local 67    -6
+ *   taste p99  web-design-mcp     certified 87   local 91    +4
+ *
+ * Above the corpus median the gap is never worse than 8. Below it, both sites were flattered,
+ * by 17 and 26.
+ *
+ * WHY THE GATE IS ON TASTE AND NOT ON THE SCORE. The obvious guard - withhold below some local
+ * score - cannot work here, because the failure IS that the local score is too high: those two
+ * sites came out 58 and 62, comfortably mid-table. The appearance head is the only signal
+ * available at grade time that separates them, and it does so cleanly. It earns that job:
+ * across these seven, r(taste, certified) = 0.90, HIGHER than r(local grade, certified) = 0.83.
+ * The head already knew.
+ *
+ * WHY THE ARITHMETIC IS NOT SIMPLY CHANGED INSTEAD. The prior lifts above p85 and pulls below
+ * p10. hightownpharmacy at p22 and properly.sg at p43 sit in the dead zone: correctly ranked in
+ * the bottom half and forbidden from being corrected. Widening the pull threshold would move
+ * exactly these two numbers and prove nothing, so the asymmetry is REPORTED rather than tuned.
+ *
+ * WHY IT MATTERS MORE THAN A CALIBRATION ISSUE. This is a self-check for someone deciding
+ * whether their site needs rebuilding. Flattering a bad site is the one error that costs them
+ * the decision: they read 62, conclude they are mid-pack, and do nothing. A certified 36 never
+ * gets the chance to change their mind.
+ * ------------------------------------------------------------------------- */
+const FLATTERY_TASTE_FLOOR = 50;
+/** The observed over-score in that band, in points. n = 2, and the message says so. */
+const FLATTERY_OVERSCORE = { min: 17, max: 26, n: 2 };
 
 /** The line that must appear wherever this number does. */
 const NOT_CERTIFIED =
@@ -602,6 +643,14 @@ async function phaseScore() {
     kind: 'local-self-check',
     overall: graded.overall,
     /**
+     * Set when the appearance head puts this site below the library median, i.e. where this
+     * instrument is measured to flatter. `overall` is still carried, because a self-heal loop
+     * needs SOMETHING to track iteration to iteration and the findings underneath it are sound.
+     * What it must not do is travel as the answer, so everything that renders this reads
+     * `flattery` first.
+     */
+    flattery: flatteryOf(state.taste, graded.overall),
+    /**
      * NO BAND LETTER. Measured, not assumed.
      *
      * Against three fresh certified grades this scores a mean absolute 9 points out, and the
@@ -658,14 +707,43 @@ function unmeasuredNote({ ladder, taste, vitals, vitalsRequested, graded, heroSe
   return gaps;
 }
 
+/** `null` when the score is safe to state; otherwise the reason it is not, and the honest range. */
+function flatteryOf(taste, overall) {
+  if (!taste?.applicable || typeof taste.percentile !== 'number') return null;
+  if (taste.percentile >= FLATTERY_TASTE_FLOOR) return null;
+  return {
+    risk: true,
+    tastePercentile: taste.percentile,
+    floor: FLATTERY_TASTE_FLOOR,
+    observedOverscore: FLATTERY_OVERSCORE,
+    // Subtracting the measured over-score. Presented as a range because it IS a range: two
+    // observations, 17 and 26 points.
+    honestRange: [overall - FLATTERY_OVERSCORE.max, overall - FLATTERY_OVERSCORE.min],
+  };
+}
+
 function renderResult(o) {
   const L = [];
   L.push('');
-  L.push(`LOCAL GRADE  ${o.overall}/100   ${o.url}`);
+  if (o.flattery) {
+    L.push(`LOCAL GRADE  ${o.url}`);
+    L.push(`  THE NUMBER IS WITHHELD ON THIS SITE. It computed ${o.overall}/100 and that is very likely too kind.`);
+    L.push(
+      `  The appearance head puts this page at percentile ${o.flattery.tastePercentile} of the library, below the median. ` +
+        `On the ${o.flattery.observedOverscore.n} sites measured in that band this instrument over-scored the certified`,
+    );
+    L.push(
+      `  grade by ${o.flattery.observedOverscore.min} and ${o.flattery.observedOverscore.max} points, so the honest range here is ` +
+        `roughly ${o.flattery.honestRange[0]} to ${o.flattery.honestRange[1]}.`,
+    );
+    L.push('  Fix the gaps below, then get the certified grade before concluding anything about this site.');
+  } else {
+    L.push(`LOCAL GRADE  ${o.overall}/100   ${o.url}`);
+    // No band. It runs about 10 points from the certified grade and the bands are 10 wide, so a
+    // letter here would contradict the certified one on the same page. See the note in the payload.
+    L.push('This is not a band and not a certified score. Bands come from the certified grade only.');
+  }
   L.push(`measured on ${o.measuredWeight} of the grader's 100 weight, margin about +/-${o.confidence} points`);
-  // No band. It runs about 9 points from the certified grade and the bands are 10 wide, so a
-  // letter here would contradict the certified one on the same page. See the note in the payload.
-  L.push('This is not a band and not a certified score. Bands come from the certified grade only.');
   L.push('');
   for (const d of o.dimensions) {
     // A dimension nothing was measured in scores 0 in the roll-up and is correctly EXCLUDED
@@ -699,9 +777,16 @@ function renderResult(o) {
   return L.join('\n');
 }
 
+// Exported for the test suite. The flattery band is the one piece of judgement in this file
+// that is not the rubric's, so it is the one piece that has to be pinned by tests.
+export { flatteryOf, FLATTERY_TASTE_FLOOR, FLATTERY_OVERSCORE };
+
 // --------------------------------------------------------------------- main ----
+// Only when run directly, so the module can be imported for testing without grading anything.
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
 // Sets process.exitCode and unwinds; it never calls process.exit(). See GradeFailure above.
-try {
+if (isMain) try {
   if (args.judgements != null) await phaseScore();
   else if (args.url) await phaseRequest();
   else {
