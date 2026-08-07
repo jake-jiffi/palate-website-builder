@@ -77,7 +77,26 @@ done
   echo "  (a leftover server from an earlier run, or another process). Kill it, or set HYGIENE_LOOP_PORT. NOT a pass." >&2
   exit 2; }
 
-run() { node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/$1.err"; }
+# THE MARKER IS RE-ASSERTED BEFORE EVERY RUN, not just at setup.
+#
+# Twice now this suite has reported a cluster of content failures - "the regression is not
+# reported", "the corrupt history is not spoken" - that were nothing of the kind: the fixture
+# server had stopped serving partway through, so every later run measured nothing and every
+# later assertion failed on absent output. The code was correct both times, and both times it
+# cost a debugging cycle to prove it.
+#
+# A dead instrument must not be able to report content failures. Checking the marker before each
+# run converts that into one accurate sentence naming the step it died at, and voids the suite
+# (exit 2) rather than failing it, because a suite that could not measure has not failed - it has
+# not run. Same rule the gate itself applies to a missing axe-core.
+run() {
+  [ "$(curl -fsS "http://localhost:$PORT/.run-marker" 2>/dev/null)" = "$MARKER" ] || {
+    echo "hygiene-loop.test: the fixture server stopped serving this run's docroot before step '$1'." >&2
+    echo "  Every assertion after this point would fail on absent output and none of them would mean anything." >&2
+    echo "  The suite is VOID, not failed. Re-run it." >&2
+    exit 2; }
+  node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/$1.err"
+}
 HIST="$OUT/hygiene-history.json"
 
 # --- 1. FIRST: blocked, with everything an agent needs to act -------------------
