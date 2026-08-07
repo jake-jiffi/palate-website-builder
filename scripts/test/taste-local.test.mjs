@@ -202,3 +202,36 @@ test('a real library hero embeds to a unit-length 768-vector', { skip: !haveLibr
   // were computed over L2-normalised embeddings.
   assert.ok(Math.abs(Math.sqrt(norm) - 1) < 1e-6, `norm was ${Math.sqrt(norm)}`);
 });
+
+/* ---------------------------------------------------------------------------
+ * THE CONSENT GATE.
+ *
+ * A 356MB download onto someone else's machine, mid-build, is not something to
+ * announce and proceed with. This asserts the refusal actually refuses: that it
+ * throws the named code, and above all that NOTHING IS FETCHED. A gate that
+ * warns and downloads anyway is worse than none, because it reads as consent.
+ *
+ * Run in a FRESH SUBPROCESS on purpose. warmTaste memoises its load promise at
+ * module scope, so asserting first-run behaviour in-process would depend on
+ * whichever test happened to touch it first.
+ */
+test('an unauthorised first run refuses and downloads nothing', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdtempSync, readdirSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'taste-gate-'));
+  try {
+    const src = `import {warmTaste} from '${new URL('../reference-capture/taste-local.mjs', import.meta.url).pathname}';
+      try { await warmTaste({cacheDir: process.argv[1]}); console.log('DOWNLOADED'); }
+      catch (e) { console.log(e.code); }`;
+    const out = execFileSync(process.execPath, ['--input-type=module', '-e', src, dir], {
+      encoding: 'utf8',
+      env: { ...process.env, PALATE_TASTE: '' },
+    }).trim();
+    assert.equal(out, 'TASTE_NOT_AUTHORISED', `must refuse without PALATE_TASTE, got: ${out}`);
+    assert.equal(readdirSync(dir).length, 0, 'the cache must be untouched: nothing may be fetched');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

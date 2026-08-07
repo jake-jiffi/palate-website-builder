@@ -79,9 +79,20 @@ let modelPromise = null;
 /**
  * Load the processor and vision tower, once.
  *
- * FIRST RUN DOWNLOADS ~356MB and that must be a stated, visible, one-off cost rather than a
- * surprise in the middle of a build. `onFirstDownload` is called before anything is fetched so
- * the caller can say so out loud; afterwards the model is cached and load is a second or two.
+ * FIRST RUN DOWNLOADS ~356MB, AND IT ASKS FIRST. Announcing is not consenting: this runs inside
+ * a build, on someone else's machine, possibly on a metered connection or a small disk, and a
+ * third of a gigabyte arriving unasked is the kind of thing that loses you a customer over a
+ * feature they did not know they had opted into.
+ *
+ * It cannot PROMPT, because it runs in an agent's tool call where there is usually nobody to
+ * answer and a question with no answer is a hang. So the contract is the same one this codebase
+ * uses everywhere else: REFUSE, LOUDLY, WITH THE REMEDY. The first run returns
+ * `applicable: false` naming the download and the one command that authorises it, the grade
+ * continues without the appearance half and says what it lost, and the fetch happens at SETUP
+ * time where a 356MB download belongs rather than mid-build.
+ *
+ * PALATE_TASTE=1 authorises it, and setup.sh --with-taste both sets it and pre-fetches. Once the
+ * model is cached the gate is moot and never fires again.
  *
  * The cache is transformers.js's own directory unless PALATE_MODEL_CACHE says otherwise.
  * Note it does NOT read TRANSFORMERS_CACHE by itself and its default lives inside node_modules,
@@ -107,7 +118,20 @@ export function warmTaste({ onFirstDownload = null, cacheDir = null } = {}) {
     if (dir) env.cacheDir = dir.endsWith('/') ? dir : `${dir}/`;
     if (process.env.PALATE_MODEL_OFFLINE === '1') env.allowRemoteModels = false;
 
-    if (onFirstDownload && !(await modelIsCached(env, dir))) onFirstDownload();
+    // THE CONSENT GATE. Only ever fires on a genuine first run: a cached model is already paid
+    // for, so asking again would be theatre.
+    if (!(await modelIsCached(env, dir))) {
+      if (process.env.PALATE_TASTE !== '1') {
+        const err = new Error(
+          'the appearance head needs a one-off ~356MB model download and has not been authorised. ' +
+            'Run `scripts/reference-capture/setup.sh --with-taste` to fetch it now, or set PALATE_TASTE=1 ' +
+            'to allow it during this build. The grade continues without it and reports what that cost.',
+        );
+        err.code = 'TASTE_NOT_AUTHORISED';
+        throw err;
+      }
+      if (onFirstDownload) onFirstDownload();
+    }
 
     const processor = await AutoProcessor.from_pretrained(MODEL_ID);
     // SiglipVisionModel, not the Auto class: the Auto class resolves this repo to the full

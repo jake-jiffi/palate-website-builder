@@ -31,6 +31,14 @@ else
   echo "[setup] npm packages already present."
 fi
 
+# --with-taste pre-fetches the ~356MB SigLIP vision tower so the local grade never surprises
+# someone with a third of a gigabyte in the middle of a build. Without it the appearance head
+# refuses and the grade says what that cost.
+if [ "${1:-}" = "--with-taste" ]; then
+  echo "[setup] fetching the SigLIP vision tower (~356MB, once)..."
+  PALATE_TASTE=1 node -e "import('./taste-local.mjs').then(m=>m.warmTaste({onFirstDownload:()=>console.log('[setup]   downloading...')})).then(()=>console.log('[setup] appearance head ready.')).catch(e=>{console.error('[setup] taste model failed: '+e.message);process.exit(1)})" || exit 1
+fi
+
 echo "[setup] ensuring headless chromium (cached after first run)..."
 npx --yes playwright install chromium || { echo "[setup] chromium install failed" >&2; exit 1; }
 

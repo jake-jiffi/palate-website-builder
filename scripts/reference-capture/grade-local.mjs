@@ -423,7 +423,27 @@ async function phaseRequest() {
           '  It is cached afterwards and every later grade loads it in about a second.\n' +
           '  Set PALATE_MODEL_CACHE to keep it outside node_modules so a dependency bump does not re-download it.\n',
       ),
-  }).catch((e) => ({ applicable: false, reason: e?.code === 'TASTE_DEPENDENCY_MISSING' ? 'dependency-missing' : 'embed-threw', detail: String(e?.message ?? e).slice(0, 300) }));
+  }).catch((e) => ({
+    applicable: false,
+    reason:
+      e?.code === 'TASTE_DEPENDENCY_MISSING' ? 'dependency-missing'
+      : e?.code === 'TASTE_NOT_AUTHORISED' ? 'not-authorised'
+      : 'embed-threw',
+    detail: String(e?.message ?? e).slice(0, 300),
+  }));
+  // NOT AUTHORISED IS NOT AN ERROR, it is a choice the operator has not made yet, so it reads
+  // as a named cost rather than a failure. Say what it cost: without the appearance head the
+  // local grade loses its single best predictor (0.738 concordance against founder labels) and
+  // the correlation with the certified grade falls from 0.83 to 0.76.
+  if (taste?.reason === 'not-authorised' || embedded?.reason === 'not-authorised') {
+    say(
+      '\ngrade-local: RUNNING WITHOUT THE APPEARANCE HEAD - it needs a one-off ~356MB model and\n' +
+        '  has not been authorised. This grade will use the design ladder alone, which measured\n' +
+        '  r = 0.76 against certified rather than 0.83, and it CANNOT apply the flattery gate that\n' +
+        '  withholds a number on weak pages, so read a mid-table score here with suspicion.\n' +
+        '  Authorise once: scripts/reference-capture/setup.sh --with-taste   (or PALATE_TASTE=1)\n',
+    );
+  }
 
   if (!embedded.applicable) {
     say(`grade-local: the appearance head did NOT run (${embedded.reason}): ${embedded.detail}`);
