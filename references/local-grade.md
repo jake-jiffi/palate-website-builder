@@ -72,15 +72,24 @@ clearly worse than a library reference and saying so is the job.
 
 Measured 2026-08-07, seven sites spanning 36 to 90 on the certified instrument.
 
-| site | certified | local | gap | local design | ladder verdict | taste |
-| --- | --- | --- | --- | --- | --- | --- |
-| nocturne-label.vercel.app | 90 | 95 | +5 | 91 | better | p92 |
-| palatemcp.com/web-design-mcp | 87 | 91 | +4 | 87 | better | p99 |
-| palatemcp.com | 83 | 75 | −8 | 79 | comparable | p73 |
-| jiffi.co | 73 | 67 | −6 | 66 | comparable | p94 |
-| linear.app | 60 | 56 | −4 | 71 | comparable | p57 |
-| hightownpharmacy.co.uk | 41 | 58 | **+17** | 52 | somewhat worse | p22 |
-| properly.sg | 36 | 62 | **+26** | 51 | somewhat worse | p43 |
+**The seven are not one clean sample and the table says which is which.** Four were captured
+with the settle detector in place; three predate it, so their heroes may be frames of an
+entrance animation — the very fault the detector was built for. They are pooled in the
+headline statistics below, which is a real weakness of that headline.
+
+| site | captured | certified | local | gap | local design | ladder verdict | taste |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| nocturne-label.vercel.app | settled | 90 | 95 | +5 | 91 | better | p92 |
+| palatemcp.com/web-design-mcp | **pre-detector** | 87 | 91 | +4 | 87 | better | p99 |
+| palatemcp.com | settled (never settles, flagged) | 83 | 75 | −8 | 79 | comparable | p73 |
+| jiffi.co | **pre-detector** | 73 | 67 | −6 | 66 | comparable | p94 |
+| linear.app | settled | 60 | 56 | −4 | 71 | comparable | p57 |
+| hightownpharmacy.co.uk | **pre-detector** | 41 | 58 | **+17** | 52 | somewhat worse | p22 |
+| properly.sg | settled | 36 | 62 | **+26** | 51 | somewhat worse | p43 |
+
+Three of the certified scores (palatemcp.com 83, linear.app 60, properly.sg 36) were supplied
+rather than run by me: the MCP allows six grades per 24 hours and I spent mine. The one
+overlapping check is nocturne, which I graded fresh at 90 against a supplied 91.
 
 **r = +0.83 (95% CI roughly [0.21, 0.97] at n = 7), Spearman rho = +0.86, mean absolute gap 10.0
 points, SD of the gap 12.6.** Carry the interval wherever the number goes: directionally strong,

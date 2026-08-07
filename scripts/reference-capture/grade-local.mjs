@@ -262,7 +262,10 @@ async function runAxe(page, axeSource) {
  *
  * Cheap on purpose: the point is to catch a truncated write, an HTML error body saved under a
  * .png name, or a zero-byte file, not to fully validate a codec. A 1KB floor is well under any
- * real 1440x900 screenshot (the smallest library hero is 16KB) and well over any error page.
+ * real 1440x900 screenshot and well over any error page. Measured across all cached library
+ * heroes, the smallest is 5.7KB. (An earlier version of this comment said 16KB, which was the
+ * smallest of the five files I happened to list, stated as though it were the corpus minimum.
+ * The floor is unaffected, but the claim was not one I had made.)
  */
 function looksLikeImage(path) {
   try {
