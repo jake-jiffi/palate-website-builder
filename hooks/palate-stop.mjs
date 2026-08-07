@@ -100,15 +100,15 @@ function positiveFailures(proj) {
   if (ix && Array.isArray(ix.interaction_failures) && ix.interaction_failures.length) {
     const all = ix.interaction_failures;
     const n = all.length;
-    // THE GRADE ENTRY IS HOISTED, not merely sampled. It carries the whole self-heal loop:
-    // the projected score against the bar, whether the last iteration improved or regressed
-    // it, the ranked gaps with a fix each, and the exact command to re-run. verify-rendered
-    // already unshifts it to the head of the list, but sampling the first three entries is a
-    // silent dependency on that ordering, and behind five axe rows the one message the agent
-    // needs to converge would never reach it. Pick it explicitly.
-    const isGrade = (f) => f && f.rule === "projected-grade-below-bar";
-    const grade = all.find(isGrade);
-    const rest = all.filter((f) => !isGrade(f));
+    // THE HYGIENE ENTRY IS HOISTED, not merely sampled. It carries the whole self-heal loop:
+    // the build hygiene score against the floor, whether the last iteration improved or
+    // regressed it, the ranked gaps with a fix each, and the exact command to re-run.
+    // verify-rendered already unshifts it to the head of the list, but sampling the first three
+    // entries is a silent dependency on that ordering, and behind five axe rows the one message
+    // the agent needs to converge would never reach it. Pick it explicitly.
+    const isHygiene = (f) => f && f.rule === "hygiene-below-floor";
+    const grade = all.find(isHygiene);
+    const rest = all.filter((f) => !isHygiene(f));
     const picked = [...(grade ? [grade] : []), ...rest.slice(0, grade ? 2 : 3)];
     const sample = picked.map((f) => (f && f.msg ? f.msg : String(f))).join("; ");
     // Accessibility only: the design and vitals entries also carry a `check`, and counting a
@@ -124,7 +124,7 @@ function positiveFailures(proj) {
       ? ` - ${a11y} of these are accessibility violations the grader scores; fix the markup or the token, do not suppress the rule`
       : " - drive the state, fix it, and re-verify";
     const heal = grade && grade.stalled
-      ? " - the projected grade has STALLED: stop iterating and escalate the named structural gaps to the human"
+      ? " - the build hygiene score has STALLED: stop iterating and escalate the named gaps to the human"
       : grade
         ? " - fix the ranked gaps above, rebuild, and RE-RUN the command in that message so the next run reports whether it moved"
         : "";

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The SELF-HEAL LOOP, driven end to end against a real browser and a real page.
+# The SELF-HEAL LOOP around the BUILD HYGIENE score, driven end to end against a real browser
+# and a real page.
 #
-# grade-loop.test.mjs covers the arithmetic. This covers the thing that actually has to work:
+# hygiene-loop.test.mjs covers the arithmetic. This covers the thing that actually has to work:
 # a deliberately generic page is served, the gate blocks it, the message tells an agent what
 # to fix and what to re-run, the page is then repaired IN PLACE at the same URL, and the next
 # run has to report the gain. Five states, in the order a real build hits them:
@@ -19,8 +20,8 @@ set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 VR="$DIR/../reference-capture/verify-rendered.mjs"
 STOP="$DIR/../../hooks/palate-stop.mjs"
-FIX="$DIR/fixtures/grade-loop"
-PORT="${GRADE_LOOP_PORT:-8791}"
+FIX="$DIR/fixtures/hygiene-loop"
+PORT="${HYGIENE_LOOP_PORT:-8791}"
 TMP="$(mktemp -d)"; SRV="$TMP/srv"; OUT="$TMP/out"
 mkdir -p "$SRV" "$OUT"
 pass=0; fail=0
@@ -45,7 +46,7 @@ for c in python3 /opt/homebrew/bin/python3 /usr/local/bin/python3 python; do
   command -v "$c" >/dev/null 2>&1 || continue
   "$c" -c 'import http.server' >/dev/null 2>&1 && { PY="$c"; break; }
 done
-[ -n "$PY" ] || { echo "grade-loop.test: no working python3 with http.server; the fixture cannot be served. NOT a pass." >&2; exit 2; }
+[ -n "$PY" ] || { echo "hygiene-loop.test: no working python3 with http.server; the fixture cannot be served. NOT a pass." >&2; exit 2; }
 
 cp "$FIX/generic/index.html" "$SRV/index.html"
 # `exec` so the subshell BECOMES python: without it $! is the subshell's pid, the trap kills
@@ -58,27 +59,31 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   sleep 0.5
 done
 curl -fsS "http://localhost:$PORT/" 2>/dev/null | grep -q Northgate \
-  || { echo "grade-loop.test: port $PORT is not serving the fixture (busy?). Set GRADE_LOOP_PORT. NOT a pass." >&2; exit 2; }
+  || { echo "hygiene-loop.test: port $PORT is not serving the fixture (busy?). Set HYGIENE_LOOP_PORT. NOT a pass." >&2; exit 2; }
 
 run() { node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/$1.err"; }
-HIST="$OUT/grade-history.json"
+HIST="$OUT/hygiene-history.json"
 
 # --- 1. FIRST: blocked, with everything an agent needs to act -------------------
 run r1
 has "1. blocked below the bar"                     "$TMP/r1.err" "BLOCKED"
-has "1. names the score and the bar"               "$TMP/r1.err" "projected grade [0-9]+/100 .* is below the 80 bar"
+has "1. names the score for what it IS"            "$TMP/r1.err" "build hygiene [0-9]+/100 is below the 80 floor"
+hasnt "1. never calls it a projected grade"        "$TMP/r1.err" "projected grade"
+has "1. states it does not predict the grade"      "$TMP/r1.err" "does NOT predict the public grade"
+has "1. carries the measurement that says so"      "$TMP/r1.err" "r = -0\.074"
+has "1. points at the real grader"                 "$TMP/r1.err" "mcp__palate__palate_grade"
 has "1. no invented baseline on the first run"     "$TMP/r1.err" "FIRST MEASUREMENT"
-has "1. ranked gaps carry points and a fix"        "$TMP/r1.err" "^  - .*\(worth [0-9.]+ pts\).*FIX: "
+has "1. ranked gaps carry points and a fix"        "$TMP/r1.err" "^  - .*\(worth [0-9.]+ pts of the hygiene score\).*FIX: "
 has "1. says to fix and RE-RUN"                    "$TMP/r1.err" "RE-RUN THIS EXACT COMMAND"
 has "1. gives the exact command"                   "$TMP/r1.err" "verify-rendered\.mjs --url http://localhost:$PORT --routes / --out .* --no-vitals"
-has "1. says the vision half is excluded"          "$TMP/r1.err" "EXCLUDED here, not guessed"
+has "1. says design cannot be checked here"        "$TMP/r1.err" "design craft is judged by the public grader"
 n=$(node -e "console.log(require('$HIST').entries.length)")
 check "1. one history entry persisted" "$n" "1"
 
 # The stop hook samples the head of interaction.json. The grade entry carries the whole loop,
 # so it must be first: behind five axe rows the agent never sees it.
 first=$(node -e "console.log(require('$OUT/interaction.json').interaction_failures[0].rule)")
-check "1. the grade entry leads interaction.json" "$first" "projected-grade-below-bar"
+check "1. the hygiene entry leads interaction.json" "$first" "hygiene-below-floor"
 msgok=$(node -e "const f=require('$OUT/interaction.json').interaction_failures;
   console.log(f.every(x=>typeof x.msg==='string'&&x.msg.length>20))")
 check "1. every blocking entry still carries an actionable msg" "$msgok" "true"
@@ -97,17 +102,17 @@ has "3. tells the agent to stop iterating"         "$TMP/r3.err" "STOP ITERATING
 has "3. names the frozen checks with a number"     "$TMP/r3.err" "stuck at [0-9.]+ across all 3 runs"
 has "3. says the checks are mechanical, not taste" "$TMP/r3.err" "MECHANICAL"
 has "3. offers the escalation, not another pass"   "$TMP/r3.err" "hand it to the human"
-has "3. and a recorded way out"                    "$TMP/r3.err" "PALATE_MIN_GRADE="
+has "3. and a recorded way out"                    "$TMP/r3.err" "PALATE_MIN_HYGIENE="
 # A stall must not release the gate: "it stopped improving" is not "it is good enough".
 stalled_block=$(node -e "const f=require('$OUT/interaction.json').interaction_failures;
-  const g=f.find(x=>x.rule==='projected-grade-below-bar'); console.log(!!g && g.stalled===true)")
+  const g=f.find(x=>x.rule==='hygiene-below-floor'); console.log(!!g && g.stalled===true)")
 check "3. a stalled build STILL blocks" "$stalled_block" "true"
 
 # --- 4. IMPROVING: repair the page in place, at the same URL -------------------
 cp "$FIX/better/index.html" "$SRV/index.html"
 run r4
 has "4. the repaired page reports the gain"        "$TMP/r4.err" "IMPROVING: [0-9]+ -> [0-9]+, UP [0-9]+ \(iteration 4"
-has "4. and now clears the bar"                    "$TMP/r4.err" "PASSES the 80 bar"
+has "4. and now clears the floor"                  "$TMP/r4.err" "CLEARS the 80 floor"
 # Repairing the contrast violation removes text_contrast from the scored set. That must not
 # make the run incomparable (the bug this loop was rewritten to avoid), but it must be said.
 has "4. discloses the denominator change"          "$TMP/r4.err" "part of this move is the denominator"
@@ -127,15 +132,21 @@ printf 'not json{' > "$HIST"
 run r6
 has "6. a corrupt history is spoken, not swallowed" "$TMP/r6.err" "The trend is LOST, not clean"
 node "$VR" --url "http://localhost:$PORT" --routes / --no-vitals >/dev/null 2>"$TMP/r7.err"
-has "7. no --out says the trend cannot be reported" "$TMP/r7.err" "no --out, so no grade history was kept"
+has "7. no --out says the trend cannot be reported" "$TMP/r7.err" "no --out, so no hygiene history was kept"
 
 # A typo'd bar used to disable the gate in silence: NaN fails both `> 0` and `<= 0`.
-PALATE_MIN_GRADE=eighty node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/r8.err"
-has "7b. a non-numeric bar is named, not obeyed"    "$TMP/r8.err" 'PALATE_MIN_GRADE="eighty" is not a number'
+PALATE_MIN_HYGIENE=eighty node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/r8.err"
+has "7b. a non-numeric floor is named, not obeyed"  "$TMP/r8.err" 'PALATE_MIN_HYGIENE="eighty" is not a number'
 has "7b. and the gate still blocks"                 "$TMP/r8.err" "BLOCKED"
-PALATE_MIN_GRADE=0 node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/r9.err"
-has "7c. an OFF gate says so"                       "$TMP/r9.err" "the projected-grade gate is OFF"
-hasnt "7c. and never claims a pass"                 "$TMP/r9.err" "PASSES the"
+PALATE_MIN_HYGIENE=0 node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/r9.err"
+has "7c. an OFF gate says so"                       "$TMP/r9.err" "the build-hygiene gate is OFF"
+hasnt "7c. and never claims a pass"                 "$TMP/r9.err" "CLEARS the"
+hasnt "7c. no spurious deprecation notice"          "$TMP/r9.err" "DEPRECATED"
+# The pre-rename name is still HONOURED, loudly. Silently ignoring it would block at 80 someone
+# who set PALATE_MIN_GRADE=0 expecting the gate off: the same silent-skip class, reintroduced.
+PALATE_MIN_GRADE=0 node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/r10.err"
+has "7d. the old env var is honoured"               "$TMP/r10.err" "the build-hygiene gate is OFF"
+has "7d. and named as deprecated"                   "$TMP/r10.err" "PALATE_MIN_GRADE is DEPRECATED"
 
 # --- 8. HAND-OFF: the stop hook must surface the grade message -----------------
 # Buried behind five other failures, the one message that closes the loop still has to reach
@@ -147,16 +158,16 @@ printf '{"verdict":"pass","visual":{"pass":true,"console_errors":0}}' > "$P/veri
 node -e "
 const fs=require('fs');
 const noise=[1,2,3,4,5].map(i=>({route:'/',viewport:'desktop',rule:'color-contrast',check:'text_contrast',msg:'a11y color-contrast violation number '+i}));
-const grade={route:'/',viewport:'all',rule:'projected-grade-below-bar',check:'projected_grade',score:21,stalled:false,msg:'projected grade 21/100 is below the 80 bar. NOW: fix the gaps above, rebuild, then RE-RUN THIS EXACT COMMAND'};
+const grade={route:'/',viewport:'all',rule:'hygiene-below-floor',check:'build_hygiene',score:21,stalled:false,msg:'build hygiene 21/100 is below the 80 floor. NOW: fix the gaps above, rebuild, then RE-RUN THIS EXACT COMMAND'};
 fs.writeFileSync('$P/.palate-shots/interaction.json',JSON.stringify({interaction_failures:[...noise,grade]}));"
 out=$(printf '{"cwd":"%s"}' "$P" | PALATE_GATE_OFF= node "$STOP" 2>/dev/null)
 echo "$out" | grep -q '"decision":"block"' && d=block || d=allow
 check "8. the stop hook blocks" "$d" "block"
-echo "$out" | grep -q 'projected grade 21/100' && r=yes || r=no
-check "8. and surfaces the grade message from position 6" "$r" "yes"
+echo "$out" | grep -q 'build hygiene 21/100' && r=yes || r=no
+check "8. and surfaces the hygiene message from position 6" "$r" "yes"
 echo "$out" | grep -q 'RE-RUN the command in that message' && r=yes || r=no
 check "8. with the instruction to re-run" "$r" "yes"
 
 echo "----"
-echo "grade-loop.test: $pass passed, $fail failed"
+echo "hygiene-loop.test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

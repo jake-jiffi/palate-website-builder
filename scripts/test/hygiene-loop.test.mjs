@@ -1,5 +1,5 @@
 /**
- * grade-loop.mjs - the self-heal arithmetic, which is pure and needs no browser.
+ * hygiene-loop.mjs - the self-heal arithmetic, which is pure and needs no browser.
  *
  * The assertions that matter are the ones about what this loop REFUSES to call progress.
  * Run-to-run spread on an unchanged page is 2.3 points (measured over five consecutive
@@ -8,7 +8,7 @@
  * iteration after that is chasing noise. The boundary is tested from both sides.
  *
  * The live end-to-end (does it actually block, does the message actually say the right
- * thing) is scripts/test/grade-loop.test.sh, which drives a real browser over a real page.
+ * thing) is scripts/test/hygiene-loop.test.sh, which drives a real browser over a real page.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,16 +16,16 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
-  NOISE_BAND, HISTORY_MAX, basisOf, entryFor, compare, comparableTail, detectStall,
+  NOISE_BAND, HISTORY_MAX, HISTORY_FILE, basisOf, entryFor, compare, comparableTail, detectStall,
   frozenChecks, readHistory, writeHistory, blockMessage, trendLine, summaryLine,
-} from '../reference-capture/grade-loop.mjs';
+} from '../reference-capture/hygiene-loop.mjs';
 
 const ON = { vitals: true, axe: true, routes: ['/'] };
 
 /** A projection shaped like rubric.mjs `score()` output, at a chosen overall. */
 const proj = (overall, checks = { colour_accent_discipline: 0.25 }, findings = []) => ({
   overall,
-  band: { band: 'D' },
+  band: { band: 'D' }, // on the rubric result; the loop must never PRINT it (these are GRADE bands)
   measuredWeight: 52,
   dimensions: [{ id: 'design', checks: Object.entries(checks).map(([id, raw]) => ({ id, raw })) }],
   findings,
@@ -115,13 +115,13 @@ test('a stall is judged on the BEST since the anchor, not the last', () => {
   assert.equal(detectStall([entry(61), entry(61), entry(64)]).stalled, false, '+3 clears the noise band');
 });
 
-test('the stall window widens with PALATE_GRADE_STALL_ITERS', () => {
+test('the stall window widens with PALATE_HYGIENE_STALL_ITERS', () => {
   const flat = [entry(21), entry(21), entry(21)];
   assert.equal(detectStall(flat, 3).stalled, false, 'three iterations is not yet four');
   assert.equal(detectStall([...flat, entry(21)], 3).stalled, true);
 });
 
-test('frozen checks are the ones under the bar that have not moved across the whole window', () => {
+test('frozen checks are the ones under the floor that have not moved across the whole window', () => {
   const w = [
     entry(21, { colour_accent_discipline: 0.25, type_system_discipline: 0.2, cls: 0.9 }),
     entry(21, { colour_accent_discipline: 0.25, type_system_discipline: 0.5, cls: 0.9 }),
@@ -148,7 +148,7 @@ test('frozen checks carry the rubric label and fix, not a bare id', () => {
 test('a missing history is a first run; a corrupt one is an error that must be spoken', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'gl-'));
   try {
-    const f = path.join(dir, 'grade-history.json');
+    const f = path.join(dir, HISTORY_FILE);
     const missing = readHistory(f);
     assert.equal(missing.error, null);
     assert.equal(missing.fresh, true);
@@ -165,7 +165,7 @@ test('a missing history is a first run; a corrupt one is an error that must be s
 });
 
 test('an unwritable history reports the failure instead of throwing', () => {
-  const r = writeHistory('/definitely/not/a/path/grade-history.json', [], entry(61));
+  const r = writeHistory('/definitely/not/a/path/' + HISTORY_FILE, [], entry(61));
   assert.match(r.error, /could not be written/);
 });
 
@@ -193,27 +193,30 @@ test('the block message carries all four things an agent needs to close the loop
   const cur = entryFor(p, ON);
   const prev = entry(52, { colour_accent_discipline: 0.25, type_system_discipline: 0.1 });
   const cmp = compare(cur, prev);
-  const msg = blockMessage({ projected: p, cmp, stall: detectStall([prev, cur]), minGrade: 80, rerun: RERUN });
+  const msg = blockMessage({ scored: p, cmp, stall: detectStall([prev, cur]), minScore: 80, rerun: RERUN });
 
-  assert.match(msg, /61\/100/, '1. the score');
-  assert.match(msg, /below the 80 bar/, '1. the bar');
-  assert.match(msg, /Colour discipline \(worth 2\.1 pts\)/, '2. the ranked gaps');
+  assert.match(msg, /build hygiene 61\/100/, '1. the score, named for what it is');
+  assert.match(msg, /below the 80 floor/, '1. the floor');
+  assert.match(msg, /Colour discipline \(worth 2\.1 pts of the hygiene score\)/, '2. the ranked gaps');
   assert.match(msg, /FIX: Replace the inherited accent/, '2. the fix for each');
   assert.match(msg, /RE-RUN THIS EXACT COMMAND/, '3. that it should re-run');
   assert.ok(msg.includes(RERUN), '3. the exact command');
   assert.match(msg, /IMPROVING: 52 -> 61, UP 9/, '4. whether the last iteration helped');
-  assert.match(msg, /EXCLUDED here, not guessed/, 'and that the number is not the public grade');
+  assert.match(msg, /does NOT predict the public grade/, '5. and that it is NOT a predicted grade');
+  assert.match(msg, /r = -0\.074/, 'carrying the measurement that retired that claim');
+  assert.match(msg, /palate_grade/, 'and where the real number actually comes from');
+  assert.doesNotMatch(msg, /projected grade/, 'the retired claim must survive nowhere in the message');
 });
 
 test('each gap reports its OWN movement, so a fix that helped is distinguishable from one that did not', () => {
   const p = proj(61, { colour_accent_discipline: 0.25, type_system_discipline: 0.2 }, FINDINGS);
   const prev = entry(52, { colour_accent_discipline: 0.25, type_system_discipline: 0.1 });
   const msg = blockMessage({
-    projected: p, cmp: compare(entryFor(p, ON), prev),
-    stall: detectStall([prev, entryFor(p, ON)]), minGrade: 80, rerun: RERUN,
+    scored: p, cmp: compare(entryFor(p, ON), prev),
+    stall: detectStall([prev, entryFor(p, ON)]), minScore: 80, rerun: RERUN,
   });
-  assert.match(msg, /Colour discipline \(worth 2\.1 pts\) \[unchanged since last run\]/);
-  assert.match(msg, /Type system \(worth 2\.0 pts\) \[up from 0\.1 last run\]/);
+  assert.match(msg, /Colour discipline \(worth 2\.1 pts of the hygiene score\) \[unchanged since last run\]/);
+  assert.match(msg, /Type system \(worth 2\.0 pts of the hygiene score\) \[up from 0\.1 last run\]/);
 });
 
 test('a stalled loop tells the agent to STOP, and does not call mechanical checks a judgement', () => {
@@ -221,7 +224,7 @@ test('a stalled loop tells the agent to STOP, and does not call mechanical check
   const window = Array(3).fill(0).map(() => entryFor(p, ON));
   const stall = detectStall(window);
   assert.equal(stall.stalled, true);
-  const msg = blockMessage({ projected: p, cmp: compare(window[2], window[1]), stall, minGrade: 80, rerun: RERUN });
+  const msg = blockMessage({ scored: p, cmp: compare(window[2], window[1]), stall, minScore: 80, rerun: RERUN });
 
   assert.match(msg, /STALLED: 3 iterations, 21 -> 21 -> 21/);
   assert.match(msg, /STOP ITERATING/);
@@ -229,7 +232,7 @@ test('a stalled loop tells the agent to STOP, and does not call mechanical check
   assert.match(msg, /MECHANICAL/, 'every check here is measured, not judged: a frozen one means the edit never landed');
   assert.match(msg, /the site was REBUILT/);
   assert.match(msg, /hand it to the human/, 'the loop is bounded, not infinite');
-  assert.match(msg, /PALATE_MIN_GRADE=21/, 'and there is a recorded way out');
+  assert.match(msg, /PALATE_MIN_HYGIENE=21/, 'and there is a recorded way out');
   assert.ok(msg.includes(RERUN), 'stop repeating the same pass, not stop measuring');
   assert.doesNotMatch(msg, /design judgement/);
 });
@@ -238,7 +241,7 @@ test('a bookkeeping failure travels INTO the message, not just the console', () 
   const p = proj(61, undefined, FINDINGS);
   const cur = entryFor(p, ON);
   const msg = blockMessage({
-    projected: p, cmp: compare(cur, null), stall: detectStall([cur]), minGrade: 80, rerun: RERUN,
+    scored: p, cmp: compare(cur, null), stall: detectStall([cur]), minScore: 80, rerun: RERUN,
     notes: ['NOTE: the grade history at x is not valid JSON, so this run is treated as a first measurement. The trend is LOST, not clean.'],
   });
   assert.match(msg, /The trend is LOST, not clean/);
@@ -247,16 +250,34 @@ test('a bookkeeping failure travels INTO the message, not just the console', () 
 test('with the gate off, nothing is reported as having passed anything', () => {
   const p = proj(41);
   const cur = entryFor(p, ON);
-  const line = summaryLine({ projected: p, cmp: compare(cur, null), stall: detectStall([cur]), minGrade: 0 });
+  const line = summaryLine({ scored: p, cmp: compare(cur, null), stall: detectStall([cur]), minScore: 0 });
   assert.match(line, /UNGATED/);
-  assert.doesNotMatch(line, /PASSES/, '"PASSES the 0 bar" reads as an endorsement of a build nothing judged');
+  assert.doesNotMatch(line, /CLEARS/, '"CLEARS the 0 floor" reads as an endorsement of a build nothing judged');
+});
+
+test('the rubric BAND never reaches a message or the history', () => {
+  // The bands are GRADE bands ("B Strong", "G Broken"). Stamping one on a hygiene score puts
+  // back the exact claim 23 re-grades retired, and it is the part a reader would quote.
+  const p = proj(61, { colour_accent_discipline: 0.25 }, FINDINGS);
+  const cur = entryFor(p, ON);
+  assert.equal(cur.band, undefined, 'the history row must not carry a band');
+  const stall = detectStall([cur]);
+  const msg = blockMessage({ scored: p, cmp: compare(cur, null), stall, minScore: 80, rerun: RERUN });
+  const line = summaryLine({ scored: p, cmp: compare(cur, null), stall, minScore: 80 });
+  for (const [name, text] of [['block message', msg], ['summary line', line]]) {
+    assert.doesNotMatch(text, /\(D\)|\bband\b/i, name + ' must not print a grade band');
+    assert.doesNotMatch(text, /projected grade/i, name + ' must not use the retired name');
+  }
+  // "predicted grade" may appear ONLY inside the prohibition, never as a label for the number.
+  assert.match(msg, /must never be reported as a predicted grade/);
+  assert.equal((msg.match(/predicted grade/gi) ?? []).length, 1, 'the only mention is the prohibition');
 });
 
 test('the summary line is printed on a PASS too, so a lucky pass is still visible as one', () => {
   const p = proj(84);
   const cur = entryFor(p, ON);
-  const line = summaryLine({ projected: p, cmp: compare(cur, entry(83)), stall: detectStall([entry(83), cur]), minGrade: 80 });
-  assert.match(line, /84\/100 .* PASSES the 80 bar/);
+  const line = summaryLine({ scored: p, cmp: compare(cur, entry(83)), stall: detectStall([entry(83), cur]), minScore: 80 });
+  assert.match(line, /build hygiene 84\/100 CLEARS the 80 floor/);
   assert.match(line, /UNCHANGED/, 'passing by one point on a flat trend is not the same as converging');
-  assert.match(line, /NOT included/);
+  assert.match(line, /HYGIENE ONLY: this does not predict the public grade/);
 });

@@ -44,7 +44,7 @@ import { score as scoreRubric } from './rubric.mjs';
 import {
   HISTORY_FILE, DEFAULT_STALL_ITERS, basisOf, entryFor, readHistory, writeHistory,
   comparableTail, compare, detectStall, blockMessage, summaryLine,
-} from './grade-loop.mjs';
+} from './hygiene-loop.mjs';
 
 // ----------------------------------------------------------------- args ----
 function parseArgs(argv) {
@@ -718,20 +718,25 @@ if (designFacts.desktop || designFacts.mobile) {
   }
 }
 
-// THE PROJECTED GRADE. The plugin now runs the grader's OWN rubric arithmetic (rubric.mjs,
-// vendored and diffed byte-for-byte in palate-product's lint) over the checks it can measure,
-// so "the plugin approved this build" carries a number rather than a promise.
+// THE BUILD HYGIENE SCORE. It runs the grader's OWN rubric arithmetic (rubric.mjs, vendored
+// and diffed byte-for-byte in palate-product's lint) over the checks that can be measured on a
+// rendered page here, so "the plugin approved this build" carries a number rather than a promise.
 //
-// It is a PROJECTION, not the grade, and the gap is stated rather than glossed. The grader
-// also runs a SigLIP appearance head and a pairwise vision ladder against library exemplars,
-// which together own most of the design dimension and which nothing here can reproduce. Those
-// checks are simply absent from this roll-up, so `measuredWeight` reports how much of the 100
-// this number actually rests on. A build that projects well can still lose points on taste;
-// what it can no longer do is lose them on anything measurable.
+// IT WAS CALLED A PROJECTED GRADE AND THAT NAME WAS A FALSE CLAIM. Across 23 fresh re-grades on
+// the current instrument it correlates with the public grade at r = -0.074 like for like, mean
+// absolute gap 18.0 points, regression grader = 40.0 + 0.323 x local, residual sd 18.2. No
+// predictive power. The cause is structural, not a calibration error: the public grade is mostly
+// DESIGN (weight 40, a SigLIP appearance head plus a pairwise vision ladder), and none of it can
+// run locally. This measures HYGIENE; the grade is mostly DESIGN. `measuredWeight` reports how
+// much of the 100 the number rests on, and the message says the rest out loud, because an agent
+// that reads 80 as "will score 80" stops working exactly where the real gap is.
+//
+// The gate stays. These are real faults and fixing them is real work. Only the claim was wrong.
+// See hygiene-loop.mjs. The real grade is mcp__palate__palate_grade at done time.
 let projected = null;
 // The self-heal trend for this run, written into design.json so the verifier and the human
 // see the same convergence story the agent was given.
-let gradeLoop = null;
+let hygieneLoop = null;
 if (designScored || vitalsScored) {
   try {
     const m = new Map();
@@ -740,53 +745,68 @@ if (designScored || vitalsScored) {
       m.set(c.id, { id: c.id, raw: c.raw, detail: c.detail, lowConfidence: !!c.lowConfidence });
     }
     // Every axe rule the grader treats as a binary. One failing contrast node zeroes 22 of the
-    // accessibility dimension there, so it must zero it here or the projection flatters.
+    // accessibility dimension there, so it must zero it here or the hygiene score flatters.
     const axeHit = (check) => interactionFailures.some((f) => f.check === check);
     for (const id of ['text_contrast', 'control_accessible_names', 'forms_and_errors', 'structure_and_landmarks']) {
       if (axeHit(id)) m.set(id, { id, raw: 0, detail: 'An axe violation was found on the rendered page.', lowConfidence: false });
     }
     if (m.size) projected = scoreRubric(m);
   } catch (e) {
-    add('Medium', '/', 'all', 'the projected grade could not be computed: ' + (e && e.message ? e.message : e));
+    add('Medium', '/', 'all', 'the build hygiene score could not be computed: ' + (e && e.message ? e.message : e));
   }
 }
 /**
- * THE SCORE GATES, IT SAYS WHY, AND IT SAYS WHETHER THE LAST FIX HELPED.
+ * THE HYGIENE FLOOR GATES, IT SAYS WHY, AND IT SAYS WHETHER THE LAST FIX HELPED.
  *
  * Printing a number and moving on is what made the plugin and the grader two disconnected
- * systems in the first place. A build that projects below the bar blocks, and the block names
- * the specific checks holding it down, ranked by how many points each is worth, with the fix
- * for each. That is what turns "you scored 57" into work an agent can actually do.
+ * systems in the first place. A build below the floor blocks, and the block names the specific
+ * checks holding it down, ranked by how many points each is worth, with the fix for each. That
+ * is what turns "you scored 57" into work an agent can actually do.
  *
  * Blocking is still not HEALING. An agent that is told it failed, fixes something, and re-runs
  * has no way to tell a real gain from the +/-2 the instrument moves on its own, so it thrashes.
- * grade-loop.mjs persists each projection next to the build and turns the next run into a
- * comparison: up, down, or unchanged, per gap as well as overall, and a stall once two
- * iterations pass with no material gain. See that file for why the noise band is 2, why a run
- * measured on a different set of checks reports NO COMPARISON instead of a delta, and why a
- * stall escalates rather than releasing the gate.
+ * hygiene-loop.mjs persists each run next to the build and turns the next one into a comparison:
+ * up, down, or unchanged, per gap as well as overall, and a stall once two iterations pass with
+ * no material gain. See that file for why the noise band is 2, why a run measured on a different
+ * set of checks reports NO COMPARISON instead of a delta, and why a stall escalates rather than
+ * releasing the gate.
  *
- * The bar is 80 on the weight this gate can see. Measured: a Palate demo projects 97 and an
- * ordinary plumber site 52, so 80 sits well clear of both without demanding perfection on a
- * number that excludes the vision ladder entirely.
+ * THE FLOOR IS 80, AND IT IS A HYGIENE FLOOR, NOT A PREDICTED GRADE. Measured: a Palate demo
+ * scores 97 here and an ordinary plumber site 52, so 80 separates them cleanly on hygiene. That
+ * separation is real and is all it claims. It does NOT transfer to the public grade (r = -0.074
+ * over 23 re-grades), so nothing here may be reported as a grade the build will get.
  *
- * PALATE_MIN_GRADE=0 turns it off for a deliberate exception; it is not silent when it does.
+ * PALATE_MIN_HYGIENE=0 turns it off for a deliberate exception; it is not silent when it does.
  */
 // A garbage value must not disable the gate. `Number('eighty')` is NaN, and NaN fails BOTH
 // `> 0` and `<= 0`, so a typo used to skip the block and print nothing about it - the exact
 // silent-skip shape this file exists to prevent. Fall back to the default and SAY SO.
-const numEnv = (name, fallback) => {
-  const raw = process.env[name];
+//
+// `legacy` is the pre-rename name. It is still READ, because the alternative is worse than the
+// churn: someone who sets PALATE_MIN_GRADE=0 expecting the gate off would otherwise be blocked
+// at 80 by a variable that was silently ignored, which is the same silent-skip class again. It
+// is honoured once, loudly, and named as deprecated.
+const numEnv = (name, fallback, legacy = null) => {
+  let raw = process.env[name], used = name;
+  const legacySet = legacy && process.env[legacy] !== undefined && process.env[legacy] !== '';
+  if ((raw === undefined || raw === '') && legacySet) {
+    raw = process.env[legacy]; used = legacy;
+    console.error(`verify-rendered: ${legacy} is DEPRECATED and was renamed ${name} (the number is a build hygiene score, not a projected grade). Honouring it this run.`);
+  } else if (legacySet) {
+    // Both set. The new name wins, but dropping the old one without a word is the same silent
+    // skip in miniature: someone would be left wondering why their =0 did nothing.
+    console.error(`verify-rendered: both ${name} and the deprecated ${legacy} are set. Using ${name}="${raw}" and IGNORING ${legacy}="${process.env[legacy]}".`);
+  }
   if (raw === undefined || raw === '') return fallback;
   const n = Number(raw);
   if (!Number.isFinite(n)) {
-    console.error(`verify-rendered: ${name}="${raw}" is not a number; using the default ${fallback}. The gate is NOT off.`);
+    console.error(`verify-rendered: ${used}="${raw}" is not a number; using the default ${fallback}. The gate is NOT off.`);
     return fallback;
   }
   return n;
 };
-const MIN_GRADE = numEnv('PALATE_MIN_GRADE', 80);
-const STALL_ITERS = Math.max(1, Math.round(numEnv('PALATE_GRADE_STALL_ITERS', DEFAULT_STALL_ITERS)) || DEFAULT_STALL_ITERS);
+const MIN_HYGIENE = numEnv('PALATE_MIN_HYGIENE', 80, 'PALATE_MIN_GRADE');
+const STALL_ITERS = Math.max(1, Math.round(numEnv('PALATE_HYGIENE_STALL_ITERS', DEFAULT_STALL_ITERS, 'PALATE_GRADE_STALL_ITERS')) || DEFAULT_STALL_ITERS);
 // The exact command to re-run, reconstructed from this invocation so the agent can copy it
 // rather than reconstruct it. A "re-run the gate" instruction with no command is an instruction
 // to guess.
@@ -800,10 +820,10 @@ if (projected) {
   const notes = [];
   let hist = { entries: [], error: null };
   if (!historyFile) {
-    notes.push('NOTE: this run had no --out, so no grade history was kept and no trend can be reported. Pass --out <dir> to make the loop measurable.');
+    notes.push('NOTE: this run had no --out, so no hygiene history was kept and no trend can be reported. Pass --out <dir> to make the loop measurable.');
   } else {
     hist = readHistory(historyFile);
-    if (hist.error) notes.push(`NOTE: the grade history at ${historyFile} ${hist.error}, so this run is treated as a first measurement. The trend is LOST, not clean.`);
+    if (hist.error) notes.push(`NOTE: the hygiene history at ${historyFile} ${hist.error}, so this run is treated as a first measurement. The trend is LOST, not clean.`);
   }
 
   // The measurement CONFIGURATION, not the outcome: see basisOf() for why keying it on the
@@ -812,50 +832,51 @@ if (projected) {
   const basis = basisOf(measuredWith);
   const tailBefore = comparableTail(hist.entries, basis);
   const entry = entryFor(projected, {
-    ...measuredWith, url: base, minGrade: MIN_GRADE,
-    blocked: MIN_GRADE > 0 && projected.overall < MIN_GRADE,
+    ...measuredWith, url: base, minScore: MIN_HYGIENE,
+    blocked: MIN_HYGIENE > 0 && projected.overall < MIN_HYGIENE,
   });
   const cmp = compare(entry, hist.entries[hist.entries.length - 1] ?? null);
   const stall = detectStall([...tailBefore, entry], STALL_ITERS);
 
   if (historyFile) {
     const w = writeHistory(historyFile, hist.entries, entry);
-    if (w.error) notes.push(`NOTE: the grade history at ${historyFile} ${w.error}, so the NEXT run will not see this one and cannot report a trend.`);
+    if (w.error) notes.push(`NOTE: the hygiene history at ${historyFile} ${w.error}, so the NEXT run will not see this one and cannot report a trend.`);
   }
 
-  if (MIN_GRADE > 0 && projected.overall < MIN_GRADE) {
-    const msg = blockMessage({ projected, cmp, stall, minGrade: MIN_GRADE, rerun: RERUN, notes });
+  if (MIN_HYGIENE > 0 && projected.overall < MIN_HYGIENE) {
+    const msg = blockMessage({ scored: projected, cmp, stall, minScore: MIN_HYGIENE, rerun: RERUN, notes });
     add('High', '/', 'all', msg);
     // FIRST, not appended: palate-stop.mjs samples the head of this list, and behind five axe
     // entries the whole self-heal message would never reach the agent that has to act on it.
     interactionFailures.unshift({
-      msg, route: '/', viewport: 'all', rule: 'projected-grade-below-bar', check: 'projected_grade',
-      score: projected.overall, bar: MIN_GRADE, trend: cmp.verdict, delta: cmp.delta,
+      msg, route: '/', viewport: 'all', rule: 'hygiene-below-floor', check: 'build_hygiene',
+      score: projected.overall, floor: MIN_HYGIENE, trend: cmp.verdict, delta: cmp.delta,
       iteration: stall.iterations, stalled: stall.stalled, rerun: RERUN,
     });
     console.error('verify-rendered: BLOCKED.\n' + msg);
-  } else if (MIN_GRADE <= 0) {
-    console.error('verify-rendered: PALATE_MIN_GRADE=0, the projected-grade gate is OFF for this build.');
+  } else if (MIN_HYGIENE <= 0) {
+    console.error('verify-rendered: PALATE_MIN_HYGIENE=0, the build-hygiene gate is OFF for this build.');
   }
-  // Printed on every run, pass or fail: an agent that has just cleared the bar still needs to
+  // Printed on every run, pass or fail: an agent that has just cleared the floor still needs to
   // know whether it cleared it by 1 point on a rising trend or by luck on a flat one.
-  console.error(summaryLine({ projected, cmp, stall, minGrade: MIN_GRADE }));
+  console.error(summaryLine({ scored: projected, cmp, stall, minScore: MIN_HYGIENE }));
   for (const n of notes) console.error('verify-rendered: ' + n);
-  gradeLoop = { basis, trend: cmp.verdict, delta: cmp.delta, previous: cmp.previous?.overall ?? null,
+  hygieneLoop = { basis, trend: cmp.verdict, delta: cmp.delta, previous: cmp.previous?.overall ?? null,
     iteration: stall.iterations, stalled: stall.stalled, blockers: stall.blockers, rerun: RERUN, notes };
 }
 
 if (outDir) {
   try { writeFileSync(`${outDir}/interaction.json`, JSON.stringify({ interaction_failures: interactionFailures }, null, 2)); }
   catch { /* artefact is a convenience for the deterministic hook, never fatal */ }
-  // The full scored set, for the verifier and for anyone comparing this build against the
-  // grade the same page will get in public.
+  // The full scored set, for the verifier and for the human. `hygiene` is deliberately NOT
+  // named `projected`: the field is read by people, and a field called `projected` invites the
+  // reading the measurement retired.
   try {
     writeFileSync(`${outDir}/design.json`, JSON.stringify({
       version: DESIGN_MEASURE_VERSION, sha: DESIGN_MEASURE_SHA, vitalsSha: VITALS_SHA,
       scored: designScored, facts: designFacts,
       vitals, vitalsScored,
-      projected, gradeLoop,
+      hygiene: projected, hygieneLoop,
     }, null, 2));
   } catch { /* same contract as above */ }
 }

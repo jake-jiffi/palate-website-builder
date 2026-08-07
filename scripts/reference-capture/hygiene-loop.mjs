@@ -1,11 +1,28 @@
 /**
- * grade-loop.mjs - the SELF-HEAL loop around the projected grade.
+ * hygiene-loop.mjs - the SELF-HEAL loop around the BUILD HYGIENE score.
  *
- * verify-rendered.mjs already computes a projected grade and blocks below the bar, naming
- * the gaps. That is a gate, not a loop. Blocking tells an agent it failed; it does not tell
- * it whether the thing it just changed helped, and an agent that cannot see whether it is
- * converging will thrash: it will keep editing, keep re-running, and have no way to tell a
- * real gain from the noise floor.
+ * WHAT THIS NUMBER IS, AND WHAT IT IS NOT. It rolls up the checks that can be measured on a
+ * rendered page locally: framework-default accents, default-only type stacks, WCAG 2.5.8 tap
+ * targets, sub-16px mobile body, axe violations, Core Web Vitals. That is HYGIENE. It is NOT
+ * a prediction of the public grade and this file used to call it one.
+ *
+ * The measurement that killed that name: across 23 fresh re-grades on the current instrument,
+ * the local number correlates with the public grade at r = -0.074 like for like (16 domains in
+ * both), mean absolute gap 18.0 points, regression grader = 40.0 + 0.323 x local with residual
+ * sd 18.2. No predictive power, and the cause is structural rather than a calibration anyone
+ * could fix here: the public grade is mostly DESIGN (weight 40, a SigLIP appearance head plus a
+ * pairwise vision ladder), none of which can run locally. Calling it a "projected grade" told
+ * an agent, and through it a customer, that clearing 80 here predicts scoring 80 publicly. It
+ * does not. The real number comes from `mcp__palate__palate_grade { url }` at done time.
+ *
+ * The gate and the loop are unchanged and still worth having. These are real faults and fixing
+ * them is real work. Only the CLAIM was wrong.
+ *
+ * verify-rendered.mjs already computes the score and blocks below the floor, naming the gaps.
+ * That is a gate, not a loop. Blocking tells an agent it failed; it does not tell it whether
+ * the thing it just changed helped, and an agent that cannot see whether it is converging will
+ * thrash: it will keep editing, keep re-running, and have no way to tell a real gain from the
+ * noise floor.
  *
  * This module closes it. It persists each projection beside the build and turns the next run
  * into a comparison: up, down, or unchanged, with the gaps that moved and the ones that did
@@ -23,10 +40,10 @@
  *      rather than printing a delta that means nothing.
  *
  *   3. THE LOOP IS BOUNDED. Two iterations with no material gain is a stall, and a stall is
- *      reported as one: it names the checks that have not moved, says they are structural,
- *      and tells the agent to stop and escalate rather than run a fourth pass. It does NOT
- *      release the gate - a stalled build still blocks - because "it stopped improving" is
- *      not the same fact as "it is good enough", and only a human gets to decide the second.
+ *      reported as one: it names the checks that have not moved and tells the agent to stop
+ *      and escalate rather than run a fourth pass. It does NOT release the gate - a stalled
+ *      build still blocks - because "it stopped improving" is not the same fact as "it is
+ *      good enough", and only a human gets to decide the second.
  *
  *   4. IT FAILS LOUD. An unreadable or unwritable history, or a run with no --out to persist
  *      to, is SAID rather than swallowed. Every silent skip in this product's history
@@ -38,7 +55,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { DIMENSIONS } from './rubric.mjs';
 
-export const HISTORY_FILE = 'grade-history.json';
+export const HISTORY_FILE = 'hygiene-history.json';
 export const HISTORY_VERSION = 1;
 /** Keep the tail bounded; a build that has run 20 iterations has a different problem. */
 export const HISTORY_MAX = 20;
@@ -90,15 +107,22 @@ export function checksOf(projected) {
   return out;
 }
 
-/** id -> points recoverable across the whole rubric, for the checks scoring under the bar. */
+/** id -> points recoverable across the whole rubric, for the checks scoring under the floor. */
 export function recoverableOf(projected) {
   const out = {};
   for (const f of projected?.findings ?? []) out[f.id] = round3(f.recoverable ?? 0);
   return out;
 }
 
-/** One history row from a projection. */
-export function entryFor(projected, ctx = {}) {
+/**
+ * One history row.
+ *
+ * No `band`. The rubric's bands are GRADE bands ("B Strong", "G Broken"); recording one against
+ * a hygiene score would put the retired claim straight back into the artefact, where the next
+ * reader would quote it.
+ */
+export function entryFor(scored, ctx = {}) {
+  const projected = scored;
   return {
     at: ctx.at ?? new Date().toISOString(),
     url: ctx.url ?? null,
@@ -106,9 +130,8 @@ export function entryFor(projected, ctx = {}) {
     vitals: ctx.vitals !== false,
     axe: ctx.axe !== false,
     overall: projected.overall,
-    band: projected.band?.band ?? null,
     measuredWeight: projected.measuredWeight ?? null,
-    minGrade: ctx.minGrade ?? null,
+    minScore: ctx.minScore ?? null,
     blocked: !!ctx.blocked,
     basis: basisOf(ctx),
     checks: checksOf(projected),
@@ -213,7 +236,7 @@ export function detectStall(tail, stallIters = DEFAULT_STALL_ITERS) {
 }
 
 /**
- * The checks that are under the bar in EVERY run of the window and have not moved across it.
+ * The checks that are under the floor in EVERY run of the window and have not moved across it.
  * These are what is structurally blocking: the agent has had `n` attempts and none of them
  * touched these, which usually means they are design judgements rather than defects to patch.
  */
@@ -264,39 +287,53 @@ export function gapLines(projected, previous, limit = 5) {
         const d = round3((f.raw ?? 0) - was);
         moved = Math.abs(d) < 0.01 ? ' [unchanged since last run]' : ` [${d > 0 ? 'up' : 'down'} from ${was} last run]`;
       }
-      return `  - ${f.label ?? f.id} (worth ${pts(f.recoverable)} pts)${moved}: ${f.detail ?? ''} FIX: ${f.fix ?? ''}`;
+      return `  - ${f.label ?? f.id} (worth ${pts(f.recoverable)} pts of the hygiene score)${moved}: ${f.detail ?? ''} FIX: ${f.fix ?? ''}`;
     })
     .join('\n');
 }
 
-const EXCLUDED =
-  'NOT INCLUDED IN THIS NUMBER: the grader also runs a SigLIP appearance head and a pairwise ' +
-  'vision ladder against library exemplars. Together they own most of the design dimension and ' +
-  'neither can run locally, so they are EXCLUDED here, not guessed. Clearing this bar does not ' +
-  'mean the public grade will match it.';
+/**
+ * The disclosure, on every message. It is long because the short version is the lie: an agent
+ * that reads "80" and infers "will score 80 publicly" stops working at exactly the point where
+ * the remaining gap is design, which is the half this cannot see.
+ */
+const WHAT_THIS_IS =
+  'WHAT THIS NUMBER IS: a BUILD HYGIENE score over the checks measurable on a rendered page ' +
+  'locally (accents, type stack, tap targets, mobile body size, axe violations, Core Web Vitals). ' +
+  'It does NOT predict the public grade at palatemcp.com/grade and must never be reported as a ' +
+  'predicted grade. Measured over 23 fresh re-grades: r = -0.074 like for like, mean absolute gap ' +
+  '18 points. The public grade is mostly DESIGN (weight 40, a SigLIP appearance head and a ' +
+  'pairwise vision ladder), none of which runs locally. Clearing this floor means no measurable ' +
+  'hygiene faults are left; design craft is judged by the public grader and cannot be checked ' +
+  'here. For the real number call mcp__palate__palate_grade { url } on the deployed URL at done time.';
 
 /**
- * The whole message an agent sees when the projection is under the bar. It has to carry four
- * things in terms it can act on: the score and the bar, the ranked gaps with fixes, the fact
+ * The whole message an agent sees when the score is under the floor. It has to carry four
+ * things in terms it can act on: the score and the floor, the ranked gaps with fixes, the fact
  * that it should fix and RE-RUN plus the exact command, and whether the last iteration helped.
+ *
+ * NOTE what the head deliberately does NOT print: the rubric's BAND letter. The bands are grade
+ * bands ("B Strong", "G Broken"), and stamping one on a hygiene score re-imports the whole claim
+ * the measurement just retired. The number is reported bare.
  */
-export function blockMessage({ projected, cmp, stall, minGrade, rerun, notes = [] }) {
+export function blockMessage({ scored, cmp, stall, minScore, rerun, notes = [] }) {
+  const projected = scored;
   const head =
-    `projected grade ${projected.overall}/100 (${projected.band?.band ?? '?'}) is below the ${minGrade} bar, ` +
-    `measured on ${projected.measuredWeight} of the grader's 100 weight.`;
+    `build hygiene ${projected.overall}/100 is below the ${minScore} floor, ` +
+    `measured on ${projected.measuredWeight} of the rubric's 100 weight.`;
 
   if (stall.stalled) {
     const path = stall.window.map((e) => e.overall).join(' -> ');
     const blockers = stall.blockers.length
       ? stall.blockers
           .slice(0, 5)
-          .map((b) => `  - ${b.label ?? b.id} (worth ${pts(b.recoverable)} pts): stuck at ${b.raw} across all ${stall.window.length} runs. FIX: ${b.fix ?? ''}`)
+          .map((b) => `  - ${b.label ?? b.id} (worth ${pts(b.recoverable)} pts of the hygiene score): stuck at ${b.raw} across all ${stall.window.length} runs. FIX: ${b.fix ?? ''}`)
           .join('\n')
       : '  (no single check is frozen: the score is moving around without net gain, which usually means the edits are cosmetic)';
     return [
       head,
       `STALLED: ${stall.iterations} iterations, ${path}, no material gain (best since the anchor is within the ${NOISE_BAND}-point noise band).`,
-      'STOP ITERATING. Another pass of the same kind will not clear the bar. These have not moved at all across the loop:',
+      'STOP ITERATING. Another pass of the same kind will not clear the floor. These have not moved at all across the loop:',
       blockers,
       // Precision matters here. Every check this projection scores is measured off the rendered
       // page - a hex, a font stack, a control height, a paint time. None of them is a matter of
@@ -308,13 +345,13 @@ export function blockMessage({ projected, cmp, stall, minGrade, rerun, notes = [
         '(2) the site was REBUILT, (3) the URL you are measuring is serving the rebuilt page. Read the `detail` for each ' +
         'check in .palate-shots/design.json - it names the exact measured value.',
       'If all three hold and the number still will not move, stop and hand it to the human with .palate-shots/design.json and ' +
-        `.palate-shots/${HISTORY_FILE}. To accept the build at this score deliberately, set PALATE_MIN_GRADE=${projected.overall} ` +
+        `.palate-shots/${HISTORY_FILE}. To accept the build at this score deliberately, set PALATE_MIN_HYGIENE=${projected.overall} ` +
         'for the run; it is recorded in the history, never silent.',
       // The command is printed here too. The instruction is to stop repeating the same kind of
       // pass, not to stop measuring: an agent that makes one deliberate structural change still
       // needs to re-measure it, and should not have to reconstruct the invocation to do it.
       'After ONE deliberate change of a different kind, this is the command that re-measures it:\n  ' + rerun,
-      EXCLUDED,
+      WHAT_THIS_IS,
       ...notes,
     ].join('\n');
   }
@@ -323,25 +360,27 @@ export function blockMessage({ projected, cmp, stall, minGrade, rerun, notes = [
   return [
     head,
     trendLine(cmp, stall.iterations),
-    `${(projected.findings ?? []).filter((f) => (f.recoverable ?? 0) > 0.05).length} gap(s) left, ranked by points recoverable:`,
+    `${(projected.findings ?? []).filter((f) => (f.recoverable ?? 0) > 0.05).length} gap(s) left, ranked by hygiene points recoverable:`,
     gaps || '  (no single gap is worth more than 0.05 points: the deficit is spread thin)',
     'NOW: fix the gaps above, rebuild, then RE-RUN THIS EXACT COMMAND to re-measure and see whether it moved:',
     '  ' + rerun,
-    EXCLUDED,
+    WHAT_THIS_IS,
     ...notes,
   ].join('\n');
 }
 
 /** The one-line summary printed on every run, pass or fail, so the trend is never invisible. */
-export function summaryLine({ projected, cmp, stall, minGrade }) {
-  // With the gate off there is no bar to pass, and saying "PASSES the 0 bar" would read as an
-  // endorsement of a build nothing judged.
-  const state = minGrade > 0
-    ? `${projected.overall >= minGrade ? 'PASSES' : 'is BELOW'} the ${minGrade} bar`
-    : 'is UNGATED (PALATE_MIN_GRADE=0), so nothing here passed or failed';
+export function summaryLine({ scored, cmp, stall, minScore }) {
+  const projected = scored;
+  // With the gate off there is no floor to clear, and saying "CLEARS the 0 floor" would read as
+  // an endorsement of a build nothing judged.
+  const state = minScore > 0
+    ? `${projected.overall >= minScore ? 'CLEARS' : 'is BELOW'} the ${minScore} floor`
+    : 'is UNGATED (PALATE_MIN_HYGIENE=0), so nothing here passed or failed';
   return (
-    `verify-rendered: projected grade ${projected.overall}/100 (${projected.band?.band ?? '?'}) ${state}, ` +
-    `on ${projected.measuredWeight} of the 100 weight this gate can see. ${trendLine(cmp, stall.iterations)} ` +
-    'The vision ladder and appearance head are NOT included and own most of the design dimension.'
+    `verify-rendered: build hygiene ${projected.overall}/100 ${state}, ` +
+    `on ${projected.measuredWeight} of the 100 weight measurable locally. ${trendLine(cmp, stall.iterations)} ` +
+    'HYGIENE ONLY: this does not predict the public grade (r = -0.074 over 23 re-grades); ' +
+    'design is weight 40 and judged by vision models that cannot run here. Real grade: mcp__palate__palate_grade.'
   );
 }
