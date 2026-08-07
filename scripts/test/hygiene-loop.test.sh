@@ -56,7 +56,13 @@ cp "$FIX/generic/index.html" "$SRV/index.html"
 # Same class as the 1400ms hero capture: the check was satisfied by something plausible instead
 # of by the actual thing. The marker is unique to this run, so only OUR server can answer it.
 MARKER="hygiene-loop-$$-$RANDOM"
+# An EMPTY marker would make the check below `[ "" = "" ]`, which a failed curl also satisfies -
+# the guard would then pass on exactly the condition it exists to catch. Assert it is non-empty
+# and that the file really landed, so the comparison can only ever be against a real value.
+[ -n "$MARKER" ] || { echo "hygiene-loop.test: could not mint a run marker. NOT a pass." >&2; exit 2; }
 printf '%s' "$MARKER" > "$SRV/.run-marker"
+[ "$(cat "$SRV/.run-marker" 2>/dev/null)" = "$MARKER" ] \
+  || { echo "hygiene-loop.test: the run marker did not write to $SRV. NOT a pass." >&2; exit 2; }
 # `exec` so the subshell BECOMES python: without it $! is the subshell's pid, the trap kills
 # the wrapper, and the server is left holding the port for the next run of this test.
 (cd "$SRV" && exec "$PY" -m http.server "$PORT" >/dev/null 2>&1) &

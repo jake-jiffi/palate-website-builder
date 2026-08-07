@@ -868,8 +868,29 @@ if (projected) {
 }
 
 if (outDir) {
-  try { writeFileSync(`${outDir}/interaction.json`, JSON.stringify({ interaction_failures: interactionFailures }, null, 2)); }
-  catch { /* artefact is a convenience for the deterministic hook, never fatal */ }
+  // NEVER FATAL IS RIGHT. SILENT IS NOT, AND THIS ONE WAS THE WORST CASE IN THE FILE.
+  //
+  // hooks/palate-stop.mjs BLOCKS on a present, non-empty interaction.json and treats an ABSENT
+  // file as "could not verify", which is the correct fail-open rule for a pass that never ran.
+  // But a failed WRITE is indistinguishable from a pass that never ran: a full disk, a
+  // read-only mount or a deleted --out directory would take a build with real blocking failures
+  // and turn it into one the Stop hook waves through, saying nothing. The findings and the exit
+  // code still stand for anyone reading them, and the hook reads neither.
+  //
+  // So it stays non-fatal and becomes loud, and the message names the consequence rather than
+  // the operation, because "could not write interaction.json" does not tell the reader their
+  // gate just stopped working.
+  try {
+    writeFileSync(`${outDir}/interaction.json`, JSON.stringify({ interaction_failures: interactionFailures }, null, 2));
+  } catch (e) {
+    const n = interactionFailures.length;
+    console.error(
+      `verify-rendered: FAILED to write ${outDir}/interaction.json (${e?.message ?? e}). ` +
+      (n
+        ? `${n} blocking failure(s) were found and the Stop hook will NOT see them, so this build can finish as though it passed. Treat it as FAILED and fix the write path.`
+        : 'No failures were found, so nothing is being hidden, but the gate artefact is missing.'),
+    );
+  }
   // The full scored set, for the verifier and for the human. `hygiene` is deliberately NOT
   // named `projected`: the field is read by people, and a field called `projected` invites the
   // reading the measurement retired.
@@ -880,7 +901,11 @@ if (outDir) {
       vitals, vitalsScored,
       hygiene: projected, hygieneLoop,
     }, null, 2));
-  } catch { /* same contract as above */ }
+  } catch (e) {
+    // Nothing gates on design.json, so this one only costs the evidence and the trend, not the
+    // block. Still said out loud: a missing artefact should never be discovered by its absence.
+    console.error(`verify-rendered: FAILED to write ${outDir}/design.json (${e?.message ?? e}). The scored evidence and the hygiene trend are LOST for this run.`);
+  }
 }
 
 // ------------------------------------------------------------- helpers -----
