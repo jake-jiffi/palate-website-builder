@@ -1,26 +1,42 @@
 /**
  * hygiene-loop.mjs - the SELF-HEAL loop around the BUILD HYGIENE score.
  *
- * WHAT THIS NUMBER IS, AND WHAT IT IS NOT. It rolls up the checks that can be measured on a
- * rendered page locally: framework-default accents, default-only type stacks, WCAG 2.5.8 tap
- * targets, sub-16px mobile body, axe violations, Core Web Vitals. That is HYGIENE. It is NOT
- * a prediction of the public grade and this file used to call it one.
+ * WHAT THIS NUMBER IS, AND WHAT IT IS NOT. It rolls up the checks measurable WITHOUT a model and
+ * WITHOUT a judge: framework-default accents, default-only type stacks, WCAG 2.5.8 tap targets,
+ * sub-16px mobile body, axe violations, Core Web Vitals. That is HYGIENE, and that boundary is
+ * the point - it runs in seconds on every build, needing nothing downloaded and nobody's opinion.
+ * It is NOT a prediction of the public grade, and this file used to call it one.
  *
  * The measurement that killed that name: across 23 fresh re-grades, the local number correlated
  * with the public grade at r = -0.074 like for like (16 domains in both), mean absolute gap 18.0
  * points, regression grader = 40.0 + 0.323 x local, residual sd 18.2. No predictive power.
  *
- * READ THAT NUMBER WITH THE CAVEAT IT NOW CARRIES, because the reference was broken while it was
- * taken. capture.mjs computed `out.design` per viewport and then dropped it at the `viewportsOut`
- * whitelist, so the worker read undefined and checks.mjs sailed past its truthy guard: production
- * grades stamped `2026-08-06.design-measured` were scoring design on 4 of 11 checks. The five
- * that were missing - type_system_discipline, colour_accent_discipline, spacing_rhythm,
- * component_detail_craft, responsive_integrity - are EXACTLY the checks this score is built from.
- * So the correlation was measured between this number and a reference from which its entire
- * overlap had been removed. r = -0.074 is real as an observation about the grades customers
- * actually received; it is NOT yet evidence for WHY they disagree, and the tempting explanation
- * ("the grade is design and design cannot run locally") is unproven. Re-measure with
- * projected-vs-graded.mjs once the capture fix is deployed.
+ * THE REFERENCE WAS BROKEN WHILE THAT WAS TAKEN. capture.mjs computed `out.design` per viewport
+ * and then dropped it at the `viewportsOut` whitelist, so the worker read undefined and checks.mjs
+ * sailed past its truthy guard: production grades stamped `2026-08-06.design-measured` were
+ * scoring design on 4 of 11 checks. The five missing - type_system_discipline,
+ * colour_accent_discipline, spacing_rhythm, component_detail_craft, responsive_integrity - are
+ * EXACTLY the checks this score is built from.
+ *
+ * THAT BUG MAKES THE CAUSAL TEST CLEANER, NOT MURKIER, WHICH I HAD BACKWARDS. With those five
+ * dropped, the certified design dimension is currently the VISION HALF ALONE (appearance head plus
+ * pairwise ladder). So there are two local numbers measured against the same vision-only
+ * reference: this one, carrying no vision, at r = -0.074 over 23; and local-grade's tier 2, which
+ * adds a locally-run SigLIP head and ladder, at r = +0.83 / rho = +0.86, mean absolute gap 10.0,
+ * over 7. The vision half is what tracks the grade. A number without it cannot, and that is this
+ * one's permanent condition by construction.
+ *
+ * So my own retraction over-corrected. "The grade is mostly design" is now the better-supported
+ * explanation rather than an unproven one. What HAS gone stale is the other half of the sentence:
+ * design can no longer be called unrunnable locally, because local-grade runs both the head and
+ * the ladder on the customer's machine.
+ *
+ * HOLD ALL OF IT LOOSELY UNTIL THE DEPLOY. n = 7 puts the 95% CI on r = +0.83 at roughly
+ * [0.21, 0.97] - directionally strong, numerically vague. Both figures are pre-deploy, and once
+ * the capture fix reaches Fly the certified design dimension gets those five computed checks back,
+ * which should RAISE this number's correlation (it would share inputs with the reference again)
+ * and may lower tier 2's. That is a prediction, recorded here so the re-measure can falsify it.
+ * Re-run projected-vs-graded.mjs after the deploy.
  *
  * None of that rescues the old name. Whatever the cause, this number did not predict the number
  * customers were given, and calling it a "projected grade" told an agent, and through it a
@@ -310,8 +326,8 @@ export function gapLines(projected, previous, limit = 5) {
  * the remaining gap is design, which is the half this cannot see.
  */
 const WHAT_THIS_IS =
-  'WHAT THIS NUMBER IS: a BUILD HYGIENE score over the checks measurable on a rendered page ' +
-  'locally (accents, type stack, tap targets, mobile body size, axe violations, Core Web Vitals). ' +
+  'WHAT THIS NUMBER IS: a BUILD HYGIENE score over the checks measurable with no model and no ' +
+  'judge (accents, type stack, tap targets, mobile body size, axe violations, Core Web Vitals). ' +
   'It is NOT the public grade at palatemcp.com/grade, it has been measured to disagree with it ' +
   'substantially, and it must never be reported as a predicted grade. Most of the design ' +
   'dimension (weight 40) is a vision judgement that is not included in THIS number. Clearing this ' +

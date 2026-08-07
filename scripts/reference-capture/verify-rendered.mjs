@@ -724,12 +724,14 @@ if (designFacts.desktop || designFacts.mobile) {
 //
 // IT WAS CALLED A PROJECTED GRADE AND THAT NAME WAS A FALSE CLAIM. Across 23 fresh re-grades it
 // correlated with the public grade at r = -0.074 like for like, mean absolute gap 18.0 points. No
-// predictive power. See hygiene-loop.mjs for the caveat that number now carries (the reference
-// grader was dropping five design checks - the same five this score is built from - while the
-// measurement was taken, so the disagreement is real but its CAUSE is not yet established).
-// Either way this measures HYGIENE and must not be reported as a grade. `measuredWeight` reports
-// how much of the 100 the number rests on, and the message says the rest out loud, because an
-// agent that reads 80 as "will score 80" stops working exactly where the real gap is.
+// predictive power, and the cause is now evidenced rather than guessed: a local number that DOES
+// carry the vision half (local-grade's tier 2, SigLIP head plus pairwise ladder) tracks the same
+// reference at r = +0.83. Vision is what the grade rests on, and this number has none in it by
+// construction. See hygiene-loop.mjs for the sample sizes, the pre-deploy caveat on both figures,
+// and the prediction the re-measure should falsify. Either way this measures HYGIENE and must not
+// be reported as a grade. `measuredWeight` reports how much of the 100 the number rests on, and
+// the message says the rest out loud, because an agent that reads 80 as "will score 80" stops
+// working exactly where the real gap is.
 //
 // The gate stays. These are real faults and fixing them is real work. Only the claim was wrong.
 // See hygiene-loop.mjs. The real grade is mcp__palate__palate_grade at done time.
