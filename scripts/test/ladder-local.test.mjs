@@ -332,3 +332,13 @@ test('the range is stated as a range, with its sample size', () => {
   assert.equal(f.honestRange[1], 60 - FLATTERY_OVERSCORE.min);
   assert.equal(FLATTERY_OVERSCORE.n, 2, 'n must travel with the correction, it is two observations');
 });
+
+test('the pass path is where the caveat goes, and the measurement says why', () => {
+  // Measured above the corpus median: gaps -4, -8, +5, -6, +4, mean signed -1.8. The number is
+  // CONSERVATIVE up here, so no correction is applied and none should be. What is NOT earned is
+  // "safe to stop on": 34 of the 100 weight is unmeasured. flatteryOf must stay null so the
+  // high-score path renders the number plus the done-signal warning, not a withholding.
+  for (const p of [56.6, 73.4, 92.4, 99.3]) {
+    assert.equal(flatteryOf({ applicable: true, percentile: p }, 91), null, `p${p} must state its number`);
+  }
+});

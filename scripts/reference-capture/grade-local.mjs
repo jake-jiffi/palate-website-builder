@@ -744,6 +744,32 @@ function renderResult(o) {
     L.push('This is not a band and not a certified score. Bands come from the certified grade only.');
   }
   L.push(`measured on ${o.measuredWeight} of the grader's 100 weight, margin about +/-${o.confidence} points`);
+
+  /**
+   * THE PASS IS WHERE A SCORE IS DANGEROUS, NOT THE FAIL.
+   *
+   * An agent reading a low number is still working. An agent reading a high one stops, and
+   * stopping on this number is the failure the whole loop exists to prevent arriving through
+   * the front door. So the caveat goes HERE, next to a score that reads as permission, rather
+   * than in a footer under a list of gaps.
+   *
+   * Measured first, so this is not a reflex. Above the corpus median the local grade is
+   * CONSERVATIVE, not flattering: gaps of -4, -8, +5, -6, +4, mean signed -1.8. So the number
+   * itself is defensible up here and no correction is applied. "Defensible number" and "safe to
+   * stop on" are different claims, and only the first one is earned.
+   *
+   * What makes it unsafe to stop on is coverage, not accuracy: content, technical foundations
+   * and AI answer-engine readiness are 34 of the 100 weight and are not measured here at all.
+   * On the certified grades to hand they run 75 to 100 even on a template, so they are usually
+   * fine - which is exactly why an agent would never think to check them.
+   */
+  if (!o.flattery && o.overall >= 80) {
+    L.push('');
+    L.push('A HIGH NUMBER HERE IS NOT A DONE SIGNAL.');
+    L.push('  It is uncertified, it leaves out 34 of the 100 weight (content, technical foundations and AI');
+    L.push('  readiness are not measured here at all), and its design half was judged by a model grading a');
+    L.push('  build it was part of. Run the certified grade before calling the site finished.');
+  }
   L.push('');
   for (const d of o.dimensions) {
     // A dimension nothing was measured in scores 0 in the roll-up and is correctly EXCLUDED
