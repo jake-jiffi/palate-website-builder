@@ -321,8 +321,18 @@ async function phaseRequest() {
   }
 
   if (args.taste) {
-    taste = { ...JSON.parse(readFileSync(resolve(args.taste), 'utf8')), applicable: true };
-    say(`grade-local: taste score read from ${args.taste}`);
+    // VALIDATED, not trusted. This file is hand-supplied (it is the OAuth fallback: the caller
+    // ran palate_taste_score themselves), so it can just as easily be an error payload or the
+    // wrong tool's output. Stamping applicable:true on whatever is in it would put an undefined
+    // percentile into the report and silently drop the prior while claiming the head had run.
+    const raw = JSON.parse(readFileSync(resolve(args.taste), 'utf8'));
+    if (typeof raw?.percentile === 'number' && Number.isFinite(raw.percentile) && raw.percentile >= 0 && raw.percentile <= 100) {
+      taste = { ...raw, applicable: true };
+      say(`grade-local: taste score read from ${args.taste} (percentile ${raw.percentile})`);
+    } else {
+      taste = { applicable: false, reason: 'taste-file-invalid', detail: `${args.taste} has no usable numeric \`percentile\`; it is not a palate_taste_score result.` };
+      say(`grade-local: the taste file was REJECTED: ${taste.detail}`);
+    }
   } else if (client && embedded.applicable) {
     try {
       const t = await client.callTool('palate_taste_score', { embedding: embedded.embedding });
