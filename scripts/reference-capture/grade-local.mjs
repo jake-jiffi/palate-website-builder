@@ -149,6 +149,44 @@ async function settleAtTop(page) {
 }
 
 /**
+ * Wait until the first screen STOPS CHANGING, then say whether it did.
+ *
+ * A fixed delay is not a settle. linear.app was captured with its headline still blurred
+ * mid-entrance, its subhead a ghost and its cards as empty outlines, because 1400ms is not long
+ * enough for a reveal animation. Nothing downstream could catch it: the aspect was right and the
+ * pixels were varied, so every gate in taste-local.mjs passed a frame of an animation and the
+ * appearance head scored it (p41.3) as though it were the design.
+ *
+ * That failure mode targets exactly the sites this product exists to build. A Palate build has
+ * entrance motion by design, so a grader that screenshots too early systematically scores the
+ * best-built sites on their worst frame.
+ *
+ * So: shoot the viewport repeatedly and compare the encoded bytes. Two identical PNGs mean
+ * nothing moved between them. `stable` is returned rather than assumed, because a page with a
+ * looping background or a video hero will never settle, and the honest answer there is "this is
+ * a frame of something moving", not a silent pass.
+ */
+async function waitForStillHero(page, { intervalMs = 450, maxMs = 9000 } = {}) {
+  const t0 = Date.now();
+  let previous = null;
+  let stableFor = 0;
+  while (Date.now() - t0 < maxMs) {
+    const shot = await page.screenshot({ fullPage: false, timeout: 15000 });
+    if (previous && shot.equals(previous)) {
+      stableFor++;
+      // Two consecutive identical frames. One pair is enough: the interval is longer than a
+      // frame, so a moving page cannot produce two matching shots by chance.
+      if (stableFor >= 1) return { stable: true, ms: Date.now() - t0 };
+    } else {
+      stableFor = 0;
+    }
+    previous = shot;
+    await page.evaluate((ms) => new Promise((r) => setTimeout(r, ms)), intervalMs);
+  }
+  return { stable: false, ms: Date.now() - t0 };
+}
+
+/**
  * Scroll to the bottom and back, so lazy content and scroll-triggered reveals have fired before
  * the design facts are read.
  *
@@ -217,6 +255,7 @@ async function phaseRequest() {
   const axeByViewport = {};
   const errors = [];
   const heroPath = join(OUT_DIR, 'local-grade-hero.png');
+  let heroSettle = null;
 
   try {
     for (const [name, vp] of Object.entries(VIEWPORTS)) {
@@ -245,6 +284,13 @@ async function phaseRequest() {
             // Loud rather than a quietly wrong hero. The head is a hero model; a scrolled frame
             // is a different question with a confident-looking answer.
             errors.push(`desktop: the page was at scrollY ${atTop} when the hero was captured, so it is NOT the hero`);
+          }
+          heroSettle = await waitForStillHero(page);
+          if (!heroSettle.stable) {
+            errors.push(
+              `desktop: the first screen was still moving after ${Math.round(heroSettle.ms / 1000)}s, so the hero is a ` +
+                'FRAME OF AN ANIMATION rather than a settled design. Treat its appearance score with suspicion.',
+            );
           }
           // fullPage FALSE: the head is a viewport model and a full-page composite (aspect ~5)
           // is squashed to 384x384 into something it never saw. taste-local.mjs refuses one.
@@ -378,6 +424,7 @@ async function phaseRequest() {
     domain,
     vertical: pack?.verticalUsed ?? args.vertical ?? null,
     heroPath,
+    heroSettle,
     designFacts,
     axeByViewport,
     vitals: vitals ?? null,
@@ -411,7 +458,10 @@ function renderRequestInstructions({ state, request, exemplars, mcpError }) {
   L.push('');
   L.push(`LOCAL GRADE, PHASE 1 of 2 - measured ${state.url}`);
   L.push('');
-  L.push(`  hero            ${state.heroPath} (${HERO_VIEWPORT.width}x${HERO_VIEWPORT.height})`);
+  L.push(
+    `  hero            ${state.heroPath} (${HERO_VIEWPORT.width}x${HERO_VIEWPORT.height})` +
+      (state.heroSettle ? (state.heroSettle.stable ? ` settled in ${state.heroSettle.ms}ms` : ` STILL MOVING after ${state.heroSettle.ms}ms - this is a frame of an animation`) : ''),
+  );
   L.push(
     `  appearance head ${
       state.taste.applicable
@@ -569,7 +619,8 @@ async function phaseScore() {
     findings: graded.findings.slice(0, 12).map((f) => ({ id: f.id, label: f.label, raw: Math.round(f.raw * 1000) / 1000, recoverable: Math.round(f.recoverable * 100) / 100, detail: f.detail, fix: f.fix })),
     taste: state.taste,
     ladder: { applicable: ladder.applicable, reason: ladder.reason ?? null, rung: ladder.rung ?? null, meanRaw: ladder.meanRaw ?? null, results: ladder.results ?? [] },
-    unmeasured: unmeasuredNote({ ladder, taste: state.taste, vitals: state.vitals, vitalsRequested: state.vitalsRequested, graded }),
+    heroSettle: state.heroSettle ?? null,
+    unmeasured: unmeasuredNote({ ladder, taste: state.taste, vitals: state.vitals, vitalsRequested: state.vitalsRequested, graded, heroSettle: state.heroSettle }),
     notCertified: NOT_CERTIFIED,
   };
   writeFileSync(RESULT_FILE, JSON.stringify(out, null, 1));
@@ -586,8 +637,13 @@ async function phaseScore() {
  * weight absent, and leaving it unsaid would let a number computed on 66 weight be compared
  * against one computed on 100 as though they were the same quantity.
  */
-function unmeasuredNote({ ladder, taste, vitals, vitalsRequested, graded }) {
+function unmeasuredNote({ ladder, taste, vitals, vitalsRequested, graded, heroSettle }) {
   const gaps = [];
+  if (heroSettle && !heroSettle.stable)
+    gaps.push(
+      `the hero was STILL MOVING after ${Math.round(heroSettle.ms / 1000)}s, so both the appearance head and the ` +
+        'ladder judged a frame of an animation rather than the settled design. Both are suspect on this run.',
+    );
   if (!ladder.applicable) gaps.push(`the design ladder (45 of design's 100 points): ${ladder.reason}`);
   if (!taste?.applicable) gaps.push(`the SigLIP appearance head (the prior on the ladder's verdict): ${taste?.reason ?? 'did not run'}`);
   if (vitalsRequested && !vitals?.applicable) gaps.push("performance (14 of the grader's 100 weight): vitals did not run");

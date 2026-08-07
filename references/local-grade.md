@@ -70,36 +70,61 @@ clearly worse than a library reference and saying so is the job.
 
 ## How close is it to the certified grade?
 
-Measured 2026-08-07 on three sites spanning the range, each graded locally and then through the
-real grader on the same day.
+Measured 2026-08-07, seven sites spanning 36 to 90 on the certified instrument.
 
-| site | certified | local | gap | certified design | local design |
-| --- | --- | --- | --- | --- | --- |
-| palatemcp.com/web-design-mcp | 87 | 91 | +4 | 90 | 87 |
-| jiffi.co | 73 | 67 | −6 | 64 | 66 |
-| hightownpharmacy.co.uk | 41 | 58 | **+17** | 26 | 52 |
+| site | certified | local | gap | local design | ladder verdict | taste |
+| --- | --- | --- | --- | --- | --- | --- |
+| nocturne-label.vercel.app | 90 | 95 | +5 | 91 | better | p92 |
+| palatemcp.com/web-design-mcp | 87 | 91 | +4 | 87 | better | p99 |
+| palatemcp.com | 83 | 75 | −8 | 79 | comparable | p73 |
+| jiffi.co | 73 | 67 | −6 | 66 | comparable | p94 |
+| linear.app | 60 | 56 | −4 | 71 | comparable | p57 |
+| hightownpharmacy.co.uk | 41 | 58 | **+17** | 52 | somewhat worse | p22 |
+| properly.sg | 36 | 62 | **+26** | 51 | somewhat worse | p43 |
 
-**Overall r = +0.89, mean absolute gap 9.0 points.** For comparison, the hygiene score that
-preceded this — the same rubric without the appearance head or the ladder — measured **r =
-−0.074 and an 18-point gap** over 23 sites. Adding design is what closed it: dropping the
-appearance head from this same run takes r from 0.89 down to 0.76.
+**r = +0.83, Spearman rho = +0.86, mean absolute gap 10.0 points, SD of the gap 12.6.** The
+hygiene score that preceded this — the same rubric without the appearance head or the ladder —
+measured **r = −0.074 over 23 sites**. So the vision half does transfer, and it is what carries
+the correlation.
 
-**Three caveats, and they matter more than the headline.**
+**THE ERROR IS NOT SPREAD EVENLY, AND WHERE IT LANDS IS THE PROBLEM.**
 
-1. **n = 3.** A correlation over three points is a demonstration, not a calibration. The gap is
-   the number to trust, and even that is three sites.
-2. **The error is concentrated at the bottom, which is the worst place for it.** The template
-   pharmacy scored 17 points too kindly, and 26 too kindly on design alone. Separating a
-   template from a designed site is the product's whole claim, and a local judge grading a site
-   it did not build is still gentler than the grader's. Do not read a middling local score as
-   proof a page is fine.
-3. **The judgements in this run were not independent** (one context, `--not-independent`),
-   which the designed path avoids by dispatching each comparison to a fresh subagent.
+- On the five sites certified 60 and above, the gap is +5, +4, −8, −6, −4: **mean absolute 5.4,
+  never worse than 8**.
+- On the two sites certified below 45, the gap is **+17 and +26, both positive**.
 
-**There is no band letter on a local grade, deliberately.** The rubric's bands are 10 points
-wide and this runs about 9 points out: web-design-mcp came back 91 locally and 87 certified,
-which is "A Exceptional" against "B Strong" on one page. A band is the part a reader quotes, so
-the local grade reports the number and its margin and nothing else.
+A local path that agrees at the top and flatters at the bottom is close to useless for the
+people who need it most, so the mechanism is worth naming exactly. Two things combine:
+
+1. **The design ceiling converts a design disagreement straight into the overall gap.** Overall
+   cannot exceed design craft by more than 15. hightownpharmacy is certified design 26, so its
+   certified overall is *capped* at 41. Locally its design scored 52, the ceiling never bound,
+   and the overall came out 58. The whole gap is one design judgement.
+2. **The appearance head is not allowed to correct it.** The taste prior lifts above p85 and
+   pulls below p10. hightownpharmacy sits at p22 and properly.sg at p43 — the head ranks both
+   correctly in the bottom half, and is forbidden from doing anything about it. The lift fires
+   for the top 15% and the pull for the bottom 10%, so the asymmetry systematically flatters
+   the middle and lower-middle.
+
+Underneath both: the local ladder returned "somewhat worse" where the certified judge returned
+something harsher. **An agent judging a site is gentler than the grader's judge**, and that is
+exactly the direction that hurts.
+
+**This has NOT been tuned away, deliberately.** Widening the pull threshold would move these two
+numbers and prove nothing. It is a finding, not a defect to paper over.
+
+**Two caveats on the measurement itself.**
+
+- **The certified side was measuring design on 4 of its 11 checks** when this ran, because
+  `capture.mjs` drops the computed-style facts on the way out of the capture. The fix is
+  committed but needs a `fly deploy`. Until then the two sides are not scoring design from the
+  same inputs, and **these numbers will move**. Re-run after the deploy.
+- **The judgements were not independent** (one context, `--not-independent`). The designed path
+  dispatches each of the six comparisons to a fresh subagent.
+
+**There is no band letter on a local grade, deliberately.** The bands are 10 points wide and
+this runs 10 out on average: web-design-mcp is 91 locally and 87 certified, which is "A
+Exceptional" against "B Strong" on one page.
 
 ## What it will not do
 
