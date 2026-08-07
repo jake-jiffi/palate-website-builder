@@ -6,14 +6,26 @@
  * targets, sub-16px mobile body, axe violations, Core Web Vitals. That is HYGIENE. It is NOT
  * a prediction of the public grade and this file used to call it one.
  *
- * The measurement that killed that name: across 23 fresh re-grades on the current instrument,
- * the local number correlates with the public grade at r = -0.074 like for like (16 domains in
- * both), mean absolute gap 18.0 points, regression grader = 40.0 + 0.323 x local with residual
- * sd 18.2. No predictive power, and the cause is structural rather than a calibration anyone
- * could fix here: the public grade is mostly DESIGN (weight 40, a SigLIP appearance head plus a
- * pairwise vision ladder), none of which can run locally. Calling it a "projected grade" told
- * an agent, and through it a customer, that clearing 80 here predicts scoring 80 publicly. It
- * does not. The real number comes from `mcp__palate__palate_grade { url }` at done time.
+ * The measurement that killed that name: across 23 fresh re-grades, the local number correlated
+ * with the public grade at r = -0.074 like for like (16 domains in both), mean absolute gap 18.0
+ * points, regression grader = 40.0 + 0.323 x local, residual sd 18.2. No predictive power.
+ *
+ * READ THAT NUMBER WITH THE CAVEAT IT NOW CARRIES, because the reference was broken while it was
+ * taken. capture.mjs computed `out.design` per viewport and then dropped it at the `viewportsOut`
+ * whitelist, so the worker read undefined and checks.mjs sailed past its truthy guard: production
+ * grades stamped `2026-08-06.design-measured` were scoring design on 4 of 11 checks. The five
+ * that were missing - type_system_discipline, colour_accent_discipline, spacing_rhythm,
+ * component_detail_craft, responsive_integrity - are EXACTLY the checks this score is built from.
+ * So the correlation was measured between this number and a reference from which its entire
+ * overlap had been removed. r = -0.074 is real as an observation about the grades customers
+ * actually received; it is NOT yet evidence for WHY they disagree, and the tempting explanation
+ * ("the grade is design and design cannot run locally") is unproven. Re-measure with
+ * projected-vs-graded.mjs once the capture fix is deployed.
+ *
+ * None of that rescues the old name. Whatever the cause, this number did not predict the number
+ * customers were given, and calling it a "projected grade" told an agent, and through it a
+ * customer, that clearing 80 here predicts scoring 80 publicly. The real number comes from
+ * `mcp__palate__palate_grade { url }` at done time, and that is the only one that may be shared.
  *
  * The gate and the loop are unchanged and still worth having. These are real faults and fixing
  * them is real work. Only the CLAIM was wrong.
@@ -300,12 +312,11 @@ export function gapLines(projected, previous, limit = 5) {
 const WHAT_THIS_IS =
   'WHAT THIS NUMBER IS: a BUILD HYGIENE score over the checks measurable on a rendered page ' +
   'locally (accents, type stack, tap targets, mobile body size, axe violations, Core Web Vitals). ' +
-  'It does NOT predict the public grade at palatemcp.com/grade and must never be reported as a ' +
-  'predicted grade. Measured over 23 fresh re-grades: r = -0.074 like for like, mean absolute gap ' +
-  '18 points. The public grade is mostly DESIGN (weight 40, a SigLIP appearance head and a ' +
-  'pairwise vision ladder), none of which runs locally. Clearing this floor means no measurable ' +
-  'hygiene faults are left; design craft is judged by the public grader and cannot be checked ' +
-  'here. For the real number call mcp__palate__palate_grade { url } on the deployed URL at done time.';
+  'It is NOT the public grade at palatemcp.com/grade, it has been measured to disagree with it ' +
+  'substantially, and it must never be reported as a predicted grade. Most of the design ' +
+  'dimension (weight 40) is a vision judgement that is not included in THIS number. Clearing this ' +
+  'floor means no measurable hygiene faults are left, nothing more. For the real number call ' +
+  'mcp__palate__palate_grade { url } on the deployed URL at done time.';
 
 /**
  * The whole message an agent sees when the score is under the floor. It has to carry four
@@ -380,7 +391,7 @@ export function summaryLine({ scored, cmp, stall, minScore }) {
   return (
     `verify-rendered: build hygiene ${projected.overall}/100 ${state}, ` +
     `on ${projected.measuredWeight} of the 100 weight measurable locally. ${trendLine(cmp, stall.iterations)} ` +
-    'HYGIENE ONLY: this does not predict the public grade (r = -0.074 over 23 re-grades); ' +
-    'design is weight 40 and judged by vision models that cannot run here. Real grade: mcp__palate__palate_grade.'
+    'HYGIENE ONLY: measured to disagree substantially with the public grade, and most of the design ' +
+    'dimension is a vision judgement not included here. Real grade: mcp__palate__palate_grade.'
   );
 }

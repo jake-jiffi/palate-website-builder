@@ -202,8 +202,13 @@ test('the block message carries all four things an agent needs to close the loop
   assert.match(msg, /RE-RUN THIS EXACT COMMAND/, '3. that it should re-run');
   assert.ok(msg.includes(RERUN), '3. the exact command');
   assert.match(msg, /IMPROVING: 52 -> 61, UP 9/, '4. whether the last iteration helped');
-  assert.match(msg, /does NOT predict the public grade/, '5. and that it is NOT a predicted grade');
-  assert.match(msg, /r = -0\.074/, 'carrying the measurement that retired that claim');
+  assert.match(msg, /It is NOT the public grade/, '5. and that it is NOT a predicted grade');
+  assert.match(msg, /measured to disagree with it substantially/, 'and that the disagreement is measured, not asserted');
+  // The r-value deliberately does NOT travel in the agent-facing message. It was measured against
+  // a grader that was dropping the five design checks this score is built from, so quoting it on
+  // every failing build would assert more precision than we have. It lives in the module comment
+  // with its caveat instead.
+  assert.doesNotMatch(msg, /r = -0\.074/, 'a confounded statistic must not be quoted as settled');
   assert.match(msg, /palate_grade/, 'and where the real number actually comes from');
   assert.doesNotMatch(msg, /projected grade/, 'the retired claim must survive nowhere in the message');
 });
@@ -279,5 +284,5 @@ test('the summary line is printed on a PASS too, so a lucky pass is still visibl
   const line = summaryLine({ scored: p, cmp: compare(cur, entry(83)), stall: detectStall([entry(83), cur]), minScore: 80 });
   assert.match(line, /build hygiene 84\/100 CLEARS the 80 floor/);
   assert.match(line, /UNCHANGED/, 'passing by one point on a flat trend is not the same as converging');
-  assert.match(line, /HYGIENE ONLY: this does not predict the public grade/);
+  assert.match(line, /HYGIENE ONLY: measured to disagree substantially with the public grade/);
 });

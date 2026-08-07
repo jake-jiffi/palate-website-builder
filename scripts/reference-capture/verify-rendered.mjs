@@ -722,14 +722,14 @@ if (designFacts.desktop || designFacts.mobile) {
 // and diffed byte-for-byte in palate-product's lint) over the checks that can be measured on a
 // rendered page here, so "the plugin approved this build" carries a number rather than a promise.
 //
-// IT WAS CALLED A PROJECTED GRADE AND THAT NAME WAS A FALSE CLAIM. Across 23 fresh re-grades on
-// the current instrument it correlates with the public grade at r = -0.074 like for like, mean
-// absolute gap 18.0 points, regression grader = 40.0 + 0.323 x local, residual sd 18.2. No
-// predictive power. The cause is structural, not a calibration error: the public grade is mostly
-// DESIGN (weight 40, a SigLIP appearance head plus a pairwise vision ladder), and none of it can
-// run locally. This measures HYGIENE; the grade is mostly DESIGN. `measuredWeight` reports how
-// much of the 100 the number rests on, and the message says the rest out loud, because an agent
-// that reads 80 as "will score 80" stops working exactly where the real gap is.
+// IT WAS CALLED A PROJECTED GRADE AND THAT NAME WAS A FALSE CLAIM. Across 23 fresh re-grades it
+// correlated with the public grade at r = -0.074 like for like, mean absolute gap 18.0 points. No
+// predictive power. See hygiene-loop.mjs for the caveat that number now carries (the reference
+// grader was dropping five design checks - the same five this score is built from - while the
+// measurement was taken, so the disagreement is real but its CAUSE is not yet established).
+// Either way this measures HYGIENE and must not be reported as a grade. `measuredWeight` reports
+// how much of the 100 the number rests on, and the message says the rest out loud, because an
+// agent that reads 80 as "will score 80" stops working exactly where the real gap is.
 //
 // The gate stays. These are real faults and fixing them is real work. Only the claim was wrong.
 // See hygiene-loop.mjs. The real grade is mcp__palate__palate_grade at done time.
