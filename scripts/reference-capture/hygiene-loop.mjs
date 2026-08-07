@@ -416,12 +416,24 @@ export function blockMessage({ scored, cmp, stall, minScore, rerun, notes = [] }
  * identical bordered card grids, stock marketing copy, no idea in it anywhere - build hygiene
  * scores 97/100 with a design dimension of 97 on 3 of 11 checks. That number is the honest
  * summary of what this instrument is, so it is quoted rather than paraphrased.
+ *
+ * THE SECOND HALF IS WORSE AND LESS OBVIOUS: A CLEAN PAGE RESTS ON LESS EVIDENCE, NOT MORE.
+ * The axe checks only enter the roll-up when they FIRE, so repairing them removes the entire
+ * accessibility dimension from the denominator. Measured across the same two fixtures under
+ * --no-vitals, the generic page scored 21 on 52 weight (design + accessibility) and the repaired
+ * one scored 97 on 40 (design alone, 3 of its 11 checks). With vitals on it is 66 -> 54, the same
+ * 12-point drop. So the basis THINS exactly as the score rises, which is the worst possible
+ * pairing: the number is at its most flattering and least supported at the moment an agent is
+ * most likely to stop. Hence the live `measuredWeight` in the message rather than a fixed claim.
  */
-const NOT_A_QUALITY_VERDICT =
+const notAQualityVerdict = (weight) =>
   'CLEARING THIS FLOOR IS NOT A QUALITY VERDICT. "Designed, not templated" (30 pts) and "One ' +
   'considered idea" (15) are 45 of the design dimension and neither is measurable here, so this ' +
   'score cannot see whether the page is a template. A tidy template with no idea in it scores 97. ' +
-  'If nothing is left to fix here, the remaining work is DESIGN, and it is judged elsewhere.';
+  `And a clean page rests on LESS evidence, not more: this run rests on ${weight} of the rubric's ` +
+  '100 weight, because the axe checks only enter the roll-up when they FIRE, so repairing them ' +
+  'drops the whole accessibility dimension out of the denominator. If nothing is left to fix ' +
+  'here, the remaining work is DESIGN, and it is judged elsewhere.';
 
 /** The one-line summary printed on every run, pass or fail, so the trend is never invisible. */
 export function summaryLine({ scored, cmp, stall, minScore }) {
@@ -434,9 +446,14 @@ export function summaryLine({ scored, cmp, stall, minScore }) {
     : 'is UNGATED (PALATE_MIN_HYGIENE=0), so nothing here passed or failed';
   return (
     `verify-rendered: build hygiene ${projected.overall}/100 ${state}, ` +
-    `on ${projected.measuredWeight} of the 100 weight measurable locally. ${trendLine(cmp, stall.iterations)} ` +
+    // "of the 100 weight measurable locally" was wrong and flattering: measuredWeight is what
+    // THIS run scored, and it moves (40 clean, 52 with axe firing, +14 with vitals). Calling it
+    // the local ceiling implied the number rests on everything available.
+    `resting on ${projected.measuredWeight} of the rubric's 100 weight. ${trendLine(cmp, stall.iterations)} ` +
     'HYGIENE ONLY: measured to disagree substantially with the public grade. ' +
-    (clears ? NOT_A_QUALITY_VERDICT + ' ' : 'Most of the design dimension is a vision judgement not included here. ') +
+    (clears
+      ? notAQualityVerdict(projected.measuredWeight) + ' '
+      : 'Most of the design dimension is a vision judgement not included here. ') +
     'Real grade: mcp__palate__palate_grade.'
   );
 }

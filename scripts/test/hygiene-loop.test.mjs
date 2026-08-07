@@ -293,6 +293,14 @@ test('clearing the floor is NOT reported as a quality verdict', () => {
   assert.match(pass, /cannot see whether the page is a template/);
   assert.match(pass, /A tidy template with no idea in it scores 97/);
   assert.match(pass, /the remaining work is DESIGN/);
+  // The thinness half. Repairing a page REMOVES the accessibility dimension from the
+  // denominator (axe checks only enter the roll-up when they fire), so the basis shrinks as the
+  // score rises: 52 -> 40 across this repo's own two fixtures. The live weight is quoted so the
+  // message cannot drift from what the run actually measured.
+  assert.match(pass, /rests on LESS evidence, not more/);
+  assert.match(pass, /this run rests on 52 of the rubric's 100 weight/);
+  assert.match(pass, /resting on 52 of the rubric's 100 weight/, 'and the headline says it too');
+  assert.doesNotMatch(pass, /weight measurable locally/, 'measuredWeight is this run, not the local ceiling');
 
   // And it must NOT appear on the block path, where it would be noise on top of a list of fixes.
   const fail = summaryLine({ scored: proj(61), cmp: compare(entry(61), null), stall: detectStall([entry(61)]), minScore: 80 });

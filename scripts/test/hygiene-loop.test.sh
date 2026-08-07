@@ -49,17 +49,27 @@ done
 [ -n "$PY" ] || { echo "hygiene-loop.test: no working python3 with http.server; the fixture cannot be served. NOT a pass." >&2; exit 2; }
 
 cp "$FIX/generic/index.html" "$SRV/index.html"
+# A PER-RUN MARKER, because "is something serving?" is the wrong question. Both fixtures say
+# Northgate, and a leftover server from an earlier run of THIS test serves a Northgate page from
+# a different docroot, so the old guard passed while every `cp` went to a directory nobody was
+# serving. That reads as a code failure (trends vanish, the page never changes) and is not one.
+# Same class as the 1400ms hero capture: the check was satisfied by something plausible instead
+# of by the actual thing. The marker is unique to this run, so only OUR server can answer it.
+MARKER="hygiene-loop-$$-$RANDOM"
+printf '%s' "$MARKER" > "$SRV/.run-marker"
 # `exec` so the subshell BECOMES python: without it $! is the subshell's pid, the trap kills
 # the wrapper, and the server is left holding the port for the next run of this test.
 (cd "$SRV" && exec "$PY" -m http.server "$PORT" >/dev/null 2>&1) &
 SRV_PID=$!
 trap 'kill $SRV_PID 2>/dev/null; rm -rf "$TMP"' EXIT
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  curl -fsS "http://localhost:$PORT/" 2>/dev/null | grep -q Northgate && break
+  [ "$(curl -fsS "http://localhost:$PORT/.run-marker" 2>/dev/null)" = "$MARKER" ] && break
   sleep 0.5
 done
-curl -fsS "http://localhost:$PORT/" 2>/dev/null | grep -q Northgate \
-  || { echo "hygiene-loop.test: port $PORT is not serving the fixture (busy?). Set HYGIENE_LOOP_PORT. NOT a pass." >&2; exit 2; }
+[ "$(curl -fsS "http://localhost:$PORT/.run-marker" 2>/dev/null)" = "$MARKER" ] || {
+  echo "hygiene-loop.test: port $PORT is serving something that is NOT this run's fixture dir" >&2
+  echo "  (a leftover server from an earlier run, or another process). Kill it, or set HYGIENE_LOOP_PORT. NOT a pass." >&2
+  exit 2; }
 
 run() { node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/$1.err"; }
 HIST="$OUT/hygiene-history.json"
@@ -126,6 +136,14 @@ check "4. the persisted score really rose" "$up" "true"
 has "4. the pass says it is not a quality verdict" "$TMP/r4.err" "NOT A QUALITY VERDICT"
 has "4. and names templating as unmeasured"        "$TMP/r4.err" "cannot see whether the page is a template"
 has "4. and sends the remaining work to design"    "$TMP/r4.err" "the remaining work is DESIGN"
+# Repairing the page REMOVED the accessibility dimension from the denominator, because axe checks
+# only enter the roll-up when they fire. So the basis thins as the score rises: 52 -> 40 across
+# these two fixtures. Worst possible pairing, and the pass message has to name it.
+has "4. warns the clean basis is THINNER"          "$TMP/r4.err" "rests on LESS evidence, not more"
+has "4. and quotes this run's real weight"         "$TMP/r4.err" "this run rests on 40 of the rubric.s 100 weight"
+before=$(node -e "const e=require('$HIST').entries; console.log(e[2].measuredWeight)")
+after=$(node -e "const e=require('$HIST').entries; console.log(e[3].measuredWeight)")
+check "4. the basis really shrank when repaired ($before -> $after)" "$((before > after))" "1"
 hasnt "4. the block path stays free of it"         "$TMP/r1.err" "NOT A QUALITY VERDICT"
 
 # --- 5. REGRESSED: put the fault back -----------------------------------------
