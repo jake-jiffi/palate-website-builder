@@ -14,8 +14,11 @@ cd "$DIR"
 # means an existing install never picks up a newly added one: axe-core would have been
 # permanently absent on every machine that had already run setup, and verify-rendered
 # would have reported accessibility UNMEASURED forever with setup.sh insisting it was done.
+# @huggingface/transformers is the local appearance head (grade-local.mjs). The PACKAGE is a
+# few MB; the ~356MB SigLIP vision tower is downloaded on first grade, not here, and
+# grade-local.mjs announces it before it starts.
 missing=""
-for dep in playwright axe-core; do
+for dep in playwright axe-core @huggingface/transformers; do
   [ -d "node_modules/$dep" ] || missing="$missing $dep"
 done
 if [ -n "$missing" ]; then
