@@ -45,8 +45,9 @@
  *
  * None of that rescues the old name. Whatever the cause, this number did not predict the number
  * customers were given, and calling it a "projected grade" told an agent, and through it a
- * customer, that clearing 80 here predicts scoring 80 publicly. The real number comes from
- * `mcp__palate__palate_grade { url }` at done time, and that is the only one that may be shared.
+ * customer, that clearing 80 here predicts scoring 80 publicly. The design half comes from the
+ * LOCAL grade (grade-local.mjs), which runs on this machine for free; the only number that may be
+ * SHARED is the one the website produces at palatemcp.com/grade.
  *
  * The gate and the loop are unchanged and still worth having. These are real faults and fixing
  * them is real work. Only the CLAIM was wrong.
@@ -355,8 +356,9 @@ const WHAT_THIS_IS =
   'It is NOT the public grade at palatemcp.com/grade, it has been measured to disagree with it ' +
   'substantially, and it must never be reported as a predicted grade. Most of the design ' +
   'dimension (weight 40) is a vision judgement that is not included in THIS number. Clearing this ' +
-  'floor means no measurable hygiene faults are left, nothing more. For the real number call ' +
-  'mcp__palate__palate_grade { url } on the deployed URL at done time.';
+  'floor means no measurable hygiene faults are left, nothing more. For the design half, run the ' +
+  'LOCAL grade (scripts/reference-capture/grade-local.mjs), which is free and runs entirely on this ' +
+  'machine. For a number you can SHOW someone, submit the URL at https://palatemcp.com/grade.';
 
 /**
  * The whole message an agent sees when the score is under the floor. It has to carry four
@@ -473,6 +475,6 @@ export function summaryLine({ scored, cmp, stall, minScore }) {
     (clears
       ? notAQualityVerdict(projected.measuredWeight) + ' '
       : 'Most of the design dimension is a vision judgement not included here. ') +
-    'Real grade: mcp__palate__palate_grade.'
+    'Design half: grade-local.mjs, free and local. Shareable number: palatemcp.com/grade.'
   );
 }

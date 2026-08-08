@@ -106,7 +106,7 @@ has "1. names the score for what it IS"            "$TMP/r1.err" "build hygiene 
 hasnt "1. never calls it a projected grade"        "$TMP/r1.err" "projected grade"
 has "1. states it is not the public grade"         "$TMP/r1.err" "It is NOT the public grade"
 has "1. says the disagreement is measured"         "$TMP/r1.err" "measured to disagree with it substantially"
-has "1. points at the real grader"                 "$TMP/r1.err" "mcp__palate__palate_grade"
+has "1. points at the shareable grader"            "$TMP/r1.err" "palatemcp.com/grade"
 has "1. no invented baseline on the first run"     "$TMP/r1.err" "FIRST MEASUREMENT"
 has "1. ranked gaps carry points and a fix"        "$TMP/r1.err" "^  - .*\(worth [0-9.]+ pts of the hygiene score\).*FIX: "
 has "1. says to fix and RE-RUN"                    "$TMP/r1.err" "RE-RUN THIS EXACT COMMAND"

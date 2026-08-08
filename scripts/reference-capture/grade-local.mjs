@@ -11,7 +11,7 @@
  * moment a number is shared. The two are different objects with different jobs:
  *
  *   THIS (free, local, unlimited)      fix your own site. Run it after every iteration.
- *   `palate_grade` (10 units, remote)  prove something to someone else. Run it once, at done.
+ *   palatemcp.com/grade (free, remote)  prove something to someone else. Submit the URL once, at done.
  *
  * You do not need certification to fix your own site. You need it to show a client, put a
  * number in a proposal, or compare against anyone else's.
@@ -157,8 +157,8 @@ const FLATTERY_OVERSCORE = { min: 17, max: 26, n: 2 };
 const NOT_CERTIFIED =
   'THIS IS A SELF-CHECK, NOT A CERTIFIED GRADE. It is computed on this machine and can be faked, so it is ' +
   'for fixing your own site and must not be shared, published or compared against anyone else\'s score. ' +
-  'The shareable number is the `palate_grade` MCP tool (10 cap units), which runs the real grader on our ' +
-  'infrastructure.';
+  'For a number you can show someone, submit the URL at https://palatemcp.com/grade, which runs the ' +
+  'grader on our infrastructure and is the same instrument a stranger would run against your site.';
 
 const VIEWPORTS = {
   mobile: { width: 390, height: 844 },

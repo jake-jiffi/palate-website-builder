@@ -7,7 +7,7 @@ wrong one is how a customer ends up quoting a number that does not mean what the
 | --- | --- | --- | --- |
 | **1. Build hygiene** (`verify-rendered.sh`) | what is measurable on a rendered page: accents, tap targets, mobile body size, axe, vitals | free, seconds, every build | no, and it is not a grade |
 | **2. Local grade** (`grade-local.mjs`) | the above **plus design craft**: the SigLIP appearance head and the pairwise ladder against library references | free, a few minutes | **no** |
-| **3. Certified grade** (`mcp__palate__palate_grade`) | everything, on our infrastructure, on a live URL | 10 cap units | **yes, this is the only one** |
+| **3. Certified grade** (submit at palatemcp.com/grade) | everything, on our infrastructure, on a live URL | free to the submitter, ~US$1.06 to us | **yes, this is the only one** |
 
 **You do not need certification to fix your own site. You need it to prove something to someone
 else.** A local grade is computed on the customer's machine from inputs they control, so it can

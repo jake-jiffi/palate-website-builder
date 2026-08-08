@@ -734,7 +734,8 @@ if (designFacts.desktop || designFacts.mobile) {
 // working exactly where the real gap is.
 //
 // The gate stays. These are real faults and fixing them is real work. Only the claim was wrong.
-// See hygiene-loop.mjs. The real grade is mcp__palate__palate_grade at done time.
+// See hygiene-loop.mjs. The design half is grade-local.mjs (free, on this machine); the shareable
+// number comes from palatemcp.com/grade.
 let projected = null;
 // The self-heal trend for this run, written into design.json so the verifier and the human
 // see the same convergence story the agent was given.

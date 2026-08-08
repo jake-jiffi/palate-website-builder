@@ -222,7 +222,12 @@ test('the block message carries all four things an agent needs to close the loop
   // every failing build would assert more precision than we have. It lives in the module comment
   // with its caveat instead.
   assert.doesNotMatch(msg, /r = -0\.074/, 'a confounded statistic must not be quoted as settled');
-  assert.match(msg, /palate_grade/, 'and where the real number actually comes from');
+  assert.match(
+    msg,
+    /palatemcp\.com\/grade/,
+    'and where a SHAREABLE number actually comes from. It must not name palate_grade: the MCP tool is\n     internal-only now, so pointing a customer at it sends them to a refusal.',
+  );
+  assert.doesNotMatch(msg, /mcp__palate__palate_grade/, 'never routes a customer to a tool they cannot call');
   assert.doesNotMatch(msg, /projected grade/, 'the retired claim must survive nowhere in the message');
 });
 

@@ -133,7 +133,7 @@ On Claude Code the hooks fire the gates for you; here YOU run them, in order, ev
 3. **Scaffold.** Run `create-palate` (above) before any page. Never freestyle root `.html`.
 4. **Build by the section recipe.** Per conversion section: 2-3 donors -> screenshot -> `component_prompts` + `do_dont` + `pages` -> reproduce the strongest re-skinned -> check `do_dont` before emit.
 5. **Gate, then stop.** Run `palate-verify` (below) and fix what it flags. You are NOT done until it exits 0.
-6. **Grade it for real, once, on the deployed URL.** `palate_grade { url }` returns the real score, dimensions, ranked findings with fixes, caps and a brief. Local gates cannot substitute: design is weight 40, judged by vision models absent here. Caps first, then findings. DONE-time only (10 units, ~2 min); a `jobId` re-polls free.
+6. **Grade it locally, free.** `grade-local.mjs --url <url>` runs the grader's own rubric, prompt and SigLIP head: score, dimensions, ranked findings with fixes. `palate_grade` is internal-only and refuses; the cloud grader is funded by the free public one at https://palatemcp.com/grade, where a shareable number comes from.
 7. **Fetch deeper doctrine on demand** (this file is the lite floor): `curl` `references/{stack,build-stages,motion-and-3d,visual-rubric,industry-patterns,composition-and-attention}.md` from the repo at that stage.
 
 ## Running the gates on any model
