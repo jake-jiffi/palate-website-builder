@@ -93,6 +93,13 @@ function blank() {
     // the concept + business type BEFORE Diverge, grounded by page-type coverage. Agent-set
     // descriptive; the done-gate checks its presence for a multi-page build (fail-open).
     architecture: null, // { ran, pages:[{ route, pageType, purpose, donor_slug }], nav:[...], journey:"awareness->...->conversion", rationale }
+    // GROUNDING (the third state): did this build actually draw on the Palate MCP at all?
+    // SCRIPT-set, NEVER agent-set - hooks/palate-stop.mjs writes it from the exit code of
+    // scripts/gate-mcp-depth.sh (0 or 2 = grounded, 3 = UNGROUNDED), so it cannot be
+    // self-claimed. Null until the gate has run. UNGROUNDED is a LABEL, not a failure: the
+    // build ran without the taste layer, which is allowed but must never be silent, and
+    // recording it here is what lets the fact travel past this one session.
+    grounding: null, // { state:"grounded"|"ungrounded", mcp_calls:int, checked_at, note }
   };
 }
 
@@ -192,6 +199,7 @@ function main() {
   // same way, so a build that started before this field exists stays readable.
   if (!("explore" in m)) m.explore = null;
   if (!("architecture" in m)) m.architecture = null; // additive W16 block
+  if (!("grounding" in m)) m.grounding = null; // additive third-state label (script-set)
 
   if (tool.startsWith("mcp__palate__")) {
     const slugs = new Set();

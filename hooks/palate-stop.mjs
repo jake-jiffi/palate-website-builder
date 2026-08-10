@@ -15,10 +15,17 @@
  *      manifest's visual/verifier blocks are a cache of computed evidence.
  *
  * Both gates FAIL OPEN: each skips (exit 0) when it cannot run - no jq, no manifest, no
- * MCP calls (MCP not connected / surveyed in a subagent), and (gate-done only) no
- * renderable preview (no dist/ and no verify-report.json). So enforcement fires ONLY
- * on a build that COULD have been verified and was not - never on a public-plugin user
- * whose token is not set or who is editing an existing app.
+ * readable manifest, and (gate-done only) no renderable preview (no dist/ and no
+ * verify-report.json). So enforcement fires ONLY on a build that COULD have been
+ * verified and was not - never on a public-plugin user whose token is not set or who is
+ * editing an existing app.
+ *
+ * THE THIRD STATE. A build that recorded ZERO Palate MCP calls (MCP not connected, or
+ * surveyed in a subagent) is UNGROUNDED: gate-mcp-depth.sh exits 3, this hook records
+ * `grounding` in the manifest, lets the done gate and recordBuild run as normal, and
+ * states the label ONCE on stderr with the reconnect command. It never blocks, not even
+ * under PALATE_GATE_STRICT=1. Absence is now visible, which is what stops it having to
+ * be fatal upstream.
  *
  * Enforcement split (the "enforce-when-possible" default): the GATES enforce when they
  * CAN (renderable + MCP connected); the HOOK stays nudge-by-default. On any gate
@@ -163,6 +170,41 @@ function facesFromHtml(html) {
   return [...faces];
 }
 
+// Write the GROUNDING label into the manifest from the depth gate's exit code, so the
+// fact that a build ran without the taste layer travels beyond this one stderr line.
+// SCRIPT-computed from the gate's exit code AND the telemetry, never an LLM boolean.
+// THREE states, because exit 0 has three meanings and only one of them is "passed": the
+// gate can also skip when jq is missing or the manifest is unreadable. Deriving the label
+// from "not exit 3" therefore stamps `grounded` on a build with zero MCP calls, which is
+// the silent degradation this whole change exists to remove, written to disk as a fact.
+//   ungrounded  the gate ran and found no Palate MCP calls
+//   unknown     the gate could not run (no jq, unreadable manifest) and there is no
+//               telemetry either, so grounding was never determined. Never claim otherwise.
+//   grounded    the telemetry is there (whether or not the build was deep enough)
+// Best-effort, like recordBuild: the label must never be the thing that traps a session.
+function recordGrounding(manifest, depth) {
+  try {
+    const m = JSON.parse(fs.readFileSync(manifest, "utf8"));
+    const calls = Array.isArray(m.mcp_calls) ? m.mcp_calls.length : 0;
+    const state =
+      depth.state === "ungrounded" ? "ungrounded" : calls === 0 ? "unknown" : "grounded";
+    m.grounding = {
+      state,
+      mcp_calls: calls,
+      checked_at: new Date().toISOString(),
+      note:
+        state === "ungrounded"
+          ? depth.reason
+          : state === "unknown"
+            ? "depth gate could not run (no jq, or unreadable manifest); grounding not determined"
+            : null,
+    };
+    fs.writeFileSync(manifest, JSON.stringify(m, null, 2) + "\n");
+  } catch {
+    /* the label is best-effort; never block finishing over it */
+  }
+}
+
 function recordBuild(manifest) {
   try {
     const m = JSON.parse(fs.readFileSync(manifest, "utf8"));
@@ -247,18 +289,10 @@ if (positive.length) {
   process.exit(0);
 }
 
-try {
-  execFileSync("bash", [GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // existing depth gate - KEEP THE FLOOR
-  execFileSync("bash", [DONE_GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // NEW: visual loop + verifier (reads artefacts, fails open)
-  recordBuild(manifest); // MOVED: only record the build to cross-build memory after ALL gates pass
-  process.exit(0);
-} catch (e) {
-  const reason =
-    (e.stderr ? e.stderr.toString() : "").trim() ||
-    "Palate gate: this build is not done - it did not draw on the library deeply enough, or the visual loop / verifier has not passed.";
-  // Hard enforcement is opt-in. By DEFAULT never block finishing — blocking traps a
-  // session that cannot satisfy the gate (MCP not connected, surveyed in a subagent).
-  // Surface a non-blocking reminder instead so the build is still nudged toward depth.
+// Hard enforcement is opt-in. By DEFAULT never block finishing — blocking traps a
+// session that cannot satisfy the gate (surveyed in a subagent, artefacts unrenderable).
+// Surface a non-blocking reminder instead so the build is still nudged toward depth.
+function gateFailure(reason) {
   if (process.env.PALATE_GATE_STRICT === "1") {
     process.stdout.write(JSON.stringify({ decision: "block", reason }));
     process.exit(0);
@@ -266,3 +300,44 @@ try {
   process.stderr.write(`[palate] ${reason}\n(Set PALATE_GATE_STRICT=1 to enforce this as a hard gate.)\n`);
   process.exit(0);
 }
+
+const GATE_FALLBACK =
+  "Palate gate: this build is not done - it did not draw on the library deeply enough, or the visual loop / verifier has not passed.";
+const UNGROUNDED_FALLBACK =
+  "MCP-depth gate UNGROUNDED: no Palate MCP calls were recorded, so this build carries no Palate taste layer. Connect it with: claude mcp add --scope user --transport http palate https://mcp.palatemcp.com/api/mcp";
+
+// THE DEPTH GATE, run on its own so its THIRD STATE cannot swallow anything after it.
+// Exit 3 = UNGROUNDED: it ran and the build recorded zero Palate MCP calls. That is a
+// LABEL, not a failure - it does not block, the done gate still runs, and the build is
+// still written to cross-build memory (a hole in that memory would quietly weaken the
+// novelty gate). It was previously sharing one try block with the done gate, where any
+// non-zero exit skipped both gate-done.sh and recordBuild().
+let depth = { state: "grounded", reason: "" };
+try {
+  execFileSync("bash", [GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // KEEP THE FLOOR
+} catch (e) {
+  const msg = (e && e.stderr ? e.stderr.toString() : "").trim();
+  depth =
+    e && e.status === 3
+      ? { state: "ungrounded", reason: msg || UNGROUNDED_FALLBACK }
+      : { state: "blocked", reason: msg || GATE_FALLBACK };
+}
+
+// Record the grounding fact in the manifest BEFORE acting on it, so it travels to the
+// check report and the local grade even on a build that then fails a later gate.
+recordGrounding(manifest, depth);
+
+if (depth.state === "blocked") gateFailure(depth.reason);
+
+try {
+  execFileSync("bash", [DONE_GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // visual loop + verifier (reads artefacts, fails open)
+} catch (e) {
+  gateFailure((e && e.stderr ? e.stderr.toString() : "").trim() || GATE_FALLBACK);
+}
+
+recordBuild(manifest); // only record the build to cross-build memory after ALL gates pass
+
+// Degrade LOUDLY, ONCE. Stated here and nowhere else in the build (the write gate stays
+// silent on purpose), factually, with the one command that fixes it. Never a block.
+if (depth.state === "ungrounded") process.stderr.write(`[palate] ${depth.reason}\n`);
+process.exit(0);

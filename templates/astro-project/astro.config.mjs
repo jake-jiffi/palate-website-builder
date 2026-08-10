@@ -2,10 +2,11 @@ import { defineConfig } from "astro/config";
 import { loadEnv } from "vite";
 import vercel from "@astrojs/vercel";
 import sitemap from "@astrojs/sitemap";
+import mdx from "@astrojs/mdx";
 import react from "@astrojs/react";
-import sanity from "@sanity/astro";
 import pagefind from "astro-pagefind";
 import tailwind from "@tailwindcss/vite";
+import { cmsIntegrations } from "./astro.cms.mjs";
 
 // Vercel is the default host (this is the baseline config). For the Cloudflare
 // backup, scripts/switch-host-cloudflare.sh swaps in the Cloudflare adapter.
@@ -23,14 +24,12 @@ export default defineConfig({
     maxDuration: 10,
   }),
   integrations: [
-    sanity({
-      projectId: env.SANITY_PROJECT_ID || "preview",
-      dataset: env.SANITY_DATASET || "production",
-      useCdn: false,
-      apiVersion: "2025-02-19",
-      studioBasePath: "/studio",
-      stega: { studioUrl: "/studio" },
-    }),
+    // Empty until a CMS is added (scripts/add-sanity.sh swaps astro.cms.mjs).
+    // Keeping it a spread means adding a CMS never edits this file.
+    ...cmsIntegrations(env),
+    // MDX before react(): .mdx entries in src/content/ may embed components,
+    // and the MDX integration has to claim the extension first.
+    mdx(),
     react(),
     sitemap(),
     pagefind(),

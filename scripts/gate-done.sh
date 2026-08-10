@@ -68,9 +68,21 @@ fi
 
 # --- KEEP THE FLOOR: the MCP-depth gate runs first and must pass ---------------
 # Capture its stderr so a depth failure surfaces the real reason through this gate.
-if ! depth_err="$(bash "$DEPTH_GATE" "$MANIFEST" 2>&1 1>/dev/null)"; then
-  fail "MCP-depth gate did not pass. ${depth_err}"
-fi
+# EXIT-CODE AWARE, not `if !`: the depth gate has THREE states (0 pass, 2 block,
+# 3 UNGROUNDED). Treating any non-zero as a failure would turn the non-blocking third
+# state into a hard block here, which is the exact inversion it exists to prevent. In
+# practice the ladder above already skips a zero-call build before this line, so 3 is
+# unreachable today; handling it keeps the two ladders in agreement if either trigger
+# ever widens, and surfaces the label instead of dropping it.
+set +e
+depth_err="$(bash "$DEPTH_GATE" "$MANIFEST" 2>&1 1>/dev/null)"
+depth_ec=$?
+set -e
+case "$depth_ec" in
+  0) ;;
+  3) echo "Done gate: ${depth_err}" >&2 ;;
+  *) fail "MCP-depth gate did not pass. ${depth_err}" ;;
+esac
 
 # --- DIVERGE wall (build-site-scoped): a BUILD SITE that skipped DIVERGE is CAUGHT,
 # not silently fail-open. This mirrors the PreToolUse write-gate at done-time. It is

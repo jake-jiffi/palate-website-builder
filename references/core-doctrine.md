@@ -13,9 +13,9 @@ Palate builds production-grade sites that do not read as AI-made. Taste comes fr
 
 ## The stack and the scaffold (build in Astro, never freestyle)
 
-**Non-negotiable stack:** Astro 6 (SSR), Tailwind 4, self-hosted fonts, GSAP + Lenis for motion, the Vercel adapter. The references, `refs_get_astro_recipe` and the gates all ASSUME Astro; a raw-HTML, Next or Vite build cannot consume them and fails the brief. Loose `index.html` at the project root is the freestyle anti-pattern and the gate rejects it.
+**Non-negotiable stack:** Astro 7 (SSR), Tailwind 4, self-hosted fonts, GSAP + Lenis for motion, the Vercel adapter. The references, `refs_get_astro_recipe` and the gates all ASSUME Astro; a raw-HTML, Next or Vite build cannot consume them and fails the brief. Loose `index.html` at the project root is the freestyle anti-pattern and the gate rejects it.
 
-**Scaffold FIRST, before any page work** (never hand-roll a project). ONE command gives a real Astro 6 + Tailwind 4 + Vercel project with the gate pre-wired (a git pre-push hook + CI): `curl -fsSL https://raw.githubusercontent.com/jake-jiffi/palate-website-builder/main/scripts/create-palate.sh | bash -s -- my-site codex` (swap `codex` for `cursor`/`gemini`/`copilot`). Build pages as `.astro` under `src/pages`; never dump `.html` at the root; brand tokens are vendored in `src/styles/globals.css` (edit them, never the Google Fonts CDN).
+**Scaffold FIRST, before any page work** (never hand-roll a project). ONE command gives a real Astro 7 + Tailwind 4 + Vercel project with the gate pre-wired (a git pre-push hook + CI): `curl -fsSL https://raw.githubusercontent.com/jake-jiffi/palate-website-builder/main/scripts/create-palate.sh | bash -s -- my-site codex` (swap `codex` for `cursor`/`gemini`/`copilot`). Build pages as `.astro` under `src/pages`; never dump `.html` at the root; brand tokens are vendored in `src/styles/globals.css` (edit them, never the Google Fonts CDN).
 
 ## The reference library
 
