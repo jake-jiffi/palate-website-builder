@@ -52,7 +52,10 @@ function gql(query, variables = {}, { mutation = false } = {}) {
   if (!m) throw new Error(`no JSON from the CLI: ${out.slice(0, 300)}`);
   const j = JSON.parse(m[0]);
   if (j.errors) throw new Error(JSON.stringify(j.errors).slice(0, 600));
-  return j.data;
+  // `store execute` returns the payload UNWRAPPED ({shop:...}), not the GraphQL envelope
+  // ({data:{shop:...}}). Accept both: reading j.data blindly yields undefined, and undefined
+  // read as "this is not a development store" is a refusal for the wrong reason.
+  return j.data ?? j;
 }
 
 /* ------------------------------------------------------------------ the fake brand
