@@ -22,7 +22,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GATE = join(HERE, "..", "gate-headless.mjs");
@@ -378,5 +378,129 @@ test("every check in the gate has a case in this file", () => {
     const missing = (all.json.passes ?? []).filter((id) => !known.has(id));
     assert.deepEqual(missing, [],
       `these checks pass but nothing here proves they can FAIL, which is how a dead gate is born: ${missing.join(", ")}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+/* ==================================================
+ * RUNTIME MODE. Static analysis of a storefront is a proxy: it reads that `httpOnly: true`
+ * appears in a file, not that the cookie reaching a browser carries it. Flags set in one file
+ * and cookies.set() called in another satisfy a regex and fail a buyer. These cases serve a
+ * storefront and ASK it.
+ * ================================================== */
+
+
+/**
+ * A served storefront, IN A SEPARATE PROCESS.
+ *
+ * This must not be an in-process http server. The gate is invoked with spawnSync, which BLOCKS
+ * the event loop, so a server living in this process can never accept the connection: every
+ * runtime check then reports "nothing answered" and every case fails after a 20-second stall
+ * that looks exactly like a network timeout. It cost an hour to see.
+ */
+function storefront({ cookie, leakId = false, price = true, agents = true }) {
+  const dir = mkdtempSync(join(tmpdir(), "srv-"));
+  const file = join(dir, "server.mjs");
+  writeFileSync(file, `
+import { createServer } from 'node:http';
+const cookie = ${JSON.stringify(cookie ?? null)};
+const leakId = ${leakId}, price = ${price}, agents = ${agents};
+const srv = createServer((req, res) => {
+  const u = req.url.split('?')[0];
+  if (u === '/api/cart/add') {
+    const h = { location: '/products/alpha?added=1' };
+    if (cookie) h['set-cookie'] = cookie;
+    res.writeHead(303, h); return res.end('ok');
+  }
+  if (u === '/agents.md' || u === '/llms.txt') {
+    if (!agents) { res.writeHead(404); return res.end('nope'); }
+    res.writeHead(200, { 'content-type': 'text/markdown' });
+    return res.end('# Agent instructions\\nPlenty of real content here for a reader to use.');
+  }
+  if (u.startsWith('/products/')) {
+    res.writeHead(200, { 'content-type': 'text/html' });
+    const leak = leakId ? '<script>window.cartId="gid://shopify/Cart/ABC?key=secret1"</script>' : '';
+    const p = price ? '<p data-price-fallback>A$10.00</p>' : '<p>no price</p>';
+    return res.end('<html><head><link rel="canonical" href="http://x' + u + '"></head><body>' + leak + p + '</body></html>');
+  }
+  res.writeHead(200, { 'content-type': 'text/html' });
+  res.end('<html><body>home</body></html>');
+});
+srv.listen(0, '127.0.0.1', () => console.log(srv.address().port));
+`);
+  const child = spawn("node", [file], { stdio: ["ignore", "pipe", "ignore"] });
+  return new Promise((resolve) => {
+    child.stdout.once("data", (d) => {
+      resolve({
+        base: `http://127.0.0.1:${String(d).trim()}`,
+        srv: { close: () => { try { child.kill(); } catch {} rmSync(dir, { recursive: true, force: true }); } },
+      });
+    });
+  });
+}
+
+const runRuntime = (dir, base) => {
+  const r = spawnSync("node", [GATE, dir, "--no-cli", "--json", "--runtime", base], { encoding: "utf8" });
+  let json = null; try { json = JSON.parse(r.stdout); } catch { /* */ }
+  return { json, out: `${r.stdout}${r.stderr}`, ids: (json?.findings ?? []).map((f) => f.id) };
+};
+
+const GOOD_COOKIE = "plt_cart=gid://shopify/Cart/A?key=k; Max-Age=1209600; Path=/; HttpOnly; Secure; SameSite=Lax";
+
+test("R3: a correct cart cookie on the wire passes", async () => {
+  const dir = correct(); const { srv, base } = await storefront({ cookie: GOOD_COOKIE });
+  try { assert.ok(!runRuntime(dir, base).ids.includes("R3-cart-cookie")); }
+  finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("R3: flags present in SOURCE but absent on the WIRE are caught", async () => {
+  // The fixture's source sets httpOnly/secure/sameSite correctly, so every static check passes.
+  // Only the runtime check can see that the cookie actually sent carries none of them.
+  const dir = correct();
+  const { srv, base } = await storefront({ cookie: "plt_cart=gid://shopify/Cart/A?key=k; Path=/" });
+  try {
+    const r = runRuntime(dir, base);
+    assert.ok(r.ids.includes("R3-cart-cookie"), `expected R3, got: ${r.ids.join(", ")}`);
+    const f = r.json.findings.find((x) => x.id === "R3-cart-cookie");
+    for (const flag of ["HttpOnly", "Secure", "SameSite=Lax"]) assert.match(f.msg, new RegExp(flag));
+  } finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("R3: SameSite=Strict is caught on the wire", async () => {
+  const dir = correct();
+  const { srv, base } = await storefront({ cookie: "plt_cart=x; Path=/; HttpOnly; Secure; SameSite=Strict" });
+  try { assert.ok(runRuntime(dir, base).ids.includes("R3-cart-cookie")); }
+  finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("R4: the capability secret must never reach the client", async () => {
+  const dir = correct();
+  const { srv, base } = await storefront({ cookie: GOOD_COOKIE, leakId: true });
+  try { assert.ok(runRuntime(dir, base).ids.includes("R4-cart-id-leaked")); }
+  finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("R1: a served product page with no price in its HTML is caught", async () => {
+  const dir = correct();
+  const { srv, base } = await storefront({ cookie: GOOD_COOKIE, price: false });
+  try { assert.ok(runRuntime(dir, base).ids.includes("R1-pdp-serves")); }
+  finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("R5/R6: an agent surface that is in src but does not SERVE is caught", async () => {
+  const dir = correct();   // src has agents.md.ts and llms.txt.ts, so the static checks pass
+  const { srv, base } = await storefront({ cookie: GOOD_COOKIE, agents: false });
+  try {
+    const ids = runRuntime(dir, base).ids;
+    assert.ok(ids.includes("R5-agents-md") && ids.includes("R6-llms-txt"),
+      `serving is what matters, not presence in src. got: ${ids.join(", ")}`);
+  } finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("an unreachable base reports UNKNOWN and invents nothing", async () => {
+  const dir = correct();
+  try {
+    const r = runRuntime(dir, "http://127.0.0.1:1");
+    assert.ok((r.json.unknowns ?? []).some((u) => u.id === "R0-reachable"));
+    assert.ok(!r.ids.some((id) => id.startsWith("R")), `no runtime finding may be invented: ${r.ids.join(", ")}`);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -1,6 +1,6 @@
 # Commerce doctrine: building a Shopify storefront
 
-**Read this only when the target is a Shopify store.** Everything here is additive to the normal
+**Read this only when the target is a Shopify store.** For the ORDERED PATH from zero to a live storefront, read `shopify-runbook.md` first; this file is the reasoning behind each step. Everything here is additive to the normal
 build doctrine, never a replacement. A brochure site never loads this file and nothing in it
 applies.
 
@@ -175,6 +175,43 @@ bag while the bag stays empty. Identify lines by `id`: `view_key` (API 2026-07) 
 
 ---
 
+## 3b. Add to bag must SHOW something, without leaving the page
+
+**The most persistent complaint on the first real build was "I still cannot add to cart", and the
+item was in the bag every single time.**
+
+Add-to-bag was a plain form POST: full page reload, then a small confirmation line above the
+button. Every mechanical check passed. `curl` returned 303, the API reported `totalQuantity: 1`,
+the cookie carried the right flags. And to the person clicking, the page flickered and looked
+identical. Nobody buys from an API response.
+
+**A confirmation the visitor has to go looking for is not a confirmation.** The bar is: after
+add-to-bag, something they can see changes, and they did not navigate anywhere.
+
+**THE PATTERN: a cart drawer, server-rendered, progressively enhanced.**
+
+1. `/api/cart/drawer` returns the cart as an **HTML fragment**, not JSON. The cart id is a
+   capability secret in an HttpOnly cookie, so the browser asks for MARKUP rather than for data it
+   would have to hold. The id never reaches client JavaScript.
+2. A document-level `submit` listener intercepts `form[data-add-to-cart]`, POSTs with `fetch`,
+   refreshes the fragment, and slides the drawer in.
+3. **The form still posts normally without JavaScript.** The listener only engages when `fetch`
+   exists, and falls back to `form.submit()` if the request throws, so the no-JS path is the
+   redirect that already worked. This is enhancement, not a dependency.
+4. The header bag link opens the drawer instead of navigating. `/cart` still exists as a real page
+   for deep links, no-JS and anyone who wants a full view.
+5. Escape closes it, focus moves in and is restored, `role="dialog"` and `aria-modal="true"`.
+
+**No framework.** About 2KB of vanilla script and one server endpoint. A React island for a cart
+drawer spends the entire framework budget on the one thing a form and a fetch already do.
+
+**And a free product is a real product.** A$0.00 renders as a price, adds to the bag, shows a
+subtotal and checks out (verified: Shopify accepts a zero-total checkout with a 200). Samples,
+digital downloads and gift-with-purchase are legitimate. **Never gate on a price being non-zero.**
+The defect worth catching is a price that renders BLANK, which is a different thing entirely.
+
+---
+
 ## 4. What you cannot do, on any plan
 
 **No plan buys a custom checkout. Including Plus.** The Shopify API Terms forbid "an alternative to
@@ -219,6 +256,31 @@ empty catalogue as a build-time assertion failure, never as an empty state to re
 **Shopify's own docs contradict each other.** Seven direct contradictions were found live on the
 same day, including metaobject field limits given as both 40 and 64. Design against the lower
 number and never ground a build on a single doc page.
+
+---
+
+## 5b. Four build-time traps that cost an evening each
+
+Every one of these was hit on the first real storefront, and none produced an error message.
+
+**A STATIC PAGE CANNOT READ `Astro.url.searchParams`.** It is evaluated at BUILD time and is
+always empty, so a server-rendered `?added=1` banner silently never appears. This is not a
+commerce rule, it is a general Astro trap worth knowing on any build. Read the query client-side,
+or make the route on-demand and know that you did.
+
+**`productCreate` WITH `productOptions` CREATES A DEFAULT VARIANT PRICED AT ZERO.** Setting
+options is not setting prices. Fifty-six of seventy-three seeded products shipped at A$0.00 and
+the storefront rendered them correctly, which is exactly why nobody noticed. Follow every
+`productCreate` with `productVariantsBulkUpdate`, then read the price back.
+
+**A DEPENDENCY THAT ONLY EXISTS IN `node_modules` BUILDS LOCALLY AND FAILS ON THE PLATFORM.** A
+brand package written straight into `node_modules` works on the machine that wrote it and cannot
+survive a clean clone. The only signal was a deploy-failure email. Vendor it as a real local
+package with a `file:` dependency.
+
+**A PLAIN POST WITHOUT `Origin` AND `Referer` IS REJECTED BY ASTRO'S CSRF CHECK WITH A 403.** A
+real browser form sends both. Any script that exercises a cart endpoint must too, or it reports a
+broken cart on a storefront whose cart is perfect.
 
 ---
 
@@ -274,6 +336,72 @@ reading the catalogue back. Never assume the create succeeded because it returne
 a mistake on a live store is permanent. Require `shop.plan.partnerDevelopment`, or a dry run plus
 explicit approval, before any mutation. `scripts/seed-shopify-dev-store.mjs` is the worked example:
 it refuses outright unless the store is a development store.
+
+---
+
+## 6c. Verify it at RUNTIME, not just in the source
+
+Static analysis of a storefront is a proxy. It can read that `httpOnly: true` appears in a file;
+it cannot tell you the cookie that actually reaches a browser carries it. Flags set in one file
+and `cookies.set()` called in another satisfy a regex and fail a buyer.
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-headless.mjs" . --runtime https://the-deployed-url
+```
+
+Nine checks that ask the storefront instead of reading it: the product page serves and carries a
+price a non-JS consumer can read, the canonical is on the wire, **the cart cookie ACTUALLY SENT
+carries HttpOnly, Secure and SameSite=Lax**, the capability secret never appears in a page, the
+cart resolves to a **Shopify-hosted** checkout URL, and `/agents.md` and `/llms.txt` genuinely
+serve rather than merely existing in `src`.
+
+Three things this taught us, each of which had produced a wrong answer first:
+
+- **A 303's body is not exposed by `fetch`**, and a leaked cart id would not be there anyway. Look
+  for it in a PAGE, which is where a drawer would inline it.
+- **A real browser form post sends `Origin` and `Referer`.** Without them Astro's CSRF check
+  answers 403, and the gate reported "no cart cookie" on a storefront whose cart was perfect.
+- **An auth wall is not a missing route.** A deployment behind Vercel's protection answers 302 for
+  every path, and calling that "this product has no page" is a false failure on a healthy site. It
+  is reported UNKNOWN, once, with the reason.
+
+**Run it against the deployed URL, not only localhost.** Deployment protection, edge redirects and
+env-var differences are all invisible locally.
+
+---
+
+## 6d. Walk the funnel. Checking parts is not checking the path.
+
+**The single most expensive lesson from building a real storefront**: the gate reported 43 checks
+clean on a store nobody could shop.
+
+The survey was clean. Routes were static. The cart cookie carried the right flags on the wire. The
+price island failed closed. The checkout URL was Shopify's. Every part passed.
+
+And a visitor landing on the home page had **no navigation, no footer, no link to a bag, no
+`/cart` page at all, and a product page with ZERO outbound links.** They could add to a cart and
+then were stranded, permanently, with no way to see it or pay.
+
+Nothing was broken. Everything was missing. Those fail differently and only a walk finds the second.
+
+So `gate-headless.mjs --runtime` now walks it:
+
+| Check | The question |
+|---|---|
+| `W1-*-is-a-dead-end` | can a visitor LEAVE this page? |
+| `W2-*-bag-reachable` | is the bag linked from every page, or is add-to-cart a trap? |
+| `W3-cart-page` | does `/cart` exist and offer a route to pay? |
+| `W4-*-chrome` | is there a header and a footer, where nav and the bag live? |
+| `R9-unresolved-tokens` | is a scaffold `{{TOKEN}}` being SERVED to a visitor? |
+
+**A storefront needs these before it needs anything clever.** Header with collections and a bag
+count, footer, `/cart` with quantity edit, remove and a checkout button, `/search`, a collections
+index, and a product page that links back to its collection and to the bag. If a build has the
+plumbing and not these, it is not a store yet.
+
+**And take the walk yourself.** Open the deployed URL, click from the home page to a product, add
+it, find the bag, reach checkout. Whatever you cannot do is the defect list. That walk found every
+item above in about ninety seconds, and no amount of check-writing had found any of them.
 
 ---
 
