@@ -178,6 +178,10 @@ indistinguishable from one that does not exist. Publish, then read the catalogue
 | Cart lost after checkout | `SameSite=Strict`. Use Lax. |
 | "Nothing happens when I add" | It added. There is no visible feedback. Build the drawer. |
 | Deploy fails, works locally | A dependency that only exists in `node_modules`. |
+| Storefront traffic vanished, sales did not | Headless splits analytics. Checkout events still fire; storefront events cannot. §6e. |
+| Product count drops when a country is set | `@inContext(country:)` filters out products unpublished for it. Silent. §6f. |
+| Metafields are null but the old theme showed them | Storefront API access is opt-in per definition; Liquid never needed it. §6f. |
+| Buyers arrive at checkout signed out | No `Shopify-Storefront-Buyer-IP` on server-side calls. §6e. |
 
 ---
 

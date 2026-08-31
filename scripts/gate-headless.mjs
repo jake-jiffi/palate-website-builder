@@ -320,6 +320,127 @@ if (/checkoutCreate\b/.test(allText)) {
     "The Checkout API is superseded by Cart, and no plan buys a self-hosted checkout: it is a terms-of-service boundary requiring written authorisation from Shopify, including on Plus. Hand off via the cart's checkoutUrl.");
 } else ok("G3-custom-checkout");
 
+/* ============================================================ X. the Storefront API contract
+ *
+ * Four ways to call this API correctly-looking and be wrong, none of which raises an error.
+ * Every one was found by auditing the API surface against a build that already passed 50 checks.
+ */
+
+// X1: @inContext DOES NOT REACH THE CART. Cart context comes only from cartCreate or
+// cartBuyerIdentityUpdate with buyerIdentity.countryCode. A build that sets country on its
+// product queries and not on its cart shows one currency and charges another, silently.
+if (/@inContext\s*\(\s*[^)]*country/i.test(allText)) {
+  const mutatesCart = /cartCreate|cartLinesAdd/.test(allText);
+  const setsBuyer = /cartBuyerIdentityUpdate|buyerIdentity/.test(allText) && /countryCode/.test(allText);
+  if (mutatesCart && !setsBuyer) {
+    add("X1-cart-context-missing",
+      "Queries use @inContext(country:) but no cart call passes buyerIdentity.countryCode.",
+      "@inContext is IGNORED by cart queries and mutations. Cart context comes only from cartCreate or cartBuyerIdentityUpdate. The page shows one currency and the buyer is charged another, with no error anywhere. Pass buyerIdentity { countryCode } when the cart is created.");
+  } else ok("X1-cart-context-missing");
+} else ok("X1-cart-context-missing");
+
+// X2: cartDiscountCodesUpdate RETURNS SUCCESS FOR A CODE THAT DOES NOT APPLY, with empty
+// userErrors and applicable:false. A call that never selects `applicable` cannot be handling it.
+if (/cartDiscountCodesUpdate/.test(allText)) {
+  const checksApplicable = srcText.some(({ t }) => /cartDiscountCodesUpdate/.test(t) && /applicable/.test(t));
+  if (!checksApplicable) {
+    add("X2-discount-applicable-unchecked",
+      "cartDiscountCodesUpdate is called without selecting `applicable`.",
+      "The mutation succeeds with EMPTY userErrors for a code that does not apply, and returns applicable:false instead. A call site that does not read it cannot show the buyer that their code was rejected, so they discover it at the payment step. Select discountCodes { code applicable } and render the failure.");
+  } else ok("X2-discount-applicable-unchecked");
+} else ok("X2-discount-applicable-unchecked");
+
+// X3: FILTERS ARE THE MERCHANT'S MERCHANDISING, NOT OURS. Only `available` and `price` exist by
+// default; everything else depends on their Search & Discovery config, and FilterValue.input is
+// meant to be echoed back rather than reconstructed by hand.
+const handRolledFilter = srcText.some(({ t }) =>
+  /filters\s*:\s*[[{]/.test(t) && /(productType|variantOption|productMetafield)\s*:/.test(t) && !/values\s*{[^}]*input/.test(t));
+if (handRolledFilter) {
+  add("X3-handrolled-filters",
+    "A ProductFilter is constructed by hand without round-tripping `filters { values { input } }`.",
+    "Only available and price filters exist by default; the rest come from the merchant's Search & Discovery configuration. FilterValue.input is designed to be echoed back. Hand-writing the shape mis-serialises price ranges and ignores the merchandising they configured.");
+} else ok("X3-handrolled-filters");
+
+// X4: REDIRECTS ARE MERCHANT DATA AND DROPPING THEM COSTS RANKINGS AT LAUNCH. A migration is
+// exactly when old URLs are still being linked and indexed.
+// Two correct shapes: query urlRedirects directly, or consume the redirects the SURVEY captured.
+// Requiring the literal query string would false-fail a build that reads them from the catalogue,
+// which is the shape this repo actually recommends.
+const handlesRedirects =
+  /urlRedirects/.test(allText) ||
+  (/redirects/.test(allText) && /(ctx|Astro)\.redirect|defineMiddleware|Response\.redirect/.test(allText)) ||
+  (Array.isArray(cat.redirects) && /redirects/.test(allText));
+if (!handlesRedirects) {
+  add("X4-redirects-dropped",
+    "Nothing in this build reads urlRedirects.",
+    "Every redirect the merchant has ever configured is live data in Shopify, and a headless build that ignores it 404s the URLs those redirects existed to save, at exactly the moment the domain cuts over. Read urlRedirects at build time and emit them, or handle them in middleware.");
+} else ok("X4-redirects-dropped");
+
+// X5: POLICIES ARE LEGAL TEXT THE MERCHANT MAINTAINS. A local copy goes stale the first time
+// they edit it in admin, and nobody notices because the page still renders.
+const policyRoute = srcText.filter(({ f }) => /polic|terms|refund|shipping/i.test(f) && /\/pages\//.test(f));
+if (policyRoute.length) {
+  const queried = policyRoute.some(({ t }) => /(privacyPolicy|refundPolicy|shippingPolicy|termsOfService|shop\s*{)/i.test(t));
+  if (!queried) {
+    add("X5-policy-hardcoded",
+      `A policy page renders local content rather than querying the shop: ${policyRoute.map((x) => relative(dir, x.f))[0]}.`,
+      "Policies are legal text the merchant edits in admin. A local copy is stale from their next edit onward and the page still renders perfectly, so nobody finds out. Query Shop.privacyPolicy and its siblings.");
+  } else ok("X5-policy-hardcoded");
+} else ok("X5-policy-hardcoded");
+
+/* ============================================================ Y. the measurement layer
+ *
+ * GOING HEADLESS SPLITS A MERCHANT'S ANALYTICS IN HALF, and only one half reports the loss.
+ * Checkout stays on Shopify, so checkout_started / checkout_completed keep firing and the
+ * revenue dashboard looks normal. The storefront no longer does, and a headless front end is
+ * not even on the list of surfaces permitted to publish standard events, so page_viewed,
+ * product_viewed and product_added_to_cart simply stop. The merchant keeps their conversions
+ * and loses their funnel, with nothing anywhere reporting a fault.
+ */
+
+// Y1. The buyer's IP on server-side calls. Shopify: without it "Shopify can't differentiate
+// requests from different buyers", costing throttling headroom, bot protection, and
+// "the buyer's logged-in checkout experience" (they land on checkout signed out).
+// Keyed on the CART MUTATIONS, not on where the endpoint URL is written. Keying it on the URL
+// would switch this check off for exactly the builds that took Y2's advice and consolidated
+// onto one client, since the URL then lives in a lib file that is neither /api/ nor on-demand.
+const serverSideCalls = srcText.filter(({ t }) =>
+  /cartCreate|cartLinesAdd|cartLinesUpdate|cartLinesRemove|cartBuyerIdentityUpdate/.test(t));
+if (serverSideCalls.length) {
+  if (!/Shopify-Storefront-Buyer-IP/i.test(allText)) {
+    add("Y1-buyer-ip-missing",
+      `Server-side Storefront calls send no Shopify-Storefront-Buyer-IP header (${serverSideCalls.map((x) => relative(dir, x.f))[0]}).`,
+      "Every cart call runs on your server, so Shopify sees ONE client making every buyer's requests. Shopify's own words: this 'can result in throttled API requests, limited bot protection, and unauthenticated flows at checkout'. Send the buyer's IP (the first entry of x-forwarded-for) on buyer-driven calls, and nothing at build time.");
+  } else ok("Y1-buyer-ip-missing");
+} else ok("Y1-buyer-ip-missing");
+
+// Y2. TWO copies of the wire client. This is not tidiness: it is the shape that let Y1 be
+// correct on one path and absent on another in our own storefront.
+const clients = srcText.filter(({ t }) => /\/api\/\$\{[^}]*\}\/graphql\.json|\/api\/[\d-]+\/graphql\.json/.test(t));
+if (clients.length > 1) {
+  add("Y2-duplicate-wire-client",
+    `${clients.length} files build the Storefront endpoint URL themselves: ${clients.map((x) => relative(dir, x.f)).join(", ")}.`,
+    "A required header added to one copy and forgotten in the other fails silently, which is exactly how the buyer-IP header went missing here. One client, imported everywhere.");
+} else ok("Y2-duplicate-wire-client");
+
+// Y3. Consent that cannot reach checkout. The four headless parameters are not optional.
+if (/setTrackingConsent/.test(allText)) {
+  const missing = ["headlessStorefront", "checkoutRootDomain", "storefrontRootDomain", "storefrontAccessToken"]
+    .filter((k) => !new RegExp(k).test(allText));
+  if (missing.length) {
+    add("Y3-consent-not-headless",
+      `setTrackingConsent is called without the headless parameters: ${missing.join(", ")}.`,
+      "On a custom storefront the consent call must carry all four, and checkout must sit on the SAME ROOT DOMAIN as the storefront or it cannot read the cookies your banner set. Consent then silently fails to travel and checkout-side pixels are gated by a consent state the buyer never gave.");
+  } else ok("Y3-consent-not-headless");
+} else ok("Y3-consent-not-headless");
+
+// Y4. Cookies Shopify stopped setting.
+if (/_shopify_[ys]\b/.test(allText)) {
+  add("Y4-retired-shopify-cookies",
+    "Source reads the _shopify_y / _shopify_s cookies.",
+    "Shopify stopped setting these on merchant storefronts (changelog says from 1 January 2026; the Hydrogen migration guide says 30 April 2026 — plan for the earlier). Reading them yields undefined and every downstream identity join quietly degrades. clientId on a Web Pixels event replaces _y; _s has no replacement, so mint your own session value.");
+} else ok("Y4-retired-shopify-cookies");
+
 /* ============================================================ H. the agent surface */
 
 const agentRoutes = [
@@ -680,7 +801,12 @@ if (RUNTIME) {
         const j = await r.json();
         url = j?.data?.cart?.checkoutUrl ?? null;
       } catch { /* reported below */ }
-      if (!url) unknown("R8-checkout-handoff", "the cart could not be resolved to a checkout URL");
+      // Name the commonest cause. An unknown that does not say WHY sends the next person
+      // hunting the storefront for a fault that is in their shell.
+      if (!url) unknown("R8-checkout-handoff",
+        process.env.SHOPIFY_STOREFRONT_TOKEN
+          ? "the cart could not be resolved to a checkout URL"
+          : "no SHOPIFY_STOREFRONT_TOKEN in the environment, so the cart could not be read back (this is a harness gap, not a storefront fault)");
       else if (!/(^https:\/\/[^/]*\.myshopify\.com\/|shopify\.com\/)/.test(url)) {
         add("R8-checkout-handoff", `The cart's checkoutUrl is not Shopify-hosted: ${url.slice(0, 80)}`,
           "The API Terms forbid an alternative to Shopify Checkout for checkout or payment processing, and no plan lifts that, including Plus. Hand off via the cart's own checkoutUrl.");

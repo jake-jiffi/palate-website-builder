@@ -47,6 +47,17 @@ has "doctrine: no plan buys a custom checkout"      "including Plus" "$DOC"
 has "doctrine: headless DELETES agents.md"          "agents.md" "$DOC"
 has "doctrine: qualification criteria"              "Qualification" "$DOC"
 
+# The measurement half. Each of these is a silent failure: nothing errors, and the merchant
+# finds out weeks later. They are the facts most likely to be trimmed as "background".
+has "doctrine: headless splits their analytics"     "SPLITS their analytics" "$DOC"
+has "doctrine: the buyer IP header is required"     "Shopify-Storefront-Buyer-IP" "$DOC"
+has "doctrine: checkout must share the root domain" "same root\|same-root" "$DOC"
+has "doctrine: the shopify cookies are retired"     "_shopify_y" "$DOC"
+has "doctrine: inContext shrinks the catalogue"     "SHRINKS THE CATALOGUE" "$DOC"
+has "doctrine: the cart ignores inContext"          "are ignored" "$DOC"
+has "doctrine: metafields are opt-in off Liquid"    "always accessible in Liquid" "$DOC"
+has "doctrine: pixel behaviour is unproven"         "Do not promise a merchant" "$DOC"
+
 # --- it must stay OPTIONAL ----------------------------------------------------
 has "commerce is an optional track" "OPTIONAL track" "$SKILL"
 if grep -q "commerce-doctrine\|shopify-runbook" "$DIR/../../references/core-doctrine.md" 2>/dev/null; then

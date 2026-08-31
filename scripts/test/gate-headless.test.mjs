@@ -45,6 +45,7 @@ function correct() {
     shop: { name: "X", currency: "AUD" },
     counts: { products: 2, collections: 1, routes: 4 },
     routes: ["/", "/collections/all", "/products/alpha", "/products/beta"],
+    redirects: [{ from: "/old-coffee", to: "/collections/all" }],
     collections: [{ handle: "all", title: "All" }],
     products: [
       { handle: "alpha", title: "Alpha", image: { url: "https://cdn.shopify.com/a.jpg", width: 800, height: 1000 } },
@@ -86,8 +87,11 @@ catch { failed = true; }
 
   w(dir, "src/pages/api/cart/add.ts",
     `export const prerender = false;
-export const POST = async ({ cookies }) => {
-  const before = await sf('{ cart { totalQuantity } }');
+export const POST = async ({ cookies, request }) => {
+  // The buyer's IP, not the server's: without it Shopify sees one client for every buyer.
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const h = ip ? { 'Shopify-Storefront-Buyer-IP': ip } : {};
+  const before = await sf('{ cart { totalQuantity } }', {}, h);
   const r = await sf('mutation { cartLinesAdd { cart { id totalQuantity } userErrors { message } } }');
   if (r.totalQuantity <= before.totalQuantity) return new Response('not added', { status: 409 });
   cookies.set('plt_cart', r.id, { httpOnly: true, secure: true, sameSite: 'lax', path: '/' });
@@ -105,6 +109,16 @@ export const POST = async ({ cookies }) => {
 <a href="/products/alpha">Shop the Alpha</a>
 <a href="/collections/all">All products</a>
 `);
+
+  // Redirects are merchant data the survey captures and the middleware applies.
+  w(dir, "src/middleware.ts",
+    `import { defineMiddleware } from 'astro:middleware';
+import { catalogue } from './lib/shopify/catalogue';
+const map = new Map((catalogue().redirects ?? []).map((r) => [r.from, r.to]));
+export const onRequest = defineMiddleware((ctx, next) => {
+  const t = map.get(ctx.url.pathname);
+  return t ? ctx.redirect(t, 301) : next();
+});`);
 
   w(dir, "src/pages/agents.md.ts", `export const GET = () => new Response('# Agent instructions');`);
   w(dir, "src/pages/llms.txt.ts", `export const GET = () => new Response('# llms');`);
@@ -306,6 +320,50 @@ export const POST = async ({ cookies }) => {
 
   ["J5-unrouted-products", "a store that silently ships part of its catalogue looks fine in review", (d) =>
     rmSync(join(d, "dist/client/products/beta"), { recursive: true, force: true })],
+
+  // --- X. the Storefront API contract, four ways to be wrong with no error -
+  ["X1-cart-context-missing", "@inContext is IGNORED by the cart, so the page and the charge disagree", (d) =>
+    w(d, "src/lib/ctx.ts",
+      `const q = 'query @inContext(country: AU) { products(first:1){ nodes { handle } } }';\n` +
+      `const m = 'mutation { cartCreate(input:{}) { cart { id } } }';\n` +
+      `const a = 'mutation { cartLinesAdd { cart { id } } }';`)],
+
+  ["X2-discount-applicable-unchecked", "a discount code that does not apply returns SUCCESS with empty userErrors", (d) =>
+    w(d, "src/lib/discount.ts",
+      `const q = 'mutation($id:ID!,$c:[String!]!){ cartDiscountCodesUpdate(cartId:$id, discountCodes:$c){ cart { id } userErrors { message } } }';`)],
+
+  ["X3-handrolled-filters", "filters are the merchant's merchandising, not ours to reconstruct", (d) =>
+    w(d, "src/lib/filters.ts",
+      `const f = { filters: [{ productType: "Coffee" }, { variantOption: { name: "Size", value: "250g" } }] };`)],
+
+  // The failure is NO HANDLING, not an empty list: a merchant with zero redirects and a build
+  // that would apply them is correct. Removing the middleware is the real defect.
+  ["X4-redirects-dropped", "every redirect the merchant configured 404s the moment the apex moves", (d) =>
+    rmSync(join(d, "src/middleware.ts"))],
+
+  ["X5-policy-hardcoded", "policy text the merchant edits in admin goes stale silently", (d) =>
+    w(d, "src/pages/policies/refund-policy.astro", `---\nconst body = "Our refund policy is 30 days.";\n---\n<p>{body}</p>`)],
+
+  // --- Y. the measurement layer -------------------------------------------
+  ["Y1-buyer-ip-missing", "every buyer's cart call looks like one client, and they reach checkout signed out", (d) =>
+    w(d, "src/pages/api/cart/add.ts",
+      `export const prerender = false;\n` +
+      `const r = await fetch(\`https://x.myshopify.com/api/2026-07/graphql.json\`, {\n` +
+      `  method: "POST", headers: { "content-type": "application/json" },\n` +
+      `  body: JSON.stringify({ query: "mutation { cartLinesAdd { cart { id } } }" }) });`)],
+
+  ["Y2-duplicate-wire-client", "a required header lands on one path and is forgotten on the other", (d) =>
+    w(d, "src/lib/other-client.ts",
+      `const V = "2026-07";\n` +
+      `export const q = (b) => fetch(\`https://x.myshopify.com/api/\${V}/graphql.json\`, { method: "POST", body: b });`)],
+
+  ["Y3-consent-not-headless", "consent never reaches checkout, so pixels are gated on a state the buyer never gave", (d) =>
+    w(d, "src/lib/consent.ts",
+      `window.Shopify.customerPrivacy.setTrackingConsent({ analytics: true, marketing: true }, () => {});`)],
+
+  ["Y4-retired-shopify-cookies", "Shopify stopped setting these, so the identity join silently degrades", (d) =>
+    w(d, "src/lib/ids.ts",
+      `const uid = document.cookie.match(/_shopify_y=([^;]+)/)?.[1];\nexport default uid;`)],
 
   // --- K. the write path --------------------------------------------------
   ["K1-write-guard", "a write script pointable at a real merchant by a typo eventually is", (d) =>

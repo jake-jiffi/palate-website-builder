@@ -33,7 +33,11 @@ their own catalogue in eight directions is a categorically better pitch than lor
 - **Live stores only.** A dev store answers 400 "Online Store channel is locked".
 - **It dies on the apex at cutover.** Tokenless works only on a host Shopify serves. The moment the
   domain points at Vercel, `theirdomain.com/api/...` becomes our own 404.
-- **Complexity capped at 1,000**, no per-buyer allowance, and the buyer-IP header cannot be sent.
+- **No per-buyer allowance, and the buyer-IP header cannot be sent.** A widely repeated "complexity
+  cap of 1,000" did NOT hold when tested: a tokenless query for 250 products x 100 variants x 20
+  media returned all 250 with `requestedQueryCost: 188` and no error. The Storefront API reports
+  `requestedQueryCost` but NO `throttleStatus`, unlike the Admin API, so you cannot read your own
+  headroom. Do not design against a number nobody can verify.
 
 **Never let a build reach production on tokenless.** It is a pitch-and-build capability. Production
 needs a Storefront token from the Headless channel.
@@ -169,6 +173,14 @@ confirmed case in Shopify's own feedback repo. So "no errors" is not "it worked"
 `totalQuantity` before and after and require it to move, or the buyer is told the item is in their
 bag while the bag stays empty. Identify lines by `id`: `view_key` (API 2026-07) is ADDITIVE, and
 `id`/`lineIds` keep working.
+
+**`Cart.discountAllocations` IS ALSO DEPRECATED.** A build rendering "you saved $X" off it is
+reading a field on the way out.
+
+**`checkoutUrl` IS NOT ONE OPTION AMONG SEVERAL, IT IS THE ONLY ONE.** The Checkout APIs were
+deprecated in 2024-04 and **sunset on 1 April 2025**; they no longer function. Any tutorial, blog
+post or model output referencing `checkoutCreate`, `checkoutLineItemsAdd` or the `Checkout` object
+is dead code, which is why `gate-headless.mjs` fails a build that calls them.
 
 **Never read `CartCost.totalTaxAmount`** or its sibling tax and duty fields: deprecated since
 2025-01, and on a taxes-included store the cart can never show a tax line anyway.
@@ -404,6 +416,75 @@ it, find the bag, reach checkout. Whatever you cannot do is the defect list. Tha
 item above in about ninety seconds, and no amount of check-writing had found any of them.
 
 ---
+
+## 6e. Going headless SPLITS their analytics, and only one half reports the loss
+
+Checkout stays on Shopify. So `checkout_started`, `checkout_completed` and every checkout-side
+pixel keep firing exactly as before, and the revenue dashboard looks untouched. The storefront
+does not: a custom front end is **not on the list of surfaces permitted to publish standard
+events** (Liquid theme files, theme app extensions, checkout UI extensions and customer account
+UI extensions are the whole list), so `page_viewed`, `product_viewed`, `collection_viewed`,
+`search_submitted` and `product_added_to_cart` stop arriving.
+
+**The merchant keeps their conversions and loses their funnel, and nothing reports a fault.**
+They find out weeks later when someone asks why traffic fell off a cliff while sales did not.
+Say this out loud during qualification, not after launch. Restoring measurement is a cost of
+headless, in the same column as `/agents.md`.
+
+Four rules that follow:
+
+- **Send `Shopify-Storefront-Buyer-IP` on every buyer-driven server-side call.** Case-sensitive.
+  Without it, in Shopify's words, "Shopify can't differentiate requests from different buyers",
+  which costs throttling headroom, bot protection, **and the buyer's logged-in checkout
+  experience**. Build-time calls have no buyer and must send nothing. Use the first entry of
+  `x-forwarded-for`, never the socket address, which is your server.
+- **One wire client.** Two copies is how a required header lands on the cart path and is
+  forgotten on the price path. This exact fault shipped here and the gate now blocks it.
+- **Consent must be able to reach checkout.** On a custom storefront `setTrackingConsent` takes
+  four extra parameters (`headlessStorefront`, `checkoutRootDomain`, `storefrontRootDomain`,
+  `storefrontAccessToken`), and Shopify is verbatim that **checkout must sit on the same root
+  domain as the storefront** or it cannot read the cookies your banner set. That is a domain
+  decision made before launch and expensive after. Consent also rides to checkout through
+  `@inContext(visitorConsent:)` from API 2025-10.
+- **`_shopify_y` and `_shopify_s` are gone.** Shopify's changelog says it stopped setting them
+  from 1 January 2026; the Hydrogen migration guide says 30 April 2026. The two disagree, so plan
+  for the earlier. `clientId` on a Web Pixels event replaces `_y`; `_s` has no replacement, so
+  mint your own session value.
+
+**UNRESOLVED, and say so rather than guessing:** no Shopify page states in either direction
+whether admin-installed pixels execute on a merchant's own headless pages. The indirect evidence
+says no (a headless front end is absent from the publishing-surfaces list, and Shopify has no
+injection point on a page it does not render), but it is inference. Do not promise a merchant
+their existing pixels will follow them.
+
+## 6f. Selling internationally, and the CMS underneath
+
+**`@inContext(country:)` SILENTLY SHRINKS THE CATALOGUE.** It does not only convert prices: it
+"automatically filters out products that aren't published for the country specified". Add the
+directive and a product count can drop with no error, no warning and a page that renders
+perfectly. If the count moves when you add a country, that is the cause.
+
+**The cart ignores it.** Verbatim: "In Cart queries and mutations the `buyer` and `country`
+arguments for `@inContext` are ignored." Set cart context with `cartCreate` or
+`cartBuyerIdentityUpdate({ countryCode })` instead, or the page quotes one currency and the
+charge lands in another. `language` and `visitorConsent` DO still apply to cart operations.
+
+**Detecting the buyer's market is your job, and Shopify says do it gently.** No automatic help
+exists off the Online Store. Signals are `accept-language`, cookies and URL params, all of which
+Shopify calls fragile for two stated reasons: page caching ignores them, and SEO bots crawl from
+the US without cookies. Shopify's recommendation is **a banner offering to switch, explicitly not
+an automatic redirect**. Give each locale its own URL (`/fr` paths or per-market domains); you
+implement that routing, admin's market settings only drive the Online Store.
+
+**Metafields are the biggest headless-only gotcha.** "This setting doesn't affect Liquid
+templates — metafields are always accessible in Liquid regardless of this setting." Storefront
+API access is opt-in per definition. So a merchant migrating off Liquid finds the fields their
+theme has always shown returning null, and the fix is in admin, not in the code being debugged.
+
+Hard limits worth knowing before promising a CMS: **20 enabled locales**, metaobject definitions
+capped at **128** per shop (256 on Plus/Enterprise), **40 fields per definition**, 1,000,000
+entries. Product tags are not translatable. `Market` is deprecated on the Storefront API's
+`Localization` and `Country`, so build on country/language/catalog context instead.
 
 ## 7. Commerce anti-patterns
 
