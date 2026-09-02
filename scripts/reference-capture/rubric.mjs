@@ -141,6 +141,9 @@ export function score(results, capIds = []) {
         const r = results.get(c.id);
         if (!r) { unmeasured.push({ id: c.id, label: c.label, reason: "Not switched on in this version of the grader." }); return null; }
         if (r.applicable === false) { unmeasured.push({ id: c.id, label: c.label, reason: r.detail || "Not measured on this page." }); return null; }
+        // A NaN raw (interp with equal bounds, an empty bot list) would poison the whole
+        // overall and land in band G "Broken" with no error; it is an absence, not a score.
+        if (!Number.isFinite(Number(r.raw))) { unmeasured.push({ id: c.id, label: c.label, reason: "Not measured: the check returned no usable number." }); return null; }
         // A CHECK MAY CARRY ITS OWN FIX, and the static one is the fallback.
         //
         // Most fixes are rightly identical for everybody: "raise contrast to 4.5:1" is the same
