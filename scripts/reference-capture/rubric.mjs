@@ -171,7 +171,12 @@ export function score(results, capIds = []) {
     };
   });
 
-  let overall = weightUsed > 0 ? Math.round(weighted / weightUsed) : 0;
+  // `merit` is the weighted sum before any cap or ceiling, rounded ONCE from the unrounded
+  // dimension scores. The report prints it beside the headline ("those six add up to N");
+  // recomputing it from the rounded per-dimension scores disagreed with `overall` by a
+  // point on about one grade in nine, which read as an unexplained adjustment.
+  const merit = weightUsed > 0 ? Math.round(weighted / weightUsed) : 0;
+  let overall = merit;
   const caps = CAPS.filter((c) => capIds.includes(c.id)).map((c) => ({ reason: c.reason, cap: c.cap }));
   for (const c of caps) overall = Math.min(overall, c.cap);
 
@@ -213,5 +218,5 @@ export function score(results, capIds = []) {
     .filter((c) => c.raw < 0.75)
     .sort((a, b) => b.recoverable - a.recoverable);
 
-  return { overall, band: bandFor(overall), confidence, dimensions, caps, findings, measuredWeight };
+  return { overall, merit, band: bandFor(overall), confidence, dimensions, caps, findings, measuredWeight };
 }
