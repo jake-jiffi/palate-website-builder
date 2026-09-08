@@ -261,11 +261,14 @@ never held to the bold bar.
 7. **The rendered bug-class gate** (the BOLD-build defects that a still and the code
    cannot catch - `references/rendered-bug-classes.md`). Serve the build (reuse the
    `serve-preview.sh` URL from step 5) and run:
+   `node scripts/palate-index.mjs <project-dir>` then
    `bash scripts/verify-rendered.sh $SERVE_URL --out .palate-shots`
-   With no `--routes` it reads `.palate/index.json` and renders every static route plus one
-   representative per dynamic template, capped at 14 (`--max-routes <n>` raises it). Naming
-   routes by hand also turns the per-route record OFF, because a hand-named route has no
-   source list to hash, so keep `--routes` for the case where you genuinely want three pages.
+   **BUILD THE INDEX FIRST.** With no `--routes` the gate reads `.palate/index.json` and
+   renders every static route plus one representative per dynamic template, capped at 14
+   (`--max-routes <n>` raises it); with no readable index it falls back to three GUESSED
+   paths and says so. Naming routes by hand also turns the per-route record OFF, because a
+   hand-named route has no source list to hash, so keep `--routes` for the case where you
+   genuinely want three pages and no incremental re-runs.
    It loads the site at 390 / 834 / 1440 in a real browser AND tests the paths a
    reduced-motion / `scrollTo` screenshot pass MASKS: a REAL `mouse.wheel` scroll with
    JS ON and motion ON, and a JS-OFF pass. Exit 1 = a High finding; exit 3 = browser
