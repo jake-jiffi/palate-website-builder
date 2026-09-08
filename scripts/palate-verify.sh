@@ -52,16 +52,26 @@ else
 fi
 
 rc=0
+# WHICH GATES ACTUALLY RAN. "PASS" over two gates where one was switched off and the other
+# could not read anything says the same word as a real pass, so the line names both lists.
+RAN=""
+SKIPPED=""
+note_ran()     { RAN="${RAN:+$RAN, }$1"; }
+note_skipped() { SKIPPED="${SKIPPED:+$SKIPPED, }$1 ($2)"; }
 
 # Gate 1: anti-freestyle. verify-is-real-astro.sh inspects the CWD, so run it inside TARGET.
 if [ "${PALATE_SKIP_ASTRO:-0}" != "1" ]; then
   echo "palate-verify: [1/2] anti-freestyle - real Astro scaffold, no loose root .html, it compiles" >&2
   if ( cd "$TARGET" && bash "$ASTRO" ); then
     echo "palate-verify: [1/2] OK" >&2
+    note_ran "anti-freestyle"
   else
     echo "palate-verify: [1/2] FAILED - scaffold from templates/astro-project (npx degit jake-jiffi/palate-website-builder/templates/astro-project .); do NOT hand-write root .html" >&2
+    note_ran "anti-freestyle"
     rc=1
   fi
+else
+  note_skipped "anti-freestyle" "PALATE_SKIP_ASTRO=1"
 fi
 
 # Gate 2: anti-slop lint (bootstrap.sh = ux-lint.sh + anti-patterns.md). On a real Astro
@@ -72,15 +82,26 @@ LINT_TARGET="$TARGET"
 echo "palate-verify: [2/2] anti-slop lint ($LINT_TARGET) - banned faces, the eyebrow/status pill, the closed list of tells" >&2
 if bash "$BOOT" "$LINT_TARGET"; then
   echo "palate-verify: [2/2] OK" >&2
+  note_ran "anti-slop lint"
 else
-  echo "palate-verify: [2/2] FAILED - AI tells above" >&2
-  rc=1
+  boot_rc=$?
+  if [ "$boot_rc" -eq 2 ]; then
+    # Could not check, which is not a failure and is certainly not a pass.
+    echo "palate-verify: [2/2] SKIPPED - the lint could not check $LINT_TARGET (reason above)" >&2
+    note_skipped "anti-slop lint" "nothing to inspect"
+  else
+    echo "palate-verify: [2/2] FAILED - AI tells above" >&2
+    note_ran "anti-slop lint"
+    rc=1
+  fi
 fi
 
 echo >&2
+gates_line="ran: ${RAN:-none}"
+[ -n "$SKIPPED" ] && gates_line="$gates_line; skipped: $SKIPPED"
 if [ "$rc" -eq 0 ]; then
-  echo "palate-verify: PASS. The gate is the floor, not the ceiling - ship against the render." >&2
+  echo "palate-verify: PASS ($gates_line). The gate is the floor, not the ceiling - ship against the render." >&2
 else
-  echo "palate-verify: FAIL. Fix the causes above and re-run. You are not done until this exits 0." >&2
+  echo "palate-verify: FAIL ($gates_line). Fix the causes above and re-run. You are not done until this exits 0." >&2
 fi
 exit "$rc"
