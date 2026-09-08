@@ -34,5 +34,35 @@ else
 fi
 rm -rf "$UT"
 
+# --- --project FINDS THE RENDERS, in both places they live ---------------------------------
+# gate-done.sh used to glob `.palate-shots/v*/rendered.html` in the shell. Explore writes its
+# renders to `.palate/explore/shots/b*/` now, so that glob found nothing and every board build
+# reported "fewer than 2 to compare" with five renders sitting on disk: a gate switched off by
+# a path, silently, which is the class of fault this suite exists for.
+PT="$(mktemp -d)"
+mkdir -p "$PT/.palate/explore/shots/b1" "$PT/.palate/explore/shots/b2"
+cp "$DIR/fixtures/uniq-a.html" "$PT/.palate/explore/shots/b1/rendered.html"
+cp "$DIR/fixtures/uniq-b.html" "$PT/.palate/explore/shots/b2/rendered.html"
+check "--project finds two board renders and compares them" 0 --project "$PT"
+
+cp "$DIR/fixtures/uniq-dup.html" "$PT/.palate/explore/shots/b2/rendered.html"
+check "--project blocks a near-duplicate pair of boards" 2 --project "$PT"
+
+# The older shape still counts, so a site mid-flight is not suddenly unchecked.
+rm -rf "$PT/.palate"
+mkdir -p "$PT/.palate-shots/v1" "$PT/.palate-shots/v2"
+cp "$DIR/fixtures/uniq-a.html" "$PT/.palate-shots/v1/rendered.html"
+cp "$DIR/fixtures/uniq-b.html" "$PT/.palate-shots/v2/rendered.html"
+check "--project still finds the older /vN renders" 0 --project "$PT"
+
+# ONE render is nothing to compare, and it says so in the shape gate-done reads.
+rm -rf "$PT/.palate-shots/v2"
+one_err="$(node "$GATE" --project "$PT" 2>&1 >/dev/null || true)"
+case "${one_err%%$'\n'*}" in
+  "uniqueness gate: skipped ("*) echo "ok   - one render skips with the reason, in the shape gate-done reads"; pass=$((pass+1)) ;;
+  *) echo "FAIL - one render did not print the skip line (got: ${one_err%%$'\n'*})"; fail=$((fail+1)) ;;
+esac
+rm -rf "$PT"
+
 echo "---"; echo "passed=$pass failed=$fail"; [ "$fail" -eq 0 ]
 

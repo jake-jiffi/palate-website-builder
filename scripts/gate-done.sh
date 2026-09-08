@@ -265,10 +265,13 @@ if [ "${PALATE_GATE_BOLD:-1}" = "1" ] && [ "$intensity" = "high" ]; then
   # (c) built Explore (the surprise engine): a bold brief must not collapse to one concept
   explore_skip=$(jq -r '(.commission.explore_skip // false)' "$MANIFEST" 2>/dev/null || echo false)
   if [ "${PALATE_GATE_EXPLORE:-1}" = "1" ] && [ "$explore_skip" != "true" ]; then
-    MIN_VARIANTS="${PALATE_MIN_VARIANTS:-2}"
-    case "$MIN_VARIANTS" in ''|*[!0-9]*) MIN_VARIANTS=2 ;; esac   # numeric-only, so a garbage env can't wrongly block
-    nvar=$(jq -r '((.variants // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
-    [ "${nvar:-0}" -ge "$MIN_VARIANTS" ] || fail "Bold bar: Explore collapsed to concept-level - a high-intensity brief built only ${nvar:-0} variant(s) (need >= $MIN_VARIANTS). Build the distinct routes, or record commission.explore_skip=true with the named-direction reason. $escalate"
+    # PALATE_MIN_BOARDS, default 3. Explore builds BOARDS now, not eight complete pages, so the
+    # floor moved with the unit of work: three rungs is the fewest a client can point BETWEEN.
+    # PALATE_MIN_VARIANTS is still honoured for a site mid-flight on the old shape.
+    MIN_BOARDS="${PALATE_MIN_BOARDS:-${PALATE_MIN_VARIANTS:-3}}"
+    case "$MIN_BOARDS" in ''|*[!0-9]*) MIN_BOARDS=3 ;; esac   # numeric-only, so a garbage env can't wrongly block
+    nvar=$(jq -r '(((.explore.boards // []) | length) as $b | ((.variants // []) | length) as $v | if $b > $v then $b else $v end)' "$MANIFEST" 2>/dev/null || echo 0)
+    [ "${nvar:-0}" -ge "$MIN_BOARDS" ] || fail "Bold bar: Explore collapsed to concept-level - a high-intensity brief built only ${nvar:-0} board(s) (need >= $MIN_BOARDS). Build the distinct rungs, or record commission.explore_skip=true with the named-direction reason. $escalate"
   fi
 fi
 
@@ -470,16 +473,24 @@ UNIQ_GATE="$HERE/gate-uniqueness.mjs"
 uniq_note="uniqueness=skipped"
 uniq_skip="gate-uniqueness.mjs not present"
 if [ -f "$UNIQ_GATE" ]; then
-  uniq_skip="fewer than 2 rendered variants to compare"
+  uniq_skip="fewer than 2 rendered boards or variants to compare"
   uniq_note="uniqueness=skipped"
-  # shellcheck disable=SC2207
-  uniq_files=($(ls "$SHOTS_DIR"/v*/rendered.html 2>/dev/null || true))
-  if [ "${#uniq_files[@]}" -ge 2 ]; then
-    if uniq_err="$(node "$UNIQ_GATE" "${uniq_files[@]}" 2>&1)"; then
-      uniq_note="uniqueness=pass(${#uniq_files[@]} variants)"; uniq_skip=""
-    else
-      fail "Variants are not distinct enough to show. ${uniq_err}"
-    fi
+  # THE GATE FINDS ITS OWN RENDERS. This shell used to glob `.palate-shots/v*/rendered.html`
+  # alone, so the direction boards (which land in `.palate/explore/shots/b*/`) were invisible to
+  # it and every board build reported "fewer than 2 to compare" with five renders on disk.
+  if uniq_err="$(node "$UNIQ_GATE" --project "$PROJ" 2>&1)"; then
+    uniq_n="$(printf '%s' "$uniq_err" | sed -n 's/.*passed: \([0-9]*\) variants.*/\1/p' | head -1)"
+    uniq_note="uniqueness=pass(${uniq_n:-2}+ compared)"; uniq_skip=""
+  else
+    uniq_rc=$?
+    uniq_first="${uniq_err%%$'\n'*}"
+    case "$uniq_first" in
+      "uniqueness gate: skipped ("*)
+        uniq_skip="${uniq_first#uniqueness gate: skipped (}"
+        uniq_skip="${uniq_skip%%)*}"
+        uniq_note="uniqueness=skipped" ;;
+      *) fail "Boards are not distinct enough to show. ${uniq_err}" ;;
+    esac
   fi
 fi
 if [ -n "$uniq_skip" ]; then gate_skipped uniqueness "$uniq_skip"; else gate_ran; fi

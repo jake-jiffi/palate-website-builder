@@ -76,7 +76,14 @@ scen "absent intensity -> still calm (backward compat, no warning)" 0 'del(.comm
 
 scen "calm + lost pairwise + variants:0 -> pass (not bound)" 0 '.commission.intensity="calm" | .variants=[]' '.pairwise={ran:true,won:false}' "sub-gates ran"
 # heal BOLD-1/BOLD-2: a non-numeric numeric-env-var must NOT wrongly block or spew `[:` errors.
-scen "high + garbage MIN_VARIANTS -> pass (env sanitised)" 0 '.commission.intensity="high" | .variants=[{},{}]' '.pairwise={ran:true,won:true} | .ambition={clears:true,dock_list:[]}' "sub-gates ran" PALATE_MIN_VARIANTS=xyz
+# THE FLOOR MOVED WITH THE UNIT OF WORK: three boards, not two variants, because three rungs
+# is the fewest a client can point BETWEEN. A garbage env still falls back to the default
+# rather than to zero, so it cannot turn the bar off.
+scen "high + garbage MIN_BOARDS -> the default floor still binds" 2 '.commission.intensity="high" | .variants=[{},{}]' '.pairwise={ran:true,won:true} | .ambition={clears:true,dock_list:[]}' "need >= 3" PALATE_MIN_BOARDS=xyz
+scen "high + 3 boards -> pass" 0 '.commission.intensity="high" | .variants=[{},{},{}]' '.pairwise={ran:true,won:true} | .ambition={clears:true,dock_list:[]}' "sub-gates ran"
+# THE COUNT IS READ FROM EITHER SHAPE. A board build records explore.boards and may carry no
+# variants[] at all; reading only variants[] would fail every board build on the bold bar.
+scen "high + 3 explore.boards and no variants[] -> pass" 0 '.commission.intensity="high" | .variants=[] | .explore={boards:[{id:"b1"},{id:"b2"},{id:"b3"}]}' '.pairwise={ran:true,won:true} | .ambition={clears:true,dock_list:[]}' "sub-gates ran"
 scen "high + garbage ITER_CAP -> pass (env sanitised)" 0 '.commission.intensity="high"' '.pairwise={ran:true,won:true} | .ambition={clears:true,dock_list:[]}' "sub-gates ran" PALATE_ITER_CAP=abc PALATE_GATE_EXPLORE=0
 
 echo "---"

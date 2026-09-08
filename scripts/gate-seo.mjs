@@ -263,7 +263,9 @@ const NEVER_INDEXED = new Set(["/404", "/500"]);
 // depends on the client having picked, which gate-shipready knows and this gate does not; the
 // one thing that is certain either way is that no gate should tell a build to go and advertise
 // eight rejected concept homepages to GPTBot.
-const IS_VARIANT = (p) => /^\/(v|lp)\d+$/.test(p);
+// `/boards/bN` is the current shape and `/vN` / `/lpN` the older one. Both are Explore
+// scaffolding: deleted at Compose, and never something a gate should tell a build to advertise.
+const IS_VARIANT = (p) => /^\/(v|lp)\d+$/.test(p) || /^\/boards\//.test(p);
 const expected = [];        // { path, why }
 const knownRoutes = new Set(); // everything a request could legitimately reach
 const noindexPaths = new Set();
