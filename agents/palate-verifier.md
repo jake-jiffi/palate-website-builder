@@ -261,7 +261,11 @@ never held to the bold bar.
 7. **The rendered bug-class gate** (the BOLD-build defects that a still and the code
    cannot catch - `references/rendered-bug-classes.md`). Serve the build (reuse the
    `serve-preview.sh` URL from step 5) and run:
-   `bash scripts/verify-rendered.sh $SERVE_URL --routes /,<other key routes> --out .palate-shots`
+   `bash scripts/verify-rendered.sh $SERVE_URL --out .palate-shots`
+   With no `--routes` it reads `.palate/index.json` and renders every static route plus one
+   representative per dynamic template, capped at 14 (`--max-routes <n>` raises it). Naming
+   routes by hand also turns the per-route record OFF, because a hand-named route has no
+   source list to hash, so keep `--routes` for the case where you genuinely want three pages.
    It loads the site at 390 / 834 / 1440 in a real browser AND tests the paths a
    reduced-motion / `scrollTo` screenshot pass MASKS: a REAL `mouse.wheel` scroll with
    JS ON and motion ON, and a JS-OFF pass. Exit 1 = a High finding; exit 3 = browser
@@ -343,6 +347,30 @@ re-render, and re-verify. Cap at **2-3 iterations on the visual loop**, then esc
 to the human with the manifest, the gate output, and the screenshots attached. Do not
 loop forever and do not lower the bar to pass. A revision that does not improve the
 rubric score is rejected, not accepted as progress.
+
+**RE-RUN THE BLAST RADIUS, NOT THE SITE, AND RUN THE LANES CHEAP FIRST.** One pass ran past
+thirty minutes, a check failed at minute twenty-five, and the next pass re-shot everything
+because one file had changed. After a fix:
+
+1. `scripts/ux-lint.sh <the changed files>` first. It reads code, costs seconds, and catches
+   the banned faces, the AI-tell copy and the eyebrow structures. There is no point paying
+   for a browser to tell you what a regex already knows.
+   **The lane order is ux-lint before rendered, rendered before vitals.**
+2. `bash scripts/verify-rendered.sh $SERVE_URL --changed <the files you edited> --no-vitals
+   --out .palate-shots`. `--changed` renders only the routes those files can reach, and a
+   file the index has never heard of falls wide and names itself rather than narrowing on a
+   guess. A route whose sources have not changed since it last passed is skipped and named
+   "unchanged, skipped". Measured on a thirty-route fixture: 25s against 187s.
+3. `--no-vitals` for every iteration in the loop. The vitals pass runs under slow-4G with 4x
+   CPU throttling on its own throttled context, and it measures the HOME route, which your
+   fix to a service page did not touch.
+
+**THE LAST RUN BEFORE HAND-OVER IS ONE FULL SWEEP:**
+`bash scripts/verify-rendered.sh $SERVE_URL --full --out .palate-shots`, with vitals on.
+`--full` ignores every unchanged-route record. This is not belt and braces: the record is
+keyed on a route's own source and its import closure, so a change to `astro.config.mjs`, to a
+dependency, or to anything the served build reads that no page imports is invisible to it.
+An incremental run is how you converge; the full sweep is what you certify.
 
 ## Your report (return this, nothing else)
 ```

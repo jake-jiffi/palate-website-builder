@@ -71,6 +71,27 @@ for f in references/hosting-vercel.md templates/host-cloudflare/_headers; do
   present "$f says the policy is a host allowlist" "$f" "host allowlist"
 done
 
+# ============ 7. INCREMENTAL RE-VERIFY, where the person re-running it will look ==========
+# A gate that renders only the blast radius is a promise about what was NOT checked, so the
+# escape hatch has to be documented in the same breath as the saving. Both halves are pinned:
+# the flag that narrows, and the flag that stops narrowing before hand-over.
+for f in README.md references/testing.md; do
+  present "$f documents --changed" "$f" "--changed"
+  present "$f documents the full sweep before hand-over" "$f" "--full"
+  present "$f says an unknown file falls wide" "$f" "falls wide"
+done
+present "the verifier agent re-runs the blast radius after a fix" \
+  "agents/palate-verifier.md" "--changed <the files you edited>"
+present "the verifier agent runs the cheap lane first" \
+  "agents/palate-verifier.md" "ux-lint before rendered, rendered before vitals"
+present "the verifier agent certifies on one full sweep" \
+  "agents/palate-verifier.md" "THE LAST RUN BEFORE HAND-OVER IS ONE FULL SWEEP"
+# The per-route record is the thing the skip rests on, so the doc names its fields.
+present "testing.md names the per-route record" \
+  "references/testing.md" "sourcesHash, renderedHash,"
+present "testing.md names what the hash does NOT cover" \
+  "references/testing.md" "so a config or dependency change is invisible to it"
+
 # ============ 6. THE HYGIENE LINE leads with what the number is ===========================
 # ASSERT THE RENDERED LINE, NOT THE SOURCE. The first draft grepped hygiene-loop.mjs for
 # "clears the " and failed on a correct implementation, because the verb is a ternary and the

@@ -71,6 +71,16 @@ Nothing in this plugin runs Lighthouse. The doctrine used to say "Lighthouse CI,
   many it dropped. On a bigger site raise it with `--max-routes <n>`, or pass `--routes` to
   name the ones that matter. A 3,400-page site is measured on 14 pages unless you say
   otherwise, and the summary prints exactly that.
+- **Re-running after a fix.** `--changed <file,...>` renders only the routes those files can
+  reach, and a file the index has never heard of falls wide and says which one. A route whose
+  sources have not changed since it last passed is skipped and printed "unchanged, skipped";
+  the record lives in `.palate-shots/manifest.json` as `{ sourcesHash, renderedHash,
+  passed_at }` per route. Measured on a thirty-route fixture: 25s against a 187s sweep. Run
+  the lanes cheap first, ux-lint before rendered, rendered before vitals.
+- **The sweep before hand-over is `--full`**, which ignores every unchanged-route record. The
+  hash covers a route's own source and its import closure and nothing else,
+  so a config or dependency change is invisible to it.
+  Converge incrementally, certify on a full sweep.
 
 ## Post-deploy smoke checks
 - workers.dev returns 200

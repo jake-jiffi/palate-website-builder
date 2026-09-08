@@ -21,6 +21,12 @@
 #
 # Usage:
 #   scripts/verify-rendered.sh <base-url> [--routes /,/contact,/blog] [--out <dir>]
+#            [--changed <file,...>]  render only the routes those files can reach; a file the
+#                                    index does not know falls wide and says which one
+#            [--full]                render every route, ignoring the unchanged-route records
+#                                    in .palate-shots/manifest.json. The sweep before
+#                                    hand-over runs this: the records are keyed on a route's
+#                                    own imports, so a config change is outside them.
 #
 # Exit codes:
 #   0  clean        1  findings at or above High        2  bad args
@@ -31,7 +37,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE="$SCRIPT_DIR/reference-capture"
 
 URL="${1:-}"
-[ -z "$URL" ] && { echo "verify-rendered: usage: verify-rendered.sh <base-url> [--routes a,b] [--out dir]" >&2; exit 2; }
+[ -z "$URL" ] && { echo "verify-rendered: usage: verify-rendered.sh <base-url> [--routes a,b] [--changed f1,f2] [--full] [--out dir]" >&2; exit 2; }
 shift
 
 command -v node >/dev/null 2>&1 || { echo "verify-rendered: node is required" >&2; exit 2; }
