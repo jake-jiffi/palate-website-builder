@@ -370,9 +370,12 @@ because one file had changed. After a fix:
 
 **THE LAST RUN BEFORE HAND-OVER IS ONE FULL SWEEP:**
 `bash scripts/verify-rendered.sh $SERVE_URL --full --out .palate-shots`, with vitals on.
-`--full` ignores every unchanged-route record. This is not belt and braces: the record is
-keyed on a route's own source and its import closure, so a change to `astro.config.mjs`, to a
-dependency, or to anything the served build reads that no page imports is invisible to it.
+`--full` ignores every unchanged-route record. The record is keyed on a route's own source,
+its import closure AND the shared inputs (the config, `package.json`, the lockfile,
+`src/styles`, `src/layouts` and the CSS those layouts import), so editing the brand tokens or
+the shared layout drops every record and the run says
+`global inputs changed, all routes re-rendered`. What stays outside the hash is remote content,
+`public/` assets and environment values, so an unchanged source can still render differently.
 An incremental run is how you converge; the full sweep is what you certify.
 
 ## Your report (return this, nothing else)

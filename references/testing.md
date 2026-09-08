@@ -77,9 +77,14 @@ Nothing in this plugin runs Lighthouse. The doctrine used to say "Lighthouse CI,
   the record lives in `.palate-shots/manifest.json` as `{ sourcesHash, renderedHash,
   passed_at }` per route. Measured on a thirty-route fixture: 25s against a 187s sweep. Run
   the lanes cheap first, ux-lint before rendered, rendered before vitals.
-- **The sweep before hand-over is `--full`**, which ignores every unchanged-route record. The
-  hash covers a route's own source and its import closure and nothing else,
-  so a config or dependency change is invisible to it.
+- **What the hash covers.** A route's own source, its whole import closure, and the SHARED
+  inputs no closure has to name: the Astro config, `package.json` and the lockfile, everything
+  under `src/styles` and `src/layouts`, and the CSS those layouts import, which is how the
+  brand package's `tokens.css` and `fonts.css` are reached. Change one of those and every
+  record goes, with the run printing `global inputs changed, all routes re-rendered`.
+- **The sweep before hand-over is `--full`**, which ignores every unchanged-route record.
+  Remote content, `public/` assets and environment values stay outside the hash,
+  so an unchanged source can still render differently.
   Converge incrementally, certify on a full sweep.
 
 ## Post-deploy smoke checks

@@ -322,7 +322,7 @@ async function main() {
     // per-route { sourcesHash, renderedHash, passed_at } here so an unchanged route is not
     // re-rendered. This file rewrites the whole manifest on every capture, so declaring the
     // field empty would erase that record and quietly put the full sweep back.
-    routes: carriedRoutes(args.out),
+    ...carriedIncremental(args.out),
   };
 
   // WRITTEN BEFORE THE BROWSER STARTS, so a run that is KILLED leaves its own record. Every
@@ -396,13 +396,18 @@ async function main() {
   process.exit(manifest.status === 'failed' ? 1 : 0);
 }
 
-// The `routes` map from any manifest already sitting in the output directory. A missing or
-// unreadable one is simply an empty map: losing the record costs a slow run, never a wrong one.
-function carriedRoutes(outDir) {
+// The incremental fields from any manifest already sitting in the output directory. A missing
+// or unreadable one carries an empty record: losing it costs a slow run, never a wrong one.
+// `globalInputs` travels with `routes` because without it the next run cannot tell a shared
+// change from a first run, and would drop every record with no reason printed.
+function carriedIncremental(outDir) {
   try {
     const m = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
-    return (m && typeof m.routes === 'object' && m.routes && !Array.isArray(m.routes)) ? m.routes : {};
-  } catch { return {}; }
+    return {
+      routes: (m && typeof m.routes === 'object' && m.routes && !Array.isArray(m.routes)) ? m.routes : {},
+      ...(typeof m?.globalInputs === 'string' ? { globalInputs: m.globalInputs } : {}),
+    };
+  } catch { return { routes: {} }; }
 }
 
 function writeManifest(outDir, m) {

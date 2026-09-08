@@ -53,12 +53,18 @@ const filler = (n) => Array.from({ length: n }, (_, i) =>
  */
 function makeFixture(count, sharedFor) {
   const root = mkdtempSync(join(tmpdir(), 'palate-incremental-'));
-  mkdirSync(join(root, 'src', 'pages'), { recursive: true });
-  mkdirSync(join(root, 'src', 'components'), { recursive: true });
-  mkdirSync(join(root, '.palate'), { recursive: true });
+  for (const d of ['src/pages', 'src/components', 'src/styles', 'src/layouts', '.palate']) {
+    mkdirSync(join(root, d), { recursive: true });
+  }
   for (const c of ['Alpha', 'Beta']) {
     writeFileSync(join(root, 'src', 'components', `${c}.astro`), `<div class="${c.toLowerCase()}">${c}</div>\n`);
   }
+  // The shared inputs no route's import closure has to name: the layout every page uses, the
+  // stylesheet it imports, and the config. Editing any of them changes what every route
+  // renders, which is what the global digest exists to notice.
+  writeFileSync(join(root, 'src', 'styles', 'globals.css'), ':root { --ink: #1a1a1a; }\n');
+  writeFileSync(join(root, 'src', 'layouts', 'BaseLayout.astro'), '---\nimport "../styles/globals.css";\n---\n<slot />\n');
+  writeFileSync(join(root, 'astro.config.mjs'), 'export default { output: "static" };\n');
   const routes = [];
   const html = new Map();
   html.set('/', page('Home', filler(2)));
@@ -204,4 +210,39 @@ test('--changed with no file list says so rather than quietly narrowing nothing'
   const r = await runGate(['--url', `http://127.0.0.1:${server.address().port}`,
     '--index', fx.index, '--no-vitals', '--changed']);
   assert.match(r.out, /--changed was given with no file list, so nothing was narrowed/);
+});
+
+test('a change to a shared input re-renders every route and says why', async (t) => {
+  // THE HOLE THE IMPORT CLOSURE LEAVES. Edit the brand tokens, globals.css, the shared layout
+  // or astro.config and every route's own source is byte-identical, so every passing record
+  // stays valid and a plain re-run skips the whole site while the output has moved. Relying
+  // on somebody remembering --full is not a safeguard.
+  const fx = makeFixture(30, (i) => (i <= 3 ? 'Alpha' : 'Beta'));
+  const server = await serve(fx.html);
+  const out = join(fx.root, '.palate-shots');
+  const common = ['--url', `http://127.0.0.1:${server.address().port}`, '--index', fx.index,
+    '--no-vitals', '--max-routes', '30', '--out', out];
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  const first = await runGate(common);
+  const m1 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.equal(Object.keys(m1.routes).length, 30, `the first run recorded ${Object.keys(m1.routes).length} routes\n${first.out.slice(-900)}`);
+
+  // No page changed. Only the stylesheet the shared layout imports.
+  writeFileSync(join(fx.root, 'src', 'styles', 'globals.css'), ':root { --ink: #0b0b0b; }\n');
+  const second = await runGate(common);
+  assert.match(second.out, /global inputs changed, all routes re-rendered/);
+  assert.ok(!/unchanged, skipped/.test(second.out), 'a route was skipped after a shared input changed');
+  assert.match(second.out, /across 30 rendered route\(s\)/);
+  const m2 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.notEqual(m2.routes['/p30'].sourcesHash, m1.routes['/p30'].sourcesHash,
+    'a route that imports neither the layout nor the stylesheet kept its hash');
+
+  // And one page on its own still narrows to itself: the global digest must not pin every
+  // route open once it has changed once.
+  writeFileSync(join(fx.root, 'src', 'pages', 'p01.astro'), '<h1>Page 01, edited</h1>\n');
+  const third = await runGate(common);
+  assert.ok(!/global inputs changed/.test(third.out), 'the shared inputs were reported as changed twice');
+  assert.match(third.out, /across 1 rendered route\(s\) \(29 unchanged, skipped\)/);
+  assert.match(third.out, /\/p02 unchanged, skipped/);
 });

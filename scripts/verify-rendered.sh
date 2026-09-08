@@ -25,8 +25,10 @@
 #                                    index does not know falls wide and says which one
 #            [--full]                render every route, ignoring the unchanged-route records
 #                                    in .palate-shots/manifest.json. The sweep before
-#                                    hand-over runs this: the records are keyed on a route's
-#                                    own imports, so a config change is outside them.
+#                                    hand-over runs this: the records cover a route's own
+#                                    imports plus the shared inputs (config, lockfile,
+#                                    src/styles, src/layouts and the CSS they import), and
+#                                    remote content and public/ assets stay outside them.
 #
 # Exit codes:
 #   0  clean        1  findings at or above High        2  bad args

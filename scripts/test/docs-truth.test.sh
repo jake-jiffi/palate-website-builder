@@ -89,8 +89,10 @@ present "the verifier agent certifies on one full sweep" \
 # The per-route record is the thing the skip rests on, so the doc names its fields.
 present "testing.md names the per-route record" \
   "references/testing.md" "sourcesHash, renderedHash,"
+present "testing.md names the shared inputs the hash covers" \
+  "references/testing.md" "global inputs changed, all routes re-rendered"
 present "testing.md names what the hash does NOT cover" \
-  "references/testing.md" "so a config or dependency change is invisible to it"
+  "references/testing.md" "so an unchanged source can still render differently"
 
 # ============ 6. THE HYGIENE LINE leads with what the number is ===========================
 # ASSERT THE RENDERED LINE, NOT THE SOURCE. The first draft grepped hygiene-loop.mjs for

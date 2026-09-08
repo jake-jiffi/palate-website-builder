@@ -36,9 +36,9 @@
  *   3  a browser could not be launched - the gate is BLOCKED, never a pass
  */
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'fs';
 import { createHash } from 'crypto';
-import { dirname, resolve } from 'path';
+import { dirname, join, relative, resolve } from 'path';
 // Commerce route resolution lives with the survey that produces the catalogue.
 // It is a NO-OP without one, so a brochure build is untouched.
 import { resolveDynamic } from '../palate-shopify.mjs';
@@ -145,13 +145,85 @@ function narrowToChanged(index, picked, files) {
 }
 
 /**
- * The identity of a route's SOURCE: its own file plus its whole import closure, which the
- * index has already computed. Two runs over the same bytes get the same hash, so "has this
- * route changed since it last passed" is answered by a comparison rather than by a clock.
- * An unreadable file hashes as its own marker, so DELETING an import changes the hash.
+ * THE GLOBAL INPUTS: the shared files that change what EVERY route renders and that no
+ * route's import closure necessarily names.
+ *
+ * The closure alone was not enough, and the gap was the dangerous kind. Edit the brand
+ * tokens, globals.css, the shared layout, astro.config or a dependency and every route's
+ * own source is byte-identical, so every passing record stays valid and a plain re-run
+ * skips the whole site while the rendered output has moved underneath it. Relying on
+ * somebody remembering --full is not a safeguard, it is the shape of every silent skip
+ * this product has shipped.
+ *
+ * So the digest below is folded into every route's hash: one shared byte changes and no
+ * record survives. It reads the config and the lockfile, everything under src/styles and
+ * src/layouts, and the CSS those layouts import from anywhere, which is how the brand
+ * package's tokens.css and fonts.css are reached without hardcoding a package name.
+ *
+ * A file that is absent contributes nothing, so DELETING one changes the digest as surely
+ * as editing it does.
  */
-function sourcesHashFor(route, root) {
+const GLOBAL_FILES = [
+  'astro.config.mjs', 'astro.config.ts', 'astro.config.js', 'astro.config.cjs',
+  'package.json', 'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lockb',
+];
+const GLOBAL_DIRS = ['src/styles', 'src/layouts'];
+
+function walkFiles(dir, out = []) {
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) walkFiles(p, out); else out.push(p);
+  }
+  return out;
+}
+
+// The CSS a layout imports, resolved to real files. A bare specifier is looked up under
+// node_modules, which is where `@palate-projects/<slug>-brand/tokens.css` lives.
+function importedCss(root, layoutFiles) {
+  const out = new Set();
+  for (const f of layoutFiles) {
+    let src;
+    try { src = readFileSync(f, 'utf8'); } catch { continue; }
+    for (const m of src.matchAll(/import\s+["']([^"']+\.css)["']/g)) {
+      const spec = m[1];
+      const cand = spec.startsWith('.') ? resolve(dirname(f), spec)
+        : spec.startsWith('@/') ? resolve(root, 'src', spec.slice(2))
+          : resolve(root, 'node_modules', spec);
+      if (existsSync(cand)) out.add(cand);
+    }
+  }
+  return [...out];
+}
+
+function globalInputsHash(root) {
+  const layouts = walkFiles(resolve(root, 'src/layouts'));
+  const files = [
+    ...GLOBAL_FILES.map((f) => resolve(root, f)).filter((p) => existsSync(p)),
+    ...GLOBAL_DIRS.flatMap((d) => walkFiles(resolve(root, d))),
+    ...importedCss(root, layouts),
+  ];
+  const uniq = [...new Set(files)].sort();
   const h = createHash('sha256');
+  for (const p of uniq) {
+    let body;
+    try { body = readFileSync(p); } catch { continue; }
+    h.update(relative(root, p)); h.update('\0'); h.update(body); h.update('\0');
+  }
+  return { hash: h.digest('hex'), count: uniq.length };
+}
+
+/**
+ * The identity of a route's SOURCE: the global inputs above, plus its own file and its whole
+ * import closure, which the index has already computed. Two runs over the same bytes get the
+ * same hash, so "has this route changed since it last passed" is answered by a comparison
+ * rather than by a clock. An unreadable file hashes as its own marker, so DELETING an import
+ * changes the hash.
+ */
+function sourcesHashFor(route, root, globalHash) {
+  const h = createHash('sha256');
+  h.update('global'); h.update('\0'); h.update(globalHash); h.update('\0');
   for (const f of [route.source, ...(route.dependsOn || [])].filter(Boolean).sort()) {
     let body;
     try { body = readFileSync(resolve(root, f)); } catch { body = Buffer.from('<unreadable>'); }
@@ -233,25 +305,38 @@ if (outDir) mkdirSync(outDir, { recursive: true });
  * next run cannot skip the route that broke, and it is ignored entirely under --full.
  *
  * WHAT IT DOES NOT COVER, said plainly because the skip is only safe while this is understood:
- * the hash is taken over the route's own source and its import closure. A change to
- * astro.config, to a dependency, or to anything the served build reads that no page imports is
- * invisible to it. That is why the sweep before hand-over runs --full, and why any file the
- * index does not know falls wide rather than narrow.
+ * the hash is taken over the route's own source, its import closure and the global inputs
+ * (see globalInputsHash above). Remote content, public/ assets and environment values are
+ * outside all three, so an unchanged source can still render differently. That is why the
+ * sweep before hand-over runs --full, and why any file the index does not know falls wide
+ * rather than narrow.
  */
 const shotsManifest = outDir ? `${outDir}/manifest.json` : '';
 let priorRoutes = {};
+let priorGlobal = '';
 if (shotsManifest) {
   try {
     const m = JSON.parse(readFileSync(shotsManifest, 'utf8'));
     if (m && typeof m.routes === 'object' && m.routes && !Array.isArray(m.routes)) priorRoutes = m.routes;
+    if (typeof m?.globalInputs === 'string') priorGlobal = m.globalInputs;
   } catch { /* no manifest yet, or an unreadable one: nothing is skipped, which is the safe way to be wrong */ }
+}
+// Recorded alongside the routes purely so the run can SAY why every record went. Folding the
+// digest into each hash is what invalidates them; without this the operator would see thirty
+// routes re-render and no reason given.
+const globalInputs = globalInputsHash(projectRoot);
+if (priorGlobal && priorGlobal !== globalInputs.hash) {
+  console.error(
+    `verify-rendered: global inputs changed, all routes re-rendered (${globalInputs.count} shared file(s): ` +
+    'the config and lockfile, src/styles, src/layouts and the CSS those layouts import).',
+  );
 }
 const sourcesHashes = new Map();
 const skipped = [];
 for (const p of routes) {
   const r = routeOf.get(p);
   if (!r) continue; // no index record behind this route, so it cannot be hashed and always renders
-  const sh = sourcesHashFor(r, projectRoot);
+  const sh = sourcesHashFor(r, projectRoot, globalInputs.hash);
   sourcesHashes.set(p, sh);
   const prior = priorRoutes[p];
   if (!FULL && prior && prior.sourcesHash === sh && prior.passed_at) skipped.push(p);
@@ -1440,6 +1525,7 @@ if (outDir) {
       out[p] = { sourcesHash: sh, renderedHash: textHash(text), passed_at: new Date().toISOString() };
     }
     m.routes = out;
+    m.globalInputs = globalInputs.hash;
     writeFileSync(shotsManifest, JSON.stringify(m, null, 2) + '\n');
   } catch (e) {
     console.error(

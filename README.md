@@ -76,9 +76,13 @@ routes those files can reach. A file the index has never heard of falls wide, re
 everything and says which file did it. A route whose sources have not changed since it last
 passed is skipped and named. On a thirty-route fixture that is 25s against 187s.
 
-**The run before hand-over is `--full`**, which ignores those records. The skip is keyed on a
-route's own source and its import closure, so a change to a config file, to a dependency, or
-to anything the served build reads that no page imports is outside it.
+The hash covers a route's own source, its import closure, and the shared inputs no closure has
+to name: the config, `package.json` and the lockfile, `src/styles`, `src/layouts` and the CSS
+those layouts import. Edit your brand tokens and every record goes, with the reason printed.
+
+**The run before hand-over is `--full`**, which ignores those records. Remote content,
+`public/` assets and environment values stay outside the hash, so an unchanged source can
+still render differently.
 
 Accessibility is a subset of axe rather than a WCAG pass, and performance is a throttled local
 lab run of Core Web Vitals on the home route. `references/testing.md` says exactly what each
