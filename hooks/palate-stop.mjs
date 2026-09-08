@@ -55,7 +55,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { buildLogEntry } from "./build-log-entry.mjs";
 import { resolveBuildContext } from "./project-dir.mjs";
 
@@ -546,20 +546,45 @@ const UNGROUNDED_FALLBACK =
 // still written to cross-build memory (a hole in that memory would quietly weaken the
 // novelty gate). It was previously sharing one try block with the done gate, where any
 // non-zero exit skipped both gate-done.sh and recordBuild().
-let depth = { state: "grounded", reason: "" };
-try {
-  execFileSync("bash", [GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // KEEP THE FLOOR
-} catch (e) {
-  const msg = (e && e.stderr ? e.stderr.toString() : "").trim();
-  if (isMissingShell(e)) {
-    process.stderr.write(`[palate] ${NO_SHELL_NOTE}\n`);
-    depth = { state: "unchecked", reason: NO_SHELL_NOTE };
-  } else {
-    depth =
-      e && e.status === 3
-        ? { state: "ungrounded", reason: msg || UNGROUNDED_FALLBACK }
-        : { state: "blocked", reason: msg || GATE_FALLBACK };
+/**
+ * Run one gate and keep BOTH streams. execFileSync discarded stdout outright and only handed
+ * back stderr when the call threw, so on exit 0 every word a gate printed was lost.
+ */
+function runGate(script, manifestPath) {
+  const r = spawnSync("bash", [script, manifestPath], { encoding: "utf8" });
+  return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "", err: r.error || null };
+}
+
+// The shape isMissingShell was written against (an execFileSync error), rebuilt from spawnSync.
+const asError = (r) => (r.err ? { code: r.err.code, message: r.err.message, status: r.status } : { status: r.status });
+
+/**
+ * SAY WHAT THE GATES SAID. A build where ship-ready, SEO, uniqueness and Explore all SKIPPED
+ * read, in the transcript, exactly like a build where every one of them ran and passed: the
+ * summary line goes to stdout and the skips to stderr, and both were thrown away on exit 0.
+ * Forward the summary and any skip line to stderr (never stdout, which is the hook protocol).
+ */
+function forwardGateOutput(r) {
+  for (const raw of `${r.stdout}\n${r.stderr}`.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("Done gate") || line.includes("skipped(")) process.stderr.write(`[palate] ${line}\n`);
   }
+}
+
+let depth = { state: "grounded", reason: "" };
+const depthRun = runGate(GATE, manifest); // KEEP THE FLOOR
+if (!depthRun.err && depthRun.status === 0) {
+  forwardGateOutput(depthRun);
+} else if (isMissingShell(asError(depthRun))) {
+  process.stderr.write(`[palate] ${NO_SHELL_NOTE}\n`);
+  depth = { state: "unchecked", reason: NO_SHELL_NOTE };
+} else {
+  const msg = depthRun.stderr.trim();
+  depth =
+    depthRun.status === 3
+      ? { state: "ungrounded", reason: msg || UNGROUNDED_FALLBACK }
+      : { state: "blocked", reason: msg || GATE_FALLBACK };
 }
 
 // Record the grounding fact in the manifest BEFORE acting on it, so it travels to the
@@ -568,14 +593,13 @@ recordGrounding(manifest, depth);
 
 if (depth.state === "blocked") gateFailure(depth.reason);
 
-try {
-  execFileSync("bash", [DONE_GATE, manifest], { stdio: ["ignore", "ignore", "pipe"] }); // visual loop + verifier (reads artefacts, fails open)
-} catch (e) {
+const doneRun = runGate(DONE_GATE, manifest); // visual loop + verifier (reads artefacts, fails open)
+if (!doneRun.err && doneRun.status === 0) {
+  forwardGateOutput(doneRun);
+} else if (!isMissingShell(asError(doneRun))) {
   // Same distinction as above: a missing shell is a skip that says so, never a verdict that
   // the build failed. It has already been reported once by the depth call, so stay quiet here.
-  if (!isMissingShell(e)) {
-    gateFailure((e && e.stderr ? e.stderr.toString() : "").trim() || GATE_FALLBACK);
-  }
+  gateFailure(doneRun.stderr.trim() || GATE_FALLBACK);
 }
 
 // Only record the build to cross-build memory after ALL gates pass, and never when the latch
