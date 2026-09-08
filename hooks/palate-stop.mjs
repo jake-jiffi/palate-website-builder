@@ -385,6 +385,29 @@ function readStopGate(manifestPath) {
 // Returns false when the latch could not be persisted. That matters: with no memory of the
 // previous stop every stop looks like the first, which would block forever, so the caller
 // falls back to the platform's own loop guard instead.
+/**
+ * PALATE_GATE_OFF=1 IS RECORDED, NEVER SILENT.
+ *
+ * Both hooks read the variable as their first act and exited before touching anything, so a
+ * build run with every gate disabled left no trace. Weeks later the manifest, the check report
+ * and the local grade all read exactly like a build that had been gated and passed. The bypass
+ * is legitimate and stays; it just goes on the record. Written through manifest-merge.mjs (the
+ * same script the gating path uses) so the stamp cannot clobber a concurrent hook write, and
+ * best-effort: a recording failure must never wedge the bypass it is recording.
+ */
+function recordGatesOff(startDir) {
+  try {
+    const manifestPath = resolveBuildContext(startDir).manifest;
+    if (!manifestPath || !fs.existsSync(manifestPath)) return;
+    execFileSync("node", [MERGE, "--manifest", manifestPath, "--gates-off"], {
+      cwd: path.dirname(manifestPath),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+  } catch {
+    /* the bypass must work even when the record cannot be written */
+  }
+}
+
 function writeStopGate(manifestPath, gate) {
   try {
     const m = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
@@ -398,7 +421,10 @@ function writeStopGate(manifestPath, gate) {
 }
 
 const p = readStdin() || {};
-if (process.env.PALATE_GATE_OFF === "1") process.exit(0);
+if (process.env.PALATE_GATE_OFF === "1") {
+  recordGatesOff(p.cwd || process.cwd());
+  process.exit(0);
+}
 
 // ONE answer to "which project is this", shared with palate-manifest.mjs. The manifest used to
 // be looked for in the session cwd while gate-done.sh reads the artefacts beside the manifest,

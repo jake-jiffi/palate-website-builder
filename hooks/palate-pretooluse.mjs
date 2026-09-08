@@ -74,6 +74,7 @@ import { resolveBuildContext } from "./project-dir.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const GATE = path.join(HERE, "..", "scripts", "gate-mcp-depth.sh");
+const MERGE = path.join(HERE, "..", "scripts", "manifest-merge.mjs");
 const SOURCE = /\.(astro|svelte|vue|tsx?|jsx?|mjs|css|scss)$/i;
 const CONFIG = /(^|\/)(astro|tailwind|vite|postcss|package|tsconfig|eslint)\.[a-z.]+$/i;
 // Page/section source: the files the model HAND-AUTHORS to compose the site. A NEW one
@@ -195,6 +196,28 @@ function allow() {
   process.exit(0);
 }
 
+/**
+ * PALATE_GATE_OFF=1 IS RECORDED, NEVER SILENT.
+ *
+ * This hook read the variable as its first act and allowed the write before touching anything,
+ * so a build run with the wall disabled left no trace. Weeks later the manifest read exactly
+ * like a build that had cleared it. The bypass is legitimate and stays; it just goes on the
+ * record. Written through manifest-merge.mjs so the stamp cannot clobber a concurrent hook
+ * write, and best-effort: a recording failure must never wedge the bypass it is recording.
+ */
+function recordGatesOff(startDir, hint) {
+  try {
+    const manifestPath = resolveBuildContext(startDir, { hint }).manifest;
+    if (!manifestPath || !fs.existsSync(manifestPath)) return;
+    execFileSync("node", [MERGE, "--manifest", manifestPath, "--gates-off"], {
+      cwd: path.dirname(manifestPath),
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+  } catch {
+    /* the bypass must work even when the record cannot be written */
+  }
+}
+
 function deny(reason) {
   process.stdout.write(
     JSON.stringify({
@@ -302,7 +325,11 @@ function divergeValid(m, mode = "brand-creation") {
 }
 
 const p = readStdin();
-if (!p || process.env.PALATE_GATE_OFF === "1") allow();
+if (!p) allow();
+if (process.env.PALATE_GATE_OFF === "1") {
+  recordGatesOff(p.cwd || process.cwd(), p.tool_input && p.tool_input.file_path);
+  allow();
+}
 
 const tool = p.tool_name || "";
 

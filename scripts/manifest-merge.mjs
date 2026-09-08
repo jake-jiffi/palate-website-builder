@@ -40,6 +40,9 @@ const CWD = process.cwd();
 const MANIFEST = arg("--manifest", join(CWD, "build-manifest.json"));
 const REPORT = arg("--report", join(CWD, "verify-report.json"));
 const SHOTS = arg("--shots", join(CWD, ".palate-shots", "manifest.json"));
+// PALATE_GATE_OFF=1 is a legitimate bypass and it must be ON THE RECORD. Written through this
+// script rather than by each hook so a gates-off stamp cannot clobber a concurrent hook write.
+const GATES_OFF = args.includes("--gates-off");
 
 function readJSON(p) {
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
@@ -101,6 +104,14 @@ function main() {
       verdict: report.verdict ?? "fail",
       report_path: REPORT,
     };
+  }
+
+  // GATES OFF, recorded. A build run with every gate disabled used to leave no trace at all,
+  // so the manifest, the check report and the local grade all read like a gated build that
+  // passed. The stamp is the first moment the bypass was seen this session; a later gated run
+  // never clears it, because what happened, happened.
+  if (GATES_OFF && !(m.gates && m.gates.state === "off")) {
+    m.gates = { state: "off", at: new Date().toISOString() };
   }
 
   // Idempotent additive write; never disturb the agent/Move-1 blocks.
