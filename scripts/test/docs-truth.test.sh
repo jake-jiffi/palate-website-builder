@@ -45,6 +45,10 @@ absent "testing.md does not call an unrun test the most important post-deploy ch
   "references/testing.md" "The most important post-deploy check: submit the contact form"
 present "testing.md names the form round-trip as not yet implemented" \
   "references/testing.md" "Implemented by E5"
+# ...and the smoke-check list two lines above must not promise the same test as done. The
+# file argued with itself about the exact claim this guard exists to remove.
+absent "the smoke-check list does not promise the POST either" \
+  "references/testing.md" "a test POST to /api/contact"
 
 # ============ 3. THE AXE SUBSET is a subset, and says which rules =========================
 present "audit-dimensions.md says the automated pass is a subset" \

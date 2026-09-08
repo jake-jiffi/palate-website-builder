@@ -32,25 +32,42 @@ VERCEL_CSP="$(node -e '
 ' "$VJ" 2>/dev/null)"
 CF_CSP="$(awk '/^ *Content-Security-Policy:/ { sub(/^ *Content-Security-Policy: */, ""); print; exit }' "$CF")"
 
+# One directive's value, so every source below is judged where it would actually be used.
+# READ THE DIRECTIVE, NOT THE STRING: an early draft searched the whole policy for a token and
+# fired on a correct one, because a later directive carried it legitimately.
+directive() { # <csp> <name> -> the directive's value, empty when absent
+  printf '%s' "$1" | tr ';' '\n' | awk -v d="$2" '{ sub(/^ +/, ""); if ($1 == d) { sub(/^[^ ]+ */, ""); print; exit } }'
+}
+
 [ -n "$VERCEL_CSP" ] && ok "vercel.json serves a Content-Security-Policy on every route" \
   || bad "vercel.json serves NO Content-Security-Policy"
 [ -n "$CF_CSP" ] && ok "the Cloudflare overlay serves a Content-Security-Policy" \
   || bad "the Cloudflare overlay serves NO Content-Security-Policy"
 
 # ============ 1. THE DIRECTIVES, on both hosts ===========================================
-for d in "default-src 'self'" "style-src 'self' 'unsafe-inline'" "img-src 'self' data: https:" \
-         "font-src 'self' data:" "object-src 'none'" "base-uri 'self'" "form-action 'self'"; do
+for d in "default-src 'self'" "object-src 'none'" "base-uri 'self'" "form-action 'self'"; do
   case "$VERCEL_CSP" in *"$d"*) ok "vercel CSP: $d" ;; *) bad "vercel CSP is missing: $d" ;; esac
   case "$CF_CSP" in *"$d"*) ok "cloudflare CSP: $d" ;; *) bad "cloudflare CSP is missing: $d" ;; esac
+done
+# THE SOURCES, not the spelling. These three directives carry host lists that differ per host
+# (the Vercel Toolbar is on one and not the other), so each required source is asserted on its
+# own rather than as one literal string that a legitimate addition would break.
+for name in "vercel:$VERCEL_CSP" "cloudflare:$CF_CSP"; do
+  who="${name%%:*}"; csp="${name#*:}"
+  for pair in "style-src:'self'" "style-src:'unsafe-inline'" "img-src:'self'" "img-src:data:" \
+              "img-src:https:" "font-src:'self'" "font-src:data:"; do
+    d="${pair%%:*}"; src="${pair#*:}"
+    case "$(directive "$csp" "$d")" in
+      *"$src"*) ok "$who CSP $d carries $src" ;;
+      *) bad "$who CSP $d is missing $src" ;;
+    esac
+  done
 done
 
 # READ THE DIRECTIVE, NOT THE STRING. The first draft searched the whole policy for
 # "script-src" followed by "'unsafe-inline'" and fired on a correct policy, because style-src
 # comes after script-src and carries the token legitimately. A check keyed on where something
 # sits in a line rather than on what it means is the same fault this repo has shipped before.
-directive() { # <csp> <name> -> the directive's value, empty when absent
-  printf '%s' "$1" | tr ';' '\n' | awk -v d="$2" '{ sub(/^ +/, ""); if ($1 == d) { sub(/^[^ ]+ */, ""); print; exit } }'
-}
 for name in "vercel:$VERCEL_CSP" "cloudflare:$CF_CSP"; do
   who="${name%%:*}"; csp="${name#*:}"
   # Astro inlines small stylesheets, and a build of this template also ships inline SCRIPT it
@@ -123,16 +140,38 @@ done
 # the headline win for client review. It is not in the template source, so the derived-host
 # check above cannot see it, and the Cloudflare overlay must NOT carry it: there is no Vercel
 # Toolbar on Workers, and a host that never loads has no business in a policy.
-for d in script-src connect-src frame-src; do
-  case "$(directive "$VERCEL_CSP" "$d")" in
-    *"https://vercel.live"*) ok "vercel CSP $d allows the Vercel Toolbar" ;;
-    *) bad "vercel CSP $d blocks the Vercel Toolbar, which every preview deployment loads" ;;
+#
+# ALL SIX DIRECTIVES, from Vercel's own list. The first pass allowed the script, the frame and
+# the connection and forgot the stylesheet, the webfont, the blob images and the Comments
+# websocket, which would have loaded an unstyled toolbar with dead Comments under a doc calling
+# Comments the headline win. Half an allowlist reads as a working feature until a client opens it.
+toolbar() { # <directive> <required source>
+  case "$(directive "$VERCEL_CSP" "$1")" in
+    *"$2"*) ok "vercel CSP $1 carries $2 for the Toolbar" ;;
+    *) bad "vercel CSP $1 is missing $2, so the Toolbar loads half-broken on every preview" ;;
+  esac
+}
+toolbar script-src  "https://vercel.live"
+toolbar connect-src "https://vercel.live"
+toolbar connect-src "wss://ws-us3.pusher.com"   # Comments; no https source covers a websocket
+toolbar frame-src   "https://vercel.live"
+toolbar style-src   "https://vercel.live"
+toolbar font-src    "https://vercel.live"
+toolbar font-src    "https://assets.vercel.com"
+toolbar img-src     "blob:"                     # avatars and screenshots
+# img-src also needs vercel.live and vercel.com. The template already allows every https image
+# source, so the hosts are covered without repeating them; assert the cover, not the spelling.
+case "$(directive "$VERCEL_CSP" img-src)" in
+  *"https:"*|*"https://vercel.live"*) ok "vercel CSP img-src covers the Toolbar's image hosts" ;;
+  *) bad "vercel CSP img-src covers neither https: nor vercel.live, so Toolbar images are blocked" ;;
+esac
+# And the overlay stays clean: not one of the Toolbar sources belongs on a Workers deploy.
+for src in "vercel.live" "assets.vercel.com" "ws-us3.pusher.com"; do
+  case "$CF_CSP" in
+    *"$src"*) bad "the Cloudflare overlay lists $src, which a Workers deploy never loads" ;;
+    *) ok "the Cloudflare overlay does not carry $src" ;;
   esac
 done
-case "$CF_CSP" in
-  *"vercel.live"*) bad "the Cloudflare overlay lists vercel.live, which a Workers deploy never loads" ;;
-  *) ok "the Cloudflare overlay does not carry the Vercel Toolbar host" ;;
-esac
 
 # A server-side host must NOT be in the policy: widening it for a request the browser never
 # makes is how a CSP stops describing anything.

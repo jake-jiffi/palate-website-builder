@@ -57,16 +57,24 @@ browser never makes is how a CSP stops describing anything. Both `style-src` and
 carry `'unsafe-inline'`: `style-src` because Astro inlines small stylesheets, `script-src` for
 the measured reason above.
 
-**`https://vercel.live` is on the Vercel policy and not on the Cloudflare one.** Vercel injects
-the Toolbar into preview HTML from that host, and the Toolbar's Comments are the headline win
-for client review below, so a policy without it would have shipped a document promising a
-feature the same repository blocks. It is on `script-src`, `connect-src` and `frame-src`,
-because the Toolbar loads a script, calls home and opens a panel in a frame. It is absent from
-the Cloudflare overlay because there is no Vercel Toolbar on a Workers deployment, and it is
-not derivable from the template source, which is why the derived-host test cannot catch it: the
-host comes from the platform, not from the build. NOT YET MEASURED against a real preview
-deployment, which is the one place the Toolbar exists; check the browser console on the first
-preview after this ships.
+**The Vercel Toolbar sources are on the Vercel policy and not on the Cloudflare one.** Vercel
+injects the Toolbar into preview HTML, and its Comments are the headline win for client review
+below, so a policy without it would ship a document promising a feature the same repository
+blocks. The list is Vercel's own, from the "Using a Content Security Policy" section of
+`vercel.com/docs/vercel-toolbar/managing-toolbar` (read 2026-09-09), and it is SIX sources
+rather than the obvious one: `https://vercel.live` on `script-src`, `connect-src`, `frame-src`,
+`style-src` and `font-src`, `wss://ws-us3.pusher.com` on `connect-src` for Comments,
+`https://assets.vercel.com` on `font-src`, and `blob:` on `img-src`. The first pass allowed the
+script, the frame and the connection and forgot the rest, which loads an unstyled toolbar with
+dead Comments: half an allowlist reads as a working feature until a client opens it. The
+Toolbar's image hosts need no entry of their own because `img-src` already allows every
+`https:` source.
+
+None of it is on the Cloudflare overlay: there is no Vercel Toolbar on a Workers deployment.
+And none of it is derivable from the template source, which is why the derived-host test cannot
+catch a mistake here; the host comes from the platform, not from the build, so the test pins
+each source by name instead. STILL NOT MEASURED against a real preview deployment, which is
+the one place the Toolbar exists. Open the console on the first preview after this ships.
 
 **Add a third-party script or a client-side fetch and you add its host here.**
 `scripts/test/template-headers.test.sh` derives the host list from the template source and

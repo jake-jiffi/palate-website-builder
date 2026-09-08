@@ -75,7 +75,7 @@ Nothing in this plugin runs Lighthouse. The doctrine used to say "Lighthouse CI,
 ## Post-deploy smoke checks
 - workers.dev returns 200
 - robots.txt, sitemap, llms.txt return 200
-- a test POST to /api/contact writes to Sanity formSubmission and returns ok
+- the contact form, BY HAND, once. Nothing posts it automatically yet; see the section below.
 
 ## The form round-trip test
 
