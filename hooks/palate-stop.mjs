@@ -67,6 +67,31 @@ const PHANTOM = path.join(HERE, "..", "scripts", "phantom-utility-check.mjs");
 const SOURCE = /\.(astro|svelte|vue|tsx?|jsx?|mjs|css|scss)$/i;
 const OVERFLOW_PX = 16; // a layout break, not a scrollbar/sub-pixel (clean builds read ~0)
 
+/**
+ * THE ONE CHANNEL THE OPERATOR ACTUALLY SEES.
+ *
+ * Writing to stderr and exiting 0 puts nothing in front of anybody. The Claude Code hooks
+ * reference is explicit: "Stderr from a hook that exits 0 goes to the debug log only, never the
+ * transcript, and Claude never sees it." So the first version of this forwarding moved the
+ * summary from one invisible place to another. The documented way is `systemMessage` in a JSON
+ * object on stdout, which for a Stop hook with `continue` unset is "shown to the user in the
+ * transcript instead".
+ *
+ * Lines are BUFFERED rather than written as they happen, because stdout carries the hook
+ * protocol: exactly one JSON object may be written, and a second one (or any loose text) would
+ * break the hook itself. Every exit path calls emitUserMessage() at most once, and the blocking
+ * path writes its own object and never calls it. The stderr copy stays, for `--debug`.
+ */
+const userLines = [];
+function say(line) {
+  userLines.push(line);
+  process.stderr.write(`[palate] ${line}\n`);
+}
+function emitUserMessage() {
+  if (!userLines.length) return;
+  process.stdout.write(JSON.stringify({ systemMessage: userLines.join("\n") }));
+}
+
 // Positive ON-DISK evidence of a REAL failure - the "enforce on evidence" layer. Unlike a
 // gate exit code (which conflates a real fail with could-not-verify, e.g. a subagent survey
 // the depth gate cannot see), every signal here fires ONLY when the evidence is PRESENT and
@@ -431,9 +456,24 @@ function readStopGate(manifestPath) {
  */
 function recordGatesOff(startDir) {
   let manifestPath = null;
+  let firstTime = false;
   try {
-    manifestPath = resolveBuildContext(startDir).manifest;
-    if (!manifestPath || !fs.existsSync(manifestPath)) return;
+    const candidate = resolveBuildContext(startDir).manifest;
+    if (!candidate || !fs.existsSync(candidate)) return;
+    const m = JSON.parse(fs.readFileSync(candidate, "utf8"));
+    // THE SAME TEST THE GATED PATH APPLIES. That path exits on !wroteSource before it records
+    // anything, so a bypass must not record MORE than the gate it bypassed: a session that keeps
+    // the variable set and stands near any stale build-manifest.json was logging a build that
+    // was not happening, one entry per turn.
+    if (!(m.files_written ?? []).some((f) => SOURCE.test(f))) return;
+    // ONCE PER BUILD, NOT ONCE PER STOP. By the second turn the stamp is already in the manifest
+    // and a second entry says nothing the first did not.
+    firstTime = !(m.gates && m.gates.state === "off");
+    manifestPath = candidate;
+  } catch {
+    return; // an unreadable manifest is not a build to record, exactly as the gated path treats it
+  }
+  try {
     execFileSync("node", [MERGE, "--manifest", manifestPath, "--gates-off"], {
       cwd: path.dirname(manifestPath),
       stdio: ["ignore", "ignore", "ignore"],
@@ -442,7 +482,7 @@ function recordGatesOff(startDir) {
     /* the bypass must work even when the record cannot be written */
   }
   // Separately, so a failed manifest stamp does not also cost the log entry.
-  if (manifestPath) recordGatesOffBuild(manifestPath);
+  if (firstTime) recordGatesOffBuild(manifestPath);
 }
 
 function writeStopGate(manifestPath, gate) {
@@ -503,7 +543,7 @@ try {
  * Block, unless the same evidence has already been refused too many times.
  * Returns true when it BLOCKED (the caller must exit), false when it RELEASED (loudly).
  */
-function latchedBlock(reasons, reasonText) {
+function latchedBlock(reasons, reasonText, kind = "evidence") {
   const fingerprint = evidenceFingerprint(reasons);
   const prev = readStopGate(manifest);
   const same = Boolean(prev && prev.fingerprint === fingerprint);
@@ -514,6 +554,13 @@ function latchedBlock(reasons, reasonText) {
     unchanged,
     total,
     reasons,
+    // WHICH KIND OF LATCH THIS IS, so the evidence branch can clear its own and leave the gate
+    // one alone. Without it strict mode never counted past 1: the clear below fires whenever the
+    // evidence list is empty, a GATE failure is empty-evidence by definition, and every strict
+    // Stop therefore wiped the previous latch before gateFailure wrote a fresh one at 1. The
+    // comment in gateFailure says this latch exists so strict mode is not an unbounded block
+    // loop; for gate failures it was one.
+    kind,
     at: new Date().toISOString(),
   });
 
@@ -521,10 +568,12 @@ function latchedBlock(reasons, reasonText) {
   // release. Hand back to the platform's own loop guard rather than wedge the session.
   const untrackable = !persisted && p.stop_hook_active === true;
   if (unchanged > MAX_UNCHANGED_BLOCKS || total > MAX_TOTAL_BLOCKS || untrackable) {
-    process.stderr.write(
-      `[palate] RELEASING a build that still has ${reasons.length} unresolved gate failure(s) after ${unchanged} attempt(s) on the same evidence:\n` +
-        reasons.map((r) => `  - ${r}\n`).join("") +
-        "This is NOT a pass. The failures above are still on disk.\n",
+    // THE ONE LINE THE OPERATOR MOST NEEDS. It is the moment the hook stops standing in the
+    // way of a build with failures still on disk, and it went to the debug log alone.
+    say(
+      `RELEASING a build that still has ${reasons.length} unresolved gate failure(s) after ${unchanged} attempt(s) on the same evidence:\n` +
+        reasons.map((r) => `  - ${r}`).join("\n") +
+        "\nThis is NOT a pass. The failures above are still on disk.",
     );
     return false;
   }
@@ -557,10 +606,16 @@ if (positive.length) {
   // build must NOT reach cross-build memory: recordBuild feeds the novelty gate, and a build
   // recorded here would go on to certify future builds as different from a broken one.
   releasedWithFailures = true;
-} else if (readStopGate(manifest)) {
+} else {
   // The evidence cleared. Drop the latch so the next block starts from zero rather than
   // inheriting a spent counter.
-  writeStopGate(manifest, null);
+  //
+  // ONLY AN EVIDENCE LATCH. A gate failure records no evidence reasons, so this branch runs on
+  // every strict Stop that failed a gate and used to clear the counter that bounds it. A latch
+  // written before `kind` existed is treated as evidence, which is what it was: the gate latch
+  // never survived a single Stop.
+  const prevLatch = readStopGate(manifest);
+  if (prevLatch && (prevLatch.kind ?? "evidence") === "evidence") writeStopGate(manifest, null);
 }
 
 // Hard enforcement is opt-in. By DEFAULT never block finishing — blocking traps a
@@ -573,7 +628,7 @@ function gateFailure(reason) {
     //
     // A BLOCK already wrote its own JSON object to stdout, and a second one would break the
     // hook, so only a RELEASE may hand the buffered lines over.
-    if (!latchedBlock([reason], reason)) emitUserMessage();
+    if (!latchedBlock([reason], reason, "gate")) emitUserMessage();
     process.exit(0);
   }
   // Through the same user channel as the summary: this line has been reaching the debug log
@@ -630,40 +685,28 @@ function runGate(script, manifestPath) {
 const asError = (r) => (r.err ? { code: r.err.code, message: r.err.message, status: r.status } : { status: r.status });
 
 /**
- * THE ONE CHANNEL THE OPERATOR ACTUALLY SEES.
- *
- * Writing to stderr and exiting 0 puts nothing in front of anybody. The Claude Code hooks
- * reference is explicit: "Stderr from a hook that exits 0 goes to the debug log only, never the
- * transcript, and Claude never sees it." So the first version of this forwarding moved the
- * summary from one invisible place to another. The documented way is `systemMessage` in a JSON
- * object on stdout, which for a Stop hook with `continue` unset is "shown to the user in the
- * transcript instead".
- *
- * Lines are BUFFERED rather than written as they happen, because stdout carries the hook
- * protocol: exactly one JSON object may be written, and a second one (or any loose text) would
- * break the hook itself. Every exit path calls emitUserMessage() at most once, and the blocking
- * path writes its own object and never calls it. The stderr copy stays, for `--debug`.
- */
-const userLines = [];
-function say(line) {
-  userLines.push(line);
-  process.stderr.write(`[palate] ${line}\n`);
-}
-function emitUserMessage() {
-  if (!userLines.length) return;
-  process.stdout.write(JSON.stringify({ systemMessage: userLines.join("\n") }));
-}
-
-/**
  * SAY WHAT THE GATES SAID. A build where ship-ready, SEO, uniqueness and Explore all SKIPPED
  * read, in the transcript, exactly like a build where every one of them ran and passed: the
  * summary line goes to the gate's stdout and the skips to its stderr, and both were thrown away.
  */
 function forwardGateOutput(r) {
+  // A NOTE'S INDENTED LINES ARE PART OF THE NOTE. On a build with zero MCP calls the gate
+  // prints two headlines and seven indented lines saying what went unchecked, why, and the
+  // command that reconnects the MCP; matching headlines alone told the operator that none of
+  // it was gated and nothing about what to do next. The "Passed:" tail of the summary is an
+  // indented continuation for the same reason.
+  //
+  // The filter takes `skipped:` as well as `skipped(`, because the depth gate writes
+  // "MCP-depth gate skipped: ..." and was dropped entirely over the punctuation.
+  let carrying = false;
   for (const raw of `${r.stdout}\n${r.stderr}`.split("\n")) {
     const line = raw.trim();
-    if (!line) continue;
-    if (line.startsWith("Done gate") || line.includes("skipped(")) say(line);
+    if (!line) { carrying = false; continue; }
+    const indented = /^\s/.test(raw);
+    if (indented && carrying) { say(line); continue; }
+    const headline = line.startsWith("Done gate") || /skipped[:(]/.test(line);
+    carrying = headline;
+    if (headline) say(line);
   }
 }
 
@@ -672,7 +715,9 @@ const depthRun = runGate(GATE, manifest); // KEEP THE FLOOR
 if (!depthRun.err && depthRun.status === 0) {
   forwardGateOutput(depthRun);
 } else if (isMissingShell(asError(depthRun))) {
-  process.stderr.write(`[palate] ${NO_SHELL_NOTE}\n`);
+  // On Windows without WSL every gate here is a shell script that cannot run, and this note is
+  // the entire experience. Through the user channel, not the debug log.
+  say(NO_SHELL_NOTE);
   depth = { state: "unchecked", reason: NO_SHELL_NOTE };
 } else {
   const msg = depthRun.stderr.trim();

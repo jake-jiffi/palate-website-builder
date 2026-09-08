@@ -83,6 +83,39 @@ else
   echo "FAIL - and it is minimal, carrying no donors (got: $logged)"; fail=$((fail+1))
 fi
 
+# --- ONCE PER BUILD, NOT ONCE PER STOP ------------------------------------------------
+# A session that keeps the variable set appends one entry per turn otherwise, and the second
+# entry says nothing the first did not: the manifest already carries the stamp by then.
+printf '{"hook_event_name":"Stop","cwd":"%s"}' "$S" \
+  | env PALATE_GATE_OFF=1 HOME="$HOME_DIR" node "$STOP" >/dev/null 2>&1
+printf '{"hook_event_name":"Stop","cwd":"%s"}' "$S" \
+  | env PALATE_GATE_OFF=1 HOME="$HOME_DIR" node "$STOP" >/dev/null 2>&1
+n_after="$(node -e '
+try { console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).length); }
+catch { console.log("0"); }' "$LOG" 2>/dev/null)"
+if [ "$n_after" = "1" ]; then
+  echo "ok   - three gates-off Stops on one build leave one entry"; pass=$((pass+1))
+else
+  echo "FAIL - three gates-off Stops on one build leave one entry (log has $n_after)"; fail=$((fail+1))
+fi
+
+# --- AND NOT AT ALL WHEN NO SOURCE WAS WRITTEN ----------------------------------------
+# The gated path exits on !wroteSource before it records anything. A bypass must not record
+# more than the gate it bypassed, or standing near any stale manifest logs a build that is not
+# happening.
+NOSRC="$TMP/no-source"; mkdir -p "$NOSRC"
+printf '{"schema":3,"mcp_calls":[],"files_written":[]}' > "$NOSRC/build-manifest.json"
+printf '{"hook_event_name":"Stop","cwd":"%s"}' "$NOSRC" \
+  | env PALATE_GATE_OFF=1 HOME="$HOME_DIR" node "$STOP" >/dev/null 2>&1
+n_nosrc="$(node -e '
+try { console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).length); }
+catch { console.log("0"); }' "$LOG" 2>/dev/null)"
+if [ "$n_nosrc" = "1" ]; then
+  echo "ok   - a manifest with no source written logs nothing"; pass=$((pass+1))
+else
+  echo "FAIL - a manifest with no source written logs nothing (log has $n_nosrc)"; fail=$((fail+1))
+fi
+
 # --- and it travels to the cross-build log entry -------------------------------------
 entry="$(node -e '
 import("'"$DIR"'/../../hooks/build-log-entry.mjs").then((m) => {

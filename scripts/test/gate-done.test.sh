@@ -103,10 +103,30 @@ if printf '%s' "$summary" | grep -qE 'Done gate: [0-9]+ of [0-9]+ sub-gates ran,
 else
   echo "FAIL - the summary opens with how many sub-gates ran (got: $summary)"; fail=$((fail+1))
 fi
-if printf '%s' "$summary" | grep -qF 'explore=skipped('; then
+if printf '%s' "$summary" | grep -qE 'explore=skipped([^(]|$)'; then
   echo "ok   - gate-explore's skip is mapped, not read as a pass"; pass=$((pass+1))
 else
   echo "FAIL - gate-explore's skip is mapped, not read as a pass (got: $summary)"; fail=$((fail+1))
+fi
+# EACH REASON IS PRINTED ONCE. It used to appear in the count clause AND again inside
+# name=skipped(reason) in the tail, which is how one line reached 1,055 characters: fourteen
+# lines at 80 columns, for a summary whose job is to be read.
+if printf '%s' "$summary" | grep -qF 'explore: not an Explore build'; then
+  echo "ok   - and the reason is in the count clause"; pass=$((pass+1))
+else
+  echo "FAIL - and the reason is in the count clause (got: $summary)"; fail=$((fail+1))
+fi
+reason_hits="$(printf '%s' "$summary" | grep -o 'not an Explore build' | grep -c . || true)"
+if [ "$reason_hits" = "1" ]; then
+  echo "ok   - and only once, not twice"; pass=$((pass+1))
+else
+  echo "FAIL - and only once, not twice (found $reason_hits times)"; fail=$((fail+1))
+fi
+# The tail is broken onto its own INDENTED line, so the two halves read as two things.
+if printf '%s' "$summary" | grep -qE '^  Passed:'; then
+  echo "ok   - and the Passed tail is its own indented line"; pass=$((pass+1))
+else
+  echo "FAIL - and the Passed tail is its own indented line (got: $summary)"; fail=$((fail+1))
 fi
 if printf '%s' "$summary" | grep -qF 'Passed:'; then
   echo "ok   - and it only says passed after the count"; pass=$((pass+1))
@@ -116,7 +136,8 @@ fi
 # THE NOVELTY GATE PRINTS ITS SKIP ON STDOUT AND EXITS 0, so reading stderr alone could not
 # tell a pass from a skip and counted both as ran. On this fixture it skips ("no diverge
 # block"), so the count is one lower than the first version of this line claimed.
-if printf '%s' "$summary" | grep -qF 'novelty=skipped('; then
+if printf '%s' "$summary" | grep -qE 'novelty=skipped([^(]|$)' \
+   && printf '%s' "$summary" | grep -qF 'novelty: no diverge block'; then
   echo "ok   - a novelty skip is counted as a skip, not a pass"; pass=$((pass+1))
 else
   echo "FAIL - a novelty skip is counted as a skip, not a pass (got: $summary)"; fail=$((fail+1))
@@ -131,10 +152,47 @@ cp "$DEEP" "$SRNONE/build-manifest.json"
 make_shots "$SRNONE" 0
 cp "$PASS/verify-report.json" "$SRNONE/verify-report.json"
 sr_summary="$(bash "$GATE" "$SRNONE/build-manifest.json" 2>/dev/null)"
-if printf '%s' "$sr_summary" | grep -qF 'shipready=skipped(nothing to inspect'; then
+if printf '%s' "$sr_summary" | grep -qF 'shipready: nothing to inspect'; then
   echo "ok   - gate-shipready's skip carries its own reason"; pass=$((pass+1))
 else
   echo "FAIL - gate-shipready's skip carries its own reason (got: $sr_summary)"; fail=$((fail+1))
+fi
+
+# --- THE SEO SKIP REASON IS THE FINDING, NOT THE HEADER --------------------------------
+# gate-seo opens a cannot-check report with "N thing(s) could NOT be checked. These are unknown,
+# not clean." and names the actual unknown two lines later. Taking the first line verbatim put
+# the header in the summary and dropped the one part that says what was not checked.
+SEOB="$TMP/seo-blocked"; mkdir -p "$SEOB/src/pages" "$SEOB/dist"
+cp "$DEEP" "$SEOB/build-manifest.json"
+make_shots "$SEOB" 0
+cp "$PASS/verify-report.json" "$SEOB/verify-report.json"
+printf -- '---\n---\n<h1>Home</h1>\n' > "$SEOB/src/pages/index.astro"
+printf '<!doctype html><html><head><link rel="canonical" href="https://x.test/"></head><body>h</body></html>' > "$SEOB/dist/index.html"
+printf '<?xml version="1.0"?><urlset><url><loc>https://x.test/</loc></url></urlset>' > "$SEOB/dist/sitemap-0.xml"
+printf 'User-agent: *\nAllow: /\nSitemap: https://x.test/sitemap-index.xml\n' > "$SEOB/dist/robots.txt"
+seo_summary="$(bash "$GATE" "$SEOB/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$seo_summary" | grep -qF 'answer-engine surfaces'; then
+  echo "ok   - the SEO skip names what could not be checked"; pass=$((pass+1))
+else
+  echo "FAIL - the SEO skip names what could not be checked (got: $seo_summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$seo_summary" | grep -qF 'thing(s) could NOT be checked'; then
+  echo "FAIL - and not gate-seo's header (got: $seo_summary)"; fail=$((fail+1))
+else
+  echo "ok   - and not gate-seo's header"; pass=$((pass+1))
+fi
+
+# --- THE NO-JQ SKIP SAYS HOW TO FIX IT -------------------------------------------------
+# Without jq every gate here is off, and the operator was told so and nothing else.
+NOJQ="$TMP/nojq-bin"; mkdir -p "$NOJQ"
+for c in node bash find wc tr sed grep cat ls dirname basename mktemp rm printf; do
+  src="$(command -v "$c" 2>/dev/null)" && ln -sf "$src" "$NOJQ/$c" 2>/dev/null
+done
+nojq_err="$(PATH="$NOJQ" bash "$GATE" "$PASS/build-manifest.json" 2>&1 >/dev/null || true)"
+if printf '%s' "$nojq_err" | grep -qF 'brew install jq'; then
+  echo "ok   - the no-jq skip says how to fix it"; pass=$((pass+1))
+else
+  echo "FAIL - the no-jq skip says how to fix it (got: $nojq_err)"; fail=$((fail+1))
 fi
 
 # --- A KILLED CAPTURE LEAVES A PENDING MANIFEST, AND THAT IS NOT EVIDENCE --------------
