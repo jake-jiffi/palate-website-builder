@@ -361,34 +361,55 @@ export function buildIndex(projectDir) {
   //
   // A built page cannot lie about what it emitted. The closure walk stays as the fallback for a
   // repo that has not been built, where a link graph from source is better than none.
+  //
+  // TRUSTED PER ROUTE, AND ONLY WHILE IT IS NEWER THAN THE SOURCE. The index runs before any
+  // build in /check's caps lane and /edit never re-indexes after building, so trusting a stale
+  // build meant a dead href added in source was invisible until after the deploy, which is
+  // exactly when the cap /check documents was supposed to have fired.
   const outRoot = findOutputRoot(projectDir);
   const pages = outRoot ? builtPages(outRoot) : [];
-  let linksParsed = 0;
-  let linkFiles = 0;
+  const mtimeOf = (p) => { try { return statSync(p).mtimeMs; } catch { return 0; } };
+  // When the build ran. A route with NO built page is only trusted as "rendered nothing" if the
+  // build is newer than it: a draft-only [slug] route, an endpoint and an on-demand page all
+  // legitimately produce no HTML, and falling back for those would put the switcher's
+  // unrendered href="/explore" straight back into every composed site.
+  const buildTime = pages.length ? Math.max(...pages.map((p) => mtimeOf(p.file))) : 0;
 
-  if (pages.length) {
-    const byRoute = new Map(routes.map((r) => [r.path, r]));
-    const dynamic = routes.filter((r) => r.kind === 'dynamic');
-    for (const { file, route } of pages) {
-      const hrefs = hrefsIn(file, format);
-      linkFiles += 1;
-      linksParsed += hrefs.length;
-      // A built entry page belongs to the dynamic route that rendered it: /blog/welcome is the
-      // output of /blog/[slug], and the route is what carries a link list.
-      const owner = byRoute.get(route)
-        || dynamic.find((r) => route.startsWith(r.path.replace(/\/\[[^\]]+\]$/, '') + '/'));
-      if (!owner) continue;
-      owner.links = [...new Set([...owner.links, ...hrefs])];
+  const byRoute = new Map(routes.map((r) => [r.path, r]));
+  const dynamic = routes.filter((r) => r.kind === 'dynamic');
+  const built = new Map();
+  for (const { file, route } of pages) {
+    // A built entry page belongs to the dynamic route that rendered it: /blog/welcome is the
+    // output of /blog/[slug], and the route is what carries a link list.
+    const owner = byRoute.get(route)
+      || dynamic.find((r) => route.startsWith(r.path.replace(/\/\[[^\]]+\]$/, '') + '/'));
+    if (!owner) continue;
+    if (!built.has(owner.path)) built.set(owner.path, []);
+    built.get(owner.path).push(file);
+  }
+
+  const hrefCache = new Map();
+  const hrefsOf = (abs) => {
+    if (!hrefCache.has(abs)) hrefCache.set(abs, hrefsIn(abs, format));
+    return hrefCache.get(abs);
+  };
+  let linksParsed = 0;
+  let staleRoutes = 0;
+  const linkFiles = new Set();
+
+  for (const r of routes) {
+    const files = built.get(r.path) || [];
+    const sourceFiles = [r.source, ...r.dependsOn].map((f) => join(projectDir, f));
+    const newestSource = Math.max(0, ...sourceFiles.map(mtimeOf));
+    const trusted = files.length ? Math.min(...files.map(mtimeOf)) >= newestSource : buildTime >= newestSource;
+    if (pages.length && !trusted) staleRoutes += 1;
+    const hrefs = new Set();
+    for (const f of (trusted ? files : sourceFiles)) {
+      const found = hrefsOf(f);
+      if (!linkFiles.has(f)) { linkFiles.add(f); linksParsed += found.length; }
+      for (const h of found) hrefs.add(h);
     }
-  } else {
-    const hrefCache = new Map();
-    const hrefsOf = (rel) => {
-      if (!hrefCache.has(rel)) hrefCache.set(rel, hrefsIn(join(projectDir, rel), format));
-      return hrefCache.get(rel);
-    };
-    for (const r of routes) r.links = internalLinks(r, hrefsOf);
-    linksParsed = [...hrefCache.values()].reduce((n, hs) => n + hs.length, 0);
-    linkFiles = hrefCache.size;
+    r.links = [...hrefs];
   }
 
   // Collections: one entry per markdown file, joined to the dynamic route that
@@ -436,15 +457,22 @@ export function buildIndex(projectDir) {
 
   // Dead internal links: an href to a path no route serves. Dynamic routes are
   // matched by prefix, since /blog/[slug] serves /blog/anything.
+  //
+  // EXPLORE SCAFFOLDING IS NEVER A DEAD LINK. `/explore` and the `/vN` variants are deleted at
+  // Compose, and the switcher that links them renders nothing once the registry is cleared. The
+  // built page knows that; a source read cannot, so a route falling back to source would report
+  // a dead link to a page that was meant to go, and /publish reads a dead link as not done.
+  // gate-seo already excludes the same shapes from its sitemap expectation.
+  const EXPLORE_ROUTE = (h) => h === '/explore' || /^\/(v|lp)\d+$/.test(h);
   const dynamicPrefixes = routes.filter((r) => r.kind === 'dynamic').map((r) => r.path.replace(/\/\[[^\]]+\]$/, ''));
   const served = new Set(routes.map((r) => r.path));
   const dead = [...new Set(routes.flatMap((r) => r.links))]
-    .filter((h) => !served.has(h) && !dynamicPrefixes.some((p) => h.startsWith(p + '/')));
+    .filter((h) => !served.has(h) && !EXPLORE_ROUTE(h) && !dynamicPrefixes.some((p) => h.startsWith(p + '/')));
 
   return {
     version: 1,
     routes, entries, facts,
-    links: { orphans, dead, parsed: linksParsed, files: linkFiles },
+    links: { orphans, dead, parsed: linksParsed, files: linkFiles.size, stale: staleRoutes },
     counts: { routes: routes.length, entries: entries.length, drafts: entries.filter((e) => e.draft).length },
   };
 }
@@ -504,6 +532,11 @@ function main() {
   const index = buildIndex(projectDir);
   if (!index) { console.error('palate-index: could not build an index.'); process.exit(2); }
 
+  // /publish reads the INDEX, not the gate, so an operator seeing forty-five dead links had no
+  // cause to read. The two tools now say the same thing about the same defect.
+  const { warning } = resolveBuildFormat(projectDir);
+  if (warning) console.error(`palate-index: ${warning}`);
+
   const blastAt = argv.indexOf('--blast');
   if (blastAt !== -1) {
     const changed = argv.slice(blastAt + 1).filter((a) => !a.startsWith('--'));
@@ -543,6 +576,14 @@ function main() {
       : `${index.links.orphans.length} orphan(s)`) +
     `, ${index.links.dead.length} dead link(s) -> ${relative(projectDir, out)}`,
   );
+  // Said out loud, because the answer came from a different place than usual and the difference
+  // is the whole point: a route whose source moved since the build is read from source.
+  if (index.links.stale) {
+    console.log(
+      `palate-index: built output older than source for ${index.links.stale} route(s), ` +
+      'links read from source. Rebuild to read what the site actually ships.',
+    );
+  }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();

@@ -19,7 +19,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { buildIndex, blastRadius, readBuildFormat, resolveBuildFormat } from '../palate-index.mjs';
@@ -207,6 +207,131 @@ test('a link that never rendered is not a link, and not a dead one either', () =
     assert.deepEqual(ix.links.dead, [], `nothing shipped a link to /explore: ${ix.links.dead}`);
     assert.ok(!ix.routes.find((r) => r.path === '/').links.includes('/explore'));
     assert.ok(!ix.links.orphans.includes('/contact'), 'the built home links /contact');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+/** Set a file's mtime, so staleness is decided by the test rather than by how fast it ran. */
+const age = (dir, rel, seconds) => {
+  const t = new Date(Date.now() + seconds * 1000);
+  utimesSync(join(dir, rel), t, t);
+};
+
+test('a dead href added AFTER the build is reported without a rebuild', () => {
+  // The index reads the built output, /check runs the index and never builds, and /edit builds
+  // without re-indexing. So a link added in source went unreported until after the deploy, and
+  // the cap /check documents fired for the first time when the link was already live.
+  const dir = site({
+    'src/pages/index.astro': '<a href="/contact">c</a>',
+    'src/pages/contact.astro': '<a href="/gone">a link the build has not seen</a>',
+    'dist/index.html': '<html><body><a href="/contact">c</a></body></html>',
+    'dist/contact/index.html': '<html><body><a href="/">home</a></body></html>',
+  });
+  try {
+    age(dir, 'dist/index.html', 0);
+    age(dir, 'dist/contact/index.html', 0);
+    age(dir, 'src/pages/index.astro', -60);
+    age(dir, 'src/pages/contact.astro', 60); // edited after the build
+    const ix = buildIndex(dir);
+    assert.ok(ix.links.dead.includes('/gone'), `expected /gone dead, got ${JSON.stringify(ix.links)}`);
+    assert.equal(ix.links.stale, 1, 'one route should be reading its source');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('and once it is rebuilt the built page is trusted again', () => {
+  const dir = site({
+    'src/pages/index.astro': '<a href="/contact">c</a>',
+    'src/pages/contact.astro': '<a href="/gone">gone</a>',
+    'dist/index.html': '<html><body><a href="/contact">c</a></body></html>',
+    // The rebuild rendered the page without that href, which is the state the site is in.
+    'dist/contact/index.html': '<html><body><a href="/">home</a></body></html>',
+  });
+  try {
+    age(dir, 'src/pages/index.astro', -60);
+    age(dir, 'src/pages/contact.astro', -60);
+    age(dir, 'dist/index.html', 0);
+    age(dir, 'dist/contact/index.html', 0);
+    const ix = buildIndex(dir);
+    assert.deepEqual(ix.links.dead, []);
+    assert.equal(ix.links.stale, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a route the build knew about and rendered nothing for is trusted empty', () => {
+  // The guard on the guard. A draft-only [slug] route, an endpoint and an on-demand page all
+  // produce no HTML, and falling back for them would put the switcher's unrendered
+  // href="/explore" straight back into every composed site.
+  const dir = site({
+    'src/pages/index.astro': '---\nimport L from "../layouts/L.astro";\n---\n<L />',
+    'src/pages/blog/[slug].astro': '---\nimport L from "../../layouts/L.astro";\n---\n<L />',
+    'src/layouts/L.astro': '{show && <a href="/explore">Explore</a>}',
+    'dist/index.html': '<html><body>home</body></html>',
+  });
+  try {
+    age(dir, 'src/pages/index.astro', -60);
+    age(dir, 'src/pages/blog/[slug].astro', -60);
+    age(dir, 'src/layouts/L.astro', -60);
+    age(dir, 'dist/index.html', 0);
+    const ix = buildIndex(dir);
+    assert.deepEqual(ix.links.dead, [], `the build rendered no post page on purpose: ${ix.links.dead}`);
+    assert.equal(ix.links.stale, 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a stale route reading source does not resurrect the Explore phantom', () => {
+  // The fallback is a source read, and a source read cannot see that the switcher renders
+  // nothing. Without this the round-1 defect came back for every route edited since the last
+  // build, which on a site under active edit is most of them.
+  const dir = site({
+    'src/pages/index.astro': '---\nimport L from "../layouts/L.astro";\n---\n<L /><a href="/gone">gone</a>',
+    'src/layouts/L.astro': '{show && <a href="/explore">Explore</a>}<a href="/v3">v3</a>',
+    'dist/index.html': '<html><body>home</body></html>',
+  });
+  try {
+    age(dir, 'dist/index.html', 0);
+    age(dir, 'src/pages/index.astro', 60);
+    const ix = buildIndex(dir);
+    assert.deepEqual(ix.links.dead, ['/gone'], `only the real one: ${ix.links.dead}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a route added since the build reads its source', () => {
+  const dir = site({
+    'src/pages/index.astro': '<a href="/contact">c</a>',
+    'src/pages/new.astro': '<a href="/nowhere">new page, never built</a>',
+    'src/pages/contact.astro': '<h1>c</h1>',
+    'dist/index.html': '<html><body><a href="/contact">c</a></body></html>',
+    'dist/contact/index.html': '<html><body>c</body></html>',
+  });
+  try {
+    for (const f of ['src/pages/index.astro', 'src/pages/contact.astro']) age(dir, f, -60);
+    for (const f of ['dist/index.html', 'dist/contact/index.html']) age(dir, f, 0);
+    age(dir, 'src/pages/new.astro', 60);
+    assert.ok(buildIndex(dir).links.dead.includes('/nowhere'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the CLI says when it read source because the build was older', () => {
+  const dir = site({
+    'src/pages/index.astro': '<a href="/gone">gone</a>',
+    'dist/index.html': '<html><body>home</body></html>',
+  });
+  try {
+    age(dir, 'dist/index.html', 0);
+    age(dir, 'src/pages/index.astro', 60);
+    const r = spawnSync(process.execPath, [join(HERE, '..', 'palate-index.mjs'), dir], { encoding: 'utf8' });
+    assert.match(`${r.stdout}${r.stderr}`, /built output older than source for 1 route\(s\), links read from source/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the CLI carries the adapter warning the gate carries', () => {
+  // /publish reads the index, not the gate, so an operator seeing 45 dead links had no cause.
+  const dir = site(
+    { 'src/pages/index.astro': '<a href="/about.html">about</a>', 'src/pages/about.astro': '<h1>A</h1>' },
+    'import vercel from "@astrojs/vercel";\nexport default { adapter: vercel(), build: { format: "file" } };\n',
+  );
+  try {
+    const r = spawnSync(process.execPath, [join(HERE, '..', 'palate-index.mjs'), dir], { encoding: 'utf8' });
+    assert.match(`${r.stdout}${r.stderr}`, /overrides it to "directory"/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
