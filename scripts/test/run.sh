@@ -4,12 +4,14 @@
 # absence for weeks.
 #
 # Usage: scripts/test/run.sh [--fast]
-#   --fast  skip the browser-driven suites (hygiene-loop, verify-rendered-a11y),
-#           which need Playwright and take minutes.
+#   --fast  skip the browser-driven suites (hygiene-loop, verify-rendered-a11y,
+#           template-csp-live), which need Playwright and take minutes. template-csp-live
+#           also npm-installs and builds the template, which is the only honest way to prove
+#           a Content-Security-Policy.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 FAST=0; for a in "$@"; do [ "$a" = "--fast" ] && FAST=1; done
-SLOW="hygiene-loop verify-rendered-a11y"
+SLOW="hygiene-loop verify-rendered-a11y template-csp-live"
 pass=0; fail=0; skipped=0; failed_names=""
 
 run() { # label  command...

@@ -37,6 +37,29 @@ so an embedded Sanity Studio preview iframe still works if a CMS is added),
 Vercel env conventions, and `.github/workflows/ci.yml` only. A default build
 does NOT run any host switch.
 
+### The Content-Security-Policy
+
+`vercel.json` and `templates/host-cloudflare/_headers` serve the SAME policy, and they are
+edited together: two hosts disagreeing about what one site may load is a bug that only shows
+up after a host switch. It is built from the hosts the template actually loads in a browser,
+which is Humblytics (the analytics script, with its own subdomains allowed to connect because
+the beacon endpoint is not knowable from the template) and Cloudflare Turnstile, which also
+needs `frame-src` because the widget renders in an iframe. Resend is a server-side fetch from
+`src/pages/api/contact.ts` and is deliberately absent: widening the policy for a request the
+browser never makes is how a CSP stops describing anything. `'unsafe-inline'` is on `style-src`
+only, because Astro inlines small stylesheets, and it must never reach `script-src`, where it
+would empty the policy.
+
+**Add a third-party script or a client-side fetch and you add its host here.**
+`scripts/test/template-headers.test.sh` derives the host list from the template source and
+fails naming the host, so the failure arrives at the build rather than as a blank widget on the
+client's live site. `scripts/test/template-csp-live.test.sh` serves the built template with the
+policy enforced and fails on a single console error.
+
+HSTS is on the Cloudflare overlay only: Vercel sends it itself on a custom domain, Workers does
+not. Two years with subdomains, and deliberately without `preload`, which is a one-way door for
+a client's apex domain.
+
 `provision-vercel.sh` makes the whole loop hands-off:
 
 - Pushes `GITHUB_PACKAGES_TOKEN` to all environments so the Vercel build can
