@@ -68,6 +68,11 @@ printf '%s' "$MARKER" > "$SRV/.run-marker"
 (cd "$SRV" && exec "$PY" -m http.server "$PORT" >/dev/null 2>&1) &
 SRV_PID=$!
 trap 'kill $SRV_PID 2>/dev/null; rm -rf "$TMP"' EXIT
+# HOME is redirected: recordBuild appends to ~/.config/palate/builds.log.json, and a suite
+# that drives the Stop hook must not write into the operator's real cross-build log. It lives
+# under this suite's own temp dir so the existing trap cleans it up; a second trap on EXIT would
+# REPLACE that one rather than add to it.
+LOG_HOME="$TMP/palate-home"; mkdir -p "$LOG_HOME"
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   [ "$(curl -fsS "http://localhost:$PORT/.run-marker" 2>/dev/null)" = "$MARKER" ] && break
   sleep 0.5
@@ -211,7 +216,7 @@ const fs=require('fs');
 const noise=[1,2,3,4,5].map(i=>({route:'/',viewport:'desktop',rule:'color-contrast',check:'text_contrast',msg:'a11y color-contrast violation number '+i}));
 const grade={route:'/',viewport:'all',rule:'hygiene-below-floor',check:'build_hygiene',score:21,stalled:false,msg:'build hygiene 21/100 is below the 80 floor. NOW: fix the gaps above, rebuild, then RE-RUN THIS EXACT COMMAND'};
 fs.writeFileSync('$P/.palate-shots/interaction.json',JSON.stringify({interaction_failures:[...noise,grade]}));"
-out=$(printf '{"cwd":"%s"}' "$P" | PALATE_GATE_OFF= node "$STOP" 2>/dev/null)
+out=$(printf '{"cwd":"%s"}' "$P" | PALATE_GATE_OFF= HOME="$LOG_HOME" node "$STOP" 2>/dev/null)
 echo "$out" | grep -q '"decision":"block"' && d=block || d=allow
 check "8. the stop hook blocks" "$d" "block"
 echo "$out" | grep -q 'build hygiene 21/100' && r=yes || r=no

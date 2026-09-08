@@ -28,10 +28,20 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { pluginRootRefusal } from "../hooks/project-dir.mjs";
 
 const dir = process.argv[2] && !process.argv[2].startsWith("-") ? process.argv[2] : ".";
 const findings = [];
 const add = (what, detail) => findings.push({ what, detail });
+
+// NEVER GRADE THE PLUGIN'S OWN FILES. This defaults to ".", so one run from a plugin checkout
+// measures the tool instead of a site: the templates carry {{PLACEHOLDER}} tokens on purpose
+// and would every one of them be reported as an unresolved placeholder shipping to a client.
+const refusal = pluginRootRefusal(dir);
+if (refusal) {
+  console.error(`gate-shipready: refused: ${refusal}. Name the site directory explicitly. NOT a pass.`);
+  process.exit(2);
+}
 
 if (!existsSync(join(dir, "src", "pages"))) {
   console.error(`gate-shipready: no ${join(dir, "src/pages")}. Not an Astro project; nothing checked. NOT a pass.`);
@@ -57,11 +67,16 @@ const PLACEHOLDER = /\{\{[A-Z][A-Z0-9_]{2,}\}\}/g;
 const scanRoots = ["src", ".vercel/output", "dist", "public"].map((r) => join(dir, r)).filter(existsSync);
 const textExt = /\.(astro|ts|tsx|js|mjs|cjs|css|html|json|md|txt|xml|svelte|vue)$/i;
 const seen = new Map();
+// HOW MUCH DID IT ACTUALLY READ. A gate that walks a tree, finds nothing to walk and exits 0
+// is indistinguishable from one that read a hundred files and found them clean, which is how a
+// real build passed everything with the site in a directory the gate never opened.
+let inspected = 0;
 for (const root of scanRoots) {
   for (const f of walk(root)) {
     if (!textExt.test(f)) continue;
     try {
       if (statSync(f).size > 2_000_000) continue;
+      inspected += 1;
       const m = readFileSync(f, "utf8").match(PLACEHOLDER);
       if (m) for (const tok of new Set(m)) {
         if (!seen.has(tok)) seen.set(tok, relative(dir, f));
@@ -69,6 +84,14 @@ for (const root of scanRoots) {
     } catch { /* unreadable file is not a finding here */ }
   }
 }
+if (inspected === 0) {
+  console.error(
+    `gate-shipready: skipped (nothing to inspect: no readable source or build files under ` +
+    `${scanRoots.length ? scanRoots.map((r) => relative(dir, r) || ".").join(", ") : "src, dist, .vercel/output, public"}). NOT a pass.`,
+  );
+  process.exit(2);
+}
+
 for (const [tok, where] of seen) {
   add("unresolved placeholder", `${tok} still present (first at ${where}). A scaffold token reaching production is a broken feature that LOOKS installed.`);
 }
@@ -162,9 +185,9 @@ if (usesImages) {
 
 // ------------------------------------------------------------------------ report
 if (!findings.length) {
-  console.log("gate-shipready: clean (placeholders resolved, Explore retired, photos reviewed).");
+  console.log(`gate-shipready: clean (placeholders resolved, Explore retired, photos reviewed) (inspected ${inspected} file(s)).`);
   process.exit(0);
 }
-console.error(`gate-shipready: ${findings.length} finding(s). This build is NOT ready to hand over.\n`);
+console.error(`gate-shipready: ${findings.length} finding(s) (inspected ${inspected} file(s)). This build is NOT ready to hand over.\n`);
 for (const f of findings) console.error(`  [${f.what}] ${f.detail}`);
 process.exit(1);

@@ -18,8 +18,11 @@
  * captures artefacts. The pass/fail is computed downstream by the verifier + the
  * done-gate from these artefacts (anti-reward-hacking: no LLM boolean in the loop).
  *
- * Built to run UNATTENDED: any failure leaves a manifest with a status and a clean
- * exit 0, so the loop can read what happened rather than crashing the build.
+ * Built to run UNATTENDED: any failure leaves a manifest carrying a status and the reason,
+ * so the loop can read what happened. A capture that FAILED also exits 1, because exiting 0
+ * on a browser that never launched made a crash indistinguishable from a clean run while the
+ * PREVIOUS run's screenshots sat in the output directory for the done gate to count. Console
+ * errors on a page that DID render still exit 0: those are a finding, not a broken instrument.
  *
  * Usage:
  *   node screenshot-build.mjs --url <http://localhost:PORT> --out <dir> [--label v1] [--sections]
@@ -307,6 +310,7 @@ async function main() {
     label: args.label || null,
     capturedAt: new Date().toISOString(),
     status: 'pending',
+    error: null,     // set with status 'failed' when the capture could not be taken
     viewports: [],
     shots: {},          // { desktop_full, mobile_full }
     sections: [],       // [{ viewport, sid, file, overflow }]
@@ -316,16 +320,32 @@ async function main() {
     notes: [],
   };
 
+  // WRITTEN BEFORE THE BROWSER STARTS, so a run that is KILLED leaves its own record. Every
+  // other write here happens on a path the process reaches; a timeout, an OOM or a SIGKILL
+  // reaches none of them, so the file left on disk was the PREVIOUS run's, still reading
+  // status "captured", with that run's PNGs beside it for the done gate to count. The stale
+  // evidence case this file was hardened against is exactly the one that survived it. The
+  // done gate refuses any present status other than captured, so a killed run now blocks with
+  // "pending" and the message names it. It is the likeliest failure on a slow build: a real
+  // capture once took 195.9s against a 180s budget.
+  writeManifest(args.out, manifest);
+
   let webgl = false;
   let browser;
   try {
     browser = await chromium.launch(makeLaunch(webgl));
   } catch (e) {
-    manifest.status = 'error';
-    manifest.notes.push('browser launch failed: ' + (e.message || String(e)).split('\n')[0]);
+    // A CAPTURE THAT DID NOT HAPPEN MUST NOT LOOK LIKE ONE THAT DID. This exited 0 under a
+    // comment about never wedging a build over a screenshot, so a browser that never launched
+    // was indistinguishable from a clean run, and the PNGs from the PREVIOUS run were still
+    // sitting in the output directory for the done gate to count as evidence.
+    const why = (e.message || String(e)).split('\n')[0];
+    manifest.status = 'failed';
+    manifest.error = 'browser launch failed: ' + why;
+    manifest.notes.push(manifest.error);
     writeManifest(args.out, manifest);
-    console.error('[shot] launch failed:', e.message);
-    process.exit(0); // exit-0-always: the loop reads the manifest, never crashes the build
+    console.error('[shot] launch failed:', why);
+    process.exit(1);
   }
 
   try {
@@ -345,11 +365,18 @@ async function main() {
     }
     await shootViewport(browser, args, manifest, 'mobile');
     manifest.console_errors = manifest.console_errors_list.length;
-    manifest.status = (manifest.shots.desktop_full || manifest.shots.mobile_full) ? 'captured' : 'error';
+    if (manifest.shots.desktop_full || manifest.shots.mobile_full) {
+      manifest.status = 'captured';
+    } else {
+      manifest.status = 'failed';
+      manifest.error = 'no viewport produced a screenshot';
+    }
   } catch (e) {
-    manifest.notes.push('capture exception: ' + (e.message || String(e)).split('\n')[0]);
+    const why = (e.message || String(e)).split('\n')[0];
+    manifest.notes.push('capture exception: ' + why);
     manifest.console_errors = manifest.console_errors_list.length;
-    if (manifest.status === 'pending') manifest.status = 'error';
+    manifest.status = 'failed';
+    manifest.error = 'capture exception: ' + why;
   } finally {
     try { await browser.close(); } catch {}
   }
@@ -359,7 +386,9 @@ async function main() {
   writeFileSync(join(args.out, 'errors.json'), JSON.stringify(manifest.console_errors_list, null, 2) + '\n');
   writeManifest(args.out, manifest);
   log(`done -> ${args.out} (${manifest.status}, ${manifest.console_errors} console error(s))`);
-  process.exit(0); // always exit 0: never wedge a build over a screenshot
+  // Exit 1 ONLY when the capture itself failed. Console errors on a page that DID render are
+  // the loop's own signal and still exit 0: they are a finding, not a broken instrument.
+  process.exit(manifest.status === 'failed' ? 1 : 0);
 }
 
 function writeManifest(outDir, m) {

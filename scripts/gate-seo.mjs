@@ -377,6 +377,17 @@ for (const r of index.routes) {
   }
 }
 
+// NOTHING TO COMPARE IS NOT A CLEAN CRAWL SURFACE. With no expected URL the coverage check,
+// the phantom check and the canonical pass all run over an empty list and report nothing,
+// so the gate used to hand back a verdict about a site whose routes it had never seen.
+if (!expected.length) {
+  console.error(
+    `gate-seo: skipped (nothing to inspect: the content index lists no route under ` +
+    `${relative(dir, join(dir, "src/pages"))}, so coverage, canonicals and redirects have nothing to measure). NOT a pass.`,
+  );
+  process.exit(2);
+}
+
 // coverage, both directions
 const missing = expected.filter((e) => !sitemapPaths.has(e.path));
 if (missing.length) {
@@ -979,12 +990,12 @@ if (blocked.length) {
 }
 
 if (findings.length) {
-  console.error(`gate-seo: ${findings.length} finding(s) over ${scope}.\n`);
+  console.error(`gate-seo: ${findings.length} finding(s) over ${scope} (inspected ${expected.length} route(s)).\n`);
   for (const f of findings) console.error(`  [${f.what}] ${f.detail}`);
   process.exit(1);
 }
 
 if (blocked.length) process.exit(2);
 
-console.log(`gate-seo: clean (${scope}); sitemap covers every route, no advertised redirect, canonicals self-referential, robots is environment aware.`);
+console.log(`gate-seo: clean (${scope}); sitemap covers every route, no advertised redirect, canonicals self-referential, robots is environment aware (inspected ${expected.length} route(s)).`);
 process.exit(0);

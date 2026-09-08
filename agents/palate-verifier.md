@@ -62,8 +62,9 @@ never held to the bold bar.
    registered and `src/pages/explore.astro` is missing, when a rung carries no
    `what` / `why` / `feeling`, when two rungs claim one position, when the ladder has
    gaps, when a name is "Option 2", or when a feeling would describe any website ever
-   built. It has NO opinion when no variants are registered, so it is silent on every
-   non-Explore build. Report its findings verbatim: they name the entry, and the fix is
+   built. It has no OPINION when no variants are registered, and it says so: a first
+   stderr line reading `gate-explore: skipped (<reason>)` with exit 2 is a SKIP, never a
+   block, and never a pass. Read that line before reporting anything. Report its findings verbatim: they name the entry, and the fix is
    always in `src/lib/variants.ts`.
 
 3. **Anti-default / slop lint** (no Claude-default shapes or AI-tell copy):

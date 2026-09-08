@@ -48,6 +48,22 @@ SHOTS_DIR="$PROJ/.palate-shots"
 SHOTS_MANIFEST="$SHOTS_DIR/manifest.json"
 SHOTS_ERRORS="$SHOTS_DIR/errors.json"
 
+# THE SUMMARY LINE COUNTS ITS SKIPS BEFORE IT SAYS PASSED.
+#
+# "Done gate passed: ... shipready=skipped(...), seo=skipped(...), explore=pass, ..." was one
+# sentence beginning with the word "passed" and carrying, several clauses later, the news that
+# most of the suite had not run. Nobody reads to the end of that line, and the whole point of
+# this file is that a gate which was blocked must not read like a gate that passed. So the count
+# comes first, the skips are named with their reasons, and "Passed:" only appears after it.
+GATES_RAN=0
+GATES_SKIPPED=0
+SKIP_REASONS=""
+gate_ran() { GATES_RAN=$((GATES_RAN + 1)); }
+gate_skipped() { # <name> <reason>
+  GATES_SKIPPED=$((GATES_SKIPPED + 1))
+  SKIP_REASONS="${SKIP_REASONS:+$SKIP_REASONS; }$1: $2"
+}
+
 fail() { echo "Done gate FAILED: $1" >&2; exit 2; }
 # STDERR, like fail() and ungrounded(). Every caller spawns this with
 # stdio: ["ignore","ignore","pipe"], so a skip written to STDOUT is DISCARDED: no jq, no
@@ -57,7 +73,8 @@ skip() { echo "Done gate skipped: $1" >&2; exit 0; }
 
 # --- FAIL-OPEN LADDER (mirrors gate-mcp-depth.sh:32-35, plus one render rung) ---
 # Never block closed when there is nothing to gate.
-command -v jq >/dev/null 2>&1 || skip "jq is not installed; not gating done."
+JQ_FIX="jq is not installed, so every gate below is OFF. Install it and re-run: brew install jq (macOS), apt install jq (Debian/Ubuntu), winget install jqlang.jq (Windows)."
+command -v jq >/dev/null 2>&1 || skip "$JQ_FIX"
 [ -f "$MANIFEST" ] || skip "no $MANIFEST (no tracked build, or the Palate MCP is not in use)."
 
 mcpcalls=$(jq '((.mcp_calls // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
@@ -138,6 +155,23 @@ vpass=$(jq -r '(.visual.pass // false)' "$REPORT")
 verr_report=$(jq -r '(.visual.console_errors // 0)' "$REPORT")
 
 [ "$vran" = "true" ] || fail "Visual loop did not run (.visual.ran is not true in verify-report.json)."
+
+# A FAILED CAPTURE IS NOT EVIDENCE, and this has to be read BEFORE the PNGs are counted. The
+# files on disk outlive the run that wrote them, so a capture that threw (or a browser that
+# never launched) leaves the PREVIOUS run's screenshots sitting exactly where the count looks.
+# Counting them answered "did a capture ever happen here", never "did THIS one succeed". The
+# driver records its own verdict; an ABSENT status is not judged, because an older shots
+# manifest predates the field and absence is not evidence of failure.
+if [ -f "$SHOTS_MANIFEST" ]; then
+  shots_status=$(jq -r '(.status // "")' "$SHOTS_MANIFEST" 2>/dev/null || echo "")
+  case "$shots_status" in
+    ""|captured|ok) ;;
+    *)
+      shots_why=$(jq -r '(.error // ((.notes // []) | join("; ")) // "")' "$SHOTS_MANIFEST" 2>/dev/null || echo "")
+      fail "shots manifest reports failed capture (status \"$shots_status\"${shots_why:+: $shots_why}). Any PNG beside it is from an earlier run and is NOT evidence for this one. Fix the cause and re-run scripts/reference-capture/screenshot-build.mjs before the visual loop can pass."
+      ;;
+  esac
+fi
 
 # EVIDENCE not assertion: a screenshot must exist ON DISK. A report claiming visual
 # pass with no captured PNG is rejected (the verifier may not pass without real pixels).
@@ -247,17 +281,31 @@ fi
 # safe-only converge, a near-repeat build, or a recurring display face) and never traps
 # a build that has nothing to compare. Set PALATE_GATE_NOVELTY=0 to disable it entirely.
 REQUIRE_NOVELTY="${PALATE_GATE_NOVELTY:-1}"
-novelty_note="novelty=off(PALATE_GATE_NOVELTY=0)"
 if [ "$REQUIRE_NOVELTY" = "1" ] && [ -f "$NOVELTY_GATE" ]; then
-  if novelty_err="$(node "$NOVELTY_GATE" --manifest "$MANIFEST" 2>&1 1>/dev/null)"; then
-    # gate-novelty prints "passed:" on a real pass and "skipped:" when nothing to
-    # compare; both exit 0. Reflect which one happened in the summary.
-    novelty_note="novelty=pass-or-skip"
+  # BOTH STREAMS. gate-novelty prints "novelty gate skipped: ..." and "novelty gate passed: ..."
+  # to STDOUT and exits 0 for each, so reading stderr alone could not tell them apart and this
+  # counted a skip as a gate that ran. On the suite's own deep fixture it skips ("no diverge
+  # block"), which is one of the nine, on the very line this epic rebuilt to stop that.
+  if novelty_out="$(node "$NOVELTY_GATE" --manifest "$MANIFEST" 2>&1)"; then
+    novelty_first="${novelty_out%%$'\n'*}"
+    case "$novelty_first" in
+      "novelty gate skipped:"*)
+        novelty_reason="${novelty_first#novelty gate skipped: }"
+        novelty_reason="${novelty_reason%.}"
+        if [ "${#novelty_reason}" -gt 100 ]; then novelty_reason="${novelty_reason:0:99}…"; fi
+        novelty_note="novelty=skipped"
+        gate_skipped novelty "$novelty_reason" ;;
+      *) novelty_note="novelty=pass"; gate_ran ;;
+    esac
   else
-    fail "Novelty gate did not pass. ${novelty_err}"
+    fail "Novelty gate did not pass. ${novelty_out}"
   fi
 elif [ ! -f "$NOVELTY_GATE" ]; then
-  novelty_note="novelty=skipped(gate-novelty.mjs not present)"
+  novelty_note="novelty=skipped"
+  gate_skipped novelty "gate-novelty.mjs not present"
+else
+  novelty_note="novelty=skipped"
+  gate_skipped novelty "switched off with PALATE_GATE_NOVELTY=0"
 fi
 
 # SHIP-READY: the seam between "built" and "deliverable". A build can be visually
@@ -266,32 +314,53 @@ fi
 # measured. All three shipped on a real build that passed every other gate here, because
 # nothing owned that seam.
 SHIPREADY_GATE="$HERE/gate-shipready.mjs"
-shipready_note="shipready=skipped(gate-shipready.mjs not present)"
+shipready_note="shipready=skipped"
+shipready_skip="gate-shipready.mjs not present"
 if [ -f "$SHIPREADY_GATE" ]; then
   # The `if` form, never a bare assignment: a non-zero command substitution in an assignment
   # is fatal wherever errexit is in force, which killed this block before the case below was
   # ever reached and turned every "cannot check" into a silent exit with no message at all.
   if shipready_err="$(node "$SHIPREADY_GATE" "$PROJ" 2>&1)"; then shipready_rc=0; else shipready_rc=$?; fi
   case "$shipready_rc" in
-    0) shipready_note="shipready=pass" ;;
-    # 2 is CANNOT CHECK (no src/pages, so not an Astro project shape), not a clean bill. It
-    # skips like every other sub-gate here, but it SAYS so, because a skip that reads as a
-    # pass is the failure mode this whole file exists to prevent.
-    2) shipready_note="shipready=skipped(not an Astro project shape)" ;;
+    0) shipready_note="shipready=pass"; shipready_skip="" ;;
+    # 2 is CANNOT CHECK, not a clean bill. It skips like every other sub-gate here, but it SAYS
+    # so, because a skip that reads as a pass is the failure mode this whole file exists to
+    # prevent. IT SAYS SO IN THE GATE'S OWN WORDS: that gate now has three exit-2 reasons (not
+    # an Astro shape, nothing readable to inspect, and a refusal to grade the plugin itself)
+    # and hardcoding one of them here reported the other two as something they are not. That is
+    # the same defect the SEO branch below documents at length, in a second branch.
+    2) shipready_first="${shipready_err%%$'\n'*}"
+       shipready_first="${shipready_first#gate-shipready: }"
+       case "$shipready_first" in
+         # A REFUSAL IS NOT A SKIP. The gate was pointed at the Palate plugin rather than a
+         # site, so the answer is wrong, not absent, and nothing downstream should read on.
+         refused:*) fail "Not ready to hand over. ${shipready_err}" ;;
+         "skipped ("*)
+           shipready_skip="${shipready_first#skipped (}"
+           shipready_skip="${shipready_skip%%)*}" ;;
+         *) shipready_skip="$shipready_first" ;;
+       esac
+       shipready_skip="${shipready_skip//$PROJ\//}"
+       shipready_skip="${shipready_skip//$PROJ/.}"
+       if [ "${#shipready_skip}" -gt 100 ]; then shipready_skip="${shipready_skip:0:99}…"; fi
+       [ -z "$shipready_skip" ] && shipready_skip="gate-shipready exited 2 without a reason"
+       shipready_note="shipready=skipped" ;;
     *) fail "Not ready to hand over. ${shipready_err}" ;;
   esac
 fi
+if [ -n "$shipready_skip" ]; then gate_skipped shipready "$shipready_skip"; else gate_ran; fi
 
 # SEO: the crawl surface. A build can be visually perfect, ship-ready and still be
 # undiscoverable: rejected Explore variants indexed, dynamic routes absent from the sitemap,
 # a preview inviting indexing of the client's content at a non-canonical domain. It lived only
 # in /sweep, which is a monthly pass somebody has to run, so nothing checked it at done-time.
 SEO_GATE="$HERE/gate-seo.mjs"
-seo_note="seo=skipped(gate-seo.mjs not present)"
+seo_note="seo=skipped"
+seo_skip="gate-seo.mjs not present"
 if [ -f "$SEO_GATE" ]; then
   if seo_err="$(node "$SEO_GATE" "$PROJ" 2>&1)"; then seo_rc=0; else seo_rc=$?; fi
   case "$seo_rc" in
-    0) seo_note="seo=pass" ;;
+    0) seo_note="seo=pass"; seo_skip="" ;;
     # 2 is CANNOT CHECK. It skips like the other sub-gates, and it SAYS so, because a skip that
     # reads as a pass is the failure this file exists to prevent.
     #
@@ -304,17 +373,34 @@ if [ -f "$SEO_GATE" ]; then
     # and fails the assignment under pipefail, which this repo has already paid for once.
     2) seo_reason="${seo_err%%$'\n'*}"
        seo_reason="${seo_reason#gate-seo: }"
+       # THE HEADER IS NOT THE FINDING. A cannot-check report opens "N thing(s) could NOT be
+       # checked. These are unknown, not clean." and names the actual unknown two lines later,
+       # so taking the first line put the header in the summary and dropped the only part that
+       # says WHAT was not checked. When the first line is that header, take the first
+       # bracketed entry instead. Pure bash, no pipe: an early-exiting reader under pipefail
+       # kills the producer, which this file has already paid for once.
+       case "$seo_reason" in
+         *"could NOT be checked"*)
+           while IFS= read -r seo_line; do
+             case "$seo_line" in
+               *\[*\]*) seo_reason="${seo_line#"${seo_line%%\[*}"}"; break ;;
+             esac
+           done <<< "$seo_err"
+           ;;
+       esac
        # Strip the absolute project path. gate-seo leads its message with the path it looked in,
        # which on a real machine is long enough to push the MEANING past the truncation, so the
        # note would read "no /Users/.../src/pages. Not an Astro pro…" and lose the actual reason.
        seo_reason="${seo_reason//$PROJ\//}"
        seo_reason="${seo_reason//$PROJ/.}"
        if [ "${#seo_reason}" -gt 100 ]; then seo_reason="${seo_reason:0:99}…"; fi
-       seo_note="seo=skipped(${seo_reason})"
-       [ -z "$seo_reason" ] && seo_note="seo=skipped(gate-seo exited 2 without a reason)" ;;
+       [ -z "$seo_reason" ] && seo_reason="gate-seo exited 2 without a reason"
+       seo_note="seo=skipped"
+       seo_skip="$seo_reason" ;;
     *) fail "SEO gate did not pass. ${seo_err}" ;;
   esac
 fi
+if [ -n "$seo_skip" ]; then gate_skipped seo "$seo_skip"; else gate_ran; fi
 
 # HEADLESS: is this Shopify storefront actually constructed correctly?
 #
@@ -322,32 +408,39 @@ fi
 # nothing, so a brochure site is never judged against a commerce contract. --no-cli because the
 # done gate must not shell out to npx on every build; the CLI checks belong to the setup step.
 HEADLESS_GATE="$HERE/gate-headless.mjs"
-headless_note="headless=skipped(not a commerce build)"
+headless_note="headless=skipped"
+headless_skip="gate-headless.mjs not present"
 if [ -f "$HEADLESS_GATE" ]; then
+  headless_skip="not a commerce build"
   if hl_err="$(node "$HEADLESS_GATE" "$PROJ" --no-cli 2>&1)"; then hl_rc=0; else hl_rc=$?; fi
   case "$hl_rc" in
-    0) headless_note="headless=pass" ;;
-    2) headless_note="headless=skipped(not a commerce build)" ;;
+    0) headless_note="headless=pass"; headless_skip="" ;;
+    2) headless_note="headless=skipped"
+       headless_skip="not a commerce build" ;;
     *) fail "Headless storefront is not correctly constructed. ${hl_err}" ;;
   esac
 fi
+if [ -n "$headless_skip" ]; then gate_skipped headless "$headless_skip"; else gate_ran; fi
 
 # CUSTOMER ACCOUNTS: a customer-account flow ships tokens, so it fails toward account takeover
 # rather than toward an ugly page. Silent (exit 0, scope "none") on any build with no account
 # surface, so it never speaks on a brochure site or on a storefront that sensibly linked out to
 # Shopify's hosted pages instead.
 CA_GATE="$HERE/gate-customer-auth.mjs"
-ca_note="customer-auth=skipped(no account surface)"
+ca_note="customer-auth=skipped"
+ca_skip="gate-customer-auth.mjs not present"
 if [ -f "$CA_GATE" ]; then
+  ca_skip="no account surface"
   if ca_err="$(node "$CA_GATE" "$PROJ" 2>&1)"; then
     case "$ca_err" in
-      *"no customer-account surface"*) ca_note="customer-auth=skipped(no account surface)" ;;
-      *) ca_note="customer-auth=pass" ;;
+      *"no customer-account surface"*) ca_note="customer-auth=skipped" ;;
+      *) ca_note="customer-auth=pass"; ca_skip="" ;;
     esac
   else
     fail "Customer-account flow is unsafe. ${ca_err}"
   fi
 fi
+if [ -n "$ca_skip" ]; then gate_skipped customer-auth "$ca_skip"; else gate_ran; fi
 
 # UNIQUENESS: the variants must be genuinely different, not ritually varied.
 #
@@ -360,36 +453,68 @@ fi
 #
 # Fail-open exactly like the rest: fewer than two rendered variants means nothing to compare.
 UNIQ_GATE="$HERE/gate-uniqueness.mjs"
-uniq_note="uniqueness=skipped(no rendered variants)"
+uniq_note="uniqueness=skipped"
+uniq_skip="gate-uniqueness.mjs not present"
 if [ -f "$UNIQ_GATE" ]; then
+  uniq_skip="fewer than 2 rendered variants to compare"
+  uniq_note="uniqueness=skipped"
   # shellcheck disable=SC2207
   uniq_files=($(ls "$SHOTS_DIR"/v*/rendered.html 2>/dev/null || true))
   if [ "${#uniq_files[@]}" -ge 2 ]; then
     if uniq_err="$(node "$UNIQ_GATE" "${uniq_files[@]}" 2>&1)"; then
-      uniq_note="uniqueness=pass(${#uniq_files[@]} variants)"
+      uniq_note="uniqueness=pass(${#uniq_files[@]} variants)"; uniq_skip=""
     else
       fail "Variants are not distinct enough to show. ${uniq_err}"
     fi
   fi
 fi
+if [ -n "$uniq_skip" ]; then gate_skipped uniqueness "$uniq_skip"; else gate_ran; fi
 
 # EXPLORE PRESENTATION: the range has to READ as a range. A set of /vN routes with no page
 # explaining them, or rungs with no stated intent, is a pile of links: the client opens two,
 # picks the nearest thing to what they already had in mind, and everything the ladder cost was
-# spent for nothing. NOTE the exit codes here are the OPPOSITE way round to the two gates above:
-# gate-explore.mjs skips with 0 and BLOCKS with 2, because it can always tell whether it applies
-# (no registered variants means no opinion), so there is no cannot-check state to signal.
+# spent for nothing.
+#
+# A SKIP AND A BLOCK BOTH EXIT 2 HERE, and the FIRST STDERR LINE is what separates them, the
+# same discriminator the SEO branch uses. gate-explore used to skip with 0, which put
+# "explore=pass" in this line on every build that never ran Explore at all: a gate reporting a
+# clean bill on a thing it had not looked at.
 EXPLORE_GATE="$HERE/gate-explore.mjs"
-explore_note="explore=skipped(gate-explore.mjs not present)"
+explore_note="explore=skipped"
+explore_skip_reason="gate-explore.mjs not present"
 if [ -f "$EXPLORE_GATE" ]; then
   if explore_err="$(node "$EXPLORE_GATE" "$PROJ" 2>&1)"; then explore_rc=0; else explore_rc=$?; fi
+  explore_first="${explore_err%%$'\n'*}"
   case "$explore_rc" in
-    0) explore_note="explore=pass" ;;
+    0) explore_note="explore=pass"; explore_skip_reason="" ;;
+    2)
+      case "$explore_first" in
+        "gate-explore: skipped ("*)
+          explore_skip_reason="${explore_first#gate-explore: skipped (}"
+          explore_skip_reason="${explore_skip_reason%)}"
+          explore_note="explore=skipped" ;;
+        *) fail "Explore is not presentable. ${explore_err}" ;;
+      esac ;;
     *) fail "Explore is not presentable. ${explore_err}" ;;
   esac
 fi
+if [ -n "$explore_skip_reason" ]; then gate_skipped explore "$explore_skip_reason"; else gate_ran; fi
 
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
-echo "Done gate passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $explore_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
+
+# The visual loop and the verifier are not optional: reaching this line means both ran and both
+# passed (every other outcome above calls fail()), so they count as ran.
+gate_ran   # visual
+gate_ran   # verifier
+GATES_TOTAL=$((GATES_RAN + GATES_SKIPPED))
+skip_clause="."
+[ "$GATES_SKIPPED" -gt 0 ] && skip_clause=" (${SKIP_REASONS})."
+# TWO LINES, AND EACH REASON PRINTED ONCE. This was one sentence of up to 1,055 characters,
+# fourteen lines at 80 columns, with every reason appearing twice: once in the count clause and
+# again inside name=skipped(reason) in the tail. The count comes first and carries the reasons;
+# the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
+# matched headline's indented continuation lines, so the two travel together to the operator.
+echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
+  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $explore_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
 exit 0

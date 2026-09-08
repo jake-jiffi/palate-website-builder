@@ -92,6 +92,145 @@ cat > "$PASS/verify-report.json" <<'JSON'
 JSON
 check "real pass evidence -> pass" 0 "$PASS/build-manifest.json"
 
+# --- THE SUMMARY COUNTS ITS SKIPS BEFORE IT SAYS PASSED ----------------------------
+# "Done gate passed" over a line naming seven sub-gates reads as seven gates passing. On this
+# fixture only two of them could run: there is no src/pages, so ship-ready, SEO and Explore
+# all refused, and there are no rendered variants to compare. The count has to be the first
+# thing in the line, and each skip has to carry its own reason.
+summary="$(bash "$GATE" "$PASS/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$summary" | grep -qE 'Done gate: [0-9]+ of [0-9]+ sub-gates ran, [0-9]+ skipped'; then
+  echo "ok   - the summary opens with how many sub-gates ran"; pass=$((pass+1))
+else
+  echo "FAIL - the summary opens with how many sub-gates ran (got: $summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$summary" | grep -qE 'explore=skipped([^(]|$)'; then
+  echo "ok   - gate-explore's skip is mapped, not read as a pass"; pass=$((pass+1))
+else
+  echo "FAIL - gate-explore's skip is mapped, not read as a pass (got: $summary)"; fail=$((fail+1))
+fi
+# EACH REASON IS PRINTED ONCE. It used to appear in the count clause AND again inside
+# name=skipped(reason) in the tail, which is how one line reached 1,055 characters: fourteen
+# lines at 80 columns, for a summary whose job is to be read.
+if printf '%s' "$summary" | grep -qF 'explore: not an Explore build'; then
+  echo "ok   - and the reason is in the count clause"; pass=$((pass+1))
+else
+  echo "FAIL - and the reason is in the count clause (got: $summary)"; fail=$((fail+1))
+fi
+reason_hits="$(printf '%s' "$summary" | grep -o 'not an Explore build' | grep -c . || true)"
+if [ "$reason_hits" = "1" ]; then
+  echo "ok   - and only once, not twice"; pass=$((pass+1))
+else
+  echo "FAIL - and only once, not twice (found $reason_hits times)"; fail=$((fail+1))
+fi
+# The tail is broken onto its own INDENTED line, so the two halves read as two things.
+if printf '%s' "$summary" | grep -qE '^  Passed:'; then
+  echo "ok   - and the Passed tail is its own indented line"; pass=$((pass+1))
+else
+  echo "FAIL - and the Passed tail is its own indented line (got: $summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$summary" | grep -qF 'Passed:'; then
+  echo "ok   - and it only says passed after the count"; pass=$((pass+1))
+else
+  echo "FAIL - and it only says passed after the count (got: $summary)"; fail=$((fail+1))
+fi
+# THE NOVELTY GATE PRINTS ITS SKIP ON STDOUT AND EXITS 0, so reading stderr alone could not
+# tell a pass from a skip and counted both as ran. On this fixture it skips ("no diverge
+# block"), so the count is one lower than the first version of this line claimed.
+if printf '%s' "$summary" | grep -qE 'novelty=skipped([^(]|$)' \
+   && printf '%s' "$summary" | grep -qF 'novelty: no diverge block'; then
+  echo "ok   - a novelty skip is counted as a skip, not a pass"; pass=$((pass+1))
+else
+  echo "FAIL - a novelty skip is counted as a skip, not a pass (got: $summary)"; fail=$((fail+1))
+fi
+
+# --- SHIPREADY'S OTHER EXIT-2 REASONS ARE NOT ALL "not an Astro project shape" ---------
+# This epic gave gate-shipready two more exit-2 paths (nothing to inspect, and a refusal), and
+# the mapping still labelled every one of them with the one reason it knew. src/pages exists
+# here and holds nothing, so the gate skips for the NEW reason.
+SRNONE="$TMP/shipready-empty"; mkdir -p "$SRNONE/src/pages"
+cp "$DEEP" "$SRNONE/build-manifest.json"
+make_shots "$SRNONE" 0
+cp "$PASS/verify-report.json" "$SRNONE/verify-report.json"
+sr_summary="$(bash "$GATE" "$SRNONE/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$sr_summary" | grep -qF 'shipready: nothing to inspect'; then
+  echo "ok   - gate-shipready's skip carries its own reason"; pass=$((pass+1))
+else
+  echo "FAIL - gate-shipready's skip carries its own reason (got: $sr_summary)"; fail=$((fail+1))
+fi
+
+# --- THE SEO SKIP REASON IS THE FINDING, NOT THE HEADER --------------------------------
+# gate-seo opens a cannot-check report with "N thing(s) could NOT be checked. These are unknown,
+# not clean." and names the actual unknown two lines later. Taking the first line verbatim put
+# the header in the summary and dropped the one part that says what was not checked.
+SEOB="$TMP/seo-blocked"; mkdir -p "$SEOB/src/pages" "$SEOB/dist"
+cp "$DEEP" "$SEOB/build-manifest.json"
+make_shots "$SEOB" 0
+cp "$PASS/verify-report.json" "$SEOB/verify-report.json"
+printf -- '---\n---\n<h1>Home</h1>\n' > "$SEOB/src/pages/index.astro"
+printf '<!doctype html><html><head><link rel="canonical" href="https://x.test/"></head><body>h</body></html>' > "$SEOB/dist/index.html"
+printf '<?xml version="1.0"?><urlset><url><loc>https://x.test/</loc></url></urlset>' > "$SEOB/dist/sitemap-0.xml"
+printf 'User-agent: *\nAllow: /\nSitemap: https://x.test/sitemap-index.xml\n' > "$SEOB/dist/robots.txt"
+seo_summary="$(bash "$GATE" "$SEOB/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$seo_summary" | grep -qF 'answer-engine surfaces'; then
+  echo "ok   - the SEO skip names what could not be checked"; pass=$((pass+1))
+else
+  echo "FAIL - the SEO skip names what could not be checked (got: $seo_summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$seo_summary" | grep -qF 'thing(s) could NOT be checked'; then
+  echo "FAIL - and not gate-seo's header (got: $seo_summary)"; fail=$((fail+1))
+else
+  echo "ok   - and not gate-seo's header"; pass=$((pass+1))
+fi
+
+# --- THE NO-JQ SKIP SAYS HOW TO FIX IT -------------------------------------------------
+# Without jq every gate here is off, and the operator was told so and nothing else.
+NOJQ="$TMP/nojq-bin"; mkdir -p "$NOJQ"
+for c in node bash find wc tr sed grep cat ls dirname basename mktemp rm printf; do
+  src="$(command -v "$c" 2>/dev/null)" && ln -sf "$src" "$NOJQ/$c" 2>/dev/null
+done
+nojq_err="$(PATH="$NOJQ" bash "$GATE" "$PASS/build-manifest.json" 2>&1 >/dev/null || true)"
+if printf '%s' "$nojq_err" | grep -qF 'brew install jq'; then
+  echo "ok   - the no-jq skip says how to fix it"; pass=$((pass+1))
+else
+  echo "FAIL - the no-jq skip says how to fix it (got: $nojq_err)"; fail=$((fail+1))
+fi
+
+# --- A KILLED CAPTURE LEAVES A PENDING MANIFEST, AND THAT IS NOT EVIDENCE --------------
+# The driver writes its manifest before it launches now, so a run killed by a timeout, an OOM
+# or a SIGKILL leaves status "pending" rather than the PREVIOUS run's "captured".
+PENDING="$TMP/pending-capture"; mkdir -p "$PENDING"
+cp "$DEEP" "$PENDING/build-manifest.json"
+make_shots "$PENDING" 0
+echo '{"status":"pending","console_errors":0}' > "$PENDING/.palate-shots/manifest.json"
+cp "$PASS/verify-report.json" "$PENDING/verify-report.json"
+check "a capture killed mid-run (status pending) -> block" 2 "$PENDING/build-manifest.json"
+
+# --- A FAILED CAPTURE IS NOT EVIDENCE ----------------------------------------------
+# The PNG on disk outlives the run that wrote it. A capture that threw, or a browser that
+# never launched, leaves the previous run's screenshots sitting exactly where the shot count
+# looks, so counting files answered "did a capture ever happen here" and never "did THIS one
+# succeed". The driver records its own verdict; the gate has to read it before it counts.
+STALE="$TMP/stale-capture"; mkdir -p "$STALE"
+cp "$DEEP" "$STALE/build-manifest.json"
+make_shots "$STALE" 0
+echo '{"status":"failed","error":"browser launch failed","console_errors":0}' > "$STALE/.palate-shots/manifest.json"
+cp "$PASS/verify-report.json" "$STALE/verify-report.json"
+check "a failed capture beside a stale PNG -> block" 2 "$STALE/build-manifest.json"
+stale_err="$(bash "$GATE" "$STALE/build-manifest.json" 2>&1 >/dev/null || true)"
+if printf '%s' "$stale_err" | grep -qF 'shots manifest reports failed capture'; then
+  echo "ok   - and it names the failed capture as the cause"; pass=$((pass+1))
+else
+  echo "FAIL - and it names the failed capture as the cause (got: $stale_err)"; fail=$((fail+1))
+fi
+
+# An older shots manifest with no status at all must NOT be trapped: absent is not bad.
+NOSTATUS="$TMP/no-status"; mkdir -p "$NOSTATUS"
+cp "$DEEP" "$NOSTATUS/build-manifest.json"
+make_shots "$NOSTATUS" 0
+echo '{"console_errors":0}' > "$NOSTATUS/.palate-shots/manifest.json"
+cp "$PASS/verify-report.json" "$NOSTATUS/verify-report.json"
+check "a shots manifest with no status -> pass (absent is not bad)" 0 "$NOSTATUS/build-manifest.json"
+
 # --- PROJECT DIR COMES FROM THE MANIFEST, NOT FROM WHERE THE MANIFEST SITS --------
 # A real client build kept build-manifest.json at the repo root and the Astro site (dist/,
 # .palate-shots/, verify-report.json) in a subdirectory. Deriving the project from dirname
