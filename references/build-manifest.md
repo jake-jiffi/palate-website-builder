@@ -13,6 +13,13 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   "created_at": "ISO-8601",
   "business": "free-text brief (optional; the agent may set it)",
   "signature_move": { "name": "...", "source_slug": "..." },  // optional, agent-set
+
+  // --- what this build was built WITH (hook-set) ---
+  "plugin_version": "1.17.0",                     // hook-set: the plugin's own VERSION file
+  "mcp_version": "2026-09-09.catalogue-stamp",    // hook-set: the MCP's version, as the MCP reports it
+  "library": { "references": 2170, "catalogue_stamp": "2026-07-09T04:12:55.108Z" }, // hook-set: from the MCP's refs_list_verticals answer; null when it did not say
+  "library_unverified": false,                    // hook-set: true until the MCP sends a stamp. A missing stamp never reads as a verified one
+  "rubric_version": null,                         // hook-set: the vendored rubric's own RUBRIC_VERSION export, null when it has none
   "mcp_calls": [
     { "tool": "mcp__palate__refs_search", "args": { ... }, "slugs": ["..."], "ts": "..." }
   ],
@@ -55,6 +62,16 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   resolved by `hooks/project-dir.mjs`, overridable with `PALATE_PROJECT_DIR`), is moved there
   once when the scaffold first appears, and is started fresh rather than merged if the project
   underneath it changes.
+- **The version stamps** answer "what was this built with", because the same brief run twice
+  against a different plugin, a different MCP deploy or a re-seeded library produces two
+  different sites and nothing used to record why. `plugin_version` and `rubric_version` are read
+  locally (the plugin's `VERSION`, and the vendored `rubric.mjs`'s own `RUBRIC_VERSION` export
+  when the grader adds one, since that file is byte-identical to the grader's copy and hash-pinned
+  in both repos, so the plugin reads it rather than writing one). `mcp_version` and `library` come
+  from the MCP's own `refs_list_verticals` answer, because only the server knows what its
+  catalogue currently holds, and the FIRST answer of a build is kept: a re-seed mid-build must not
+  rewrite what the survey actually read. An older MCP sends no stamp, which leaves `library: null`
+  and `library_unverified: true` standing rather than certifying a library nobody measured.
 - **`business`**, **`signature_move`**, **`sections`** are optional and may be set by
   the agent/surveyor to record intent; the depth gate cross-checks them against the
   telemetry (e.g. a declared signature move's `source_slug` must appear in
