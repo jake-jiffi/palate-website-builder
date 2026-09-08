@@ -61,6 +61,16 @@ if (siteAt !== -1 && !siteOverride) {
   console.error("gate-seo: --site needs an origin (e.g. --site https://example.com). Nothing checked. NOT a pass.");
   process.exit(2);
 }
+// `example.com` is not a URL, so it would have been discarded and the comparison would have run
+// against the config or the sitemap instead: the operator asks for one origin and silently gets
+// another. Refused rather than dropped.
+if (siteOverride && !/^[a-z][a-z0-9+.-]*:\/\//i.test(siteOverride)) {
+  console.error(
+    `gate-seo: --site must include a scheme (got "${siteOverride}", try https://${siteOverride}). ` +
+    "Nothing checked. NOT a pass.",
+  );
+  process.exit(2);
+}
 
 // Which URL spelling this build produces. Read once, because `norm` runs on every sitemap
 // entry, every route and every canonical.
@@ -256,7 +266,14 @@ const IS_VARIANT = (p) => /^\/(v|lp)\d+$/.test(p);
 const expected = [];        // { path, why }
 const knownRoutes = new Set(); // everything a request could legitimately reach
 const noindexPaths = new Set();
-// Collection-entry URLs, so a post can be asked for an Article node and a listing page cannot.
+// Entry URLs of the collection the BLOG route renders, so a post can be asked for an Article
+// node and nothing else is.
+//
+// Keyed on the collection, never on "is this a dynamic route". Every collection entry used to
+// count as a post, so a build with services, team, locations or case-studies behind a [slug]
+// route was told its structured data had the wrong type on every one of those pages, and a
+// correct site was refused at hand-over. The scaffold could not show it: it ships one collection.
+const POST_COLLECTIONS = new Set(["posts", "post", "blog", "news", "articles"]);
 const postPaths = new Set();
 const skipped = { variant: 0, noindex: 0 };
 // Prefixes of dynamic routes whose URLs could NOT be enumerated. Anything the sitemap advertises
@@ -354,7 +371,7 @@ for (const r of index.routes) {
   for (const e of items) {
     const p = norm(r.path.replace(/\[\.{0,3}[^\]]+\]/, e.id));
     knownRoutes.add(p);
-    postPaths.add(p);
+    if (POST_COLLECTIONS.has(collection.toLowerCase())) postPaths.add(p);
     expected.push({ path: p, why: `${r.source} -> ${e.file}` });
   }
 }
@@ -524,7 +541,7 @@ if (!agentSurfaces.length) {
 // no entity at all, a block Google silently drops because of a trailing comma, or an entity
 // copied from the reference the build was grounded on and still pointing at their domain.
 const ORG_TYPES = new Set(["Organization", "LocalBusiness"]);
-const ARTICLE_TYPES = new Set(["Article", "BlogPosting"]);
+const ARTICLE_TYPES = new Set(["Article", "BlogPosting", "NewsArticle"]);
 const LD_RE = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
 
 /**
@@ -703,6 +720,44 @@ let headerPages = 0;
  * removes the whole site from search with nothing failing anywhere.
  */
 const sweepingProduction = Boolean(base && siteOrigin && originOf(base) === siteOrigin);
+
+/**
+ * Does the `*` group close the whole site?
+ *
+ * Parsed as GROUPS rather than grepped, because the two ways to get this wrong both matter.
+ * `Disallow: /admin` is not a closed site and every site has one of those, so a substring test
+ * would fire on nearly all of them. And an EMPTY `User-agent:` value names no agent at all, so
+ * a group that follows it is not the `*` group: reading it as one would report a preview as
+ * correctly closed while every crawler walked in.
+ */
+function disallowsEverything(body) {
+  const lines = String(body || "").split(/\r?\n/).map((l) => l.replace(/#.*$/, "").trim()).filter(Boolean);
+  let agents = [];
+  let collecting = false;
+  let starGroup = false;
+  for (const line of lines) {
+    const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1].toLowerCase();
+    const value = m[2].trim();
+    if (key === "user-agent") {
+      // Consecutive User-agent lines name one group. A rule ends the run, so the next
+      // User-agent after it starts a NEW group rather than joining the old one: without the
+      // reset a `*` group anywhere in the file would make every later group count as `*`, and
+      // `Disallow: /` under `User-agent: GPTBot` would read as the whole site being closed.
+      if (!collecting) { agents = []; collecting = true; }
+      // Matched exactly, so `User-agent:` with an empty value names no agent and the group that
+      // follows it is not the `*` group.
+      agents.push(value.toLowerCase());
+      starGroup = agents.includes("*");
+      continue;
+    }
+    collecting = false;
+    if (starGroup && key === "disallow" && value === "/") return true;
+  }
+  return false;
+}
+let liveRobots = null;
 const productionNoindex = [];
 const META_ROBOTS = /<meta\b[^>]*>/gi;
 const saysNoindex = (html, headerValue) =>
@@ -760,6 +815,11 @@ if (base) {
     }
     if (res.status >= 400) continue; // llms.txt absent on a site that has none is not a finding here
 
+    // The served robots.txt is the only place a deployment's ACTUAL policy can be observed. The
+    // disk pass reads the route's source and can say it is CAPABLE of closing; only a request
+    // says whether it did. Read before the content-type gate, which is what skipped it.
+    if (p === "/robots.txt") { liveRobots = await res.text(); continue; }
+
     const ct = res.headers.get("content-type") || "";
     if (!ct.includes("text/html")) continue;
     // Documents only. X-Frame-Options on robots.txt protects nothing and would turn one
@@ -788,6 +848,32 @@ if (base) {
     console.error(`gate-seo: nothing at ${base} answered. The live pass measured nothing. NOT a pass.`);
     process.exit(2);
   }
+}
+
+// What the origin's robots.txt actually says, which is a different question from whether the
+// route COULD say it. Both directions are faults and they are opposite ones.
+if (base && liveRobots !== null) {
+  const closed = disallowsEverything(liveRobots);
+  if (sweepingProduction && closed) {
+    add(
+      "production robots.txt disallows everything",
+      `${base}/robots.txt disallows / for every crawler, and this IS the site's own origin. ` +
+      "The live site is closed to search and nothing else reports a fault.",
+    );
+  } else if (!sweepingProduction && !closed) {
+    add(
+      "preview robots.txt does not disallow",
+      `${base}/robots.txt does not disallow / for every crawler. This origin is not the site's own, ` +
+      "so it is a public copy of a client's content on a domain they do not own, and it is inviting " +
+      "indexing. Check the environment the deployment was built with.",
+    );
+  }
+} else if (base && (robotsSrc || robotsBuiltFile || robotsPublic)) {
+  cannot(
+    "served robots.txt not read",
+    `${base}/robots.txt returned nothing readable, so the policy this deployment actually serves is ` +
+    "UNKNOWN. The source on disk was judged; what the origin answers was not.",
+  );
 }
 
 // The site's own origin telling crawlers to forget it. This is the failure the noindex default
@@ -836,8 +922,10 @@ if (ldFindings.type.length) {
   add(
     "wrong type of structured data for the page",
     `${countRoutes(ldFindings.type)} page(s): ${someRoutes(ldFindings.type)}. A home page needs an ` +
-    "Organization or LocalBusiness node and a post needs an Article or BlogPosting node. " +
-    "The wrong type is not a near miss: it makes the page ineligible for the result it was written for.",
+    "Organization or LocalBusiness node, and a post needs an Article, BlogPosting or NewsArticle " +
+    "node. Only the collection the blog route renders is asked for one: a services or team page " +
+    "is not. The wrong type is not a near miss, it makes the page ineligible for the result it " +
+    "was written for.",
   );
 }
 if (ldFindings.origin.length) {

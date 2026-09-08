@@ -221,6 +221,15 @@ test("--site overrides the config, so a deploy on another origin can be checked"
   assert.equal(r.code, 0, r.out);
 });
 
+test("--site without a scheme blocks rather than being silently dropped", () => {
+  // It passed the empty-value guard, then failed to parse as a URL, so the override was
+  // discarded and the comparison ran against the config or the sitemap instead. The operator
+  // asked for one origin and got another, with nothing said.
+  const r = run(scaffold(), "--site", "example.com");
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /site must include a scheme/);
+});
+
 test("--site with no value blocks rather than silently skipping the origin check", () => {
   const r = run(scaffold(), "--site");
   assert.equal(r.code, 2, r.out);
@@ -411,7 +420,44 @@ test("a post with no Article node fires", () => {
   const r = run(p);
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /wrong type of structured data/);
-  assert.match(r.out, /Article or BlogPosting/);
+  assert.match(r.out, /Article, BlogPosting or NewsArticle/);
+});
+
+test("a NON-BLOG collection is not asked for an Article", () => {
+  // Every collection entry was classified as a post, so a build with services, team, locations
+  // or case-studies behind a [slug] route was told its structured data had the wrong type on
+  // every one of those pages. A correct site refused at hand-over, and the scaffold could not
+  // show it because it ships one collection.
+  const p = scaffold();
+  write(
+    join(p, "src/pages/services/[slug].astro"),
+    '---\nimport { getEntry } from "astro:content";\nconst s = await getEntry("services", Astro.params.slug);\n---\n<h1>s</h1>\n',
+  );
+  write(join(p, "src/content/services/roofing.md"), "---\ntitle: Roofing\ndraft: false\n---\nhi\n");
+  sitemap(p, ["https://ex.com/", "https://ex.com/blog/", "https://ex.com/blog/welcome/", "https://ex.com/services/roofing/"]);
+  page(p, "services/roofing/index.html", "/services/roofing");
+  const r = run(p);
+  assert.equal(r.code, 0, r.out);
+});
+
+test("a news collection still counts as a post, and NewsArticle satisfies it", () => {
+  const p = scaffold();
+  write(
+    join(p, "src/pages/news/[slug].astro"),
+    '---\nimport { getEntry } from "astro:content";\nconst n = await getEntry("news", Astro.params.slug);\n---\n<h1>n</h1>\n',
+  );
+  write(join(p, "src/content/news/opened.md"), "---\ntitle: Opened\ndraft: false\n---\nhi\n");
+  sitemap(p, ["https://ex.com/", "https://ex.com/blog/", "https://ex.com/blog/welcome/", "https://ex.com/news/opened/"]);
+  page(p, "news/opened/index.html", "/news/opened", [ORG]);
+  const bare = run(p);
+  assert.equal(bare.code, 1, bare.out);
+  assert.match(bare.out, /wrong type of structured data/);
+
+  page(p, "news/opened/index.html", "/news/opened", [
+    ORG,
+    { "@context": "https://schema.org", "@type": "NewsArticle", headline: "Opened", url: "https://ex.com/news/opened" },
+  ]);
+  assert.equal(run(p).code, 0);
 });
 
 test("a listing page is not required to be an Article", () => {
@@ -588,10 +634,19 @@ test("the live pass catches a redirect disk cannot see", async () => {
  * The live-pass fixture again, parameterised by the headers it answers with and by which paths
  * it serves without structured data.
  */
-function headerServer(port, headers, noLd = [], head = "") {
+// What a correct PREVIEW origin serves: it is a public origin on a domain the client does not
+// own, so it closes. Tests that sweep a production origin pass an open one.
+const ROBOTS_CLOSED = "User-agent: *\nDisallow: /\n";
+const ROBOTS_OPEN = "User-agent: *\nAllow: /\nSitemap: https://ex.com/sitemap-index.xml\n";
+
+function headerServer(port, headers, { noLd = [], head = "", robots = ROBOTS_CLOSED } = {}) {
   const server = createServer((req, res) => {
     const path = req.url.replace(/\/$/, "") || "/";
-    if (path === "/robots.txt" || path === "/llms.txt") {
+    if (path === "/robots.txt") {
+      res.writeHead(200, { "content-type": "text/plain" });
+      return res.end(robots);
+    }
+    if (path === "/llms.txt") {
       res.writeHead(200, { "content-type": "text/plain" });
       return res.end("# x\n");
     }
@@ -630,7 +685,7 @@ test("a page read off disk AND off the origin is one page, not two", async () =>
   // report as "2 page(s)", which is a defect in the report rather than in the site.
   const p = scaffold();
   page(p, "blog/index.html", "/blog", null);
-  const server = await headerServer(8869, ALL_HEADERS, ["/blog"]);
+  const server = await headerServer(8869, ALL_HEADERS, { noLd: ["/blog"] });
   try {
     const r = await runAsync(p, "--base", "http://127.0.0.1:8869");
     assert.equal(r.code, 1, r.out);
@@ -675,7 +730,7 @@ test("--no-hsts says so in the report rather than going quiet", async () => {
 
 test("a production origin that renders noindex fires, and names the route", async () => {
   const p = scaffold();
-  const server = await headerServer(8870, ALL_HEADERS, [], '<meta name="robots" content="noindex">');
+  const server = await headerServer(8870, ALL_HEADERS, { head: '<meta name="robots" content="noindex">', robots: ROBOTS_OPEN });
   try {
     const r = await runAsync(p, "--base", "http://127.0.0.1:8870", "--site", "http://127.0.0.1:8870");
     assert.equal(r.code, 1, r.out);
@@ -687,7 +742,7 @@ test("an X-Robots-Tag noindex header fires the same way", async () => {
   // The meta is one of two ways to say it, and a host header is the one nothing in the repo
   // can see by reading the source.
   const p = scaffold();
-  const server = await headerServer(8871, { ...ALL_HEADERS, "x-robots-tag": "noindex, nofollow" });
+  const server = await headerServer(8871, { ...ALL_HEADERS, "x-robots-tag": "noindex, nofollow" }, { robots: ROBOTS_OPEN });
   try {
     const r = await runAsync(p, "--base", "http://127.0.0.1:8871", "--site", "http://127.0.0.1:8871");
     assert.equal(r.code, 1, r.out);
@@ -699,11 +754,111 @@ test("the same noindex on a PREVIEW origin is silent, because that is correct th
   // The check only applies when the origin being swept IS the site's own. A preview is
   // supposed to be noindexed, and firing there would train everyone to ignore the finding.
   const p = scaffold();
-  const server = await headerServer(8872, ALL_HEADERS, [], '<meta name="robots" content="noindex">');
+  const server = await headerServer(8872, ALL_HEADERS, { head: '<meta name="robots" content="noindex">' });
   try {
     const r = await runAsync(p, "--base", "http://127.0.0.1:8872");
     assert.equal(r.code, 0, r.out);
     assert.doesNotMatch(r.out, /production renders noindex/);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+// The served robots.txt is the only place a preview's ACTUAL policy can be observed. The disk
+// pass reads the route's source and can say it is capable of closing; only a request says
+// whether it did.
+
+test("a preview origin whose robots.txt does not disallow fires", async () => {
+  const p = scaffold();
+  const server = await headerServer(8873, ALL_HEADERS, { robots: ROBOTS_OPEN });
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8873");
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /preview robots\.txt does not disallow/);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("a production origin whose robots.txt disallows everything fires", async () => {
+  // The expensive direction. A live site closed to crawlers loses all of its search traffic
+  // and nothing else reports a fault.
+  const p = scaffold();
+  const server = await headerServer(8874, ALL_HEADERS, { robots: ROBOTS_CLOSED });
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8874", "--site", "http://127.0.0.1:8874");
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /production robots\.txt disallows everything/);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("a partial Disallow on production is not a total one", async () => {
+  // Every site closes /admin or /cart. Reading that as a closed site would fire on almost all
+  // of them. The assertion is on the robots finding alone: sweeping a fixture server as though
+  // it were the canonical origin makes the fixture's own canonicals foreign, which is a
+  // different finding and not what this test is about.
+  const p = scaffold();
+  const server = await headerServer(8875, ALL_HEADERS, { robots: "User-agent: *\nDisallow: /admin\nDisallow: /cart\n" });
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8875", "--site", "http://127.0.0.1:8875");
+    assert.doesNotMatch(r.out, /robots\.txt disallows everything/, r.out);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("an EMPTY User-agent value does not capture every crawler", async () => {
+  // The trap: `User-agent:` with nothing after it names no agent, so the group that follows is
+  // not the * group and its Disallow does not close the site. Read as a * group it would report
+  // a preview as correctly closed while every crawler walked in.
+  const p = scaffold();
+  const server = await headerServer(8876, ALL_HEADERS, { robots: "User-agent:\nDisallow: /\n" });
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8876");
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /preview robots\.txt does not disallow/);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("another agent's total Disallow is not the whole site's", async () => {
+  // The groups have to be kept apart. Read as one run of agents, the `*` at the top would still
+  // be in scope when GPTBot's `Disallow: /` arrives, and a preview wide open to every crawler
+  // but one would report as correctly closed.
+  const p = scaffold();
+  const server = await headerServer(8878, ALL_HEADERS, {
+    robots: "User-agent: *\nDisallow: /admin\n\nUser-agent: GPTBot\nDisallow: /\n",
+  });
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8878");
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /preview robots\.txt does not disallow/);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("a * group written after another agent's group is still read", async () => {
+  const p = scaffold();
+  const server = await headerServer(8877, ALL_HEADERS, {
+    robots: "User-agent: GPTBot\nDisallow: /private\n\nUser-agent: *\nDisallow: /\n",
+  });
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8877");
+    assert.equal(r.code, 0, r.out);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("an origin that serves no robots.txt reports the policy as unknown, not clean", async () => {
+  // The disk has a robots route, so the gate judged the source and knows the deployment should
+  // be serving something. Reading nothing back is an unknown, and an unknown is not a pass.
+  const p = scaffold();
+  const server = createServer((req, res) => {
+    const path = req.url.replace(/\/$/, "") || "/";
+    if (path === "/robots.txt" || path.endsWith(".md") || path === "/llms-full.txt") { res.writeHead(404); return res.end(); }
+    if (path === "/llms.txt") { res.writeHead(200, { "content-type": "text/plain" }); return res.end("# x\n"); }
+    res.writeHead(200, { "content-type": "text/html", ...ALL_HEADERS });
+    res.end(
+      `<!doctype html><html><head><link rel="canonical" href="https://ex.com${path}">` +
+      `${ldScript(ORG)}${ldScript(POST(path))}</head><body>x</body></html>`,
+    );
+  });
+  await new Promise((r) => server.listen(8879, "127.0.0.1", r));
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8879");
+    assert.equal(r.code, 2, r.out);
+    assert.match(r.out, /served robots\.txt not read/);
   } finally { await new Promise((r) => server.close(r)); }
 });
 
