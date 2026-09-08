@@ -56,6 +56,15 @@ fails naming the host, so the failure arrives at the build rather than as a blan
 client's live site. `scripts/test/template-csp-live.test.sh` serves the built template with the
 policy enforced and fails on a single console error.
 
+**A CMS BUILD NEEDS MORE, and the base policy deliberately does not carry it.**
+`scripts/add-sanity.sh` mounts the Sanity Studio on the site's own origin and turns on the
+visual-editing overlay, and both run in the BROWSER and talk to Sanity, so a CMS build has to
+add the Sanity hosts to `connect-src` (and `img-src` already allows `https:` for
+`cdn.sanity.io`). The base policy lists only what the base template loads, because widening it
+for a service most builds never call is how a policy stops describing anything. This has NOT
+been measured against a CMS build: check the browser console on the Studio route the first
+time a CMS build is deployed with the policy on.
+
 HSTS is on the Cloudflare overlay only: Vercel sends it itself on a custom domain, Workers does
 not. Two years with subdomains, and deliberately without `preload`, which is a one-way door for
 a client's apex domain.
