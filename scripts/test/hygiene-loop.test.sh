@@ -147,7 +147,7 @@ check "3. a stalled build STILL blocks" "$stalled_block" "true"
 cp "$FIX/better/index.html" "$SRV/index.html"
 run r4
 has "4. the repaired page reports the gain"        "$TMP/r4.err" "IMPROVING: [0-9]+ -> [0-9]+, UP [0-9]+ \(iteration 4"
-has "4. and now clears the floor"                  "$TMP/r4.err" "CLEARS the 80 floor"
+has "4. and now clears the floor"                  "$TMP/r4.err" "build hygiene: clears the 80 floor at [0-9]+ \(not a grade\)"
 # Repairing the contrast violation removes text_contrast from the scored set. That must not
 # make the run incomparable (the bug this loop was rewritten to avoid), but it must be said.
 has "4. discloses the denominator change"          "$TMP/r4.err" "part of this move is the denominator"
@@ -191,7 +191,7 @@ has "7b. a non-numeric floor is named, not obeyed"  "$TMP/r8.err" 'PALATE_MIN_HY
 has "7b. and the gate still blocks"                 "$TMP/r8.err" "BLOCKED"
 PALATE_MIN_HYGIENE=0 node "$VR" --url "http://localhost:$PORT" --routes / --out "$OUT" --no-vitals >/dev/null 2>"$TMP/r9.err"
 has "7c. an OFF gate says so"                       "$TMP/r9.err" "the build-hygiene gate is OFF"
-hasnt "7c. and never claims a pass"                 "$TMP/r9.err" "CLEARS the"
+hasnt "7c. and never claims a pass"                 "$TMP/r9.err" "clears the"
 hasnt "7c. no spurious deprecation notice"          "$TMP/r9.err" "DEPRECATED"
 # The pre-rename name is still HONOURED, loudly. Silently ignoring it would block at 80 someone
 # who set PALATE_MIN_GRADE=0 expecting the gate off: the same silent-skip class, reintroduced.

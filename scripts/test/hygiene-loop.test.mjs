@@ -275,7 +275,8 @@ test('with the gate off, nothing is reported as having passed anything', () => {
   const cur = entryFor(p, ON);
   const line = summaryLine({ scored: p, cmp: compare(cur, null), stall: detectStall([cur]), minScore: 0 });
   assert.match(line, /UNGATED/);
-  assert.doesNotMatch(line, /CLEARS/, '"CLEARS the 0 floor" reads as an endorsement of a build nothing judged');
+  assert.doesNotMatch(line, /clears/i, '"clears the 0 floor" reads as an endorsement of a build nothing judged');
+  assert.match(line, /\(not a grade\)/, 'an ungated number is still not a grade');
 });
 
 test('the rubric BAND never reaches a message or the history', () => {
@@ -306,7 +307,10 @@ test('clearing the floor is NOT reported as a quality verdict', () => {
   const p = proj(97);
   const cur = entryFor(p, ON);
   const pass = summaryLine({ scored: p, cmp: compare(cur, null), stall: detectStall([cur]), minScore: 80 });
-  assert.match(pass, /CLEARS the 80 floor/);
+  // The VERDICT leads and the number follows it. A number in front reads as a grade whatever
+  // the rest of the sentence says, and this one correlates with the public grade at -0.074.
+  assert.match(pass, /build hygiene: clears the 80 floor at 97 \(not a grade\)/);
+  assert.doesNotMatch(pass, /build hygiene 97\/100/, 'the score must not lead the line');
   assert.match(pass, /NOT A QUALITY VERDICT/);
   assert.match(pass, /cannot see whether the page is a template/);
   assert.match(pass, /A tidy template with no idea in it scores 97/);
@@ -322,7 +326,7 @@ test('clearing the floor is NOT reported as a quality verdict', () => {
 
   // And it must NOT appear on the block path, where it would be noise on top of a list of fixes.
   const fail = summaryLine({ scored: proj(61), cmp: compare(entry(61), null), stall: detectStall([entry(61)]), minScore: 80 });
-  assert.match(fail, /is BELOW the 80 floor/);
+  assert.match(fail, /build hygiene: is BELOW the 80 floor at 61 \(not a grade\)/);
   assert.doesNotMatch(fail, /NOT A QUALITY VERDICT/);
 });
 
@@ -330,7 +334,7 @@ test('the summary line is printed on a PASS too, so a lucky pass is still visibl
   const p = proj(84);
   const cur = entryFor(p, ON);
   const line = summaryLine({ scored: p, cmp: compare(cur, entry(83)), stall: detectStall([entry(83), cur]), minScore: 80 });
-  assert.match(line, /build hygiene 84\/100 CLEARS the 80 floor/);
+  assert.match(line, /build hygiene: clears the 80 floor at 84 \(not a grade\)/);
   assert.match(line, /UNCHANGED/, 'passing by one point on a flat trend is not the same as converging');
   assert.match(line, /HYGIENE ONLY: measured to disagree substantially with the public grade/);
 });
