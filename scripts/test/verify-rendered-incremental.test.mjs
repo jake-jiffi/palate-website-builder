@@ -149,3 +149,59 @@ test('a second run over unchanged source keeps the first run\'s per-route record
   assert.notEqual(m3.routes['/p02'].passed_at, m1.routes['/p02'].passed_at);
   assert.equal(m3.routes['/p01'].passed_at, m1.routes['/p01'].passed_at, 'an untouched route was re-rendered');
 });
+
+test('--changed renders the blast radius and nothing else', async (t) => {
+  // Alpha is imported by three of the thirty routes, so the blast radius is a tenth of the
+  // sweep. The home-route probes cost the same in both runs, so a failure to narrow cannot
+  // hide inside that fixed overhead.
+  const fx = makeFixture(30, (i) => (i <= 3 ? 'Alpha' : 'Beta'));
+  const server = await serve(fx.html);
+  const url = `http://127.0.0.1:${server.address().port}`;
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  // NO --out on either run. With no manifest there is no record to skip against, so the
+  // difference measured is the narrowing alone rather than the narrowing plus the skip.
+  const common = ['--url', url, '--index', fx.index, '--no-vitals', '--max-routes', '30'];
+  const full = await runGate(common);
+  assert.match(full.out, /: 30 route\(s\) from /, `the full sweep did not select 30 routes\n${full.out.slice(-800)}`);
+
+  const blast = await runGate([...common, '--changed', 'src/components/Alpha.astro']);
+  assert.match(blast.out, /: 3 route\(s\) from .*, narrowed by --changed/, `--changed did not narrow to the blast radius\n${blast.out.slice(-800)}`);
+  assert.match(blast.out, /blast radius of 3 of 30 route\(s\)/);
+  for (const r of ['/p04', '/p30']) {
+    assert.ok(!blast.out.includes(`${r} @`), `${r} is outside the blast radius and was rendered anyway`);
+  }
+  // Printed on a pass as well as a failure: the acceptance here is a timing claim, and a
+  // claim nobody can read the number behind is a claim nobody can check.
+  t.diagnostic(`full sweep ${full.ms}ms over 30 route(s), blast radius ${blast.ms}ms over 3`);
+  assert.ok(
+    blast.ms < full.ms / 5,
+    `--changed took ${blast.ms}ms against a full sweep of ${full.ms}ms, which is not under a fifth`,
+  );
+});
+
+test('a file the index has never heard of falls wide and says which one', async (t) => {
+  // A small fixture: this direction is about the message and the count, and paying for
+  // another thirty-route sweep to read one line is the cost this whole epic is against.
+  const fx = makeFixture(6, () => 'Beta');
+  const server = await serve(fx.html);
+  const url = `http://127.0.0.1:${server.address().port}`;
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  const wide = await runGate(['--url', url, '--index', fx.index, '--no-vitals',
+    '--changed', 'astro.config.mjs,src/components/Beta.astro']);
+  assert.match(wide.out, /verify-rendered: astro\.config\.mjs is not in the index, falling wide/);
+  assert.match(wide.out, /: 6 route\(s\) from /, `an unknown file did not fall wide\n${wide.out.slice(-800)}`);
+  // The known file in the same list must not narrow the run behind the unknown one's back.
+  assert.ok(!/blast radius of/.test(wide.out), 'a wide fall still reported a blast radius');
+});
+
+test('--changed with no file list says so rather than quietly narrowing nothing', async (t) => {
+  const fx = makeFixture(1, () => 'Alpha');
+  const server = await serve(fx.html);
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  const r = await runGate(['--url', `http://127.0.0.1:${server.address().port}`,
+    '--index', fx.index, '--no-vitals', '--changed']);
+  assert.match(r.out, /--changed was given with no file list, so nothing was narrowed/);
+});

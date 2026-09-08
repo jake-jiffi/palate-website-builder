@@ -173,6 +173,11 @@ const changed = args.changed && args.changed !== 'true'
 // before hand-over is where it must not apply: a record is only as good as the source list it
 // was taken over, and a config or a dependency change is outside that list.
 const FULL = args.full === 'true';
+// `--changed` with nothing after it parses as the string "true", which would silently mean
+// "no narrowing" on a command the operator wrote precisely to narrow.
+if (args.changed === 'true') {
+  console.error('verify-rendered: --changed was given with no file list, so nothing was narrowed. Pass --changed <file,...>.');
+}
 let routes;
 // A rendered path back to the index record that produced it, which is the only place the
 // route's source and its import closure are known. Empty under --routes: a hand-named route
