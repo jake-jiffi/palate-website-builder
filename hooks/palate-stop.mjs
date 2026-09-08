@@ -431,7 +431,9 @@ if (process.env.PALATE_GATE_OFF === "1") {
 // and on a build under WORK_ROOT/{slug}-site those are different directories.
 const ctx = resolveBuildContext(p.cwd || process.cwd());
 const manifest = ctx.manifest;
-if (!fs.existsSync(manifest)) process.exit(0); // not a build session
+// A refusal (the candidate is the Palate plugin itself) hands back no manifest at all, and
+// that is not a build session either: say nothing and write nothing.
+if (!manifest || !fs.existsSync(manifest)) process.exit(0); // not a build session
 // The artefact root is the manifest's own directory, deliberately: that is exactly how
 // gate-done.sh derives it, and the two agreeing is the whole point of the change.
 const cwd = path.dirname(manifest);

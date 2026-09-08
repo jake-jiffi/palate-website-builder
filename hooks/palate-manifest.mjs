@@ -545,6 +545,10 @@ function main() {
   // The file being written is the strongest hint available: a write into src/pages/index.astro
   // names its project even when the session cwd sits two levels above it.
   const ctx = resolveBuildContext(p.cwd || process.cwd(), { hint: written });
+  // NEVER RECORD A BUILD INTO THE PLUGIN. This wrote five stray build-manifest.json files into
+  // the skill repo, one of them recording 188 files_written across three unrelated
+  // repositories, because the resolver fell back to whatever directory the session sat in.
+  if (ctx.how === "refused" || !ctx.manifest) return;
   const MANIFEST = adoptStaleManifest(ctx);
   const projectDir = ctx.dir;
 

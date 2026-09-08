@@ -460,6 +460,9 @@ const cwd = p.cwd || process.cwd();
 // The MARKER lookup below deliberately stays on the cwd. It decides WHETHER the wall applies at
 // all, and widening where it is looked for would widen the set of sessions that get walled.
 const buildCtx = resolveBuildContext(cwd, { hint: fp });
+// The Palate plugin is not a site under construction. A refusal means there is no build here to
+// gate, so allow the write rather than judge the tool's own files against a client's contract.
+if (buildCtx.how === "refused" || !buildCtx.manifest) allow();
 
 // BUILD-SITE SCOPE: the DIVERGE wall only applies inside an active build-site flow.
 // state-init.sh writes .palate-skill-state.json before scaffold and before any source

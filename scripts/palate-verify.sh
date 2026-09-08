@@ -24,6 +24,39 @@ set -uo pipefail
 
 TARGET="${1:-.}"
 REF="${PALATE_REF:-main}"
+
+# NEVER GRADE THE PLUGIN'S OWN FILES.
+#
+# DUPLICATED FROM hooks/project-dir.mjs ON PURPOSE, and it is the one duplication here that is
+# not drift waiting to happen: bootstrap.sh curls this script ALONE into a cache directory, so
+# it has no sibling to import and must carry the predicate itself. Three conditions, matching
+# pluginRootRefusal(): the directory is CLAUDE_PLUGIN_ROOT, it sits inside it, or it carries
+# .claude-plugin/plugin.json. No ancestor walk, or every fixture in the plugin's own test suite
+# would be refused.
+palate_plugin_refusal() { # <dir> -> prints the reason and returns 0 when it must be refused
+  local d
+  d="$(cd "$1" 2>/dev/null && pwd)" || return 1
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    local root
+    root="$(cd "$CLAUDE_PLUGIN_ROOT" 2>/dev/null && pwd)" || root=""
+    if [ -n "$root" ]; then
+      case "$d" in
+        "$root") echo "$d is CLAUDE_PLUGIN_ROOT, the Palate plugin itself, not a site"; return 0 ;;
+        "$root"/*) echo "$d is inside CLAUDE_PLUGIN_ROOT ($root), so it is part of the Palate plugin, not a site"; return 0 ;;
+      esac
+    fi
+  fi
+  if [ -f "$d/.claude-plugin/plugin.json" ]; then
+    echo "$d carries .claude-plugin/plugin.json, so it is a Claude Code plugin checkout, not a site"
+    return 0
+  fi
+  return 1
+}
+
+if refusal="$(palate_plugin_refusal "$TARGET")"; then
+  echo "palate-verify: refused: $refusal. Name the site directory explicitly. NOT a pass." >&2
+  exit 2
+fi
 BASE="https://raw.githubusercontent.com/jake-jiffi/palate-website-builder/${REF}"
 
 # Prefer local siblings (a repo checkout: this sits in scripts/ beside the real gates), so it

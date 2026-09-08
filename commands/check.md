@@ -10,6 +10,13 @@ every contribution, so it is scoped to the diff and nothing else.
 checkout, so use the checkout root. `$SITE` is the project directory (the first argument if it
 is a directory, else the current directory).
 
+**`$SITE` must be a site, and the plugin is not one.** If no directory was given and the working
+directory holds no `package.json` plus `src/pages`, and no `build-manifest.json` whose `project`
+is this directory, stop and ask for the site path. Do not run the gates against the current
+directory to see what happens: run from a plugin checkout they measure the plugin, whose doctrine
+QUOTES the tells the lint hunts and whose templates carry `{{PLACEHOLDER}}` tokens on purpose.
+The gates refuse it themselves now (`refused:`, exit 2); this is so you never ask them to.
+
 ## 1. Work out what changed
 
 Use `$ARGUMENTS` if it names files. Otherwise take the working tree:

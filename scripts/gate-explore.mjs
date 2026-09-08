@@ -40,8 +40,18 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pluginRootRefusal } from "../hooks/project-dir.mjs";
 
 const dir = process.argv[2] || ".";
+
+// NEVER GRADE THE PLUGIN'S OWN FILES. This defaults to ".", and the plugin ships a template
+// variants.ts, so a run from a plugin checkout would judge the scaffold's example entries as
+// though a client were about to be handed them.
+const refusal = pluginRootRefusal(dir);
+if (refusal) {
+  console.error(`gate-explore: refused: ${refusal}. Name the site directory explicitly. NOT a pass.`);
+  process.exit(2);
+}
 const read = (p) => {
   try {
     return readFileSync(join(dir, p), "utf8");

@@ -28,10 +28,20 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { pluginRootRefusal } from "../hooks/project-dir.mjs";
 
 const dir = process.argv[2] && !process.argv[2].startsWith("-") ? process.argv[2] : ".";
 const findings = [];
 const add = (what, detail) => findings.push({ what, detail });
+
+// NEVER GRADE THE PLUGIN'S OWN FILES. This defaults to ".", so one run from a plugin checkout
+// measures the tool instead of a site: the templates carry {{PLACEHOLDER}} tokens on purpose
+// and would every one of them be reported as an unresolved placeholder shipping to a client.
+const refusal = pluginRootRefusal(dir);
+if (refusal) {
+  console.error(`gate-shipready: refused: ${refusal}. Name the site directory explicitly. NOT a pass.`);
+  process.exit(2);
+}
 
 if (!existsSync(join(dir, "src", "pages"))) {
   console.error(`gate-shipready: no ${join(dir, "src/pages")}. Not an Astro project; nothing checked. NOT a pass.`);
