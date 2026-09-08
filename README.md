@@ -64,6 +64,17 @@ legacy/manual path: see `INSTALL.md`.
 
 `scripts/preflight.sh` (build) and `scripts/brand-preflight.sh` (brand) check what's needed.
 
+## What the verifier measures, and on how much of the site
+
+`scripts/verify-rendered.sh` renders the first **14 routes** by default, at 390, 834 and 1440
+wide, and prints how many it dropped. On a larger site raise the cap with `--max-routes <n>`
+or name the routes that matter with `--routes /a,/b`. A 3,400-page site is measured on 14
+pages unless you say otherwise.
+
+Accessibility is a subset of axe rather than a WCAG pass, and performance is a throttled local
+lab run of Core Web Vitals on the home route. `references/testing.md` says exactly what each
+one covers; nothing here runs Lighthouse.
+
 ## The Palate MCP
 
 The skill reads the reference library through the Palate MCP (`palate` connector, `refs_*` tools) at `https://mcp.palatemcp.com/api/mcp` (http transport), authenticated with your `plt_live_...` token. You add the connector once with `claude mcp add --scope user` (see Install); the token is baked into your Claude Code config, so there is no env var to manage and the tools resolve as `mcp__palate__*` for the skill and the depth gate.

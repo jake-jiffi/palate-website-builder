@@ -54,12 +54,32 @@ Each phase has a verify-{phase}.sh that must pass before the phase is marked com
 ## Build-time checks (in CI)
 - astro check (typecheck)
 - npm run build (must succeed; a logic error here halts, never deploys broken)
-- Lighthouse CI (baseline 100s for performance/SEO/best-practices/accessibility)
+
+## What is actually measured, and on how much of the site
+
+Nothing in this plugin runs Lighthouse. The doctrine used to say "Lighthouse CI, baseline
+100s", which promised a gate that does not exist and a number nothing produced.
+
+- **Performance** is a local lab run of Core Web Vitals (`scripts/reference-capture/vitals.mjs`)
+  under PageSpeed's own mobile emulation, slow 4G with 4x CPU throttling. It runs on the HOME
+  route only, and it is a lab proxy rather than field data: TBT is not INP and is labelled TBT.
+  Unthrottled numbers are worthless here, 7.9x apart from the throttled ones on our own site,
+  which is why the emulation is not optional.
+- **Accessibility** is a SUBSET of axe, described in `references/audit-dimensions.md`, run at
+  three viewports. Clearing it is not a WCAG 2.2 AA pass.
+- **Coverage.** `verify-rendered.sh` renders the first **14 routes** by default and says how
+  many it dropped. On a bigger site raise it with `--max-routes <n>`, or pass `--routes` to
+  name the ones that matter. A 3,400-page site is measured on 14 pages unless you say
+  otherwise, and the summary prints exactly that.
 
 ## Post-deploy smoke checks
 - workers.dev returns 200
 - robots.txt, sitemap, llms.txt return 200
-- a test POST to /api/contact writes to Sanity formSubmission and returns ok
+- the contact form, BY HAND, once. Nothing posts it automatically yet; see the section below.
 
 ## The form round-trip test
-The most important post-deploy check: submit the contact form with a test payload, confirm it (a) passes Turnstile, (b) writes to Sanity using the write token, (c) sends via Resend. If the write token is wrong, this 401s, which is exactly the failure the two-token heal prevents.
+
+**Not implemented. Implemented by E5**, which submits the form against the preview and the
+deployed URL. Nothing today fills or posts the contact form, so a broken endpoint, a wrong
+Turnstile key or a bad Resend token ships silently. Until then, submit the form by hand once
+after a deploy and watch for the mail.

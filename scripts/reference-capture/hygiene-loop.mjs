@@ -462,11 +462,17 @@ export function summaryLine({ scored, cmp, stall, minScore }) {
   // With the gate off there is no floor to clear, and saying "CLEARS the 0 floor" would read as
   // an endorsement of a build nothing judged.
   const clears = minScore > 0 && projected.overall >= minScore;
+  // THE NUMBER DOES NOT LEAD THE LINE. It used to read "build hygiene 92/100 CLEARS the 80
+  // floor", and a number in that position reads as a grade no matter what the rest of the
+  // sentence says: the local score correlates with the public grade at r = -0.074, so leading
+  // with it invites exactly the reading it cannot support. The verdict leads, the number
+  // follows it, and "(not a grade)" travels in the same breath rather than in a caveat
+  // further down that nobody reaches.
   const state = minScore > 0
-    ? `${clears ? 'CLEARS' : 'is BELOW'} the ${minScore} floor`
-    : 'is UNGATED (PALATE_MIN_HYGIENE=0), so nothing here passed or failed';
+    ? `${clears ? 'clears' : 'is BELOW'} the ${minScore} floor at ${projected.overall} (not a grade)`
+    : `is UNGATED (PALATE_MIN_HYGIENE=0) at ${projected.overall} (not a grade), so nothing here passed or failed`;
   return (
-    `verify-rendered: build hygiene ${projected.overall}/100 ${state}, ` +
+    `verify-rendered: build hygiene: ${state}, ` +
     // "of the 100 weight measurable locally" was wrong and flattering: measuredWeight is what
     // THIS run scored, and it moves (40 clean, 52 with axe firing, +14 with vitals). Calling it
     // the local ceiling implied the number rests on everything available.
