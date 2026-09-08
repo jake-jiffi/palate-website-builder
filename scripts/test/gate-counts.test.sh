@@ -92,6 +92,13 @@ want_rc "palate-verify with the Astro gate skipped -> exit 0" 0 "$rc"
 want_in "and the PASS line names the gate that ran"     "$out" "ran: anti-slop lint"
 want_in "and names the one that was skipped"            "$out" "skipped: anti-freestyle"
 
+# ZERO GATES RUN IS NOT A PASS. With the Astro gate switched off and a lint that could not
+# inspect anything, this printed "PASS (ran: none; ...)" and exited 0: a green exit code over
+# nothing measured, in the epic whose rule is that a gate never exits 0 having inspected nothing.
+out="$(env PALATE_SKIP_ASTRO=1 bash "$SCRIPTS/palate-verify.sh" "$NOFILES" 2>&1)"; rc=$?
+want_rc "palate-verify with nothing inspected -> exit 2" 2 "$rc"
+want_in "and it says SKIPPED rather than PASS" "$out" "palate-verify: SKIPPED (ran: none"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

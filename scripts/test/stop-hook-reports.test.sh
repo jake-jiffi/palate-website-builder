@@ -9,7 +9,14 @@
 # ran and passed. That is the whole failure class this repo keeps paying for: a gate that was
 # blocked reads exactly like a gate that passed.
 #
-# So: on a PASSING build the hook must forward the done gate's summary and any skip line.
+# AND STDERR IS NOT WHERE THE OPERATOR LOOKS. The Claude Code hooks reference is explicit:
+# "Stderr from a hook that exits 0 goes to the debug log only, never the transcript, and Claude
+# never sees it." The documented channel is `systemMessage` in a JSON object on stdout, which
+# for a Stop hook with `continue` unset is "shown to the user in the transcript instead". So the
+# summary must travel there, and the stderr copy stays for `--debug`.
+#
+# So: on a PASSING build the hook must forward the done gate's summary and any skip line, on
+# both channels.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 HOOK="$DIR/../../hooks/palate-stop.mjs"
@@ -37,10 +44,33 @@ cat > "$T/verify-report.json" <<'JSON'
   "shots_dir": ".palate-shots" }
 JSON
 
-out="$(cd "$T" && printf '{"hook_event_name":"Stop","cwd":"%s"}' "$T" | node "$HOOK" 2>&1 >/dev/null)"
+# HOME is redirected so the suite does not append to the real cross-build log.
+run_hook() { # -> stdout on fd 1, stderr captured into $err_file
+  (cd "$T" && printf '{"hook_event_name":"Stop","cwd":"%s"}' "$T" \
+    | env HOME="$TMP/home" node "$HOOK" 2>"$TMP/stderr")
+}
+mkdir -p "$TMP/home"
+sout="$(run_hook)"
+serr="$(cat "$TMP/stderr")"
 
-want "the done gate's summary reaches the user on a pass" "$out" "Done gate"
-want "and the sub-gates that skipped are named"           "$out" "skipped("
+want "the done gate's summary reaches the debug log on a pass" "$serr" "Done gate"
+want "and the sub-gates that skipped are named there"          "$serr" "skipped("
+
+# STDOUT MUST BE ONE VALID JSON OBJECT AND NOTHING ELSE. A parse failure here is not cosmetic:
+# the hook protocol reads this stream, so trailing text would break the hook itself.
+msg="$(printf '%s' "$sout" | node -e '
+let raw = ""; process.stdin.on("data", (d) => (raw += d)).on("end", () => {
+  try { const o = JSON.parse(raw); console.log(typeof o.systemMessage === "string" ? o.systemMessage : ""); }
+  catch { console.log("__NOT_JSON__"); }
+});' 2>/dev/null)"
+
+if [ "$msg" = "__NOT_JSON__" ]; then
+  echo "FAIL - stdout is one valid JSON object (got: $sout)"; fail=$((fail+1))
+else
+  echo "ok   - stdout is one valid JSON object"; pass=$((pass+1))
+fi
+want "the summary reaches the USER through systemMessage" "$msg" "Done gate"
+want "and the skips travel with it"                       "$msg" "skipped("
 
 echo "---"
 echo "passed=$pass failed=$fail"

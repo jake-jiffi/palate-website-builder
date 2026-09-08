@@ -19,10 +19,15 @@ want() { # <desc> <file> <needle>
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 # --- the Stop hook ------------------------------------------------------------------
+# HOME is redirected: this path now appends to the cross-build log, and a test must not write
+# into the operator's real one.
+HOME_DIR="$TMP/home"; mkdir -p "$HOME_DIR"
+LOG="$HOME_DIR/.config/palate/builds.log.json"
+
 S="$TMP/stop"; mkdir -p "$S"
 cp "$DIR/fixtures/manifest-deep.json" "$S/build-manifest.json"
 printf '{"hook_event_name":"Stop","cwd":"%s"}' "$S" \
-  | env PALATE_GATE_OFF=1 node "$STOP" >/dev/null 2>&1
+  | env PALATE_GATE_OFF=1 HOME="$HOME_DIR" node "$STOP" >/dev/null 2>&1
 want "the Stop hook records gates-off in the manifest" "$S/build-manifest.json" '"state": "off"'
 want "and stamps when"                                 "$S/build-manifest.json" '"at":'
 
@@ -31,8 +36,52 @@ W="$TMP/write"; mkdir -p "$W/src/pages"
 cp "$DIR/fixtures/manifest-deep.json" "$W/build-manifest.json"
 printf '{"hook_event_name":"PreToolUse","cwd":"%s","tool_name":"Write","tool_input":{"file_path":"%s"}}' \
   "$W" "$W/src/pages/index.astro" \
-  | env PALATE_GATE_OFF=1 node "$PRE" >/dev/null 2>&1
+  | env PALATE_GATE_OFF=1 HOME="$HOME_DIR" node "$PRE" >/dev/null 2>&1
 want "the PreToolUse hook records gates-off in the manifest" "$W/build-manifest.json" '"state": "off"'
+
+# AND IT MUST NOT APPEND A LOG ENTRY. The write wall fires on every matched tool call, so an
+# entry per Write would put thousands into cross-build memory for one build.
+entries_after="$(node -e '
+try { console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).length); }
+catch { console.log("0"); }' "$LOG" 2>/dev/null)"
+if [ "$entries_after" = "1" ]; then
+  echo "ok   - the write wall adds no build-log entry of its own"; pass=$((pass+1))
+else
+  echo "FAIL - the write wall adds no build-log entry of its own (log has $entries_after)"; fail=$((fail+1))
+fi
+
+# --- THE BUILD LOG IS WRITTEN ON THE PATH THAT ACTUALLY HAPPENS ----------------------
+# The stamp reached the manifest, and the log entry only ever arrived through a LATER gated
+# Stop on the same build. An operator who sets the variable for a session and never runs a
+# gated Stop, which is the ordinary way it is used, left no trace in cross-build memory at all.
+if [ -f "$LOG" ]; then
+  echo "ok   - the gates-off Stop writes a build-log entry"; pass=$((pass+1))
+else
+  echo "FAIL - the gates-off Stop writes a build-log entry (no $LOG)"; fail=$((fail+1))
+fi
+logged="$(node -e '
+try {
+  const e = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+  const last = e[e.length - 1] || {};
+  console.log(JSON.stringify({ n: e.length, gates_off: last.gates_off === true, ts: typeof last.ts === "string", donors: Array.isArray(last.donors) }));
+} catch { console.log("{}"); }' "$LOG" 2>/dev/null)"
+if printf '%s' "$logged" | grep -qF '"gates_off":true'; then
+  echo "ok   - and the entry says the gates were off"; pass=$((pass+1))
+else
+  echo "FAIL - and the entry says the gates were off (got: $logged)"; fail=$((fail+1))
+fi
+if printf '%s' "$logged" | grep -qF '"ts":true'; then
+  echo "ok   - and it is stamped"; pass=$((pass+1))
+else
+  echo "FAIL - and it is stamped (got: $logged)"; fail=$((fail+1))
+fi
+# MINIMAL, deliberately: gate-novelty reads these entries to judge later builds, and an
+# ungated build must not certify a future one as different from it.
+if printf '%s' "$logged" | grep -qF '"donors":false'; then
+  echo "ok   - and it is minimal, carrying no donors for the novelty gate to read"; pass=$((pass+1))
+else
+  echo "FAIL - and it is minimal, carrying no donors (got: $logged)"; fail=$((fail+1))
+fi
 
 # --- and it travels to the cross-build log entry -------------------------------------
 entry="$(node -e '

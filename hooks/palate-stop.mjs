@@ -303,26 +303,61 @@ function recordDonors(manifest, m) {
   }
 }
 
+/**
+ * Append one entry to the cross-build log. Extracted so the gates-off path can record that a
+ * build happened without going through the whole faces-and-donors read that recordBuild does.
+ */
+function appendBuildLog(entry) {
+  const dir = path.join(os.homedir(), ".config", "palate");
+  fs.mkdirSync(dir, { recursive: true });
+  const log = path.join(dir, "builds.log.json");
+  let entries = [];
+  try {
+    entries = JSON.parse(fs.readFileSync(log, "utf8"));
+  } catch {
+    // Back-compat: migrate the v1 jiffi-namespaced log on first write.
+    try {
+      entries = JSON.parse(
+        fs.readFileSync(path.join(os.homedir(), ".config", "jiffi", "builds.log.json"), "utf8"),
+      );
+    } catch {
+      entries = [];
+    }
+  }
+  if (!Array.isArray(entries)) entries = [];
+  entries.push(entry);
+  fs.writeFileSync(log, JSON.stringify(entries, null, 2) + "\n");
+}
+
+/**
+ * A BUILD RUN WITH THE GATES OFF STILL HAPPENED, and cross-build memory has to know.
+ *
+ * The manifest stamp landed, but the log entry only ever arrived through a LATER gated Stop on
+ * the same build. Somebody who sets PALATE_GATE_OFF=1 for a session and never runs a gated Stop,
+ * which is the ordinary way the variable is used, left no trace at all.
+ *
+ * MINIMAL ON PURPOSE. gate-novelty reads these entries to judge later builds, so an ungated
+ * build must not arrive carrying donors and faces and go on to certify a future build as
+ * different from one nothing checked. Timestamp, business, and the flag.
+ */
+function recordGatesOffBuild(manifestPath) {
+  try {
+    let business = null;
+    try {
+      business = JSON.parse(fs.readFileSync(manifestPath, "utf8")).business ?? null;
+    } catch {
+      /* an unreadable manifest still leaves a dated record that the gates were off */
+    }
+    appendBuildLog({ ts: new Date().toISOString(), business, gates_off: true });
+  } catch {
+    /* memory is best-effort; never block finishing over it */
+  }
+}
+
 function recordBuild(manifest) {
   try {
     const m = JSON.parse(fs.readFileSync(manifest, "utf8"));
     recordDonors(manifest, m);
-    const dir = path.join(os.homedir(), ".config", "palate");
-    fs.mkdirSync(dir, { recursive: true });
-    const log = path.join(dir, "builds.log.json");
-    let entries = [];
-    try {
-      entries = JSON.parse(fs.readFileSync(log, "utf8"));
-    } catch {
-      // Back-compat: migrate the v1 jiffi-namespaced log on first write.
-      try {
-        entries = JSON.parse(
-          fs.readFileSync(path.join(os.homedir(), ".config", "jiffi", "builds.log.json"), "utf8"),
-        );
-      } catch {
-        entries = [];
-      }
-    }
     // Record the display faces used, read from the rendered variant HTML the manifest
     // points at, so type-face recurrence is computable across builds. Best-effort: a
     // missing/unreadable variant file just contributes no faces.
@@ -340,8 +375,7 @@ function recordBuild(manifest) {
     }
     // Entry shape (incl. the W1 Explore labels) lives in build-log-entry.mjs so it is
     // unit-testable without faking a whole passing build.
-    entries.push(buildLogEntry(m, [...faces]));
-    fs.writeFileSync(log, JSON.stringify(entries, null, 2) + "\n");
+    appendBuildLog(buildLogEntry(m, [...faces]));
   } catch {
     /* memory is best-effort; never block finishing over it */
   }
@@ -396,8 +430,9 @@ function readStopGate(manifestPath) {
  * best-effort: a recording failure must never wedge the bypass it is recording.
  */
 function recordGatesOff(startDir) {
+  let manifestPath = null;
   try {
-    const manifestPath = resolveBuildContext(startDir).manifest;
+    manifestPath = resolveBuildContext(startDir).manifest;
     if (!manifestPath || !fs.existsSync(manifestPath)) return;
     execFileSync("node", [MERGE, "--manifest", manifestPath, "--gates-off"], {
       cwd: path.dirname(manifestPath),
@@ -406,6 +441,8 @@ function recordGatesOff(startDir) {
   } catch {
     /* the bypass must work even when the record cannot be written */
   }
+  // Separately, so a failed manifest stamp does not also cost the log entry.
+  if (manifestPath) recordGatesOffBuild(manifestPath);
 }
 
 function writeStopGate(manifestPath, gate) {
@@ -533,10 +570,16 @@ function gateFailure(reason) {
   if (process.env.PALATE_GATE_STRICT === "1") {
     // Through the SAME latch as the evidence path. Without it, removing the blanket
     // stop_hook_active release would turn strict mode into an unbounded block loop.
-    latchedBlock([reason], reason);
+    //
+    // A BLOCK already wrote its own JSON object to stdout, and a second one would break the
+    // hook, so only a RELEASE may hand the buffered lines over.
+    if (!latchedBlock([reason], reason)) emitUserMessage();
     process.exit(0);
   }
-  process.stderr.write(`[palate] ${reason}\n(Set PALATE_GATE_STRICT=1 to enforce this as a hard gate.)\n`);
+  // Through the same user channel as the summary: this line has been reaching the debug log
+  // and nobody else since the hook was written, which is the whole point of the fix above.
+  say(`${reason}\n(Set PALATE_GATE_STRICT=1 to enforce this as a hard gate.)`);
+  emitUserMessage();
   process.exit(0);
 }
 
@@ -587,16 +630,40 @@ function runGate(script, manifestPath) {
 const asError = (r) => (r.err ? { code: r.err.code, message: r.err.message, status: r.status } : { status: r.status });
 
 /**
+ * THE ONE CHANNEL THE OPERATOR ACTUALLY SEES.
+ *
+ * Writing to stderr and exiting 0 puts nothing in front of anybody. The Claude Code hooks
+ * reference is explicit: "Stderr from a hook that exits 0 goes to the debug log only, never the
+ * transcript, and Claude never sees it." So the first version of this forwarding moved the
+ * summary from one invisible place to another. The documented way is `systemMessage` in a JSON
+ * object on stdout, which for a Stop hook with `continue` unset is "shown to the user in the
+ * transcript instead".
+ *
+ * Lines are BUFFERED rather than written as they happen, because stdout carries the hook
+ * protocol: exactly one JSON object may be written, and a second one (or any loose text) would
+ * break the hook itself. Every exit path calls emitUserMessage() at most once, and the blocking
+ * path writes its own object and never calls it. The stderr copy stays, for `--debug`.
+ */
+const userLines = [];
+function say(line) {
+  userLines.push(line);
+  process.stderr.write(`[palate] ${line}\n`);
+}
+function emitUserMessage() {
+  if (!userLines.length) return;
+  process.stdout.write(JSON.stringify({ systemMessage: userLines.join("\n") }));
+}
+
+/**
  * SAY WHAT THE GATES SAID. A build where ship-ready, SEO, uniqueness and Explore all SKIPPED
  * read, in the transcript, exactly like a build where every one of them ran and passed: the
- * summary line goes to stdout and the skips to stderr, and both were thrown away on exit 0.
- * Forward the summary and any skip line to stderr (never stdout, which is the hook protocol).
+ * summary line goes to the gate's stdout and the skips to its stderr, and both were thrown away.
  */
 function forwardGateOutput(r) {
   for (const raw of `${r.stdout}\n${r.stderr}`.split("\n")) {
     const line = raw.trim();
     if (!line) continue;
-    if (line.startsWith("Done gate") || line.includes("skipped(")) process.stderr.write(`[palate] ${line}\n`);
+    if (line.startsWith("Done gate") || line.includes("skipped(")) say(line);
   }
 }
 
@@ -636,5 +703,6 @@ if (!releasedWithFailures) recordBuild(manifest);
 
 // Degrade LOUDLY, ONCE. Stated here and nowhere else in the build (the write gate stays
 // silent on purpose), factually, with the one command that fixes it. Never a block.
-if (depth.state === "ungrounded") process.stderr.write(`[palate] ${depth.reason}\n`);
+if (depth.state === "ungrounded") say(depth.reason);
+emitUserMessage();
 process.exit(0);

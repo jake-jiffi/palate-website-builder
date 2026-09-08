@@ -146,6 +146,14 @@ fi
 echo >&2
 gates_line="ran: ${RAN:-none}"
 [ -n "$SKIPPED" ] && gates_line="$gates_line; skipped: $SKIPPED"
+# ZERO GATES RUN IS NOT A PASS. With the Astro gate switched off and a lint that could not
+# inspect anything, this printed PASS and exited 0 over nothing measured. The line named
+# "ran: none", which is the honest half, but a CI step reads the verdict word and the exit code,
+# and this whole epic exists to stop a gate exiting 0 having inspected nothing.
+if [ -z "$RAN" ]; then
+  echo "palate-verify: SKIPPED ($gates_line). Nothing was inspected, so nothing has been established. NOT a pass." >&2
+  exit 2
+fi
 if [ "$rc" -eq 0 ]; then
   echo "palate-verify: PASS ($gates_line). The gate is the floor, not the ceiling - ship against the render." >&2
 else
