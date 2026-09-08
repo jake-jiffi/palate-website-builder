@@ -92,6 +92,28 @@ cat > "$PASS/verify-report.json" <<'JSON'
 JSON
 check "real pass evidence -> pass" 0 "$PASS/build-manifest.json"
 
+# --- THE SUMMARY COUNTS ITS SKIPS BEFORE IT SAYS PASSED ----------------------------
+# "Done gate passed" over a line naming seven sub-gates reads as seven gates passing. On this
+# fixture only two of them could run: there is no src/pages, so ship-ready, SEO and Explore
+# all refused, and there are no rendered variants to compare. The count has to be the first
+# thing in the line, and each skip has to carry its own reason.
+summary="$(bash "$GATE" "$PASS/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$summary" | grep -qE 'Done gate: [0-9]+ of [0-9]+ sub-gates ran, [0-9]+ skipped'; then
+  echo "ok   - the summary opens with how many sub-gates ran"; pass=$((pass+1))
+else
+  echo "FAIL - the summary opens with how many sub-gates ran (got: $summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$summary" | grep -qF 'explore=skipped('; then
+  echo "ok   - gate-explore's skip is mapped, not read as a pass"; pass=$((pass+1))
+else
+  echo "FAIL - gate-explore's skip is mapped, not read as a pass (got: $summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$summary" | grep -qF 'Passed:'; then
+  echo "ok   - and it only says passed after the count"; pass=$((pass+1))
+else
+  echo "FAIL - and it only says passed after the count (got: $summary)"; fail=$((fail+1))
+fi
+
 # --- PROJECT DIR COMES FROM THE MANIFEST, NOT FROM WHERE THE MANIFEST SITS --------
 # A real client build kept build-manifest.json at the repo root and the Astro site (dist/,
 # .palate-shots/, verify-report.json) in a subdirectory. Deriving the project from dirname

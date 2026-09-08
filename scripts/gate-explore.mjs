@@ -28,10 +28,14 @@
  * ============================ FAIL-OPEN, ALWAYS ============================
  *
  * It only has an opinion once variants are REGISTERED. No variants.ts, no variants, or a build
- * that is not doing Explore all skip (exit 0). It has nothing to say about a non-Explore build,
- * a single-page edit, or a user who never ran Explore at all.
+ * that is not doing Explore all SKIP. It has nothing to say about a non-Explore build, a
+ * single-page edit, or a user who never ran Explore at all.
  *
- * Exit 0 = pass or skip, 2 = block with the specific entries named.
+ * A SKIP SAYS SO AND EXITS 2, it does not exit 0. Exiting 0 having inspected nothing put
+ * "explore=pass" in the done gate's summary line on every build that never ran Explore.
+ *
+ * Exit 0 = pass, 2 = skip (first stderr line `gate-explore: skipped (<reason>)`) OR block
+ * (with the specific entries named). The caller separates the two on that first line.
  * Usage: node scripts/gate-explore.mjs [projectDir]
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -160,12 +164,21 @@ const findings = [];
 const add = (what, why) => findings.push({ what, why });
 
 const src = read("src/lib/variants.ts");
-if (!src) process.exit(0); // not an Explore build, or not this scaffold: nothing to say
+if (!src) {
+  // A SKIP IS NOT A PASS. Exiting 0 here put "explore=pass" in the done gate's summary for
+  // every build that never ran Explore, so the one line a person reads claimed a gate had
+  // cleared a thing it had not looked at. Say what was not inspected, and exit 2.
+  console.error("gate-explore: skipped (not an Explore build: no src/lib/variants.ts)");
+  process.exit(2);
+}
 
 const clean = stripComments(src);
 const body = arrayBody(clean, "variants");
 const entries = body ? objects(body) : [];
-if (!entries.length) process.exit(0); // Explore has not registered anything yet
+if (!entries.length) {
+  console.error("gate-explore: skipped (no boards registered)");
+  process.exit(2);
+}
 
 // ------------------------------------------------------- 1. the coaching page
 if (!existsSync(join(dir, "src/pages/explore.astro"))) {

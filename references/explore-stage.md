@@ -331,7 +331,9 @@ when variants are registered and the page is missing, when a rung carries no
 `what`/`why`/`feeling`, when two rungs claim the same position, when the ladder has gaps,
 and when a name is "Option 2" or a feeling would describe any website ever built. It has
 no opinion at all when no variants are registered, so it never touches a non-Explore
-build. The page is DELETED at Compose with the `/vN` routes; `gate-shipready.mjs` catches
+build, and it SAYS that rather than exiting clean: `gate-explore: skipped (<reason>)` with
+exit 2, which the done gate records as `explore=skipped(<reason>)`. Exiting 0 there used to
+put `explore=pass` in the summary of every build that never ran Explore. The page is DELETED at Compose with the `/vN` routes; `gate-shipready.mjs` catches
 it if it survives, because it names the rejected directions and belongs to nobody but this
 client.
 

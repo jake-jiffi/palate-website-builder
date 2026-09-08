@@ -3,16 +3,29 @@
 #
 # It holds three things that are easy to skip and impossible to notice missing: the page that
 # explains the range exists, every rung carries its own argument, and the ladder positions are
-# real. It must stay silent on everything else, because a gate that fires on an ordinary edit
-# gets switched off and then protects nothing.
+# real. It must have no OPINION on anything else, because a gate that fires on an ordinary edit
+# gets switched off and then protects nothing. Having no opinion is a SKIP with a printed reason
+# and exit 2, never exit 0: a gate that exits clean having inspected nothing reads as a pass.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 GATE="$DIR/../gate-explore.mjs"
 pass=0; fail=0
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
-# run <dir> -> "PASS" or "BLOCK"
-run() { node "$GATE" "$1" >/dev/null 2>&1 && echo PASS || echo BLOCK; }
+# run <dir> -> "PASS", "SKIP" or "BLOCK".
+#
+# A SKIP AND A BLOCK BOTH EXIT 2, and the first stderr line is what separates them, exactly as
+# gate-done.sh reads it. Classifying here rather than in the gate keeps the two in step: if the
+# gate ever stops printing its skip line, these cases report BLOCK and the suite says so.
+run() {
+  local err ec
+  err="$(node "$GATE" "$1" 2>&1 >/dev/null)"; ec=$?
+  if [ "$ec" -eq 0 ]; then echo PASS; return; fi
+  case "${err%%$'\n'*}" in
+    "gate-explore: skipped ("*) echo SKIP ;;
+    *) echo BLOCK ;;
+  esac
+}
 # The output is CAPTURED and then searched, never piped into `grep -q`. Under `set -o pipefail`
 # a `-q` grep exits on the first match, SIGPIPEs node, and the pipeline reports the signal, so
 # every assertion fails at the exact moment it should pass. That cost a debugging round here.
@@ -45,13 +58,15 @@ TS
 
 # === 1. NOT AN EXPLORE BUILD: nothing to say.
 A="$TMP/none"; mk "$A"
-want "no variants.ts at all -> pass" PASS "$(run "$A")"
+want "no variants.ts at all -> skip, with a reason" SKIP "$(run "$A")"
+has "and it says it is not an Explore build" "$A" "not an Explore build"
 
 # === 2. THE SHIPPED TEMPLATE, whose example entry is COMMENTED OUT. A naive scan reads that
 # comment as a fully-argued variant and passes a build that registered nothing.
 B="$TMP/template"; mk "$B"
 cp "$DIR/../../templates/astro-project/src/lib/variants.ts" "$B/src/lib/variants.ts"
-want "the bare template (example is commented out) -> pass" PASS "$(run "$B")"
+want "the bare template (example is commented out) -> skip, not pass" SKIP "$(run "$B")"
+has "and it says nothing is registered" "$B" "no boards registered"
 
 # === 3. THE HAPPY PATH.
 C="$TMP/good"; mk "$C"; good_variants "$C"; page "$C"
