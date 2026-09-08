@@ -25,6 +25,10 @@ want_re() { # <desc> <haystack> <regex>
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
+# COPIED OUT OF THE REPO. ux-lint and palate-verify refuse any directory inside a Claude Code
+# plugin checkout, and this suite's clean fixture lives in one.
+cp -R "$DIR/fixtures/uxlint/good" "$TMP/lint-good"
+
 # ---------------------------------------------------------------- gate-shipready
 # An Astro shape with nothing in it: the project check passes and the scan reads no file.
 EMPTY="$TMP/shipready-empty"; mkdir -p "$EMPTY/src/pages"
@@ -62,7 +66,7 @@ out="$(bash "$SCRIPTS/ux-lint.sh" "$NOFILES" 2>&1)"; rc=$?
 want_rc "ux-lint with no matching source -> exit 2" 2 "$rc"
 want_in "and it says it skipped, with a reason" "$out" "skipped (nothing to inspect"
 
-out="$(bash "$SCRIPTS/ux-lint.sh" "$DIR/fixtures/uxlint/good" 2>&1)"
+out="$(bash "$SCRIPTS/ux-lint.sh" "$TMP/lint-good" 2>&1)"
 want_re "ux-lint says how many files it read" "$out" 'inspected [1-9][0-9]* file'
 
 # --------------------------------------------------------------- verify-scaffold
@@ -83,7 +87,7 @@ want_in "and it refuses to call it clean" "$out" "SKIPPED"
 # ----------------------------------------------------------------- palate-verify
 # PALATE_SKIP_ASTRO=1 so this needs no compiling Astro project: the point is that the PASS line
 # NAMES what ran and what did not, rather than reading as two gates passing.
-out="$(env PALATE_SKIP_ASTRO=1 bash "$SCRIPTS/palate-verify.sh" "$DIR/fixtures/uxlint/good" 2>&1)"; rc=$?
+out="$(env PALATE_SKIP_ASTRO=1 bash "$SCRIPTS/palate-verify.sh" "$TMP/lint-good" 2>&1)"; rc=$?
 want_rc "palate-verify with the Astro gate skipped -> exit 0" 0 "$rc"
 want_in "and the PASS line names the gate that ran"     "$out" "ran: anti-slop lint"
 want_in "and names the one that was skipped"            "$out" "skipped: anti-freestyle"

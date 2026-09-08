@@ -71,6 +71,33 @@ else
   bad "an ordinary client project still resolves (got $res)"
 fi
 
+# --- AND FROM A SUB-DIRECTORY, which is where the strays actually landed ---------------
+# Checking the candidate alone left the fault half open. A session standing in scripts/test
+# takes the FALLBACK rung (nothing detected) and a session in templates/astro-project takes the
+# HINT rung (it is a real package.json + src/pages), and both used to resolve a project and get
+# a build-manifest.json written into the plugin. Two of the five stray locations, and the habit
+# an agent has of cd-ing into a subdirectory of its own build.
+for sub in scripts/test templates/astro-project; do
+  res="$(cd "$ROOT/$sub" && env CLAUDE_PLUGIN_ROOT="$TMP/fake-installed-cache" node -e '
+import("'"$ROOT"'/hooks/project-dir.mjs").then((m) => {
+  const r = m.resolveProjectDir(process.cwd());
+  console.log(JSON.stringify({ how: r.how, dir: r.dir }));
+});
+')"
+  if printf '%s' "$res" | grep -qF '"how":"refused"'; then ok "the resolver refuses $sub";
+  else bad "the resolver refuses $sub (got $res)"; fi
+
+  rm -f "$ROOT/$sub/build-manifest.json"
+  printf '{"hook_event_name":"PostToolUse","cwd":"%s","tool_name":"Write","tool_input":{"file_path":"%s/x.astro"},"tool_response":{"ok":true}}' \
+    "$ROOT/$sub" "$ROOT/$sub" \
+    | env CLAUDE_PLUGIN_ROOT="$TMP/fake-installed-cache" node "$ROOT/hooks/palate-manifest.mjs" >/dev/null 2>&1
+  if [ -f "$ROOT/$sub/build-manifest.json" ]; then
+    bad "the manifest hook must not write into $sub"; rm -f "$ROOT/$sub/build-manifest.json"
+  else
+    ok "the manifest hook writes nothing into $sub"
+  fi
+done
+
 # --- the hooks write nothing into the plugin -----------------------------------------
 rm -f "$ROOT/build-manifest.json"
 printf '{"hook_event_name":"PostToolUse","cwd":"%s","tool_name":"Write","tool_input":{"file_path":"%s/README.md"},"tool_response":{"ok":true}}' "$ROOT" "$ROOT" \

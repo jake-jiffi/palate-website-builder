@@ -64,8 +64,8 @@ command -v perl >/dev/null 2>&1 || { echo "ux-lint: perl is required" >&2; exit 
 # not drift waiting to happen: bootstrap.sh curls this script ALONE into a cache directory, so
 # it has no sibling to import and must carry the predicate itself. Three conditions, matching
 # pluginRootRefusal(): the directory is CLAUDE_PLUGIN_ROOT, it sits inside it, or it carries
-# .claude-plugin/plugin.json. No ancestor walk, or every fixture in the plugin's own test suite
-# would be refused.
+# .claude-plugin/plugin.json, on the directory itself or on any ancestor up to the git toplevel.
+# A test that needs a fixture linted copies it to a temporary directory first.
 palate_plugin_refusal() { # <dir> -> prints the reason and returns 0 when it must be refused
   local d
   d="$(cd "$1" 2>/dev/null && pwd)" || return 1
@@ -79,10 +79,24 @@ palate_plugin_refusal() { # <dir> -> prints the reason and returns 0 when it mus
       esac
     fi
   fi
-  if [ -f "$d/.claude-plugin/plugin.json" ]; then
-    echo "$d carries .claude-plugin/plugin.json, so it is a Claude Code plugin checkout, not a site"
-    return 0
-  fi
+  # Ancestors too, bounded by the git toplevel: checking the candidate alone still let a gate
+  # run inside scripts/test or templates/astro-project measure the plugin. `.git` is a
+  # directory in a clone and a FILE in a worktree, so -e rather than -d.
+  local cur="$d" i=0
+  while [ "$i" -lt 12 ]; do
+    if [ -f "$cur/.claude-plugin/plugin.json" ]; then
+      if [ "$cur" = "$d" ]; then
+        echo "$d carries .claude-plugin/plugin.json, so it is a Claude Code plugin checkout, not a site"
+      else
+        echo "$d is inside the Claude Code plugin checkout at $cur (.claude-plugin/plugin.json), not a site"
+      fi
+      return 0
+    fi
+    [ -e "$cur/.git" ] && break
+    local parent; parent="$(dirname "$cur")"
+    [ "$parent" = "$cur" ] && break
+    cur="$parent"; i=$((i + 1))
+  done
   return 1
 }
 

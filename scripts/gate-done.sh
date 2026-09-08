@@ -281,12 +281,23 @@ fi
 # a build that has nothing to compare. Set PALATE_GATE_NOVELTY=0 to disable it entirely.
 REQUIRE_NOVELTY="${PALATE_GATE_NOVELTY:-1}"
 if [ "$REQUIRE_NOVELTY" = "1" ] && [ -f "$NOVELTY_GATE" ]; then
-  if novelty_err="$(node "$NOVELTY_GATE" --manifest "$MANIFEST" 2>&1 1>/dev/null)"; then
-    # gate-novelty prints "passed:" on a real pass and "skipped:" when nothing to
-    # compare; both exit 0. Reflect which one happened in the summary.
-    novelty_note="novelty=pass-or-skip"; gate_ran
+  # BOTH STREAMS. gate-novelty prints "novelty gate skipped: ..." and "novelty gate passed: ..."
+  # to STDOUT and exits 0 for each, so reading stderr alone could not tell them apart and this
+  # counted a skip as a gate that ran. On the suite's own deep fixture it skips ("no diverge
+  # block"), which is one of the nine, on the very line this epic rebuilt to stop that.
+  if novelty_out="$(node "$NOVELTY_GATE" --manifest "$MANIFEST" 2>&1)"; then
+    novelty_first="${novelty_out%%$'\n'*}"
+    case "$novelty_first" in
+      "novelty gate skipped:"*)
+        novelty_reason="${novelty_first#novelty gate skipped: }"
+        novelty_reason="${novelty_reason%.}"
+        if [ "${#novelty_reason}" -gt 100 ]; then novelty_reason="${novelty_reason:0:99}…"; fi
+        novelty_note="novelty=skipped(${novelty_reason})"
+        gate_skipped novelty "$novelty_reason" ;;
+      *) novelty_note="novelty=pass"; gate_ran ;;
+    esac
   else
-    fail "Novelty gate did not pass. ${novelty_err}"
+    fail "Novelty gate did not pass. ${novelty_out}"
   fi
 elif [ ! -f "$NOVELTY_GATE" ]; then
   novelty_note="novelty=skipped(gate-novelty.mjs not present)"
@@ -311,11 +322,28 @@ if [ -f "$SHIPREADY_GATE" ]; then
   if shipready_err="$(node "$SHIPREADY_GATE" "$PROJ" 2>&1)"; then shipready_rc=0; else shipready_rc=$?; fi
   case "$shipready_rc" in
     0) shipready_note="shipready=pass"; shipready_skip="" ;;
-    # 2 is CANNOT CHECK (no src/pages, so not an Astro project shape), not a clean bill. It
-    # skips like every other sub-gate here, but it SAYS so, because a skip that reads as a
-    # pass is the failure mode this whole file exists to prevent.
-    2) shipready_note="shipready=skipped(not an Astro project shape)"
-       shipready_skip="not an Astro project shape" ;;
+    # 2 is CANNOT CHECK, not a clean bill. It skips like every other sub-gate here, but it SAYS
+    # so, because a skip that reads as a pass is the failure mode this whole file exists to
+    # prevent. IT SAYS SO IN THE GATE'S OWN WORDS: that gate now has three exit-2 reasons (not
+    # an Astro shape, nothing readable to inspect, and a refusal to grade the plugin itself)
+    # and hardcoding one of them here reported the other two as something they are not. That is
+    # the same defect the SEO branch below documents at length, in a second branch.
+    2) shipready_first="${shipready_err%%$'\n'*}"
+       shipready_first="${shipready_first#gate-shipready: }"
+       case "$shipready_first" in
+         # A REFUSAL IS NOT A SKIP. The gate was pointed at the Palate plugin rather than a
+         # site, so the answer is wrong, not absent, and nothing downstream should read on.
+         refused:*) fail "Not ready to hand over. ${shipready_err}" ;;
+         "skipped ("*)
+           shipready_skip="${shipready_first#skipped (}"
+           shipready_skip="${shipready_skip%%)*}" ;;
+         *) shipready_skip="$shipready_first" ;;
+       esac
+       shipready_skip="${shipready_skip//$PROJ\//}"
+       shipready_skip="${shipready_skip//$PROJ/.}"
+       if [ "${#shipready_skip}" -gt 100 ]; then shipready_skip="${shipready_skip:0:99}…"; fi
+       [ -z "$shipready_skip" ] && shipready_skip="gate-shipready exited 2 without a reason"
+       shipready_note="shipready=skipped(${shipready_skip})" ;;
     *) fail "Not ready to hand over. ${shipready_err}" ;;
   esac
 fi

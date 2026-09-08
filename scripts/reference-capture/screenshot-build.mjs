@@ -320,6 +320,16 @@ async function main() {
     notes: [],
   };
 
+  // WRITTEN BEFORE THE BROWSER STARTS, so a run that is KILLED leaves its own record. Every
+  // other write here happens on a path the process reaches; a timeout, an OOM or a SIGKILL
+  // reaches none of them, so the file left on disk was the PREVIOUS run's, still reading
+  // status "captured", with that run's PNGs beside it for the done gate to count. The stale
+  // evidence case this file was hardened against is exactly the one that survived it. The
+  // done gate refuses any present status other than captured, so a killed run now blocks with
+  // "pending" and the message names it. It is the likeliest failure on a slow build: a real
+  // capture once took 195.9s against a 180s budget.
+  writeManifest(args.out, manifest);
+
   let webgl = false;
   let browser;
   try {

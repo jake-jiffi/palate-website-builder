@@ -113,6 +113,39 @@ if printf '%s' "$summary" | grep -qF 'Passed:'; then
 else
   echo "FAIL - and it only says passed after the count (got: $summary)"; fail=$((fail+1))
 fi
+# THE NOVELTY GATE PRINTS ITS SKIP ON STDOUT AND EXITS 0, so reading stderr alone could not
+# tell a pass from a skip and counted both as ran. On this fixture it skips ("no diverge
+# block"), so the count is one lower than the first version of this line claimed.
+if printf '%s' "$summary" | grep -qF 'novelty=skipped('; then
+  echo "ok   - a novelty skip is counted as a skip, not a pass"; pass=$((pass+1))
+else
+  echo "FAIL - a novelty skip is counted as a skip, not a pass (got: $summary)"; fail=$((fail+1))
+fi
+
+# --- SHIPREADY'S OTHER EXIT-2 REASONS ARE NOT ALL "not an Astro project shape" ---------
+# This epic gave gate-shipready two more exit-2 paths (nothing to inspect, and a refusal), and
+# the mapping still labelled every one of them with the one reason it knew. src/pages exists
+# here and holds nothing, so the gate skips for the NEW reason.
+SRNONE="$TMP/shipready-empty"; mkdir -p "$SRNONE/src/pages"
+cp "$DEEP" "$SRNONE/build-manifest.json"
+make_shots "$SRNONE" 0
+cp "$PASS/verify-report.json" "$SRNONE/verify-report.json"
+sr_summary="$(bash "$GATE" "$SRNONE/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$sr_summary" | grep -qF 'shipready=skipped(nothing to inspect'; then
+  echo "ok   - gate-shipready's skip carries its own reason"; pass=$((pass+1))
+else
+  echo "FAIL - gate-shipready's skip carries its own reason (got: $sr_summary)"; fail=$((fail+1))
+fi
+
+# --- A KILLED CAPTURE LEAVES A PENDING MANIFEST, AND THAT IS NOT EVIDENCE --------------
+# The driver writes its manifest before it launches now, so a run killed by a timeout, an OOM
+# or a SIGKILL leaves status "pending" rather than the PREVIOUS run's "captured".
+PENDING="$TMP/pending-capture"; mkdir -p "$PENDING"
+cp "$DEEP" "$PENDING/build-manifest.json"
+make_shots "$PENDING" 0
+echo '{"status":"pending","console_errors":0}' > "$PENDING/.palate-shots/manifest.json"
+cp "$PASS/verify-report.json" "$PENDING/verify-report.json"
+check "a capture killed mid-run (status pending) -> block" 2 "$PENDING/build-manifest.json"
 
 # --- A FAILED CAPTURE IS NOT EVIDENCE ----------------------------------------------
 # The PNG on disk outlives the run that wrote it. A capture that threw, or a browser that

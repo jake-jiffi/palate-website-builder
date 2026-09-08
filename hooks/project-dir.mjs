@@ -56,9 +56,14 @@ const MAX_UP = 12;
  * stray build-manifest.json files inside the repo, one recording 188 files_written spanning
  * three unrelated repositories.
  *
- * Three conditions, and no ancestor walk. Walking up for `.claude-plugin/plugin.json` would
- * refuse every fixture directory in this repo's own test suite, which is a real cost for a
- * case (a client site nested inside a plugin checkout) that does not happen.
+ * IT WALKS ANCESTORS, BOUNDED BY THE GIT TOPLEVEL. Checking the candidate alone left the fault
+ * half open: a session standing in `scripts/test` or `templates/astro-project` still resolved a
+ * project and the manifest hook still wrote `build-manifest.json` there, which is two of the
+ * five stray locations and the habit (an agent cd-ing into a subdirectory of its own build) the
+ * 2026-08-28 changelog already records. The walk stops at the directory holding `.git`, so it
+ * cannot reach out of the repository it started in, and there is no environment escape hatch:
+ * a test that needs a fixture linted copies it to a temporary directory first, which is what
+ * most of the suites here already do.
  *
  * Returns the reason to refuse, or null when the directory is fair game.
  */
@@ -79,12 +84,32 @@ export function pluginRootRefusal(dir) {
       /* an unresolvable override is not a reason to refuse a real project */
     }
   }
-  try {
-    if (fs.statSync(path.join(resolved, ".claude-plugin", "plugin.json")).isFile()) {
-      return `${resolved} carries .claude-plugin/plugin.json, so it is a Claude Code plugin checkout, not a site`;
+
+  let cur = resolved;
+  for (let i = 0; i < MAX_UP; i++) {
+    let isPlugin = false;
+    try {
+      isPlugin = fs.statSync(path.join(cur, ".claude-plugin", "plugin.json")).isFile();
+    } catch {
+      /* not a plugin checkout at this level */
     }
-  } catch {
-    /* not a plugin checkout */
+    if (isPlugin) {
+      return cur === resolved
+        ? `${resolved} carries .claude-plugin/plugin.json, so it is a Claude Code plugin checkout, not a site`
+        : `${resolved} is inside the Claude Code plugin checkout at ${cur} (.claude-plugin/plugin.json), not a site`;
+    }
+    // The repository root is the ceiling. `.git` is a directory in a clone and a FILE in a
+    // worktree, so existsSync rather than a directory test.
+    let atRepoRoot = false;
+    try {
+      atRepoRoot = fs.existsSync(path.join(cur, ".git"));
+    } catch {
+      /* unreadable: treat as not a root and keep the MAX_UP bound */
+    }
+    if (atRepoRoot) break;
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
   }
   return null;
 }
