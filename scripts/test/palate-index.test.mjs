@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { buildIndex, blastRadius, readBuildFormat } from '../palate-index.mjs';
+import { buildIndex, blastRadius, readBuildFormat, resolveBuildFormat } from '../palate-index.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE = join(HERE, '..', '..', 'templates', 'astro-project');
@@ -186,6 +186,110 @@ test('the CLI reports how many links it read, over how many files', () => {
   try {
     const r = spawnSync(process.execPath, [join(HERE, '..', 'palate-index.mjs'), dir], { encoding: 'utf8' });
     assert.match(`${r.stdout}${r.stderr}`, /links: \d+ parsed across \d+ files/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a link that never rendered is not a link, and not a dead one either', () => {
+  // THE DEFECT THIS CLOSES. ExploreSwitcher carries a literal href="/explore" inside a
+  // `{show && ...}` that is false once the variant registry is cleared, and BaseLayout mounts it
+  // on every route. Reading the source, every finished Palate site reported a dead link to a
+  // page Compose had deleted, and /publish reads a dead link as not done.
+  const dir = site({
+    'src/pages/index.astro': '---\nimport L from "../layouts/L.astro";\n---\n<L />',
+    'src/pages/contact.astro': '<h1>c</h1>',
+    'src/layouts/L.astro': '{show && <a href="/explore">Explore</a>}<a href="/contact">c</a>',
+    // The composed build: the switcher rendered nothing, so /explore is nowhere in the output.
+    'dist/index.html': '<html><body><a href="/contact">c</a></body></html>',
+    'dist/contact/index.html': '<html><body><a href="/">home</a></body></html>',
+  });
+  try {
+    const ix = buildIndex(dir);
+    assert.deepEqual(ix.links.dead, [], `nothing shipped a link to /explore: ${ix.links.dead}`);
+    assert.ok(!ix.routes.find((r) => r.path === '/').links.includes('/explore'));
+    assert.ok(!ix.links.orphans.includes('/contact'), 'the built home links /contact');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('with no build to read, the source closure is still the fallback', () => {
+  const dir = site({
+    'src/pages/index.astro': '---\nimport L from "../layouts/L.astro";\n---\n<L />',
+    'src/pages/contact.astro': '<h1>c</h1>',
+    'src/layouts/L.astro': '<a href="/contact">c</a>',
+  });
+  try {
+    assert.deepEqual(buildIndex(dir).routes.find((r) => r.path === '/').links, ['/contact']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a built entry page belongs to the dynamic route that rendered it', () => {
+  const dir = site({
+    'src/pages/index.astro': '<a href="/blog/welcome">post</a>',
+    'src/pages/blog/[slug].astro': '<h1>post</h1>',
+    'dist/index.html': '<html><body><a href="/blog/welcome">post</a></body></html>',
+    'dist/blog/welcome/index.html': '<html><body><a href="/">home</a></body></html>',
+  });
+  try {
+    const ix = buildIndex(dir);
+    assert.deepEqual(ix.routes.find((r) => r.path === '/blog/[slug]').links, ['/']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the OUTPUT decides the format, so .html files mean file even with no config', () => {
+  const dir = site({
+    'src/pages/index.astro': '<a href="/about.html">about</a>',
+    'src/pages/about.astro': '<h1>About</h1>',
+    'dist/index.html': '<html><body><a href="/about.html">about</a></body></html>',
+    'dist/about.html': '<html><body><a href="/">home</a></body></html>',
+  });
+  try {
+    assert.equal(resolveBuildFormat(dir).format, 'file');
+    assert.deepEqual(buildIndex(dir).links.dead, []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the Vercel adapter overrides build.format, and the .html links really are dead', () => {
+  // @astrojs/vercel calls updateConfig({ build: { format: "directory" } }) unconditionally, so
+  // a project that declares "file" ships /about/ and /about.html is a 404. Reading the config
+  // alone made both tools report those links as live pages, which is a check saying the
+  // opposite of the truth.
+  const dir = site(
+    {
+      'src/pages/index.astro': '<a href="/about.html">about</a>',
+      'src/pages/about.astro': '<h1>About</h1>',
+      'dist/index.html': '<html><body><a href="/about.html">about</a></body></html>',
+      'dist/about/index.html': '<html><body><a href="/">home</a></body></html>',
+    },
+    'import vercel from "@astrojs/vercel";\nexport default { adapter: vercel(), build: { format: "file" } };\n',
+  );
+  try {
+    const resolved = resolveBuildFormat(dir);
+    assert.equal(resolved.format, 'directory');
+    assert.match(resolved.warning, /overrides it to "directory"/);
+    assert.ok(buildIndex(dir).links.dead.includes('/about.html'), 'that href 404s on this host');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('with no output at all the adapter still decides, and says so', () => {
+  const dir = site(
+    { 'src/pages/index.astro': '<a href="/about.html">about</a>', 'src/pages/about.astro': '<h1>A</h1>' },
+    'import vercel from "@astrojs/vercel";\nexport default { adapter: vercel(), build: { format: "file" } };\n',
+  );
+  try {
+    const resolved = resolveBuildFormat(dir);
+    assert.equal(resolved.format, 'directory');
+    assert.match(resolved.warning, /@astrojs\/vercel/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('declared file with no adapter is honoured, and is silent', () => {
+  const dir = site(
+    { 'src/pages/index.astro': '<a href="/about.html">about</a>', 'src/pages/about.astro': '<h1>A</h1>' },
+    'export default { build: { format: "file" } };\n',
+  );
+  try {
+    const resolved = resolveBuildFormat(dir);
+    assert.equal(resolved.format, 'file');
+    assert.equal(resolved.warning, null);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

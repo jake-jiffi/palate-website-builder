@@ -42,7 +42,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, basename } from "node:path";
-import { buildIndex, readBuildFormat } from "./palate-index.mjs";
+import { buildIndex, resolveBuildFormat, OUT_CANDIDATES, findOutputRoot } from "./palate-index.mjs";
 
 // ------------------------------------------------------------------------ args
 const argv = process.argv.slice(2);
@@ -73,8 +73,10 @@ if (siteOverride && !/^[a-z][a-z0-9+.-]*:\/\//i.test(siteOverride)) {
 }
 
 // Which URL spelling this build produces. Read once, because `norm` runs on every sitemap
-// entry, every route and every canonical.
-const BUILD_FORMAT = readBuildFormat(dir);
+// entry, every route and every canonical. THE BUILT OUTPUT IS THE TRUTH: @astrojs/vercel
+// overrides build.format, so the config is what the project asked for and not what it ships.
+const { format: BUILD_FORMAT, source: FORMAT_FROM, warning: FORMAT_WARNING } = resolveBuildFormat(dir);
+if (FORMAT_WARNING) console.error(`gate-seo: ${FORMAT_WARNING}\n`);
 
 const findings = [];
 const blocked = [];
@@ -196,8 +198,7 @@ if (!index) {
 // The build output, in the order the adapters produce it. `dist/client` first because the
 // Vercel adapter leaves a bare `dist/` behind on some versions and picking it would walk
 // server bundles looking for HTML.
-const OUT_CANDIDATES = [".vercel/output/static", "dist/client", "dist", "build"];
-const outRoot = OUT_CANDIDATES.map((c) => join(dir, c)).find(existsSync) || null;
+const outRoot = findOutputRoot(dir);
 if (!outRoot) {
   console.error(
     `gate-seo: no build output in ${OUT_CANDIDATES.join(", ")}. The sitemap is a BUILD artefact, ` +
@@ -964,6 +965,7 @@ const scope =
   `${expected.length} expected URL(s), ${sitemapPaths.size} advertised, ` +
   `${canonicalChecked} canonical(s) read` +
   (siteOrigin ? `, site ${hostOf(siteOrigin)} (from ${siteFrom})` : ", site origin unknown") +
+  `, ${BUILD_FORMAT} URLs (from ${FORMAT_FROM})` +
   (skipped.noindex ? `, ${skipped.noindex} noindex page(s) excluded` : "") +
   (skipped.variant ? `, ${skipped.variant} Explore variant(s) excluded` : "") +
   `${base ? `, live against ${base}` : ", disk only"}` +

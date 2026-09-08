@@ -82,11 +82,94 @@ const withoutComments = (src) =>
   src.split(/\r?\n/).filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
 
 /**
+ * The built output, in the order the adapters produce it. `dist/client` before `dist` because
+ * the Vercel adapter leaves a bare `dist/` behind on some versions and picking it would walk
+ * server bundles looking for HTML.
+ */
+export const OUT_CANDIDATES = ['.vercel/output/static', 'dist/client', 'dist', 'build'];
+export const findOutputRoot = (projectDir) =>
+  OUT_CANDIDATES.map((c) => join(projectDir, c)).find(existsSync) || null;
+
+/** Every built page under an output root, with the route each one serves. */
+export function builtPages(outRoot) {
+  const out = [];
+  for (const f of walk(outRoot)) {
+    if (!f.endsWith('.html')) continue;
+    let r = relative(outRoot, f).replace(/\\/g, '/').replace(/\.html$/, '');
+    // Build artefacts, not pages. `_astro` and `pagefind` are Astro's and pagefind's own.
+    if (/(^|\/)(_astro|pagefind)\//.test(r)) continue;
+    if (r.endsWith('/index')) r = r.slice(0, -'/index'.length);
+    if (r === 'index') r = '';
+    out.push({ file: f, route: ('/' + r).replace(/\/{2,}/g, '/').replace(/(.)\/$/, '$1') });
+  }
+  return out;
+}
+
+/**
+ * Which spelling the OUTPUT uses, or null when there is not enough of it to tell.
+ *
+ * A page written as `about.html` beside `index.html` is file format; one written as
+ * `about/index.html` is directory. `index.html`, `404.html` and `500.html` sit at the root in
+ * both, so they answer nothing and are skipped.
+ */
+export function formatOfOutput(outRoot) {
+  let sawPage = false;
+  for (const { file } of builtPages(outRoot)) {
+    const rel = relative(outRoot, file).replace(/\\/g, '/');
+    if (/^(index|404|500)\.html$/.test(rel)) continue;
+    if (!rel.endsWith('/index.html')) return 'file';
+    sawPage = true;
+  }
+  return sawPage ? 'directory' : null;
+}
+
+/** Is @astrojs/vercel wired into the config? It rewrites build.format whatever the config says. */
+function usesVercelAdapter(projectDir) {
+  for (const name of ['astro.config.mjs', 'astro.config.ts', 'astro.config.js']) {
+    const src = read(join(projectDir, name));
+    if (src && /@astrojs\/vercel/.test(withoutComments(src))) return true;
+  }
+  return false;
+}
+
+/**
+ * Which URL spelling this build produces. THE BUILT OUTPUT IS THE TRUTH when there is one.
+ *
+ * `@astrojs/vercel` calls `updateConfig({ build: { format: "directory" } })` unconditionally in
+ * astro:config:setup, so a project declaring "file" and using the default adapter SHIPS
+ * directory. Reading the config alone made both tools strip `.html` from forty-one hrefs that
+ * really do 404 on that host, and report a clean site: a check that says the opposite of the
+ * truth, which is the class this repo exists to hunt.
+ *
+ * With no output to read, the adapter still decides: declared "file" plus the Vercel adapter is
+ * directory, and it warns, because that disagreement is a defect in the project rather than a
+ * detail of this gate.
+ */
+export function resolveBuildFormat(projectDir) {
+  const declared = readBuildFormat(projectDir);
+  const vercel = usesVercelAdapter(projectDir);
+  const outRoot = findOutputRoot(projectDir);
+  const observed = outRoot ? formatOfOutput(outRoot) : null;
+
+  let format = declared;
+  let source = 'astro.config';
+  if (observed) { format = observed; source = relative(projectDir, outRoot) || 'the build output'; }
+  else if (declared === 'file' && vercel) { format = 'directory'; source = 'the @astrojs/vercel adapter'; }
+
+  const warning = declared === 'file' && format !== 'file' && vercel
+    ? `astro.config declares build.format "file" and @astrojs/vercel overrides it to "directory" ` +
+      `at build time, so this build serves /about/ and NOT /about.html. Reading ${source}. ` +
+      'Remove the format from the config, or change host.'
+    : null;
+  return { format, source, warning };
+}
+
+/**
  * `build.format` from the Astro config, read syntactically. No bundler, no install.
  *
  * "file" writes /about.html, "directory" writes /about/index.html, "preserve" mirrors the
- * source tree. It decides whether a `/about.html` href is this site's own URL or a 404, and
- * nothing here read it, so every such link on a file-format build reported as dead.
+ * source tree. Prefer `resolveBuildFormat`: this is what the project ASKED for, which is not
+ * always what it ships.
  *
  * Unreadable or absent is "directory", which is Astro's own default.
  */
@@ -240,7 +323,7 @@ export function buildIndex(projectDir) {
   const srcDir = join(projectDir, 'src');
   const pagesDir = join(srcDir, 'pages');
   if (!existsSync(pagesDir)) return null;
-  const format = readBuildFormat(projectDir);
+  const { format } = resolveBuildFormat(projectDir);
 
   const files = walk(srcDir);
   const graph = {};
@@ -268,15 +351,45 @@ export function buildIndex(projectDir) {
   }
   routes.sort((a, b) => a.path.localeCompare(b.path));
 
-  // Links, read once per file. Every route reads its own page plus its whole closure, so the
-  // shared layout is parsed once and not once per page that reaches it.
-  const hrefCache = new Map();
-  const hrefsOf = (rel) => {
-    if (!hrefCache.has(rel)) hrefCache.set(rel, hrefsIn(join(projectDir, rel), format));
-    return hrefCache.get(rel);
-  };
-  for (const r of routes) r.links = internalLinks(r, hrefsOf);
-  const linksParsed = [...hrefCache.values()].reduce((n, hs) => n + hs.length, 0);
+  // Links. THE BUILT PAGE IS THE TRUTH when there is one.
+  //
+  // Reading the source closure was right in one way and wrong in another: it found the nav that
+  // lives in a Header component, and it also found hrefs that never render. The shared layout
+  // mounts ExploreSwitcher, whose `href="/explore"` is inside a `{show && ...}` that is false
+  // once the variant registry is cleared, so every finished Palate site reported a dead link to
+  // a page Compose had deleted, and `/publish` reads a dead link as not done.
+  //
+  // A built page cannot lie about what it emitted. The closure walk stays as the fallback for a
+  // repo that has not been built, where a link graph from source is better than none.
+  const outRoot = findOutputRoot(projectDir);
+  const pages = outRoot ? builtPages(outRoot) : [];
+  let linksParsed = 0;
+  let linkFiles = 0;
+
+  if (pages.length) {
+    const byRoute = new Map(routes.map((r) => [r.path, r]));
+    const dynamic = routes.filter((r) => r.kind === 'dynamic');
+    for (const { file, route } of pages) {
+      const hrefs = hrefsIn(file, format);
+      linkFiles += 1;
+      linksParsed += hrefs.length;
+      // A built entry page belongs to the dynamic route that rendered it: /blog/welcome is the
+      // output of /blog/[slug], and the route is what carries a link list.
+      const owner = byRoute.get(route)
+        || dynamic.find((r) => route.startsWith(r.path.replace(/\/\[[^\]]+\]$/, '') + '/'));
+      if (!owner) continue;
+      owner.links = [...new Set([...owner.links, ...hrefs])];
+    }
+  } else {
+    const hrefCache = new Map();
+    const hrefsOf = (rel) => {
+      if (!hrefCache.has(rel)) hrefCache.set(rel, hrefsIn(join(projectDir, rel), format));
+      return hrefCache.get(rel);
+    };
+    for (const r of routes) r.links = internalLinks(r, hrefsOf);
+    linksParsed = [...hrefCache.values()].reduce((n, hs) => n + hs.length, 0);
+    linkFiles = hrefCache.size;
+  }
 
   // Collections: one entry per markdown file, joined to the dynamic route that
   // renders it and to every listing route that reaches the same collection.
@@ -331,7 +444,7 @@ export function buildIndex(projectDir) {
   return {
     version: 1,
     routes, entries, facts,
-    links: { orphans, dead, parsed: linksParsed, files: hrefCache.size },
+    links: { orphans, dead, parsed: linksParsed, files: linkFiles },
     counts: { routes: routes.length, entries: entries.length, drafts: entries.filter((e) => e.draft).length },
   };
 }

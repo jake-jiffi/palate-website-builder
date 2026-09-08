@@ -271,6 +271,24 @@ test("under build.format \"file\" the site's .html URLs are its real URLs", () =
   assert.match(r.out, /3 expected URL\(s\), 3 advertised/);
 });
 
+test("the Vercel adapter overrides the config, so the gate reads the build and warns", () => {
+  // @astrojs/vercel forces build.format to "directory". Reading the config, the gate stripped
+  // .html from every href and canonical and reported a site whose .html URLs 404 as clean:
+  // a check saying the opposite of the truth, on the scaffold's default adapter.
+  const p = scaffold();
+  write(
+    join(p, "astro.config.mjs"),
+    'import vercel from "@astrojs/vercel";\nexport default { site: "https://ex.com", adapter: vercel(), build: { format: "file" } };\n',
+  );
+  sitemap(p, ["https://ex.com/", "https://ex.com/blog.html", "https://ex.com/blog/welcome/"]);
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /overrides it to "directory"/);
+  assert.match(r.out, /sitemap advertises a URL no route serves/);
+  assert.match(r.out, /\/blog\.html/);
+  assert.match(r.out, /directory URLs \(from/);
+});
+
 test("without that format a .html URL in the sitemap is still a phantom", () => {
   // The strip is keyed on the format for a reason: on a directory-format host /blog.html is a
   // 404, and a gate that normalised it away would report a crawl trap as clean.
