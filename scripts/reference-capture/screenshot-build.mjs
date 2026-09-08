@@ -18,8 +18,11 @@
  * captures artefacts. The pass/fail is computed downstream by the verifier + the
  * done-gate from these artefacts (anti-reward-hacking: no LLM boolean in the loop).
  *
- * Built to run UNATTENDED: any failure leaves a manifest with a status and a clean
- * exit 0, so the loop can read what happened rather than crashing the build.
+ * Built to run UNATTENDED: any failure leaves a manifest carrying a status and the reason,
+ * so the loop can read what happened. A capture that FAILED also exits 1, because exiting 0
+ * on a browser that never launched made a crash indistinguishable from a clean run while the
+ * PREVIOUS run's screenshots sat in the output directory for the done gate to count. Console
+ * errors on a page that DID render still exit 0: those are a finding, not a broken instrument.
  *
  * Usage:
  *   node screenshot-build.mjs --url <http://localhost:PORT> --out <dir> [--label v1] [--sections]
