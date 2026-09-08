@@ -155,6 +155,23 @@ verr_report=$(jq -r '(.visual.console_errors // 0)' "$REPORT")
 
 [ "$vran" = "true" ] || fail "Visual loop did not run (.visual.ran is not true in verify-report.json)."
 
+# A FAILED CAPTURE IS NOT EVIDENCE, and this has to be read BEFORE the PNGs are counted. The
+# files on disk outlive the run that wrote them, so a capture that threw (or a browser that
+# never launched) leaves the PREVIOUS run's screenshots sitting exactly where the count looks.
+# Counting them answered "did a capture ever happen here", never "did THIS one succeed". The
+# driver records its own verdict; an ABSENT status is not judged, because an older shots
+# manifest predates the field and absence is not evidence of failure.
+if [ -f "$SHOTS_MANIFEST" ]; then
+  shots_status=$(jq -r '(.status // "")' "$SHOTS_MANIFEST" 2>/dev/null || echo "")
+  case "$shots_status" in
+    ""|captured|ok) ;;
+    *)
+      shots_why=$(jq -r '(.error // ((.notes // []) | join("; ")) // "")' "$SHOTS_MANIFEST" 2>/dev/null || echo "")
+      fail "shots manifest reports failed capture (status \"$shots_status\"${shots_why:+: $shots_why}). Any PNG beside it is from an earlier run and is NOT evidence for this one. Fix the cause and re-run scripts/reference-capture/screenshot-build.mjs before the visual loop can pass."
+      ;;
+  esac
+fi
+
 # EVIDENCE not assertion: a screenshot must exist ON DISK. A report claiming visual
 # pass with no captured PNG is rejected (the verifier may not pass without real pixels).
 shot_count=$(find "$SHOTS_DIR" -maxdepth 2 -type f -name '*.png' 2>/dev/null | wc -l | tr -d ' ')

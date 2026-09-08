@@ -114,6 +114,32 @@ else
   echo "FAIL - and it only says passed after the count (got: $summary)"; fail=$((fail+1))
 fi
 
+# --- A FAILED CAPTURE IS NOT EVIDENCE ----------------------------------------------
+# The PNG on disk outlives the run that wrote it. A capture that threw, or a browser that
+# never launched, leaves the previous run's screenshots sitting exactly where the shot count
+# looks, so counting files answered "did a capture ever happen here" and never "did THIS one
+# succeed". The driver records its own verdict; the gate has to read it before it counts.
+STALE="$TMP/stale-capture"; mkdir -p "$STALE"
+cp "$DEEP" "$STALE/build-manifest.json"
+make_shots "$STALE" 0
+echo '{"status":"failed","error":"browser launch failed","console_errors":0}' > "$STALE/.palate-shots/manifest.json"
+cp "$PASS/verify-report.json" "$STALE/verify-report.json"
+check "a failed capture beside a stale PNG -> block" 2 "$STALE/build-manifest.json"
+stale_err="$(bash "$GATE" "$STALE/build-manifest.json" 2>&1 >/dev/null || true)"
+if printf '%s' "$stale_err" | grep -qF 'shots manifest reports failed capture'; then
+  echo "ok   - and it names the failed capture as the cause"; pass=$((pass+1))
+else
+  echo "FAIL - and it names the failed capture as the cause (got: $stale_err)"; fail=$((fail+1))
+fi
+
+# An older shots manifest with no status at all must NOT be trapped: absent is not bad.
+NOSTATUS="$TMP/no-status"; mkdir -p "$NOSTATUS"
+cp "$DEEP" "$NOSTATUS/build-manifest.json"
+make_shots "$NOSTATUS" 0
+echo '{"console_errors":0}' > "$NOSTATUS/.palate-shots/manifest.json"
+cp "$PASS/verify-report.json" "$NOSTATUS/verify-report.json"
+check "a shots manifest with no status -> pass (absent is not bad)" 0 "$NOSTATUS/build-manifest.json"
+
 # --- PROJECT DIR COMES FROM THE MANIFEST, NOT FROM WHERE THE MANIFEST SITS --------
 # A real client build kept build-manifest.json at the repo root and the Astro site (dist/,
 # .palate-shots/, verify-report.json) in a subdirectory. Deriving the project from dirname
