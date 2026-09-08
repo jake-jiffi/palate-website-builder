@@ -58,9 +58,17 @@ export function byAmbition(list: Variant[]): Variant[] {
 `;
 
 /** The two sections the board shows, written once and used by both the board and the home. */
-const HERO = (mark) => `
-<section class="relative px-6 py-24" style="background:#f7f5ee">
-  ${mark}
+// THE MARKER GOES ON THE SECTION, which is what the doctrine tells Compose to do. It was on
+// an inner span first, and that hid a real defect: the gate hid `[data-palate-section]` as
+// Explore scaffolding, which on a real composed page hides every section of it. The built home
+// then measured as setting no type at all and the gate failed an honest build.
+/**
+ * `badge` is the SectionMark, INSIDE the hero, in a face the design never chose. It is the
+ * control for excluding scaffolding from the comparison: the board carries it and the composed
+ * home never does, so a gate that measures it reports "missing ui-monospace" on an honest build.
+ */
+const HERO = (mark, badge = "") => `
+<section class="relative px-6 py-24" style="background:#f7f5ee" ${mark}>${badge}
   <div class="mx-auto max-w-3xl">
     <h1 style="font-family:Georgia,serif;font-size:64px;line-height:1.08;color:#1c1b19">Quiet confidence, in a room that holds it</h1>
     <p style="font-family:Helvetica,Arial,sans-serif;font-size:18px;line-height:1.6;color:#1c1b19">We look after the whole thing, slowly, and we tell you what we found. Nothing here asks anything of you before you have read a sentence, which is the point of the room.</p>
@@ -69,8 +77,7 @@ const HERO = (mark) => `
 </section>`;
 
 const SERVICES = (mark) => `
-<section class="relative px-6 py-20" style="background:#f7f5ee">
-  ${mark}
+<section class="relative px-6 py-20" style="background:#f7f5ee" ${mark}>
   <div class="mx-auto max-w-5xl">
     <h2 style="font-family:Georgia,serif;font-size:32px;line-height:1.2;color:#1c1b19">What we look after</h2>
     <p style="font-family:Helvetica,Arial,sans-serif;font-size:18px;line-height:1.6;color:#1c1b19">Three things, done properly, and we will say so when a fourth is not worth your money at all. That is the whole of the offer and it does not change.</p>
@@ -84,19 +91,34 @@ const variant = variants.find((v) => v.id === "b1");
 ---
 {variant && (
   <BoardFrame variant={variant}>
-    <Fragment slot="hero" set:html={${JSON.stringify(HERO('<span data-section-id="b1-hero"></span>').replace("ACCENT", "#2f5d50"))}} />
-    <Fragment slot="section" set:html={${JSON.stringify(SERVICES('<span data-section-id="b1-services"></span>').replace("ACCENT", "#2f5d50"))}} />
+    <Fragment slot="hero" set:html={${JSON.stringify(HERO('data-section-id="b1-hero"', '<span data-palate-mark data-section-id="b1-hero" style="font-family:ui-monospace,monospace;font-size:10px;color:#ffffff;background:#000000">b1-hero</span>').replace("ACCENT", "#2f5d50"))}} />
+    <Fragment slot="section" set:html={${JSON.stringify(SERVICES('data-section-id="b1-services"').replace("ACCENT", "#2f5d50"))}} />
   </BoardFrame>
 )}
 `;
+
+/**
+ * A THIRD SECTION, IN A FACE THE BOARD NEVER SET, sitting inside the top 900px.
+ *
+ * It is the control for the scoping. The comparison used to be "everything above the fold",
+ * which is not symmetric: below the board's hero sits the system strip and below the home's
+ * sits the next real section. This block makes that asymmetry visible in the unit suite, where
+ * before it only showed up on a real end-to-end run: scoped to the hero it is correctly
+ * ignored, and through a 900px window it arrives as a face the client never picked.
+ */
+const BELOW = `
+<section class="relative px-6 py-4" style="background:#f7f5ee;font-family:'Courier New',monospace">
+  <p style="font-family:'Courier New',monospace;font-size:15px;line-height:1.6;color:#1c1b19">A band the board never had, in a face the board never set, close enough to the top of the page to sit inside any fold-shaped window somebody might reach for.</p>
+</section>`;
 
 const homePage = (accent) => `---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { business } from "../lib/business";
 ---
 <BaseLayout title={business.name}>
-  <Fragment set:html={${JSON.stringify(HERO('<span data-palate-section="b1-hero"></span>'))}.replace("ACCENT", ${JSON.stringify(accent)})} />
-  <Fragment set:html={${JSON.stringify(SERVICES('<span data-palate-section="b1-services"></span>'))}} />
+  <Fragment set:html={${JSON.stringify(HERO('data-palate-section="b1-hero"'))}.replace("ACCENT", ${JSON.stringify(accent)})} />
+  <Fragment set:html={${JSON.stringify(BELOW)}} />
+  <Fragment set:html={${JSON.stringify(SERVICES('data-palate-section="b1-services"'))}} />
 </BaseLayout>
 `;
 
@@ -200,7 +222,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import { business } from "../lib/business";
 ---
 <BaseLayout title={business.name}>
-  <Fragment set:html={${JSON.stringify(HERO('<span data-palate-section="b1-hero"></span>').replace("ACCENT", "#2f5d50"))}} />
+  <Fragment set:html={${JSON.stringify(HERO('data-palate-section="b1-hero"').replace("ACCENT", "#2f5d50"))}} />
 </BaseLayout>
 `;
   writeFileSync(join(SITE, "src/pages/index.astro"), only);

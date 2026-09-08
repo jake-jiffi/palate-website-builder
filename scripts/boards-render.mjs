@@ -435,7 +435,18 @@ async function main() {
     const bin = join(projectDir, "node_modules/.bin/astro");
     if (!existsSync(bin)) die(`no ${bin}. Install the project's dependencies, or pass --no-build to read an existing dist/.`);
     try {
-      execFileSync(bin, ["build"], { cwd: projectDir, stdio: ["ignore", "ignore", "pipe"] });
+      // PUBLIC_EXPLORE_MODE=true, or the boards do not exist in the output.
+      //
+      // `SectionMark` and `ExploreSwitcher` render nothing without it, and `explore.astro`
+      // renders an empty page. Measured on the scaffold fixture: the archived renders came back
+      // with NO data-section-id at all, so gate-fidelity skipped with "its sections cannot be
+      // identified" on a build that had done everything right. A board is an Explore-mode
+      // artefact; building it in production mode is building something else.
+      execFileSync(bin, ["build"], {
+        cwd: projectDir,
+        stdio: ["ignore", "ignore", "pipe"],
+        env: { ...process.env, PUBLIC_EXPLORE_MODE: "true" },
+      });
     } catch (e) {
       die(`astro build failed, so there is nothing to render:\n${(e.stderr || "").toString().trim().split("\n").slice(-8).join("\n")}`);
     }
@@ -507,12 +518,6 @@ async function main() {
       if (!res || !res.ok()) failSeed(`board ${b.id} did not load at /${route}/ (${res ? res.status() : "no response"}). Nothing written.`);
       await page.waitForTimeout(400);
 
-      // --- the shots: rendered markup for the uniqueness gate, a hero still for fidelity ---
-      const boardShots = join(shotsDir, b.id);
-      mkdirSync(boardShots, { recursive: true });
-      writeFileSync(join(boardShots, "rendered.html"), await page.content());
-      await page.screenshot({ path: join(boardShots, "hero.png"), fullPage: false });
-
       // --- what the artboard is made of, read from the rendered page ---------------------
       const harvest = await page.evaluate(() => {
         const css = [];
@@ -537,6 +542,25 @@ async function main() {
           height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
         };
       });
+
+      // --- fonts: self-hosted faces inlined, Google Fonts left as a link ------------------
+      const { css, fonts } = await inlineFonts(harvest.css, ctx, base);
+
+      // --- the shots: rendered markup for the uniqueness gate, a hero still for fidelity ---
+      //
+      // THE ARCHIVED RENDER CARRIES ITS OWN STYLESHEET. Saving the markup alone was tried and
+      // it is worthless a few minutes later: the render links `/_astro/<hash>.css`, Compose
+      // rebuilds the site, the hash changes and the old file is gone, so the archived board
+      // renders UNSTYLED. gate-fidelity then measured a page with no palette and no type scale
+      // and reported both as "could not be compared" on a build that had done everything right,
+      // and gate-uniqueness compared two pages whose only visible style was inline. The render
+      // is self-contained, so it means the same thing on the day it is read as on the day it
+      // was taken.
+      const boardShots = join(shotsDir, b.id);
+      mkdirSync(boardShots, { recursive: true });
+      const live = await page.content();
+      writeFileSync(join(boardShots, "rendered.html"), selfContained(live, css));
+      await page.screenshot({ path: join(boardShots, "hero.png"), fullPage: false });
 
       // --- images: written beside the artboard, bare filenames, under the ceiling --------
       const imageMap = {};
@@ -609,9 +633,6 @@ async function main() {
       }, imageMap);
       await inlineComputedStyles(page, PROPERTY_LIST);
       const bodyHtml = await page.evaluate(() => document.body.innerHTML);
-
-      // --- fonts: self-hosted faces inlined, Google Fonts left as a link ------------------
-      const { css, fonts } = await inlineFonts(harvest.css, ctx, base);
 
       const file = `B${b.ambition}.dc.html`;
       const artboard = toArtboard({ html: bodyHtml, css, fonts, script: motionScript, name: `${b.id} ${b.name}` });
@@ -687,6 +708,21 @@ export async function fitUnder(buf, sharp, limit = MAX_IMAGE_BYTES) {
     if (!smallest || out.length < smallest.buffer.length) smallest = { ok: false, buffer: out, ...step };
   }
   return smallest;
+}
+
+/**
+ * Replace a page's linked stylesheets with the collected CSS, inline.
+ *
+ * The archived render has to outlive the build it came from, and an `/_astro/<hash>.css` link
+ * does not: the next build renames it. Everything else about the markup is left exactly as the
+ * browser produced it, because this file is also the uniqueness gate's evidence.
+ */
+export function selfContained(html, css) {
+  const stripped = html.replace(/<link\b[^>]*rel=["']stylesheet["'][^>]*>/gi, "");
+  const style = `<style data-palate-archived-css="1">${css}</style>`;
+  return stripped.includes("</head>")
+    ? stripped.replace("</head>", `${style}</head>`)
+    : `${style}${stripped}`;
 }
 
 /** Self-hosted faces become data URIs; a Google Fonts link is the one host the canvas allows. */

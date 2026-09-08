@@ -290,6 +290,23 @@ test("two boards render to two artboards the canvas can open", async (t) => {
     assert.ok(existsSync(join(SITE, ".palate/explore/shots", id, "rendered.html")));
     assert.ok(existsSync(join(SITE, ".palate/explore/shots", id, "hero.png")));
     assert.ok(existsSync(join(SITE, "public/_explore", `${id}.png`)));
+
+    const archived = readFileSync(join(SITE, ".palate/explore/shots", id, "rendered.html"), "utf8");
+
+    // BUILT IN EXPLORE MODE, or the boards do not exist in the output. SectionMark renders
+    // nothing without PUBLIC_EXPLORE_MODE, so the archived renders came back with no section
+    // ids at all and gate-fidelity skipped with "its sections cannot be identified" on a build
+    // that had done everything right. Found by running the whole loop, not by reading it.
+    assert.match(archived, new RegExp(`data-section-id="${id}-hero"`),
+      `${id}'s archived render carries no section id, so nothing downstream can identify its sections`);
+
+    // SELF-CONTAINED, because it has to outlive the build it came from. The render links
+    // /_astro/<hash>.css; Compose rebuilds, the hash changes, the old file is gone, and the
+    // archived board renders UNSTYLED. gate-fidelity then measured a page with no palette and
+    // no type scale and called both "could not be compared" on an honest build.
+    assert.match(archived, /data-palate-archived-css/, `${id}'s archived render carries no stylesheet of its own`);
+    assert.ok(!/<link\b[^>]*rel=["']stylesheet["']/i.test(archived),
+      `${id}'s archived render still links a stylesheet, which the next build renames`);
   }
   assert.match(r.stdout, /B1\.dc\.html \d+ KB/, "the run does not report the artboard sizes");
 });

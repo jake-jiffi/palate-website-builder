@@ -27,12 +27,25 @@ const ramp = [
   { label: "Small", size: "var(--brand-text-sm, 0.8125rem)", family: "body", weight: "400" },
 ];
 
+/**
+ * THE LAST CHIP SHOWS THE ACCENT AS A FILL, NOT AS TEXT, and that is not a styling
+ * preference. The first version set the accent as 12px LABEL text on the dark ground, which
+ * axe measured at 2.29:1 across all three viewports on every board: a strip whose job is to
+ * demonstrate craft, failing AA on the page a client sees first. An accent at full strength is
+ * a FILL, and the legible variant of a colour FLIPS with the ground it sits on. So the chip
+ * keeps its dark ground, labels itself in the inverse ink, and shows the accent as a block.
+ */
 const swatches = [
   { label: "Ground", value: "var(--brand-bg, var(--brand-bg-default, #ffffff))", ink: "var(--brand-text, var(--brand-text-primary, #111111))" },
   { label: "Ink", value: "var(--brand-text, var(--brand-text-primary, #111111))", ink: "var(--brand-inverse, var(--brand-text-inverse, #ffffff))" },
   { label: "Muted", value: "var(--brand-muted, var(--brand-text-muted, #6d6b65))", ink: "var(--brand-inverse, var(--brand-text-inverse, #ffffff))" },
   { label: "Accent", value: "var(--brand-accent, var(--brand-accent-default, #2f5d50))", ink: "var(--brand-inverse, var(--brand-text-inverse, #ffffff))" },
-  { label: "Accent on dark", value: "var(--brand-bg-inverse, var(--brand-text, #1c1b19))", ink: "var(--brand-accent, var(--brand-accent-default, #2f5d50))" },
+  {
+    label: "Accent on dark",
+    value: "var(--brand-bg-inverse, var(--brand-text, #1c1b19))",
+    ink: "var(--brand-inverse, var(--brand-text-inverse, #ffffff))",
+    fill: "var(--brand-accent, var(--brand-accent-default, #2f5d50))",
+  },
 ];
 
 const displayFamily = "var(--brand-font-display, var(--brand-font-body, Georgia, serif))";
@@ -74,6 +87,7 @@ const radius = "var(--brand-radius, 4px)";
         <ul class="ss-chips">
           {swatches.map((sw) => (
             <li class="ss-chip" style={`background:${sw.value};color:${sw.ink}`}>
+              {sw.fill && <span class="ss-chip-fill" style={`background:${sw.fill}`}></span>}
               <span>{sw.label}</span>
             </li>
           ))}
@@ -140,7 +154,10 @@ const radius = "var(--brand-radius, 4px)";
   .ss-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); gap: 0.5rem; }
   .ss-chip {
     display: flex; align-items: flex-end; min-height: 5.5rem; padding: 0.625rem;
-    font-size: 0.75rem; line-height: 1.3;
+    font-size: 0.75rem; line-height: 1.3; position: relative;
+  }
+  .ss-chip-fill {
+    position: absolute; inset: 0.625rem 0.625rem 2rem; display: block;
   }
   .ss-controls { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
   .ss-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0.625rem 1.25rem; font-size: 0.9375rem; }

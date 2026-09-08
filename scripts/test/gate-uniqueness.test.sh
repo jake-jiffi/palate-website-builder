@@ -34,6 +34,23 @@ else
 fi
 rm -rf "$UT"
 
+# --- THE ARCHIVED STYLESHEET IS NOT A STYLE SIGNATURE --------------------------------------
+# boards-render inlines the build's whole stylesheet into every archived render so the render
+# survives the next build. That stylesheet is one shared Tailwind output, byte-identical on
+# every board, so signing it puts the style axis near 1.00 for every pair and collapses this
+# gate to structure-only, silently. Two boards whose actual styling differs must still read
+# as differing.
+AC="$(mktemp -d)"
+shared='<style data-palate-archived-css="1">.a{color:#111111}.b{background:#222222}.c{font-family: Georgia, serif}.d{border-radius: 4px}</style>'
+printf '<html><head>%s</head><body><section class="hero"><h1 style="color:#2f5d50">a</h1></section></body></html>\n' "$shared" > "$AC/a.html"
+printf '<html><head>%s</head><body><main class="wall"><h2 style="color:#8a3b12">b</h2></main></body></html>\n' "$shared" > "$AC/b.html"
+uniq_out="$(node "$GATE" "$AC/a.html" "$AC/b.html" 2>&1 >/dev/null || true)"
+style_score="$(printf '%s' "$uniq_out" | sed -n 's/.*style \([0-9.]*\).*/\1/p' | head -1)"
+awk -v s="${style_score:-1}" 'BEGIN { exit !(s <= 0.2) }' \
+  && { echo "ok   - the shared archived stylesheet is stripped before signing (style ${style_score:-?})"; pass=$((pass+1)); } \
+  || { echo "FAIL - the archived stylesheet is being signed, so the style axis is ~1 on every pair (style ${style_score:-?})"; fail=$((fail+1)); }
+rm -rf "$AC"
+
 # --- --project FINDS THE RENDERS, in both places they live ---------------------------------
 # gate-done.sh used to glob `.palate-shots/v*/rendered.html` in the shell. Explore writes its
 # renders to `.palate/explore/shots/b*/` now, so that glob found nothing and every board build

@@ -16,12 +16,14 @@
  *
  * ======================== WHAT IT COMPARES, AND WHERE =====================
  *
- * The board's archived render against the built home, both at 1440, both measured ABOVE THE
- * FOLD. Above the fold because a board is a quarter of a page: comparing its whole content
- * against a whole home page would be comparing different amounts of page and calling the
- * difference infidelity. Everything below 900px is set to `visibility: hidden` before
- * measuring, which is the one lever `design-measure.mjs` already honours and which, unlike
- * removing nodes, does not change the layout of what remains.
+ * The board's archived render against the built home, both at 1440, both measured OVER THE
+ * PICKED HERO SECTION ALONE. Not the whole page, because a board is a quarter of one and the
+ * difference in amount would read as infidelity. Not "above the fold" either, which was tried
+ * and is not symmetric: below the board's hero sits the system strip, and below the home's
+ * hero sits the next real section, so a 900px window measures two different things and reported
+ * an 11% type-scale drift on a home page composed from the board's own component. Everything
+ * outside the hero is set to `visibility: hidden`, the one lever `design-measure.mjs` already
+ * honours and which, unlike removing nodes, cannot move the layout of what remains.
  *
  * The section checks are structural AND named, deliberately. The id says "this is the one";
  * the tag-and-class signature says "and it really is", because an id is a label an agent can
@@ -251,15 +253,39 @@ async function serveOnFreePort(root, first, boardHtml) {
  * face nothing in the design chose. The board render always carries it and the composed home
  * never does, so leaving it in would report the picker as a type drift on every honest build.
  */
-const SCAFFOLDING = ".ev-switcher, [data-section-id], [data-palate-section]";
-async function measureAboveFold(page) {
-  await page.evaluate(({ fold, scaffolding }) => {
-    for (const el of document.querySelectorAll(scaffolding)) el.style.visibility = "hidden";
+/**
+ * Hide everything outside the picked hero section, then measure.
+ *
+ * THE SECTION IS THE UNIT, not a 900px window. The window was tried: below the board's hero
+ * sits the system strip and below the home's hero sits the next real section, so the two
+ * windows contain different things and the gate reported an 11% type-scale drift on a home
+ * page composed from the board's own component. Scoping to the section makes the two sides
+ * the same thing by construction.
+ *
+ * Ancestors stay visible because they carry the ground the section sits on. The direction
+ * picker and the SectionMark badge fall outside the hero and are hidden with everything else,
+ * which is what keeps a monospace pill in the corner out of the type comparison.
+ *
+ * Returns null when the marker is not there, so the caller reports what it could not measure
+ * rather than measuring the whole page and calling the answer a comparison.
+ */
+async function measureHeroScope(page, selector) {
+  const scoped = await page.evaluate(({ sel, scaffolding }) => {
+    const marked = document.querySelector(sel);
+    if (!marked) return false;
+    const hero = marked.matches("section") ? marked : (marked.closest("section") || marked);
     for (const el of document.body.querySelectorAll("*")) {
-      const r = el.getBoundingClientRect();
-      if (r.top >= fold) el.style.visibility = "hidden";
+      if (el === hero || hero.contains(el) || el.contains(hero)) continue;
+      el.style.visibility = "hidden";
     }
-  }, { fold: FOLD, scaffolding: SCAFFOLDING });
+    // AND THE SCAFFOLDING INSIDE THE HERO. The SectionMark badge sits within the section it
+    // labels and sets a monospace face nothing in the design chose, so the board carries it and
+    // the composed home never does: measured, that reads as "missing ui-monospace" on an honest
+    // build. `:not(section)` covers renders taken before the badge declared itself.
+    for (const el of document.querySelectorAll(scaffolding)) el.style.visibility = "hidden";
+    return true;
+  }, { sel: selector, scaffolding: "[data-palate-mark], .ev-switcher, [data-section-id]:not(section)" });
+  if (!scoped) return null;
   return measurePage(page);
 }
 
@@ -305,7 +331,10 @@ try {
   const boardPage = await ctx.newPage();
   await boardPage.goto(`http://127.0.0.1:${boardServed.port}${BOARD_ROUTE}`, { waitUntil: "load", timeout: 30000 });
   await boardPage.waitForTimeout(300);
-  const boardFacts = await measureAboveFold(boardPage);
+  const boardFacts = await measureHeroScope(boardPage, `[data-section-id="${heroSectionId}"]`);
+  if (!boardFacts) {
+    cannotCheck(`the archived render of ${heroPick.variant_id} has no element marked ${heroSectionId}, so its hero could not be scoped.`);
+  }
 
   // --- the built home ----------------------------------------------------------------
   const homeUrl = serveUrl || `http://127.0.0.1:${boardServed.port}/`;
@@ -317,27 +346,36 @@ try {
   const heroShot = join(shotsRoot, "_built-hero.png");
   mkdirSync(shotsRoot, { recursive: true });
   await homePage.screenshot({ path: heroShot, fullPage: false });
-  const homeFacts = await measureAboveFold(homePage);
+  const homeFacts = await measureHeroScope(homePage, `[data-palate-section="${heroSectionId}"], [data-section-id="${heroSectionId}"]`);
 
-  // --- 1. the faces above the fold ---------------------------------------------------
+  // --- 0. could the home's hero be found at all? --------------------------------------
+  // Everything below compares the two heroes, so an unmarked home is not a drift, it is an
+  // unmeasurable comparison, and the section checks further down say so specifically.
+  if (!homeFacts) {
+    notes.push(`the built home carries no element marked ${heroSectionId}, so the faces, the accent and the type scale could not be compared.`);
+  }
+
+  // --- 1. the faces of the picked hero -------------------------------------------------
   const boardFonts = new Set((boardFacts.fonts || []).map((f) => f.v).filter(Boolean));
-  const homeFonts = new Set((homeFacts.fonts || []).map((f) => f.v).filter(Boolean));
+  const homeFonts = new Set(((homeFacts && homeFacts.fonts) || []).map((f) => f.v).filter(Boolean));
+  if (homeFacts) {
   const missing = [...boardFonts].filter((f) => !homeFonts.has(f));
   const extra = [...homeFonts].filter((f) => !boardFonts.has(f));
   if (missing.length || extra.length) {
     add(
       "the type is not the picked board's",
-      `above the fold the board sets [${[...boardFonts].join(", ") || "nothing"}] and the built home sets [${[...homeFonts].join(", ") || "nothing"}]` +
+      `in the hero the board sets [${[...boardFonts].join(", ") || "nothing"}] and the built home sets [${[...homeFonts].join(", ") || "nothing"}]` +
       `${missing.length ? `; missing ${missing.join(", ")}` : ""}${extra.length ? `; added ${extra.join(", ")}` : ""}. ` +
       "The faces are the loudest thing a client picked, so a face that arrived from somewhere else is a different direction wearing the same layout.",
     );
   }
+  }
 
   // --- 2. the accent ------------------------------------------------------------------
   const boardAccent = dominantAccent(boardFacts.colours);
-  const homeAccent = dominantAccent(homeFacts.colours);
+  const homeAccent = homeFacts ? dominantAccent(homeFacts.colours) : null;
   if (!boardAccent || !homeAccent) {
-    notes.push(`the accent could not be compared (${!boardAccent ? "the board" : "the built home"} leads with no chromatic colour above the fold).`);
+    if (homeFacts) notes.push(`the accent could not be compared (${!boardAccent ? "the board" : "the built home"} leads with no chromatic colour in its hero).`);
   } else {
     const d = deltaE(boardAccent, homeAccent);
     if (d > ACCENT_MAX_DELTA_E) {
@@ -353,9 +391,9 @@ try {
 
   // --- 3. the type scale --------------------------------------------------------------
   const boardScale = typeScale(boardFacts.sizes);
-  const homeScale = typeScale(homeFacts.sizes);
+  const homeScale = homeFacts ? typeScale(homeFacts.sizes) : null;
   if (!boardScale || !homeScale) {
-    notes.push("the type scale could not be compared (one side set no measurable type above the fold).");
+    if (homeFacts) notes.push("the type scale could not be compared (one side set no measurable type in its hero).");
   } else {
     const drift = Math.abs(homeScale - boardScale) / boardScale;
     if (drift > TYPE_SCALE_TOLERANCE) {

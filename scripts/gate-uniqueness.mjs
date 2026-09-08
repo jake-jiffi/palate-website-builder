@@ -128,8 +128,19 @@ function jaccard(a, b) {
   return inter / (A.size + B.size - inter);
 }
 
+/**
+ * The archived stylesheet is not a style SIGNATURE.
+ *
+ * boards-render inlines the build's whole stylesheet into each archived render so the render
+ * still means something after the next build renames its assets. That stylesheet is one shared
+ * Tailwind output, byte-identical on every board, so signing it puts the style axis at 1.00 for
+ * every pair and collapses this gate to structure-only, silently. It is stripped before signing:
+ * what discriminates two boards is the styling they actually reach for, which is in the markup.
+ */
+const ARCHIVED_CSS = /<style\b[^>]*data-palate-archived-css[^>]*>[\s\S]*?<\/style>/gi;
+
 const variants = files.map((f) => {
-  const html = readFileSync(f, "utf8");
+  const html = readFileSync(f, "utf8").replace(ARCHIVED_CSS, "");
   return { f, struct: new Set(structSig(html)), style: styleSig(html) };
 });
 
@@ -155,7 +166,19 @@ if (worst) {
 console.log(`uniqueness gate passed: ${variants.length} variants, no near-duplicate pair (every pair differs in structure or skin).`);
 process.exit(0);
 
-function base(p) { return p.split("/").pop(); }
+/**
+ * A name a person can act on.
+ *
+ * Every board's render is called `rendered.html`, so the last path segment alone produced
+ * "rendered.html and rendered.html are near-duplicates", which names neither board. The
+ * directory above it is the board id, and that is the part worth printing.
+ */
+function base(p) {
+  const parts = p.split("/").filter(Boolean);
+  const last = parts[parts.length - 1] || p;
+  const parent = parts[parts.length - 2];
+  return parent && /^(b|v|lp)\d+$/i.test(parent) ? `${parent}/${last}` : last;
+}
 
 // OPTIONAL perceptual-hash enhancement: where sharp is available (e.g. CI with the
 // build's node_modules), a DCT pHash over each variant's full-page screenshot adds a

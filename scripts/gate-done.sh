@@ -480,7 +480,7 @@ if [ -f "$UNIQ_GATE" ]; then
   # it and every board build reported "fewer than 2 to compare" with five renders on disk.
   if uniq_err="$(node "$UNIQ_GATE" --project "$PROJ" 2>&1)"; then
     uniq_n="$(printf '%s' "$uniq_err" | sed -n 's/.*passed: \([0-9]*\) variants.*/\1/p' | head -1)"
-    uniq_note="uniqueness=pass(${uniq_n:-2}+ compared)"; uniq_skip=""
+    uniq_note="uniqueness=pass(${uniq_n:-2} compared)"; uniq_skip=""
   else
     uniq_rc=$?
     uniq_first="${uniq_err%%$'\n'*}"

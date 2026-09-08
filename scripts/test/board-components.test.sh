@@ -91,6 +91,10 @@ has "the strip renders a primary control"   'data-strip="primary"'
 has "the strip renders a secondary control" 'data-strip="secondary"'
 has "the strip renders a card"              'data-strip="card"'
 has "the strip renders the nav"             'data-strip="nav"'
+# THE ACCENT ON DARK IS A FILL, NEVER SMALL TEXT. Setting the accent as a 12px label on the
+# dark ground measured 2.29:1 through axe at all three viewports, on every board: a strip whose
+# job is to demonstrate craft, failing AA on the page the client sees first.
+has "the accent on dark is shown as a fill"  'ss-chip-fill'
 
 # --- the notes: the argument the rung makes for itself ---------------------------------
 has "the notes carry the name"    "The Quiet Room"
