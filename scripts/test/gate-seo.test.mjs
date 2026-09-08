@@ -65,10 +65,14 @@ const sitemap = (p, locs) =>
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset>${locs.map((l) => `<url><loc>${l}</loc></url>`).join("")}</urlset>\n`,
   );
 
+/**
+ * One built page. `canonical` is a path on the fixture's own host, or a whole absolute URL when
+ * a test needs the canonical to point somewhere else, or null for a page carrying none.
+ */
 const page = (p, file, canonical) =>
   write(
     join(p, "dist", file),
-    `<!doctype html><html><head><title>x</title>${canonical === null ? "" : `<link rel="canonical" href="https://ex.com${canonical}">`}</head><body>x</body></html>`,
+    `<!doctype html><html><head><title>x</title>${canonical === null ? "" : `<link rel="canonical" href="${/^https?:/.test(canonical) ? canonical : `https://ex.com${canonical}`}">`}</head><body>x</body></html>`,
   );
 
 function run(p, ...args) {
@@ -168,6 +172,50 @@ test("a canonical pointing somewhere else fires", () => {
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /canonical is not self-referential/);
   assert.match(r.out, /\/blog\/welcome declares its canonical as \/blog/);
+});
+
+test("a canonical on ANOTHER HOST fires and names both hosts", () => {
+  // Comparing the pathname alone passed this: /blog/welcome matched /blog/welcome, and the page
+  // was handing its ranking to a domain nobody here owns. The origin is the half that mattered.
+  const p = scaffold();
+  page(p, "blog/welcome/index.html", "https://evil.example/blog/welcome");
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /canonical points at evil\.example \(site is ex\.com\)/);
+});
+
+test("astro.config's site is what the canonical origin is compared against", () => {
+  // The site moved domain, the config followed and the canonicals did not. Nothing on disk
+  // except the config knows the new home, so the config has to be read.
+  const p = scaffold();
+  write(join(p, "astro.config.mjs"), 'export default { site: "https://good.example" };\n');
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /canonical points at ex\.com \(site is good\.example\)/);
+});
+
+test("--site overrides the config, so a deploy on another origin can be checked", () => {
+  const p = scaffold();
+  write(join(p, "astro.config.mjs"), 'export default { site: "https://good.example" };\n');
+  const r = run(p, "--site", "https://ex.com");
+  assert.equal(r.code, 0, r.out);
+});
+
+test("--site with no value blocks rather than silently skipping the origin check", () => {
+  const r = run(scaffold(), "--site");
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /--site needs an origin/);
+});
+
+test("with no site anywhere the origin comparison is reported unmeasured, never passed", () => {
+  // A relative sitemap gives the gate paths and no origin. Reporting clean here would mean a
+  // canonical on a stranger's domain reads as correct, which is the fault this task is about.
+  const p = scaffold();
+  sitemap(p, ["/", "/blog/", "/blog/welcome/"]);
+  const r = run(p);
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /canonical origin not compared/);
+  assert.match(r.out, /--site/);
 });
 
 test("a page with no canonical at all fires", () => {

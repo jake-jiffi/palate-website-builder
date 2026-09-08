@@ -31,6 +31,7 @@
  * Usage:
  *   node gate-seo.mjs [project-dir]                      # disk only: built output + index
  *   node gate-seo.mjs [project-dir] --base http://host   # also fetch, so redirects are real
+ *   node gate-seo.mjs [project-dir] --site https://host  # the origin canonicals must name
  *
  * The disk pass answers coverage and canonical for anything prerendered. It cannot answer
  * redirects for a server-rendered route, which is most of them, so a sweep of a deployed
@@ -50,6 +51,13 @@ const baseArg = baseAt !== -1 ? argv[baseAt + 1] : null;
 const base = baseArg && !baseArg.startsWith("--") ? baseArg.replace(/\/+$/, "") : null;
 if (baseAt !== -1 && !base) {
   console.error("gate-seo: --base needs an origin (e.g. --base http://localhost:4321). Nothing checked. NOT a pass.");
+  process.exit(2);
+}
+const siteAt = argv.indexOf("--site");
+const siteArg = siteAt !== -1 ? argv[siteAt + 1] : null;
+const siteOverride = siteArg && !siteArg.startsWith("--") ? siteArg.replace(/\/+$/, "") : null;
+if (siteAt !== -1 && !siteOverride) {
+  console.error("gate-seo: --site needs an origin (e.g. --site https://example.com). Nothing checked. NOT a pass.");
   process.exit(2);
 }
 
@@ -98,6 +106,45 @@ const pathOf = (loc) => { try { return norm(new URL(loc).pathname); } catch { re
 const rawPathOf = (loc) => {
   try { return new URL(loc).pathname; } catch { return String(loc).split("#")[0].split("?")[0]; }
 };
+
+/** The origin of an absolute URL, or null when the string is not one. */
+const originOf = (u) => { try { return new URL(u).origin; } catch { return null; } };
+const hostOf = (u) => { try { return new URL(u).host; } catch { return String(u); } };
+
+/**
+ * The site's own origin as the Astro config declares it. A STRING LITERAL ONLY.
+ *
+ * The shipped scaffold writes `site: siteUrl`, built from an env var the gate cannot see, so
+ * this returns null there and the sitemap answers instead. Resolving the expression would mean
+ * comparing every canonical against `https://{{DOMAIN}}`, which is a placeholder wearing the
+ * costume of a measurement.
+ */
+function readSiteFromConfig(projectDir) {
+  for (const name of ["astro.config.mjs", "astro.config.ts", "astro.config.js"]) {
+    const src = read(join(projectDir, name));
+    if (!src) continue;
+    const m = src.match(/(?:^|[\s,{])site\s*:\s*["']([^"']+)["']/m);
+    if (m && !m[1].includes("{{") && originOf(m[1])) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Does this canonical name THIS page on THIS site?
+ *
+ * Comparing the pathname alone passed a canonical on somebody else's domain: /about matched
+ * /about and the page handed its ranking to a host nobody here owns. Origin first, because a
+ * foreign origin makes the path irrelevant. `site` null means the origin half is unmeasured,
+ * which is reported once at the end rather than guessed at per page.
+ */
+function canonicalMismatch(href, route, site) {
+  const want = site ? originOf(site) : null;
+  const got = originOf(href);
+  if (want && got && got !== want) return { kind: "origin", expected: hostOf(want), actual: hostOf(got) };
+  const p = pathOf(href);
+  if (p !== route) return { kind: "path", expected: route, actual: p };
+  return null;
+}
 
 // ------------------------------------------------------- 0. can this be checked at all
 if (!existsSync(join(dir, "src", "pages"))) {
@@ -153,6 +200,23 @@ for (const f of sitemapFiles) {
   }
 }
 const sitemapPaths = new Set(sitemapLocs.map((l) => l.path));
+
+// ------------------------------------------------------- 1b. the site's own origin
+// Three sources, most explicit first. The sitemap is last and is a real measurement rather than
+// a guess: @astrojs/sitemap writes absolute URLs from `site`, so a build that advertises one
+// origin and renders canonicals on another is the fault this is here to catch. Several origins
+// in one sitemap answer nothing, so that reads as unknown.
+const configSite = readSiteFromConfig(dir);
+const sitemapOrigins = [...new Set(sitemapLocs.map((l) => originOf(l.loc)).filter(Boolean))];
+const siteOrigin =
+  (siteOverride && originOf(siteOverride)) ||
+  (configSite && originOf(configSite)) ||
+  (sitemapOrigins.length === 1 ? sitemapOrigins[0] : null);
+const siteFrom = siteOverride && originOf(siteOverride)
+  ? "--site"
+  : configSite && originOf(configSite)
+    ? "astro.config"
+    : siteOrigin ? "the sitemap" : null;
 
 // -------------------------------------------------- 2. what SHOULD be in the sitemap
 // Enumerated from the content graph. Reading the file system instead is precisely how the
@@ -450,8 +514,15 @@ for (const f of htmlFiles) {
   const href = m[0].match(/href=["']([^"']+)["']/i)?.[1];
   if (!href) { add("empty canonical", `${relative(dir, f)} (${route}) has a canonical tag with no href.`); continue; }
   canonicalChecked += 1;
-  if (pathOf(href) !== route) {
-    add("canonical is not self-referential", `${route} declares its canonical as ${pathOf(href)}. The page is telling crawlers to index a different URL.`);
+  const wrong = canonicalMismatch(href, route, siteOrigin);
+  if (wrong?.kind === "origin") {
+    add(
+      "canonical points at another origin",
+      `${route} canonical points at ${wrong.actual} (site is ${wrong.expected}): ${href}. The page is handing ` +
+      "its ranking to a host this site does not control, and the path matching is why it looked correct.",
+    );
+  } else if (wrong) {
+    add("canonical is not self-referential", `${route} declares its canonical as ${wrong.actual}. The page is telling crawlers to index a different URL.`);
   }
 }
 if (!htmlFiles.length) {
@@ -544,13 +615,33 @@ if (base) {
     if (!tag) { add("no canonical", `${p} renders no <link rel="canonical"> (fetched from ${base}).`); continue; }
     const href = tag[0].match(/href=["']([^"']+)["']/i)?.[1];
     canonicalChecked += 1;
-    if (!href) add("empty canonical", `${p} has a canonical tag with no href.`);
-    else if (pathOf(href) !== p) add("canonical is not self-referential", `${p} declares its canonical as ${pathOf(href)} (fetched from ${base}).`);
+    if (!href) { add("empty canonical", `${p} has a canonical tag with no href.`); continue; }
+    const wrong = canonicalMismatch(href, p, siteOrigin);
+    if (wrong?.kind === "origin") {
+      add(
+        "canonical points at another origin",
+        `${p} canonical points at ${wrong.actual} (site is ${wrong.expected}): ${href} (fetched from ${base}).`,
+      );
+    } else if (wrong) {
+      add("canonical is not self-referential", `${p} declares its canonical as ${wrong.actual} (fetched from ${base}).`);
+    }
   }
   if (!reachable) {
     console.error(`gate-seo: nothing at ${base} answered. The live pass measured nothing. NOT a pass.`);
     process.exit(2);
   }
+}
+
+// A canonical whose PATH was read and whose ORIGIN was not is half checked, and the unchecked
+// half is the one that hands a page to another domain. Said once, after both passes.
+if (canonicalChecked && !siteOrigin) {
+  cannot(
+    "canonical origin not compared",
+    `${canonicalChecked} canonical(s) had their path checked and their origin NOT checked, because nothing ` +
+    "here declares the site's own origin: no --site, no literal site: in astro.config.*, and no single " +
+    "absolute origin in the sitemap. A canonical on somebody else's domain would read as correct. " +
+    "Pass --site <origin>.",
+  );
 }
 
 // ---------------------------------------------------------------------- report
@@ -560,6 +651,7 @@ if (base) {
 const scope =
   `${expected.length} expected URL(s), ${sitemapPaths.size} advertised, ` +
   `${canonicalChecked} canonical(s) read` +
+  (siteOrigin ? `, site ${hostOf(siteOrigin)} (from ${siteFrom})` : ", site origin unknown") +
   (skipped.noindex ? `, ${skipped.noindex} noindex page(s) excluded` : "") +
   (skipped.variant ? `, ${skipped.variant} Explore variant(s) excluded` : "") +
   `${base ? `, live against ${base}` : ", disk only"}`;
