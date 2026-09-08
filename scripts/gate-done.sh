@@ -514,6 +514,52 @@ if [ -f "$EXPLORE_GATE" ]; then
 fi
 if [ -n "$explore_skip_reason" ]; then gate_skipped explore "$explore_skip_reason"; else gate_ran; fi
 
+# FIDELITY: did the built home page carry the direction the client actually picked?
+#
+# This is the one promise Explore makes that nothing checked. The failure worth catching is not
+# a wrong page, which somebody notices, but a PLAUSIBLE one: the same layout in a slightly
+# different accent, the same accent at a different type scale, the picked section quietly
+# dropped because it was awkward to compose. Invisible side by side, obvious when measured.
+#
+# It only has an opinion once there is a pick AND a composed home page, so it is silent on every
+# build that never ran Explore and on every Explore build before Compose. Same discriminator as
+# the SEO and Explore branches: exit 2 with `gate-fidelity: skipped (` on the first stderr line
+# is a skip, any other exit 2 or an exit 1 is a block.
+FIDELITY_GATE="$HERE/gate-fidelity.mjs"
+fidelity_note="fidelity=skipped"
+fidelity_skip="gate-fidelity.mjs not present"
+if [ -f "$FIDELITY_GATE" ] && [ "${PALATE_GATE_FIDELITY:-1}" = "1" ]; then
+  # THE REASON FOLLOWS THE WORKFLOW ORDER: boards, then a pick, then Compose. A build with no
+  # picks is reported as having no picks whether or not a home page exists, because "Compose
+  # has not run" on a build nobody has picked from sends the reader to the wrong step.
+  fidelity_skip="no picks recorded"
+  npicks=$(jq -r '((.explore.picks // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
+  if [ "${npicks:-0}" -lt 1 ]; then
+    fidelity_skip="no picks recorded"
+  elif [ ! -f "$PROJ/src/pages/index.astro" ]; then
+    fidelity_skip="Compose has not written src/pages/index.astro yet"
+  else
+    if fid_err="$(node "$FIDELITY_GATE" "$PROJ" 2>&1)"; then fid_rc=0; else fid_rc=$?; fi
+    fid_first="${fid_err%%$'\n'*}"
+    case "$fid_rc" in
+      0) fidelity_note="fidelity=pass"; fidelity_skip="" ;;
+      2)
+        case "$fid_first" in
+          "gate-fidelity: skipped ("*)
+            fidelity_skip="${fid_first#gate-fidelity: skipped (}"
+            fidelity_skip="${fidelity_skip%)}"
+            if [ "${#fidelity_skip}" -gt 100 ]; then fidelity_skip="${fidelity_skip:0:99}…"; fi
+            fidelity_note="fidelity=skipped" ;;
+          *) fail "The built home has drifted from the direction the client picked. ${fid_err}" ;;
+        esac ;;
+      *) fail "The built home has drifted from the direction the client picked. ${fid_err}" ;;
+    esac
+  fi
+else
+  [ "${PALATE_GATE_FIDELITY:-1}" = "1" ] || fidelity_skip="PALATE_GATE_FIDELITY=0"
+fi
+if [ -n "$fidelity_skip" ]; then gate_skipped fidelity "$fidelity_skip"; else gate_ran; fi
+
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
 
@@ -530,5 +576,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $explore_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
+  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $explore_note, $fidelity_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
 exit 0

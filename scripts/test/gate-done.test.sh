@@ -143,6 +143,38 @@ else
   echo "FAIL - a novelty skip is counted as a skip, not a pass (got: $summary)"; fail=$((fail+1))
 fi
 
+# --- THE FIDELITY GATE IS IN THE SUMMARY, AND ITS SKIP CARRIES A REASON -----------------
+# It is the only check on the one promise Explore makes, so its absence from the line is the
+# same failure as a skip that reads as a pass: nobody can tell it did not run.
+if printf '%s' "$summary" | grep -qE 'fidelity=skipped'; then
+  echo "ok   - the fidelity gate is in the summary"; pass=$((pass+1))
+else
+  echo "FAIL - the fidelity gate is in the summary (got: $summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$summary" | grep -qF 'fidelity: no picks recorded'; then
+  echo "ok   - and its skip says why"; pass=$((pass+1))
+else
+  echo "FAIL - and its skip says why (got: $summary)"; fail=$((fail+1))
+fi
+
+# A build WITH picks but no composed home page skips for the OTHER reason, because "no picks"
+# on a build that has picks would send somebody looking in the wrong place.
+FIDNC="$TMP/fidelity-nocompose"; mkdir -p "$FIDNC"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.explore = { ran: true, picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }] };
+fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
+' "$DEEP" "$FIDNC/build-manifest.json"
+make_shots "$FIDNC" 0
+cp "$PASS/verify-report.json" "$FIDNC/verify-report.json"
+fid_summary="$(bash "$GATE" "$FIDNC/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$fid_summary" | grep -qF 'fidelity: Compose has not written'; then
+  echo "ok   - a picked build with no composed home says so, rather than 'no picks'"; pass=$((pass+1))
+else
+  echo "FAIL - a picked build with no composed home says so (got: $fid_summary)"; fail=$((fail+1))
+fi
+
 # --- SHIPREADY'S OTHER EXIT-2 REASONS ARE NOT ALL "not an Astro project shape" ---------
 # This epic gave gate-shipready two more exit-2 paths (nothing to inspect, and a refusal), and
 # the mapping still labelled every one of them with the one reason it knew. src/pages exists
