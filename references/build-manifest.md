@@ -20,6 +20,7 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   "library": { "references": 2170, "catalogue_stamp": "2026-07-09T04:12:55.108Z" }, // hook-set: from the MCP's refs_list_verticals answer; null when it did not say
   "library_unverified": false,                    // hook-set: true until the MCP sends a stamp. A missing stamp never reads as a verified one
   "rubric_version": null,                         // hook-set: the vendored rubric's own RUBRIC_VERSION export, null when it has none
+  "rubric_unverified": true,                      // hook-set: true while rubric.mjs exports no version. FOLLOW-UP: the constant belongs grader-side (see below)
   "mcp_calls": [
     { "tool": "mcp__palate__refs_search", "args": { ... }, "slugs": ["..."], "ts": "..." }
   ],
@@ -67,7 +68,11 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   different sites and nothing used to record why. `plugin_version` and `rubric_version` are read
   locally (the plugin's `VERSION`, and the vendored `rubric.mjs`'s own `RUBRIC_VERSION` export
   when the grader adds one, since that file is byte-identical to the grader's copy and hash-pinned
-  in both repos, so the plugin reads it rather than writing one). `mcp_version` and `library` come
+  in both repos, so the plugin reads it rather than writing one). **`rubric_version` is null on
+  every build today and `rubric_unverified` says so.** The constant has to be added in
+  palate-product's copy of `rubric.mjs` and will then be read here with no plugin change; that is
+  a tracked follow-up, and until it lands a re-grade cannot be attributed to a rubric change from
+  the manifest alone. `mcp_version` and `library` come
   from the MCP's own `refs_list_verticals` answer, because only the server knows what its
   catalogue currently holds, and the FIRST answer of a build is kept: a re-seed mid-build must not
   rewrite what the survey actually read. An older MCP sends no stamp, which leaves `library: null`

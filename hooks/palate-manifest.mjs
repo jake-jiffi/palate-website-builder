@@ -130,6 +130,11 @@ function blank() {
     library: null,            // { references, catalogue_stamp } from the MCP's own answer
     library_unverified: true, // until the MCP sends a stamp. A missing one is never a verified one
     rubric_version: null,
+    // TRUE until the vendored rubric exports a version. It does not yet: rubric.mjs is
+    // byte-identical to the grader's copy and hash-pinned in both repos, so the constant has
+    // to be added grader-side and read from here. Recording the absence is the point; a
+    // manifest that simply had no field would read as a build nobody thought about.
+    rubric_unverified: true,
     mcp_calls: [],
     // Palate calls that were REFUSED or came back empty. They are not grounding (the depth
     // gate counts mcp_calls, and a call that returned nothing taught the build nothing), but
@@ -733,6 +738,7 @@ function main() {
   if (!("library" in m)) m.library = null;
   if (!("library_unverified" in m)) m.library_unverified = true;
   if (!("rubric_version" in m)) m.rubric_version = null;
+  if (!("rubric_unverified" in m)) m.rubric_unverified = true;
   // Read once and kept: these are what the build STARTED on, and re-reading them every call
   // would let a mid-build plugin update rewrite history.
   if (m.plugin_version == null || m.rubric_version == null) {
@@ -740,6 +746,7 @@ function main() {
     if (m.plugin_version == null) m.plugin_version = readPluginVersion(root);
     if (m.rubric_version == null) m.rubric_version = readRubricVersion(root);
   }
+  if (m.rubric_version != null) m.rubric_unverified = false;
 
   if (tool.startsWith("mcp__palate__")) {
     const evidence = resultEvidence(result);

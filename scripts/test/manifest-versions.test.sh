@@ -91,6 +91,7 @@ W4="$TMP/w4"; mkdir -p "$W4"
 CLAUDE_PLUGIN_ROOT="$FAKE" call "$W4" "mcp__palate__refs_search" '{"query":"clinic"}' '{"results":[{"slug":"nocturne-label"}]}'
 MAN4="$W4/build-manifest.json"
 is "the rubric version is read from its export" "$(field "$MAN4" .rubric_version)" "2026-09-09.stamped"
+is "and it is no longer flagged unverified"     "$(field "$MAN4" .rubric_unverified)" "false"
 is "and the plugin root env is honoured"        "$(field "$MAN4" .plugin_version)" "9.9.9"
 
 # A rubric with no export records null rather than a guess.
@@ -98,6 +99,8 @@ printf 'export const DIMENSIONS = [];\n' > "$FAKE/scripts/reference-capture/rubr
 W5="$TMP/w5"; mkdir -p "$W5"
 CLAUDE_PLUGIN_ROOT="$FAKE" call "$W5" "mcp__palate__refs_search" '{"query":"clinic"}' '{"results":[{"slug":"nocturne-label"}]}'
 is "no export: the rubric version is null" "$(field "$W5/build-manifest.json" .rubric_version)" "null"
+is "no export: and it says so, rather than leaving the reader to notice" \
+  "$(field "$W5/build-manifest.json" .rubric_unverified)" "true"
 
 # =====================================================================================
 # 6. AN OLDER MANIFEST is upgraded in place. Every field it already had survives.
@@ -129,6 +132,7 @@ cat > "$W7/build-manifest.json" <<'OLDER'
 OLDER
 call "$W7" "mcp__palate__refs_search" '{"query":"bakery"}' '{"results":[{"slug":"nocturne-label"}]}'
 is "an older manifest with no stamp reads unverified" "$(field "$W7/build-manifest.json" .library_unverified)" "true"
+is "and the same for the rubric"                      "$(field "$W7/build-manifest.json" .rubric_unverified)" "true"
 is "and keeps the survey it already had"       "$(field "$MAN6" '.references_surveyed[0]')" "therapy-in-london"
 is "and keeps its business brief"              "$(field "$MAN6" .business)" "a pelvic health clinic"
 

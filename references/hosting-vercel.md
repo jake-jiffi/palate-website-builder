@@ -39,6 +39,13 @@ does NOT run any host switch.
 
 ### The Content-Security-Policy
 
+**What this policy is worth, plainly: it is a host allowlist, not protection against injected
+script.** `script-src` carries `'unsafe-inline'` because a static Astro build ships inline
+script it does not control and cannot nonce, and Vercel reads `vercel.json` from the repository
+rather than from build output, so a hash would be hand-committed and go stale. So the policy
+stops a script, a frame or a form reaching a host that is not on the list, and it does not stop
+inline script that reaches the page. Do not describe it to a client as XSS protection.
+
 `vercel.json` and `templates/host-cloudflare/_headers` serve the SAME policy, and they are
 edited together: two hosts disagreeing about what one site may load is a bug that only shows
 up after a host switch. It is built from the hosts the template actually loads in a browser,
@@ -56,14 +63,24 @@ fails naming the host, so the failure arrives at the build rather than as a blan
 client's live site. `scripts/test/template-csp-live.test.sh` serves the built template with the
 policy enforced and fails on a single console error.
 
-**A CMS BUILD NEEDS MORE, and the base policy deliberately does not carry it.**
-`scripts/add-sanity.sh` mounts the Sanity Studio on the site's own origin and turns on the
-visual-editing overlay, and both run in the BROWSER and talk to Sanity, so a CMS build has to
-add the Sanity hosts to `connect-src` (and `img-src` already allows `https:` for
-`cdn.sanity.io`). The base policy lists only what the base template loads, because widening it
-for a service most builds never call is how a policy stops describing anything. This has NOT
-been measured against a CMS build: check the browser console on the Studio route the first
-time a CMS build is deployed with the policy on.
+**A CMS BUILD NEEDS MORE, and `scripts/add-sanity.sh` adds it.** The Studio mounts at
+`/studio` and the visual-editing overlay runs in the browser, so the overlay step extends
+whichever policy the project carries (`vercel.json` on Vercel, `public/_headers` on Cloudflare,
+since the Cloudflare switch deletes `vercel.json`) with `https://*.api.sanity.io`,
+`https://*.apicdn.sanity.io`, `https://api.sanity.io` and `https://cdn.sanity.io` on
+`connect-src`, plus `https://design-system-static.sanity.io` on `font-src`. It is idempotent,
+and it says so out loud when a project carries no policy to extend rather than passing over it.
+
+**Those hosts were measured, not reasoned about.** A real build of the overlay served under the
+base policy raised `connect-src` violations for `https://<projectId>.api.sanity.io`
+(`users/me`, `check/cors`) and `font-src` violations for the Studio's own Inter webfont on
+`design-system-static.sanity.io`, which nobody would have listed from reading the code. The base
+policy still lists only what the base template loads, because widening it for a service most
+builds never call is how a policy stops describing anything.
+
+`frame-src` names `'self'` for the same reason: an explicitly set `frame-src` does NOT fall
+back to `default-src`, so a policy listing only Turnstile would stop the site framing its own
+pages, which is exactly how Sanity's Presentation tool shows a live preview.
 
 HSTS is on the Cloudflare overlay only: Vercel sends it itself on a custom domain, Workers does
 not. Two years with subdomains, and deliberately without `preload`, which is a one-way door for

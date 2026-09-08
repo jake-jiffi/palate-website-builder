@@ -85,9 +85,12 @@ if (!headers["Content-Security-Policy"]) {
   console.error("serve: vercel.json carries no CSP; refusing to serve a policy-free page as proof.");
   process.exit(2);
 }
-// The control: drop one required host so a clean run under the real policy means something.
+// The controls: drop a required host so a clean run under the real policy means something.
 if (process.env.CSP_MODE === "break") {
   headers["Content-Security-Policy"] = headers["Content-Security-Policy"].replace(/ https:\/\/app\.humblytics\.com/g, "");
+}
+if (process.env.CSP_MODE === "break-sanity") {
+  headers["Content-Security-Policy"] = headers["Content-Security-Policy"].replace(/ https:\/\/[^ ;]*sanity\.io/g, "");
 }
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
   ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png",
@@ -128,8 +131,17 @@ const routes = (process.argv[3] || "/").split(",");
 const browser = await chromium.launch();
 const ctx = await browser.newContext();
 const violations = [];
+// The third-party hosts the page actually reached. A lane that asserts "no violation" on a
+// page that requested nothing has measured nothing, so the hosts are reported too.
+const hosts = new Set();
 for (const route of routes) {
   const page = await ctx.newPage();
+  page.on("request", (r) => {
+    try {
+      const u = new URL(r.url());
+      if (u.protocol.startsWith("http") && !u.hostname.startsWith("localhost")) hosts.add(u.hostname);
+    } catch { /* not a URL we can read */ }
+  });
   await page.addInitScript(() => {
     window.__csp = [];
     document.addEventListener("securitypolicyviolation", (e) =>
@@ -141,7 +153,7 @@ for (const route of routes) {
   await page.close();
 }
 await browser.close();
-console.log(JSON.stringify(violations));
+console.log(JSON.stringify({ violations, hosts: [...hosts].sort() }));
 JS
 
 serve() { # <mode>
@@ -160,7 +172,7 @@ export PLAYWRIGHT_ENTRY="$ROOT/scripts/reference-capture/node_modules/playwright
 serve enforce
 v="$(node "$TMP/probe.mjs" "http://localhost:$PORT" /,/contact,/blog 2>"$TMP/probe.err")"
 [ -n "$v" ] || { echo "template-csp-live: the probe returned nothing:" >&2; cat "$TMP/probe.err" >&2; exit 2; }
-n="$(printf '%s' "$v" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).length))')"
+n="$(printf '%s' "$v" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).violations.length))')"
 [ "$n" = "0" ] && ok "the built template raises NO CSP violation under the policy it ships" \
   || bad "the policy blocks $n thing(s) the template loads: $v"
 
@@ -185,6 +197,52 @@ c="$(grep -c 'console error\|request failed\|page error' "$out")"
 a="$(grep -c 'accessibility scan could not run' "$out")"
 [ "$a" = "0" ] && ok "the accessibility scan still runs under the policy" \
   || bad "the policy blocks the verifier's own axe injection, so accessibility is UNMEASURED on $a route-viewport(s)"
+
+# ---- 6. THE CMS BUILD, which needs hosts the base policy deliberately does not carry ----
+# add-sanity.sh mounts the Studio at /studio and turns on the visual-editing overlay, both of
+# which run in the browser. This lane is the reason that patch exists.
+#
+# WHAT IS NOT PROVED HERE. The overlay itself needs PUBLIC_SANITY_VISUAL_EDITING_ENABLED=true,
+# which makes every route render on demand (astro.cms.mjs sets route.prerender = false), and a
+# static file server cannot serve a server build. The Studio route IS served, it is the same
+# Sanity client against the same hosts, and it is what a signing-in editor loads first.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "skip - the CMS lane needs jq, which add-sanity.sh requires. NOT counted as a pass." >&2
+else
+  bash "$ROOT/scripts/add-sanity.sh" "$SITE" > "$TMP/add-sanity.out" 2>&1 || {
+    echo "template-csp-live: add-sanity.sh failed, so the CMS policy is UNPROVEN:" >&2
+    tail -5 "$TMP/add-sanity.out" >&2; exit 2; }
+  grep -q "CSP extended" "$TMP/add-sanity.out" && ok "add-sanity extends the policy for the Studio" \
+    || bad "add-sanity did not extend the policy: $(tail -2 "$TMP/add-sanity.out")"
+  perl -pi -e 's/\{\{CLIENT_NAME\}\}/CSP Test/g' "$SITE/sanity.config.ts"
+  ( cd "$SITE" && npm install --no-audit --no-fund >"$TMP/cms-install.log" 2>&1 ) || {
+    echo "template-csp-live: the Sanity install failed, so the CMS policy is UNPROVEN." >&2
+    tail -5 "$TMP/cms-install.log" >&2; exit 2; }
+  ( cd "$SITE" && ./node_modules/.bin/astro build >"$TMP/cms-build.log" 2>&1 ) || {
+    echo "template-csp-live: the CMS build failed, so the CMS policy is UNPROVEN." >&2
+    tail -10 "$TMP/cms-build.log" >&2; exit 2; }
+  [ -f "$SITE/dist/client/studio/index.html" ] && ok "the CMS build mounts the Studio at /studio" \
+    || bad "the CMS build produced no /studio route, so this lane measures nothing"
+
+  serve enforce
+  v="$(node "$TMP/probe.mjs" "http://localhost:$PORT" /,/studio 2>/dev/null)"
+  n="$(printf '%s' "$v" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).violations.length))')"
+  [ "$n" = "0" ] && ok "the Studio raises NO CSP violation under the extended policy" \
+    || bad "the extended policy still blocks $n thing(s) the Studio loads: $v"
+  # And it really loaded: a lane that passes on a page which reached nothing proves nothing.
+  case "$v" in
+    *sanity.io*) ok "and the Studio actually reached Sanity, so the lane measured something" ;;
+    *) bad "the Studio reached no Sanity host at all; this lane is inert ($v)" ;;
+  esac
+
+  # THE CONTROL: strip the Sanity hosts back out and the Studio must break again.
+  serve break-sanity
+  v="$(node "$TMP/probe.mjs" "http://localhost:$PORT" /studio 2>/dev/null)"
+  case "$v" in
+    *sanity.io*directive*|*directive*sanity.io*) ok "removing the Sanity hosts breaks the Studio, so the fix is load-bearing" ;;
+    *) bad "the Studio raised no violation with the Sanity hosts removed; the lane is not measuring the policy ($v)" ;;
+  esac
+fi
 
 echo "---"
 echo "passed=$pass failed=$fail"
