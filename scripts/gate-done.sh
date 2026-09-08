@@ -371,8 +371,22 @@ if [ -f "$SEO_GATE" ]; then
     # is the exists-but-never-fires class: the gate ran, refused, and was filed as not applicable.
     # Pure bash below on purpose: a pipe into an early-exiting grep or head SIGPIPEs the producer
     # and fails the assignment under pipefail, which this repo has already paid for once.
-    2) seo_reason="${seo_err%%$'\n'*}"
-       seo_reason="${seo_reason#gate-seo: }"
+    2) # THE ADVISORY IS NOT THE REASON. gate-seo prints a build-format advisory on stderr
+       # before it checks anything, so on an exit-2 path the FIRST line can be that advisory
+       # with the verdict two lines below it, and a site that had simply never been built was
+       # summarised as a config problem: the operator is sent to change their host over a
+       # missing dist. An advisory precedes the verdict by construction, so the LAST
+       # `gate-seo: ` line is the verdict on every one of that gate's exit-2 paths. Read with a
+       # here-string rather than a pipe: a pipeline into an early-exiting reader SIGPIPEs the
+       # producer under pipefail, which this file has already paid for once.
+       seo_reason=""
+       while IFS= read -r seo_line; do
+         case "$seo_line" in
+           "gate-seo: "*) seo_reason="${seo_line#gate-seo: }" ;;
+         esac
+       done <<< "$seo_err"
+       # Nothing recognisable: keep the old first-line behaviour rather than report nothing.
+       [ -z "$seo_reason" ] && seo_reason="${seo_err%%$'\n'*}"
        # THE HEADER IS NOT THE FINDING. A cannot-check report opens "N thing(s) could NOT be
        # checked. These are unknown, not clean." and names the actual unknown two lines later,
        # so taking the first line put the header in the summary and dropped the only part that
