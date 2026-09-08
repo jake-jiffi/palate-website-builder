@@ -32,6 +32,7 @@
  *   node gate-seo.mjs [project-dir]                      # disk only: built output + index
  *   node gate-seo.mjs [project-dir] --base http://host   # also fetch, so redirects are real
  *   node gate-seo.mjs [project-dir] --site https://host  # the origin canonicals must name
+ *   node gate-seo.mjs [project-dir] --base ... --no-hsts # an origin that terminates TLS elsewhere
  *
  * The disk pass answers coverage and canonical for anything prerendered. It cannot answer
  * redirects for a server-rendered route, which is most of them, so a sweep of a deployed
@@ -653,7 +654,31 @@ if (!robotsSrc && !robotsBuiltFile && !robotsPublic) {
 }
 
 // ------------------------------------------------------------------- 6. live pass
-// Only a request answers "does this redirect". Everything above is what disk can prove.
+// Only a request answers "does this redirect", and only a request answers "what headers does
+// the edge actually send". A template can ship four security headers in vercel.json and the
+// deployed origin send none of them, and nothing here looked.
+const SECURITY_HEADERS = [
+  ["content-security-policy", "Content-Security-Policy",
+   "nothing constrains what the page may load or execute, so one injected script has the whole origin."],
+  ["x-content-type-options", "X-Content-Type-Options",
+   "a browser may sniff a response into a type it was not served as."],
+  ["x-frame-options", "X-Frame-Options",
+   "the page can be framed by anyone, which is what clickjacking needs."],
+  ["referrer-policy", "Referrer-Policy",
+   "the full URL of the page travels to every third party the page loads."],
+  ["permissions-policy", "Permissions-Policy",
+   "camera, microphone and geolocation stay available to any frame the page embeds."],
+];
+const HSTS = ["strict-transport-security", "Strict-Transport-Security",
+  "a first visit over http is interceptable and the browser has no instruction to stay on https."];
+const noHsts = argv.includes("--no-hsts");
+// A browser IGNORES HSTS over http and the edge only sends it on https, so demanding it on a
+// localhost sweep would fire on every correct build. Not silent about it: the reason is printed.
+const hstsReason = noHsts ? "--no-hsts" : base && !base.startsWith("https:") ? "the origin is http" : null;
+const headersChecked = [...SECURITY_HEADERS, ...(hstsReason ? [] : [HSTS])];
+const headersMissing = Object.fromEntries(headersChecked.map(([h]) => [h, []]));
+let headerPages = 0;
+
 if (base) {
   const MAX = 200;
   const targets = [...new Set([
@@ -705,6 +730,10 @@ if (base) {
 
     const ct = res.headers.get("content-type") || "";
     if (!ct.includes("text/html")) continue;
+    // Documents only. X-Frame-Options on robots.txt protects nothing and would turn one
+    // missing header into a finding per asset.
+    headerPages += 1;
+    for (const [h] of headersChecked) if (!res.headers.get(h)) headersMissing[h].push(p);
     const body = await res.text();
     readJsonLd(body, p);
     const tag = body.match(/<link[^>]+rel=["']canonical["'][^>]*>/i);
@@ -726,6 +755,18 @@ if (base) {
     console.error(`gate-seo: nothing at ${base} answered. The live pass measured nothing. NOT a pass.`);
     process.exit(2);
   }
+}
+
+// One finding per header, naming the pages that lack it. A deployment sends the same headers
+// to every route, so a per-page finding would be the same sentence two hundred times.
+for (const [h, name, why] of headersChecked) {
+  const miss = headersMissing[h];
+  if (!miss.length) continue;
+  add(
+    `no ${name}`,
+    `${miss.length} of ${headerPages} page(s) fetched from ${base} send no ${name}, e.g. ` +
+    `${miss.slice(0, 3).join(", ")}. ${why}`,
+  );
 }
 
 // Structured data, grouped. One line per fault naming up to six routes, because a site whose
@@ -792,7 +833,9 @@ const scope =
   (siteOrigin ? `, site ${hostOf(siteOrigin)} (from ${siteFrom})` : ", site origin unknown") +
   (skipped.noindex ? `, ${skipped.noindex} noindex page(s) excluded` : "") +
   (skipped.variant ? `, ${skipped.variant} Explore variant(s) excluded` : "") +
-  `${base ? `, live against ${base}` : ", disk only"}`;
+  `${base ? `, live against ${base}` : ", disk only"}` +
+  (base ? `, ${headerPages} page(s) read for security headers` : "") +
+  (base && hstsReason ? `, HSTS not checked (${hstsReason})` : "");
 
 if (blocked.length) {
   console.error(`gate-seo: ${blocked.length} thing(s) could NOT be checked. These are unknown, not clean.\n`);

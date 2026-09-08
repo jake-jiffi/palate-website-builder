@@ -573,6 +573,80 @@ test("the live pass catches a redirect disk cannot see", async () => {
   }
 });
 
+/** The live-pass fixture again, this time parameterised by the headers it answers with. */
+function headerServer(port, headers) {
+  const server = createServer((req, res) => {
+    const path = req.url.replace(/\/$/, "") || "/";
+    if (path === "/robots.txt" || path === "/llms.txt") {
+      res.writeHead(200, { "content-type": "text/plain" });
+      return res.end("# x\n");
+    }
+    if (path.endsWith(".md") || path === "/llms-full.txt") { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { "content-type": "text/html", ...headers });
+    res.end(
+      `<!doctype html><html><head><link rel="canonical" href="https://ex.com${path}">` +
+      `<script type="application/ld+json">${JSON.stringify(ORG)}</script>` +
+      `<script type="application/ld+json">${JSON.stringify(POST(path))}</script>` +
+      "</head><body>x</body></html>",
+    );
+  });
+  return new Promise((r) => server.listen(port, "127.0.0.1", () => r(server)));
+}
+
+const ALL_HEADERS = {
+  "content-security-policy": "default-src 'self'",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "SAMEORIGIN",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "permissions-policy": "camera=(), microphone=()",
+};
+
+test("the live pass names every missing security header, one finding each", async () => {
+  // Nothing checked headers on a deployed origin, so a template shipping four of them and a
+  // Cloudflare overlay sending none both read as clean.
+  const p = scaffold();
+  const server = await headerServer(8865, {});
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8865");
+    assert.equal(r.code, 1, r.out);
+    for (const h of ["Content-Security-Policy", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy"]) {
+      assert.match(r.out, new RegExp(`no ${h}`), `${h} was not reported missing`);
+    }
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("a deployment that sends them all is silent about headers", async () => {
+  const p = scaffold();
+  const server = await headerServer(8866, ALL_HEADERS);
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8866");
+    assert.equal(r.code, 0, r.out);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("HSTS is not demanded over http, and the report says why", async () => {
+  // A browser ignores Strict-Transport-Security over http and the edge only sends it on https,
+  // so demanding it on a localhost sweep would fire on every correct build.
+  const p = scaffold();
+  const server = await headerServer(8867, ALL_HEADERS);
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8867");
+    assert.equal(r.code, 0, r.out);
+    assert.doesNotMatch(r.out, /no Strict-Transport-Security/);
+    assert.match(r.out, /HSTS not checked \(the origin is http\)/);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("--no-hsts says so in the report rather than going quiet", async () => {
+  const p = scaffold();
+  const server = await headerServer(8868, ALL_HEADERS);
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8868", "--no-hsts");
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /HSTS not checked \(--no-hsts\)/);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
 test("an unreachable origin blocks rather than passing", () => {
   const p = scaffold();
   // Nothing is listening here. A live sweep that quietly measured zero URLs and printed clean
