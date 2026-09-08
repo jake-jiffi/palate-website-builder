@@ -5,13 +5,22 @@
 #
 # Usage: scripts/test/run.sh [--fast]
 #   --fast  skip the browser-driven suites (hygiene-loop, verify-rendered-a11y,
-#           template-csp-live), which need Playwright and take minutes. template-csp-live
-#           also npm-installs and builds the template, which is the only honest way to prove
-#           a Content-Security-Policy.
+#           verify-rendered-incremental, template-csp-live), which need Playwright and take
+#           minutes. template-csp-live also npm-installs and builds the template, which is the
+#           only honest way to prove a Content-Security-Policy.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 FAST=0; for a in "$@"; do [ "$a" = "--fast" ] && FAST=1; done
-SLOW="hygiene-loop verify-rendered-a11y template-csp-live"
+# FULL FILE NAMES, and the extension is load-bearing. The list used to hold bare names and
+# only filtered the shell loop, so a browser suite written as .test.mjs was named here and
+# ran under --fast anyway. Filtering both loops on a bare name is worse again: hygiene-loop
+# is BOTH a browser suite and a 72ms unit suite, and the bare name silently took the unit one
+# out of every fast run. A missing entry is warned about below, because a list that names a
+# file nobody has skips nothing and says nothing.
+SLOW="hygiene-loop.test.sh verify-rendered-a11y.test.sh verify-rendered-incremental.test.mjs template-csp-live.test.sh"
+for s in $SLOW; do
+  [ -e "$DIR/$s" ] || echo "  WARNING: the slow list names $s, which does not exist"
+done
 pass=0; fail=0; skipped=0; failed_names=""
 
 run() { # label  command...
@@ -28,14 +37,16 @@ echo "shell suites"
 for t in "$DIR"/*.test.sh; do
   [ -e "$t" ] || continue
   n="$(basename "$t" .test.sh)"
-  case " $SLOW " in *" $n "*) [ "$FAST" = "1" ] && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; };; esac
+  case " $SLOW " in *" $(basename "$t") "*) [ "$FAST" = "1" ] && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; };; esac
   run "$n" bash "$t"
 done
 
 echo "node suites"
 for t in "$DIR"/*.test.mjs; do
   [ -e "$t" ] || continue
-  run "$(basename "$t" .test.mjs)" node --test "$t"
+  n="$(basename "$t" .test.mjs)"
+  case " $SLOW " in *" $(basename "$t") "*) [ "$FAST" = "1" ] && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; };; esac
+  run "$n" node --test "$t"
 done
 
 echo "---"

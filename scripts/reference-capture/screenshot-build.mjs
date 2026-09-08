@@ -28,7 +28,7 @@
  *   node screenshot-build.mjs --url <http://localhost:PORT> --out <dir> [--label v1] [--sections]
  */
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 // ---------------------------------------------------------------- config ----
@@ -318,6 +318,11 @@ async function main() {
     console_errors: 0,
     console_errors_list: [],
     notes: [],
+    // NOT THIS SCRIPT'S FIELD, AND CARRIED FORWARD ON PURPOSE. verify-rendered.mjs records a
+    // per-route { sourcesHash, renderedHash, passed_at } here so an unchanged route is not
+    // re-rendered. This file rewrites the whole manifest on every capture, so declaring the
+    // field empty would erase that record and quietly put the full sweep back.
+    routes: carriedRoutes(args.out),
   };
 
   // WRITTEN BEFORE THE BROWSER STARTS, so a run that is KILLED leaves its own record. Every
@@ -389,6 +394,15 @@ async function main() {
   // Exit 1 ONLY when the capture itself failed. Console errors on a page that DID render are
   // the loop's own signal and still exit 0: they are a finding, not a broken instrument.
   process.exit(manifest.status === 'failed' ? 1 : 0);
+}
+
+// The `routes` map from any manifest already sitting in the output directory. A missing or
+// unreadable one is simply an empty map: losing the record costs a slow run, never a wrong one.
+function carriedRoutes(outDir) {
+  try {
+    const m = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
+    return (m && typeof m.routes === 'object' && m.routes && !Array.isArray(m.routes)) ? m.routes : {};
+  } catch { return {}; }
 }
 
 function writeManifest(outDir, m) {
