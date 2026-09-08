@@ -127,12 +127,17 @@ const hostOf = (u) => { try { return new URL(u).host; } catch { return String(u)
  * this returns null there and the sitemap answers instead. Resolving the expression would mean
  * comparing every canonical against `https://{{DOMAIN}}`, which is a placeholder wearing the
  * costume of a measurement.
+ *
+ * Comment LINES are dropped first: a commented-out `site:` from the domain the client used to
+ * be on would otherwise win over the live sitemap and report every correct canonical as wrong.
+ * Whole lines only, because stripping `//` anywhere cuts `https://example.com` in half.
  */
 function readSiteFromConfig(projectDir) {
   for (const name of ["astro.config.mjs", "astro.config.ts", "astro.config.js"]) {
     const src = read(join(projectDir, name));
     if (!src) continue;
-    const m = src.match(/(?:^|[\s,{])site\s*:\s*["']([^"']+)["']/m);
+    const body = src.split(/\r?\n/).filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+    const m = body.match(/(?:^|[\s,{])site\s*:\s*["']([^"']+)["']/m);
     if (m && !m[1].includes("{{") && originOf(m[1])) return m[1];
   }
   return null;
@@ -635,11 +640,11 @@ if (!robotsSrc && !robotsBuiltFile && !robotsPublic) {
     "environment-aware route never runs. Whatever the route would have said on a preview, the fixed " +
     "file is the policy on every deployment. Delete one of them.",
   );
-} else if (robotsSrc || robotsPublic || robotsBuilt) {
+} else if (robotsSrc || robotsPublic || robotsBuiltFile) {
   // The source when there is one, otherwise whatever the build actually serves. A fixed file
   // cannot read an environment, so this is where a hand-written robots.txt is caught.
   const where = robotsSrc ? robotsSrc.p : robotsPublic ? "public/robots.txt" : relative(dir, robotsBuiltFile);
-  const body = robotsSrc ? robotsSrc.body : robotsPublic || robotsBuilt;
+  const body = robotsSrc ? robotsSrc.body : robotsPublic || robotsBuilt || "";
   const envAware = /VERCEL_ENV|PUBLIC_SITE_ENV|SITE_ENV|import\.meta\.env\.(DEV|PROD)/.test(body);
   const canBlock = /Disallow:\s*\//.test(body);
   if (!envAware || !canBlock) {
@@ -772,25 +777,31 @@ for (const [h, name, why] of headersChecked) {
 // Structured data, grouped. One line per fault naming up to six routes, because a site whose
 // layout emits none has the same sentence on every page and three hundred of them is how a
 // gate stops being read.
-const someRoutes = (rs) => `${rs.slice(0, 6).join(", ")}${rs.length > 6 ? `, +${rs.length - 6} more` : ""}`;
+// Deduplicated: with --base a page is read twice, once off disk and once off the origin, and
+// the same route listed twice reads as two broken pages.
+const someRoutes = (raw) => {
+  const rs = [...new Set(raw)];
+  return `${rs.slice(0, 6).join(", ")}${rs.length > 6 ? `, +${rs.length - 6} more` : ""}`;
+};
+const countRoutes = (raw) => new Set(raw).size;
 if (ldFindings.missing.length) {
   add(
     "page renders no structured data",
-    `${ldFindings.missing.length} page(s): ${someRoutes(ldFindings.missing)}. Nothing tells an answer engine ` +
+    `${countRoutes(ldFindings.missing)} page(s): ${someRoutes(ldFindings.missing)}. Nothing tells an answer engine ` +
     "what this page is about, and the rubric scores structured data whether or not anything emits it.",
   );
 }
 if (ldFindings.unparsable.length) {
   add(
     "structured data does not parse",
-    `${ldFindings.unparsable.length} page(s): ${someRoutes(ldFindings.unparsable)}. A parser drops the whole ` +
+    `${countRoutes(ldFindings.unparsable)} page(s): ${someRoutes(ldFindings.unparsable)}. A parser drops the whole ` +
     "block, so the page carries the markup and none of the meaning, and it looks correct in the source.",
   );
 }
 if (ldFindings.type.length) {
   add(
     "wrong type of structured data for the page",
-    `${ldFindings.type.length} page(s): ${someRoutes(ldFindings.type)}. A home page needs an ` +
+    `${countRoutes(ldFindings.type)} page(s): ${someRoutes(ldFindings.type)}. A home page needs an ` +
     "Organization or LocalBusiness node and a post needs an Article or BlogPosting node. " +
     "The wrong type is not a near miss: it makes the page ineligible for the result it was written for.",
   );
@@ -798,7 +809,7 @@ if (ldFindings.type.length) {
 if (ldFindings.origin.length) {
   add(
     "structured data names another origin",
-    `${ldFindings.origin.length} page(s): ${someRoutes(ldFindings.origin)} carry a node whose url is not on ` +
+    `${countRoutes(ldFindings.origin)} page(s): ${someRoutes(ldFindings.origin)} carry a node whose url is not on ` +
     `${siteOrigin ? hostOf(siteOrigin) : "this site"}. An entity copied from the reference a build was ` +
     "grounded on keeps pointing at their domain, and the structured data then describes them.",
   );

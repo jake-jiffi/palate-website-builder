@@ -203,6 +203,17 @@ test("astro.config's site is what the canonical origin is compared against", () 
   assert.match(r.out, /canonical points at ex\.com \(site is good\.example\)/);
 });
 
+test("a commented-out site: in the config is prose, not a setting", () => {
+  // This repo has been bitten by exactly this once already, when a test matched output: "server"
+  // inside the comment explaining why it is no longer server. An old domain left in a comment
+  // would report every correct canonical on the site as pointing at the wrong host.
+  const p = scaffold();
+  write(join(p, "astro.config.mjs"), '// site: "https://we-moved-off-this.example",\nexport default { output: "static" };\n');
+  const r = run(p);
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /site ex\.com/);
+});
+
 test("--site overrides the config, so a deploy on another origin can be checked", () => {
   const p = scaffold();
   write(join(p, "astro.config.mjs"), 'export default { site: "https://good.example" };\n');
@@ -573,8 +584,11 @@ test("the live pass catches a redirect disk cannot see", async () => {
   }
 });
 
-/** The live-pass fixture again, this time parameterised by the headers it answers with. */
-function headerServer(port, headers) {
+/**
+ * The live-pass fixture again, parameterised by the headers it answers with and by which paths
+ * it serves without structured data.
+ */
+function headerServer(port, headers, noLd = []) {
   const server = createServer((req, res) => {
     const path = req.url.replace(/\/$/, "") || "/";
     if (path === "/robots.txt" || path === "/llms.txt") {
@@ -583,12 +597,8 @@ function headerServer(port, headers) {
     }
     if (path.endsWith(".md") || path === "/llms-full.txt") { res.writeHead(404); return res.end(); }
     res.writeHead(200, { "content-type": "text/html", ...headers });
-    res.end(
-      `<!doctype html><html><head><link rel="canonical" href="https://ex.com${path}">` +
-      `<script type="application/ld+json">${JSON.stringify(ORG)}</script>` +
-      `<script type="application/ld+json">${JSON.stringify(POST(path))}</script>` +
-      "</head><body>x</body></html>",
-    );
+    const ld = noLd.includes(path) ? "" : ldScript(ORG) + ldScript(POST(path));
+    res.end(`<!doctype html><html><head><link rel="canonical" href="https://ex.com${path}">${ld}</head><body>x</body></html>`);
   });
   return new Promise((r) => server.listen(port, "127.0.0.1", () => r(server)));
 }
@@ -612,6 +622,19 @@ test("the live pass names every missing security header, one finding each", asyn
     for (const h of ["Content-Security-Policy", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy", "Permissions-Policy"]) {
       assert.match(r.out, new RegExp(`no ${h}`), `${h} was not reported missing`);
     }
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("a page read off disk AND off the origin is one page, not two", async () => {
+  // With --base every page is read twice. Counting both made one page with no structured data
+  // report as "2 page(s)", which is a defect in the report rather than in the site.
+  const p = scaffold();
+  page(p, "blog/index.html", "/blog", null);
+  const server = await headerServer(8869, ALL_HEADERS, ["/blog"]);
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8869");
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /1 page\(s\): \/blog\./);
   } finally { await new Promise((r) => server.close(r)); }
 });
 

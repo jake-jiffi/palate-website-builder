@@ -68,6 +68,20 @@ function walk(dir, out = []) {
 const read = (p) => { try { return readFileSync(p, 'utf8'); } catch { return ''; } };
 
 /**
+ * The config with its comment LINES removed, so a setting is read and prose is not.
+ *
+ * This repo has already been bitten once: a test grepped the whole Astro config and matched
+ * `output: "server"` inside the comment explaining why it is no longer server, and reported the
+ * opposite of the truth. A commented-out `format: "file"` or an old `site:` would do the same
+ * here, and both change what every URL in the build is compared against.
+ *
+ * Whole lines only. Stripping `//` anywhere would cut `site: "https://example.com"` in half,
+ * which is the sort of fix that creates the bug it was written to prevent.
+ */
+const withoutComments = (src) =>
+  src.split(/\r?\n/).filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+
+/**
  * `build.format` from the Astro config, read syntactically. No bundler, no install.
  *
  * "file" writes /about.html, "directory" writes /about/index.html, "preserve" mirrors the
@@ -80,7 +94,7 @@ export function readBuildFormat(projectDir) {
   for (const name of ['astro.config.mjs', 'astro.config.ts', 'astro.config.js']) {
     const src = read(join(projectDir, name));
     if (!src) continue;
-    const block = src.match(/build\s*:\s*\{([\s\S]*?)\}/);
+    const block = withoutComments(src).match(/build\s*:\s*\{([\s\S]*?)\}/);
     const m = block && block[1].match(/format\s*:\s*["'`](file|directory|preserve)["'`]/);
     if (m) return m[1];
   }

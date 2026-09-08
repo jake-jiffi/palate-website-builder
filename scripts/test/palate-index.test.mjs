@@ -201,6 +201,19 @@ test('readBuildFormat reads the config, and defaults to Astro\'s own default', (
   }
 });
 
+test('a commented-out build.format is prose, not a setting', () => {
+  // A commented example of format: "file" would switch .html stripping on for the whole build,
+  // and every genuinely broken /about.html link would then read as fine.
+  const dir = site(
+    { 'src/pages/index.astro': '<a href="/about.html">about</a>', 'src/pages/about.astro': '<h1>About</h1>' },
+    '// build: { format: "file" },\nexport default { output: "static" };\n',
+  );
+  try {
+    assert.equal(readBuildFormat(dir), 'directory');
+    assert.ok(buildIndex(dir).links.dead.includes('/about.html'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('under build.format "file" a /about.html link is a link, not a dead one', () => {
   // The site's own URLs ARE /about.html under that format, and every one of them read as a
   // dead link because the normaliser only ever stripped a trailing slash.
