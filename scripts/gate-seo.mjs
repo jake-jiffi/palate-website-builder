@@ -121,6 +121,17 @@ const originOf = (u) => { try { return new URL(u).origin; } catch { return null;
 const hostOf = (u) => { try { return new URL(u).host; } catch { return String(u); } };
 
 /**
+ * A few routes out of a list, for a finding that would otherwise be the same sentence on every
+ * page of the site. Deduplicated: with --base a page is read twice, once off disk and once off
+ * the origin, and the same route listed twice reads as two broken pages.
+ */
+const someRoutes = (raw) => {
+  const rs = [...new Set(raw)];
+  return `${rs.slice(0, 6).join(", ")}${rs.length > 6 ? `, +${rs.length - 6} more` : ""}`;
+};
+const countRoutes = (raw) => new Set(raw).size;
+
+/**
  * The site's own origin as the Astro config declares it. A STRING LITERAL ONLY.
  *
  * The shipped scaffold writes `site: siteUrl`, built from an env var the gate cannot see, so
@@ -684,6 +695,22 @@ const headersChecked = [...SECURITY_HEADERS, ...(hstsReason ? [] : [HSTS])];
 const headersMissing = Object.fromEntries(headersChecked.map(([h]) => [h, []]));
 let headerPages = 0;
 
+/**
+ * Is the origin being swept the site's OWN origin, rather than a preview or a localhost?
+ *
+ * This is what makes a noindex meaning-bearing. A preview is supposed to carry noindex, and
+ * firing there would train everyone to ignore the finding; on the real domain the same tag
+ * removes the whole site from search with nothing failing anywhere.
+ */
+const sweepingProduction = Boolean(base && siteOrigin && originOf(base) === siteOrigin);
+const productionNoindex = [];
+const META_ROBOTS = /<meta\b[^>]*>/gi;
+const saysNoindex = (html, headerValue) =>
+  /noindex/i.test(headerValue || "") ||
+  [...html.matchAll(META_ROBOTS)].some(
+    (m) => /name=["']robots["']/i.test(m[0]) && /content=["'][^"']*noindex/i.test(m[0]),
+  );
+
 if (base) {
   const MAX = 200;
   const targets = [...new Set([
@@ -740,6 +767,7 @@ if (base) {
     headerPages += 1;
     for (const [h] of headersChecked) if (!res.headers.get(h)) headersMissing[h].push(p);
     const body = await res.text();
+    if (sweepingProduction && saysNoindex(body, res.headers.get("x-robots-tag"))) productionNoindex.push(p);
     readJsonLd(body, p);
     const tag = body.match(/<link[^>]+rel=["']canonical["'][^>]*>/i);
     if (!tag) { add("no canonical", `${p} renders no <link rel="canonical"> (fetched from ${base}).`); continue; }
@@ -762,6 +790,19 @@ if (base) {
   }
 }
 
+// The site's own origin telling crawlers to forget it. This is the failure the noindex default
+// trades against: a build that cannot prove it is production noindexes itself, and every page
+// leaves the index with nothing failing anywhere. It is only a finding on the real origin.
+if (productionNoindex.length) {
+  add(
+    "production renders noindex",
+    `production renders noindex on ${someRoutes(productionNoindex)} ` +
+    `(${countRoutes(productionNoindex)} of ${headerPages} page(s) fetched from ${base}, which IS this site's ` +
+    "own origin). Either the deployment cannot tell it is production, or something is setting the tag " +
+    "deliberately. Set PUBLIC_SITE_ENV=production on the build, or remove the tag.",
+  );
+}
+
 // One finding per header, naming the pages that lack it. A deployment sends the same headers
 // to every route, so a per-page finding would be the same sentence two hundred times.
 for (const [h, name, why] of headersChecked) {
@@ -777,13 +818,6 @@ for (const [h, name, why] of headersChecked) {
 // Structured data, grouped. One line per fault naming up to six routes, because a site whose
 // layout emits none has the same sentence on every page and three hundred of them is how a
 // gate stops being read.
-// Deduplicated: with --base a page is read twice, once off disk and once off the origin, and
-// the same route listed twice reads as two broken pages.
-const someRoutes = (raw) => {
-  const rs = [...new Set(raw)];
-  return `${rs.slice(0, 6).join(", ")}${rs.length > 6 ? `, +${rs.length - 6} more` : ""}`;
-};
-const countRoutes = (raw) => new Set(raw).size;
 if (ldFindings.missing.length) {
   add(
     "page renders no structured data",

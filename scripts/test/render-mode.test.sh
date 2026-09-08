@@ -110,6 +110,29 @@ grep -q 'PUBLIC_SITE_ENV === "production"' "$BL" \
   && ok "BaseLayout knows whether this build is the live site" \
   || bad "BaseLayout does not read PUBLIC_SITE_ENV, so it cannot tell a preview from production"
 
+# Unknown fails toward noindex, so production has to be DETECTABLE on every host we ship to,
+# by every route the value can arrive on. A production deploy that cannot prove it is
+# production noindexes itself, which is a total and silent loss of search traffic.
+grep -q 'VERCEL_ENV === "production"' "$BL" \
+  && ok "and reads VERCEL_ENV directly, for a build whose config did not fold it in" \
+  || bad "BaseLayout reads only one production signal; a Vercel build that missed the inline noindexes itself"
+
+# The Cloudflare overlay has no VERCEL_ENV to fall back on, so CI has to say which build this
+# is, and the config has to bake it in: wrangler vars reach the Worker at runtime and the
+# robots meta is decided at build time.
+CF="$(dirname "$TPL")/host-cloudflare"
+if [ -d "$CF" ]; then
+  grep -q 'PUBLIC_SITE_ENV: production' "$CF/.github/workflows/deploy.yml" \
+    && ok "the Cloudflare production deploy declares itself production" \
+    || bad "the Cloudflare deploy sets no PUBLIC_SITE_ENV, so the live site would noindex itself"
+  grep -q 'PUBLIC_SITE_ENV: preview' "$CF/.github/workflows/preview.yml" \
+    && ok "and its preview deploy declares itself a preview" \
+    || bad "the Cloudflare preview deploy sets no PUBLIC_SITE_ENV"
+  grep -q 'import.meta.env.PUBLIC_SITE_ENV' "$CF/astro.config.mjs" \
+    && ok "and the overlay bakes the value into the build" \
+    || bad "the Cloudflare overlay never defines PUBLIC_SITE_ENV, so CI setting it changes nothing"
+fi
+
 META="$(grep 'content="noindex"' "$BL" | head -1)"
 case "$META" in
   *'!isProduction'*) ok "every non-production page carries meta robots noindex" ;;

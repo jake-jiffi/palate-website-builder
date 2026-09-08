@@ -588,7 +588,7 @@ test("the live pass catches a redirect disk cannot see", async () => {
  * The live-pass fixture again, parameterised by the headers it answers with and by which paths
  * it serves without structured data.
  */
-function headerServer(port, headers, noLd = []) {
+function headerServer(port, headers, noLd = [], head = "") {
   const server = createServer((req, res) => {
     const path = req.url.replace(/\/$/, "") || "/";
     if (path === "/robots.txt" || path === "/llms.txt") {
@@ -598,7 +598,7 @@ function headerServer(port, headers, noLd = []) {
     if (path.endsWith(".md") || path === "/llms-full.txt") { res.writeHead(404); return res.end(); }
     res.writeHead(200, { "content-type": "text/html", ...headers });
     const ld = noLd.includes(path) ? "" : ldScript(ORG) + ldScript(POST(path));
-    res.end(`<!doctype html><html><head><link rel="canonical" href="https://ex.com${path}">${ld}</head><body>x</body></html>`);
+    res.end(`<!doctype html><html><head><link rel="canonical" href="https://ex.com${path}">${ld}${head}</head><body>x</body></html>`);
   });
   return new Promise((r) => server.listen(port, "127.0.0.1", () => r(server)));
 }
@@ -667,6 +667,43 @@ test("--no-hsts says so in the report rather than going quiet", async () => {
     const r = await runAsync(p, "--base", "http://127.0.0.1:8868", "--no-hsts");
     assert.equal(r.code, 0, r.out);
     assert.match(r.out, /HSTS not checked \(--no-hsts\)/);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+// A build that cannot tell it is production noindexes itself, and every page of it disappears
+// from search with nothing failing anywhere. This is the check that makes the safe default safe.
+
+test("a production origin that renders noindex fires, and names the route", async () => {
+  const p = scaffold();
+  const server = await headerServer(8870, ALL_HEADERS, [], '<meta name="robots" content="noindex">');
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8870", "--site", "http://127.0.0.1:8870");
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /production renders noindex on \//);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("an X-Robots-Tag noindex header fires the same way", async () => {
+  // The meta is one of two ways to say it, and a host header is the one nothing in the repo
+  // can see by reading the source.
+  const p = scaffold();
+  const server = await headerServer(8871, { ...ALL_HEADERS, "x-robots-tag": "noindex, nofollow" });
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8871", "--site", "http://127.0.0.1:8871");
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /production renders noindex on \//);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test("the same noindex on a PREVIEW origin is silent, because that is correct there", async () => {
+  // The check only applies when the origin being swept IS the site's own. A preview is
+  // supposed to be noindexed, and firing there would train everyone to ignore the finding.
+  const p = scaffold();
+  const server = await headerServer(8872, ALL_HEADERS, [], '<meta name="robots" content="noindex">');
+  try {
+    const r = await runAsync(p, "--base", "http://127.0.0.1:8872");
+    assert.equal(r.code, 0, r.out);
+    assert.doesNotMatch(r.out, /production renders noindex/);
   } finally { await new Promise((r) => server.close(r)); }
 });
 

@@ -30,7 +30,15 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
 //
 // Independent of the `noindex` prop on purpose. A page that asks for noindex gets it in
 // production too, and a preview gets it whether or not the page asked.
-const isProduction = import.meta.env.PUBLIC_SITE_ENV === "production";
+//
+// UNKNOWN FAILS TOWARD NOINDEX, so production has to be DETECTABLE on every host we ship to.
+// Both signals are read because they arrive by different routes: astro.config inlines
+// PUBLIC_SITE_ENV (folding in VERCEL_ENV on Vercel and set by CI on the Cloudflare overlay),
+// and process.env.VERCEL_ENV is the direct read for a build whose config did not do that.
+// gate-seo's live pass catches the case where both are missing on the real origin.
+const isProduction =
+  import.meta.env.PUBLIC_SITE_ENV === "production" ||
+  (typeof process !== "undefined" && process.env?.VERCEL_ENV === "production");
 
 // Visual editing is gated by a build-time env var, set "true" only on the
 // preview deployment. When on: mount the overlay, never edge-cache, noindex.
