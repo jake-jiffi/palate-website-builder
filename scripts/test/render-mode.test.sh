@@ -101,6 +101,37 @@ grep -qi "Match the site you are in" "$DIR/../../references/continue-mode.md" \
   && ok "continue-mode.md tells an edit to match the site it is in" \
   || bad "continue-mode.md does not tell an edit to match the site's existing render mode"
 
+# --- 8. A PREVIEW IS NOINDEXED IN THE PAGE, NOT ONLY IN robots.txt --------------------
+# Disallow stops the CRAWL. It does not stop the URL being INDEXED when something links to
+# it, and a preview deployment is a real public origin carrying a client's content at a
+# domain they do not own. The two mechanisms fail differently, so the scaffold ships both.
+BL="$TPL/src/layouts/BaseLayout.astro"
+grep -q 'PUBLIC_SITE_ENV === "production"' "$BL" \
+  && ok "BaseLayout knows whether this build is the live site" \
+  || bad "BaseLayout does not read PUBLIC_SITE_ENV, so it cannot tell a preview from production"
+
+META="$(grep 'content="noindex"' "$BL" | head -1)"
+case "$META" in
+  *'!isProduction'*) ok "every non-production page carries meta robots noindex" ;;
+  *) bad "the noindex meta does not fire on a non-production build: $META" ;;
+esac
+# The env half must not hang off the prop, or a preview page that did not ask stays indexable.
+case "$META" in
+  *'noindex ||'*) ok "and an explicit noindex prop still works, in production too" ;;
+  *) bad "the noindex prop no longer reaches the meta tag: $META" ;;
+esac
+
+# Explore variants are rejected concept homepages. They must never be indexable anywhere.
+found_variant=0
+for f in "$TPL"/src/pages/v[0-9]*.astro; do
+  [ -f "$f" ] || continue
+  found_variant=1
+  grep -q 'noindex' "$f" \
+    && ok "$(basename "$f") declares noindex" \
+    || bad "$(basename "$f") is a rejected concept homepage with no noindex"
+done
+[ "$found_variant" = "1" ] || ok "no Explore variant ships in the scaffold; nothing to noindex"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

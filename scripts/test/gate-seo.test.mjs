@@ -463,6 +463,26 @@ test("the SHIPPED scaffold robots endpoint satisfies the check", () => {
   assert.equal(run(scaffold()).code, 0);
 });
 
+test("a static public/robots.txt shadowing the SSR route fires", () => {
+  // The static file is copied into the build verbatim and served first, so the environment-aware
+  // route never runs and the fixed policy is what every deployment gets. Both files exist, both
+  // look right on their own, and nothing in the build says which one is answering.
+  const p = scaffold();
+  write(join(p, "public/robots.txt"), "User-agent: *\nAllow: /\n");
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /static robots\.txt shadows the SSR route/);
+});
+
+test("a fixed robots.txt with no route at all is not environment aware, and says so", () => {
+  const p = scaffold();
+  rmSync(join(p, "src/pages/robots.txt.ts"));
+  write(join(p, "public/robots.txt"), "User-agent: *\nAllow: /\n");
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /robots\.txt is not environment aware/);
+});
+
 test("a site with no robots.txt anywhere fires", () => {
   const p = scaffold();
   rmSync(join(p, "src/pages/robots.txt.ts"));

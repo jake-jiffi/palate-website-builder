@@ -618,17 +618,33 @@ if (!htmlFiles.length) {
 const robotsSrc = ["src/pages/robots.txt.ts", "src/pages/robots.txt.js", "src/pages/robots.txt.astro"]
   .map((p) => ({ p, body: read(join(dir, p)) }))
   .find((x) => x.body);
-const robotsBuilt = outFiles.find((f) => basename(f) === "robots.txt");
+const robotsBuiltFile = outFiles.find((f) => basename(f) === "robots.txt");
+const robotsBuilt = robotsBuiltFile ? read(robotsBuiltFile) : null;
+const robotsPublic = read(join(dir, "public/robots.txt"));
 
-if (!robotsSrc && !robotsBuilt && !read(join(dir, "public/robots.txt"))) {
+if (!robotsSrc && !robotsBuiltFile && !robotsPublic) {
   add("no robots.txt", "the site serves no robots.txt at all, so there is no Sitemap: line and no crawler policy.");
-} else if (robotsSrc) {
-  const envAware = /VERCEL_ENV|PUBLIC_SITE_ENV|SITE_ENV|import\.meta\.env\.(DEV|PROD)/.test(robotsSrc.body);
-  const canBlock = /Disallow:\s*\//.test(robotsSrc.body);
+} else if (robotsSrc && robotsPublic) {
+  // Both exist, both look right on their own, and nothing in the build says which one answers.
+  // The static file is copied into the output verbatim and served ahead of the route, so the
+  // environment-aware endpoint is dead code and the fixed policy is what every deployment gets.
+  add(
+    "static robots.txt shadows the SSR route",
+    `public/robots.txt is copied into the build verbatim and served ahead of ${robotsSrc.p}, so the ` +
+    "environment-aware route never runs. Whatever the route would have said on a preview, the fixed " +
+    "file is the policy on every deployment. Delete one of them.",
+  );
+} else if (robotsSrc || robotsPublic || robotsBuilt) {
+  // The source when there is one, otherwise whatever the build actually serves. A fixed file
+  // cannot read an environment, so this is where a hand-written robots.txt is caught.
+  const where = robotsSrc ? robotsSrc.p : robotsPublic ? "public/robots.txt" : relative(dir, robotsBuiltFile);
+  const body = robotsSrc ? robotsSrc.body : robotsPublic || robotsBuilt;
+  const envAware = /VERCEL_ENV|PUBLIC_SITE_ENV|SITE_ENV|import\.meta\.env\.(DEV|PROD)/.test(body);
+  const canBlock = /Disallow:\s*\//.test(body);
   if (!envAware || !canBlock) {
     add(
       "robots.txt is not environment aware",
-      `${robotsSrc.p} emits the same policy everywhere (` +
+      `${where} emits the same policy everywhere (` +
       `${envAware ? "reads an env var but never emits Disallow: /" : "no environment or host condition"}` +
       "). Every preview deployment is a public origin inviting indexing of the client's content at a " +
       "domain they do not own, which is duplicate content they cannot see and cannot take down.",
@@ -644,7 +660,7 @@ if (base) {
     ...sitemapLocs.map((l) => l.path),
     ...expected.map((e) => e.path),
     ...agentSurfaces.flatMap((s) => [...s.body.matchAll(/\]\((\/[^)\s]*)\)/g)].map((m) => norm(m[1]))),
-    ...(robotsSrc || robotsBuilt ? ["/robots.txt"] : []),
+    ...(robotsSrc || robotsBuiltFile || robotsPublic ? ["/robots.txt"] : []),
     ...AGENT_FILES.map((n) => "/" + n),
   ])];
   const checkList = targets.slice(0, MAX);
