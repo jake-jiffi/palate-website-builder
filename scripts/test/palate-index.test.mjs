@@ -20,6 +20,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { buildIndex, blastRadius, readBuildFormat } from '../palate-index.mjs';
 
@@ -126,6 +127,67 @@ function site(files, config = null) {
   }
   return dir;
 }
+
+test('a route linked only from a component is not an orphan', () => {
+  // The link graph was empty on every site Palate has built, because only the page file was
+  // read. A site whose nav lives in a Header component had every page in that nav reported as
+  // an orphan, and the report was a statement about the parser rather than about the site.
+  const dir = site({
+    'src/pages/index.astro': '---\nimport Header from "../components/Header.astro";\n---\n<Header />',
+    'src/pages/contact.astro': '<h1>Contact</h1>',
+    'src/components/Header.astro': '<nav><a href="/contact">Contact</a></nav>',
+  });
+  try {
+    const ix = buildIndex(dir);
+    assert.ok(!ix.links.orphans.includes('/contact'), `the header links /contact: ${ix.links.orphans}`);
+    assert.deepEqual(ix.routes.find((r) => r.path === '/').links, ['/contact']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the shipped template has a link graph, and says how much of one it read', () => {
+  assert.ok(index.links.parsed > 0, 'the template parsed no links at all, so nothing downstream can be trusted');
+  assert.ok(index.links.files > 0, 'no files were scanned for links');
+  assert.ok(index.routes.find((r) => r.path === '/').links.length > 0,
+    'home reaches no internal link, so every page it links to reads as an orphan');
+  assert.ok(!index.links.orphans.includes('/explore'),
+    'the switcher in the shared layout links /explore, so it is reached from every page');
+});
+
+test('orphans are not computed when no link was parsed at all', () => {
+  // Zero parsed links is the signature of a parser that saw nothing. Listing every page as an
+  // orphan then reports the parser's blindness as a property of the site.
+  const dir = site({ 'src/pages/index.astro': '<h1>Home</h1>', 'src/pages/about.astro': '<h1>About</h1>' });
+  try {
+    const ix = buildIndex(dir);
+    assert.equal(ix.links.parsed, 0);
+    assert.deepEqual(ix.links.orphans, []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('an asset href in the shared layout is not a dead link', () => {
+  // BaseLayout carries <link rel="icon" href="/favicon.svg">. Reading the closure without
+  // this filter puts a favicon in every route's link list and then reports it as a broken page.
+  const dir = site({
+    'src/pages/index.astro': '---\nimport L from "../layouts/L.astro";\n---\n<L />',
+    'src/pages/contact.astro': '<h1>c</h1>',
+    'src/layouts/L.astro': '<link rel="icon" href="/favicon.svg" /><a href="/brochure.pdf">pdf</a><a href="/contact">c</a>',
+  });
+  try {
+    assert.deepEqual(buildIndex(dir).links.dead, []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the CLI reports how many links it read, over how many files', () => {
+  const dir = site({
+    'src/pages/index.astro': '---\nimport Header from "../components/Header.astro";\n---\n<Header />',
+    'src/pages/contact.astro': '<h1>Contact</h1>',
+    'src/components/Header.astro': '<nav><a href="/contact">Contact</a></nav>',
+  });
+  try {
+    const r = spawnSync(process.execPath, [join(HERE, '..', 'palate-index.mjs'), dir], { encoding: 'utf8' });
+    assert.match(`${r.stdout}${r.stderr}`, /links: \d+ parsed across \d+ files/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('readBuildFormat reads the config, and defaults to Astro\'s own default', () => {
   const bare = site({ 'src/pages/index.astro': '<h1>x</h1>' });

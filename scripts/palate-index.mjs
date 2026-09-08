@@ -183,10 +183,41 @@ function frontmatter(file) {
   return out;
 }
 
-/** Internal hrefs one file emits, in this build's own URL spelling. */
+/**
+ * A route, or an asset?
+ *
+ * BaseLayout carries `<link rel="icon" href="/favicon.svg">`, and once the closure is read
+ * that href lands on every route in the site and then reports as a broken page. A last
+ * segment with an extension is a file the site serves, not a route it renders. `.html` is the
+ * exception both ways: under build.format "file" it IS the route, and under any other format
+ * it is a link that really does 404, which is the case the format keying exists for.
+ */
+const isRouteHref = (h) => {
+  const last = h.split('/').pop() || '';
+  return !last.includes('.') || /\.html?$/i.test(last);
+};
+
+/** Internal route hrefs one file emits, in this build's own URL spelling. */
 function hrefsIn(file, format) {
   const src = read(file);
-  return [...src.matchAll(/href=["'](\/[^"'#?]*)/g)].map((m) => normalisePath(m[1], format));
+  return [...src.matchAll(/href=["'](\/[^"'#?]*)/g)]
+    .map((m) => normalisePath(m[1], format))
+    .filter(isRouteHref);
+}
+
+/**
+ * Every internal href a ROUTE emits: its own page file plus every file in its `dependsOn`
+ * closure, so a nav that lives in a Header component counts as links from the pages that
+ * render it. Reading the page file alone produced an EMPTY link graph on the shipped
+ * template, which made every page in the nav an orphan and every orphan report meaningless.
+ *
+ * The second argument is a per-file href reader rather than the index: this runs while the
+ * index is being built, so there is no index to hand it yet.
+ */
+function internalLinks(route, hrefsOf) {
+  const out = new Set();
+  for (const f of [route.source, ...route.dependsOn]) for (const h of hrefsOf(f)) out.add(h);
+  return [...out];
 }
 
 // -------------------------------------------------------------------- build
@@ -218,10 +249,20 @@ export function buildIndex(projectDir) {
       // Transitive, so editing a layout or a token file resolves to every page
       // that reaches it, not just the ones that name it directly.
       dependsOn: [...closure(rel, graph)].sort(),
-      links: [...new Set(hrefsIn(f, format))],
+      links: [],
     });
   }
   routes.sort((a, b) => a.path.localeCompare(b.path));
+
+  // Links, read once per file. Every route reads its own page plus its whole closure, so the
+  // shared layout is parsed once and not once per page that reaches it.
+  const hrefCache = new Map();
+  const hrefsOf = (rel) => {
+    if (!hrefCache.has(rel)) hrefCache.set(rel, hrefsIn(join(projectDir, rel), format));
+    return hrefCache.get(rel);
+  };
+  for (const r of routes) r.links = internalLinks(r, hrefsOf);
+  const linksParsed = [...hrefCache.values()].reduce((n, hs) => n + hs.length, 0);
 
   // Collections: one entry per markdown file, joined to the dynamic route that
   // renders it and to every listing route that reaches the same collection.
@@ -257,8 +298,12 @@ export function buildIndex(projectDir) {
   // Orphans: a published page nothing links to. Not an error (a campaign
   // landing page is legitimately unlinked) which is why it is reported, not
   // failed. Endpoints are excluded: robots.txt is not meant to be linked.
+  //
+  // COMPUTED ONLY WHEN A LINK WAS ACTUALLY PARSED. Zero links parsed is the signature of a
+  // parser that saw nothing, and "every page is an orphan" is then a fact about this script
+  // rather than about the site. That is precisely the report the empty graph used to produce.
   const linked = new Set(routes.flatMap((r) => r.links));
-  const orphans = routes
+  const orphans = linksParsed === 0 ? [] : routes
     .filter((r) => r.kind === 'static' && r.path !== '/' && !linked.has(r.path))
     .map((r) => r.path);
 
@@ -272,7 +317,7 @@ export function buildIndex(projectDir) {
   return {
     version: 1,
     routes, entries, facts,
-    links: { orphans, dead },
+    links: { orphans, dead, parsed: linksParsed, files: hrefCache.size },
     counts: { routes: routes.length, entries: entries.length, drafts: entries.filter((e) => e.draft).length },
   };
 }
@@ -360,10 +405,16 @@ function main() {
   // a pure function of the repo and two runs over unchanged source are byte
   // identical. A timestamp baked into the data makes every rebuild a diff.
   writeFileSync(out, JSON.stringify({ ...index, generatedAt: new Date().toISOString() }, null, 2) + '\n');
+  // The link counts are printed because the orphan and dead-link numbers are only worth
+  // reading once something has been parsed. "0 parsed across 41 files" says the graph is
+  // empty; "0 orphans" on its own said the site was fine.
   console.log(
     `palate-index: ${index.counts.routes} routes, ${index.counts.entries} entries ` +
-    `(${index.counts.drafts} draft), ${index.links.orphans.length} orphan(s), ` +
-    `${index.links.dead.length} dead link(s) -> ${relative(projectDir, out)}`,
+    `(${index.counts.drafts} draft), links: ${index.links.parsed} parsed across ${index.links.files} files, ` +
+    (index.links.parsed === 0
+      ? 'orphans not computed'
+      : `${index.links.orphans.length} orphan(s)`) +
+    `, ${index.links.dead.length} dead link(s) -> ${relative(projectDir, out)}`,
   );
 }
 
