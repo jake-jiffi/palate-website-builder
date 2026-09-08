@@ -67,6 +67,37 @@ function walk(dir, out = []) {
 
 const read = (p) => { try { return readFileSync(p, 'utf8'); } catch { return ''; } };
 
+/**
+ * `build.format` from the Astro config, read syntactically. No bundler, no install.
+ *
+ * "file" writes /about.html, "directory" writes /about/index.html, "preserve" mirrors the
+ * source tree. It decides whether a `/about.html` href is this site's own URL or a 404, and
+ * nothing here read it, so every such link on a file-format build reported as dead.
+ *
+ * Unreadable or absent is "directory", which is Astro's own default.
+ */
+export function readBuildFormat(projectDir) {
+  for (const name of ['astro.config.mjs', 'astro.config.ts', 'astro.config.js']) {
+    const src = read(join(projectDir, name));
+    if (!src) continue;
+    const block = src.match(/build\s*:\s*\{([\s\S]*?)\}/);
+    const m = block && block[1].match(/format\s*:\s*["'`](file|directory|preserve)["'`]/);
+    if (m) return m[1];
+  }
+  return 'directory';
+}
+
+/**
+ * One spelling for a path the site serves. Under "file" the `.html` is part of the URL's
+ * spelling and not part of its identity; under any other format /about.html really is a
+ * different URL from /about, and stripping it there would hide a real 404.
+ */
+export function normalisePath(href, format) {
+  let s = String(href || '').replace(/\/$/, '') || '/';
+  if (format === 'file' && /\.html$/i.test(s)) s = s.replace(/(\/index)?\.html$/i, '') || '/';
+  return s || '/';
+}
+
 // ------------------------------------------------------------------- imports
 
 /**
@@ -152,12 +183,10 @@ function frontmatter(file) {
   return out;
 }
 
-/** Internal hrefs a file emits, so orphans and dead links are answerable. */
-function internalLinks(file) {
+/** Internal hrefs one file emits, in this build's own URL spelling. */
+function hrefsIn(file, format) {
   const src = read(file);
-  return [...new Set(
-    [...src.matchAll(/href=["'](\/[^"'#?]*)/g)].map((m) => m[1].replace(/\/$/, '') || '/'),
-  )];
+  return [...src.matchAll(/href=["'](\/[^"'#?]*)/g)].map((m) => normalisePath(m[1], format));
 }
 
 // -------------------------------------------------------------------- build
@@ -166,6 +195,7 @@ export function buildIndex(projectDir) {
   const srcDir = join(projectDir, 'src');
   const pagesDir = join(srcDir, 'pages');
   if (!existsSync(pagesDir)) return null;
+  const format = readBuildFormat(projectDir);
 
   const files = walk(srcDir);
   const graph = {};
@@ -188,7 +218,7 @@ export function buildIndex(projectDir) {
       // Transitive, so editing a layout or a token file resolves to every page
       // that reaches it, not just the ones that name it directly.
       dependsOn: [...closure(rel, graph)].sort(),
-      links: internalLinks(f),
+      links: [...new Set(hrefsIn(f, format))],
     });
   }
   routes.sort((a, b) => a.path.localeCompare(b.path));

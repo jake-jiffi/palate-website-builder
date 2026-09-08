@@ -226,6 +226,33 @@ test("a page with no canonical at all fires", () => {
   assert.match(r.out, /no canonical/);
 });
 
+test("under build.format \"file\" the site's .html URLs are its real URLs", () => {
+  // Every URL on a file-format build ends .html, and the gate compared them against routes that
+  // do not, so a correct sitemap read as one phantom plus one missing route per page and every
+  // canonical read as pointing somewhere else.
+  const p = scaffold();
+  write(join(p, "astro.config.mjs"), 'export default { site: "https://ex.com", build: { format: "file" } };\n');
+  rmSync(join(p, "dist/blog/index.html"));
+  rmSync(join(p, "dist/blog/welcome/index.html"), { recursive: true });
+  sitemap(p, ["https://ex.com/", "https://ex.com/blog.html", "https://ex.com/blog/welcome.html"]);
+  page(p, "blog.html", "/blog.html");
+  page(p, "blog/welcome.html", "/blog/welcome.html");
+  const r = run(p);
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /3 expected URL\(s\), 3 advertised/);
+});
+
+test("without that format a .html URL in the sitemap is still a phantom", () => {
+  // The strip is keyed on the format for a reason: on a directory-format host /blog.html is a
+  // 404, and a gate that normalised it away would report a crawl trap as clean.
+  const p = scaffold();
+  sitemap(p, ["https://ex.com/", "https://ex.com/blog.html", "https://ex.com/blog/welcome/"]);
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /sitemap advertises a URL no route serves/);
+  assert.match(r.out, /\/blog\.html/);
+});
+
 test("a sitemap URL that matches a declared redirect fires", () => {
   const p = scaffold();
   write(join(p, "vercel.json"), JSON.stringify({ redirects: [{ source: "/blog/:slug", destination: "/writing/:slug", permanent: true }] }));

@@ -41,7 +41,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, basename } from "node:path";
-import { buildIndex } from "./palate-index.mjs";
+import { buildIndex, readBuildFormat } from "./palate-index.mjs";
 
 // ------------------------------------------------------------------------ args
 const argv = process.argv.slice(2);
@@ -60,6 +60,10 @@ if (siteAt !== -1 && !siteOverride) {
   console.error("gate-seo: --site needs an origin (e.g. --site https://example.com). Nothing checked. NOT a pass.");
   process.exit(2);
 }
+
+// Which URL spelling this build produces. Read once, because `norm` runs on every sitemap
+// entry, every route and every canonical.
+const BUILD_FORMAT = readBuildFormat(dir);
 
 const findings = [];
 const blocked = [];
@@ -90,6 +94,10 @@ function norm(p) {
   s = s.split("#")[0].split("?")[0];
   if (!s.startsWith("/")) s = "/" + s;
   s = s.replace(/\/{2,}/g, "/");
+  // Under build.format: "file" the site's own URLs END .html, so the extension is part of the
+  // spelling and not part of the identity. Only under that format: elsewhere /about.html is a
+  // different URL from /about, and normalising it away would report a crawl trap as clean.
+  if (BUILD_FORMAT === "file" && /\.html$/i.test(s)) s = s.replace(/(\/index)?\.html$/i, "") || "/";
   return s.length > 1 ? s.replace(/\/+$/, "") : "/";
 }
 

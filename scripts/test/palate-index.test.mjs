@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { buildIndex, blastRadius } from '../palate-index.mjs';
+import { buildIndex, blastRadius, readBuildFormat } from '../palate-index.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE = join(HERE, '..', '..', 'templates', 'astro-project');
@@ -114,6 +114,52 @@ test('dead internal links are detected, and dynamic routes are not false positiv
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+/** A throwaway site. `config` is the astro.config.mjs body, or null for a project with none. */
+function site(files, config = null) {
+  const dir = mkdtempSync(join(tmpdir(), 'palate-idx-fmt-'));
+  if (config) writeFileSync(join(dir, 'astro.config.mjs'), config);
+  for (const [rel, body] of Object.entries(files)) {
+    mkdirSync(join(dir, dirname(rel)), { recursive: true });
+    writeFileSync(join(dir, rel), body);
+  }
+  return dir;
+}
+
+test('readBuildFormat reads the config, and defaults to Astro\'s own default', () => {
+  const bare = site({ 'src/pages/index.astro': '<h1>x</h1>' });
+  const filed = site({ 'src/pages/index.astro': '<h1>x</h1>' }, 'export default { build: { format: "file" } };\n');
+  try {
+    assert.equal(readBuildFormat(bare), 'directory');
+    assert.equal(readBuildFormat(filed), 'file');
+  } finally {
+    rmSync(bare, { recursive: true, force: true });
+    rmSync(filed, { recursive: true, force: true });
+  }
+});
+
+test('under build.format "file" a /about.html link is a link, not a dead one', () => {
+  // The site's own URLs ARE /about.html under that format, and every one of them read as a
+  // dead link because the normaliser only ever stripped a trailing slash.
+  const dir = site(
+    { 'src/pages/index.astro': '<a href="/about.html">about</a>', 'src/pages/about.astro': '<h1>About</h1>' },
+    'export default { build: { format: "file" } };\n',
+  );
+  try {
+    const ix = buildIndex(dir);
+    assert.deepEqual(ix.links.dead, [], `expected no dead links, got ${ix.links.dead}`);
+    assert.ok(!ix.links.orphans.includes('/about'), 'home links /about, so it is not an orphan');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the same .html link IS dead under the default directory format', () => {
+  // The strip has to be keyed on the format. Applied everywhere it would hide a real 404,
+  // because /about.html and /about are two different URLs on a directory-format host.
+  const dir = site({ 'src/pages/index.astro': '<a href="/about.html">about</a>', 'src/pages/about.astro': '<h1>About</h1>' });
+  try {
+    assert.ok(buildIndex(dir).links.dead.includes('/about.html'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('returns null rather than throwing on a directory that is not a site', () => {
