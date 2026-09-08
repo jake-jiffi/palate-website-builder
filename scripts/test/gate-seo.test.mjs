@@ -53,7 +53,7 @@ function scaffold() {
   sitemap(p, ["https://ex.com/", "https://ex.com/blog/", "https://ex.com/blog/welcome/"]);
   page(p, "index.html", "/");
   page(p, "blog/index.html", "/blog");
-  page(p, "blog/welcome/index.html", "/blog/welcome");
+  page(p, "blog/welcome/index.html", "/blog/welcome", [ORG, POST("/blog/welcome")]);
   write(join(p, "dist/llms.txt"), "# Example\n\n## Recent writing\n- [Welcome](/blog/welcome): hi\n");
   write(join(p, "dist/robots.txt"), "User-agent: *\nAllow: /\n");
   return p;
@@ -65,14 +65,23 @@ const sitemap = (p, locs) =>
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset>${locs.map((l) => `<url><loc>${l}</loc></url>`).join("")}</urlset>\n`,
   );
 
+// The structured data the scaffold's own BaseLayout emits on every page, and the BlogPosting
+// its post template adds. Written out here so a fixture is a real page rather than a shape.
+const ORG = { "@context": "https://schema.org", "@type": "Organization", name: "Example", url: "https://ex.com" };
+const POST = (path) => ({ "@context": "https://schema.org", "@type": "BlogPosting", headline: "Welcome", url: `https://ex.com${path}` });
+const ldScript = (n) => `<script type="application/ld+json">${typeof n === "string" ? n : JSON.stringify(n)}</script>`;
+
 /**
  * One built page. `canonical` is a path on the fixture's own host, or a whole absolute URL when
- * a test needs the canonical to point somewhere else, or null for a page carrying none.
+ * a test needs the canonical to point somewhere else, or null for a page carrying none. `ld` is
+ * the structured data: nodes, raw strings for a page whose JSON is broken, or null for none.
  */
-const page = (p, file, canonical) =>
+const page = (p, file, canonical, ld = [ORG]) =>
   write(
     join(p, "dist", file),
-    `<!doctype html><html><head><title>x</title>${canonical === null ? "" : `<link rel="canonical" href="${/^https?:/.test(canonical) ? canonical : `https://ex.com${canonical}`}">`}</head><body>x</body></html>`,
+    `<!doctype html><html><head><title>x</title>` +
+    `${canonical === null ? "" : `<link rel="canonical" href="${/^https?:/.test(canonical) ? canonical : `https://ex.com${canonical}`}">`}` +
+    `${ld === null ? "" : ld.map(ldScript).join("")}</head><body>x</body></html>`,
   );
 
 function run(p, ...args) {
@@ -167,7 +176,7 @@ test("URLs under an UNENUMERABLE dynamic route are not called phantoms", () => {
 
 test("a canonical pointing somewhere else fires", () => {
   const p = scaffold();
-  page(p, "blog/welcome/index.html", "/blog"); // copied between templates, the usual cause
+  page(p, "blog/welcome/index.html", "/blog", [ORG, POST("/blog/welcome")]); // copied between templates, the usual cause
   const r = run(p);
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /canonical is not self-referential/);
@@ -178,7 +187,7 @@ test("a canonical on ANOTHER HOST fires and names both hosts", () => {
   // Comparing the pathname alone passed this: /blog/welcome matched /blog/welcome, and the page
   // was handing its ranking to a domain nobody here owns. The origin is the half that mattered.
   const p = scaffold();
-  page(p, "blog/welcome/index.html", "https://evil.example/blog/welcome");
+  page(p, "blog/welcome/index.html", "https://evil.example/blog/welcome", [ORG, POST("/blog/welcome")]);
   const r = run(p);
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /canonical points at evil\.example \(site is ex\.com\)/);
@@ -236,7 +245,7 @@ test("under build.format \"file\" the site's .html URLs are its real URLs", () =
   rmSync(join(p, "dist/blog/welcome/index.html"), { recursive: true });
   sitemap(p, ["https://ex.com/", "https://ex.com/blog.html", "https://ex.com/blog/welcome.html"]);
   page(p, "blog.html", "/blog.html");
-  page(p, "blog/welcome.html", "/blog/welcome.html");
+  page(p, "blog/welcome.html", "/blog/welcome.html", [ORG, POST("/blog/welcome.html")]);
   const r = run(p);
   assert.equal(r.code, 0, r.out);
   assert.match(r.out, /3 expected URL\(s\), 3 advertised/);
@@ -347,6 +356,89 @@ test("a noindex page advertised in the sitemap fires", () => {
   const r = run(p);
   assert.equal(r.code, 1, r.out);
   assert.match(r.out, /noindex page is in the sitemap/);
+});
+
+// ---------------------------------------------------------- 2b. structured data
+
+test("a page with no structured data fires", () => {
+  const p = scaffold();
+  page(p, "blog/index.html", "/blog", null);
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /renders no structured data/);
+  assert.match(r.out, /\/blog\b/);
+});
+
+test("structured data that does not parse fires, and is not read as missing", () => {
+  // A trailing comma is invisible in the page and invisible to a grep for ld+json. Google
+  // drops the whole block, so the page has the markup and none of the meaning.
+  const p = scaffold();
+  page(p, "blog/index.html", "/blog", ['{"@context":"https://schema.org","@type":"Organization",}']);
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /structured data does not parse/);
+});
+
+test("a home page with no Organisation node fires", () => {
+  const p = scaffold();
+  page(p, "index.html", "/", [{ "@context": "https://schema.org", "@type": "WebSite", name: "Example" }]);
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /wrong type of structured data/);
+  assert.match(r.out, /Organization or LocalBusiness/);
+});
+
+test("a LocalBusiness satisfies the home page, so a trades site is not told it is broken", () => {
+  const p = scaffold();
+  page(p, "index.html", "/", [{ "@context": "https://schema.org", "@type": "LocalBusiness", name: "Example", url: "https://ex.com" }]);
+  assert.equal(run(p).code, 0);
+});
+
+test("a post with no Article node fires", () => {
+  const p = scaffold();
+  page(p, "blog/welcome/index.html", "/blog/welcome", [ORG]);
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /wrong type of structured data/);
+  assert.match(r.out, /Article or BlogPosting/);
+});
+
+test("a listing page is not required to be an Article", () => {
+  // /blog renders a list, not a post. Demanding an Article there would fire on every site.
+  assert.equal(run(scaffold()).code, 0);
+});
+
+test("structured data whose url is on another origin fires", () => {
+  // Copied from the reference the build was grounded on, and it hands the entity to them.
+  const p = scaffold();
+  page(p, "index.html", "/", [{ "@context": "https://schema.org", "@type": "Organization", name: "Example", url: "https://someone-else.example" }]);
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /structured data names another origin/);
+});
+
+test("two different organisations across the site fire once, not per page", () => {
+  const p = scaffold();
+  page(p, "blog/index.html", "/blog", [{ "@context": "https://schema.org", "@type": "Organization", name: "Somebody Else", url: "https://ex.com" }]);
+  const r = run(p);
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /more than one organisation/);
+  assert.match(r.out, /Example/);
+  assert.match(r.out, /Somebody Else/);
+  assert.equal((r.out.match(/more than one organisation/g) || []).length, 1);
+});
+
+test("the same organisation on every page is what the scaffold does, and is silent", () => {
+  assert.equal(run(scaffold()).code, 0);
+});
+
+test("an @graph document is read, not treated as one untyped node", () => {
+  const p = scaffold();
+  page(p, "index.html", "/", [{
+    "@context": "https://schema.org",
+    "@graph": [{ "@type": "WebSite", name: "Example" }, { "@type": "Organization", name: "Example", url: "https://ex.com" }],
+  }]);
+  assert.equal(run(p).code, 0);
 });
 
 // ------------------------------------------------------------------- 3. robots

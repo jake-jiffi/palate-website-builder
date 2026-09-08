@@ -239,6 +239,8 @@ const IS_VARIANT = (p) => /^\/(v|lp)\d+$/.test(p);
 const expected = [];        // { path, why }
 const knownRoutes = new Set(); // everything a request could legitimately reach
 const noindexPaths = new Set();
+// Collection-entry URLs, so a post can be asked for an Article node and a listing page cannot.
+const postPaths = new Set();
 const skipped = { variant: 0, noindex: 0 };
 // Prefixes of dynamic routes whose URLs could NOT be enumerated. Anything the sitemap advertises
 // underneath one of them is unjudgeable, not phantom: the route plainly serves that shape, this
@@ -335,6 +337,7 @@ for (const r of index.routes) {
   for (const e of items) {
     const p = norm(r.path.replace(/\[\.{0,3}[^\]]+\]/, e.id));
     knownRoutes.add(p);
+    postPaths.add(p);
     expected.push({ path: p, why: `${r.source} -> ${e.file}` });
   }
 }
@@ -499,6 +502,73 @@ if (!agentSurfaces.length) {
   );
 }
 
+// ----------------------------------------------------------- 3b. structured data
+// The rubric scores structured data and nothing measured it, so a build could ship a page with
+// no entity at all, a block Google silently drops because of a trailing comma, or an entity
+// copied from the reference the build was grounded on and still pointing at their domain.
+const ORG_TYPES = new Set(["Organization", "LocalBusiness"]);
+const ARTICLE_TYPES = new Set(["Article", "BlogPosting"]);
+const LD_RE = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+
+/**
+ * Every TYPED node in one JSON-LD document: the document itself, an array of documents, or a
+ * @graph. Nested properties are deliberately not walked: a post's `publisher` and an
+ * organisation's `address` are parts of their parent, not separate entities, and counting them
+ * would make a correct page look like it declares three.
+ */
+function ldNodes(v, out = []) {
+  if (Array.isArray(v)) { for (const x of v) ldNodes(x, out); return out; }
+  if (!v || typeof v !== "object") return out;
+  if (Array.isArray(v["@graph"])) ldNodes(v["@graph"], out);
+  if (v["@type"]) out.push(v);
+  return out;
+}
+const ldTypes = (n) => (Array.isArray(n["@type"]) ? n["@type"] : [n["@type"]]).map(String);
+const isOrgNode = (n) => ldTypes(n).some((t) => ORG_TYPES.has(t));
+
+/**
+ * The structured data on one page. `kind` is "home", "post" or "page".
+ *
+ * Returns `{ findings, orgs }`: findings as tokens so the caller can group them into one line
+ * per fault rather than one line per page, and the organisation identities so the sitewide
+ * "which business is this" question can be answered across the whole build.
+ */
+function checkJsonLd(html, kind, site) {
+  const out = { findings: [], orgs: [] };
+  const blocks = [...html.matchAll(LD_RE)].map((m) => m[1].trim()).filter(Boolean);
+  if (!blocks.length) { out.findings.push("missing"); return out; }
+
+  const nodes = [];
+  for (const b of blocks) {
+    let doc = null;
+    try { doc = JSON.parse(b); } catch { out.findings.push("unparsable"); continue; }
+    ldNodes(doc, nodes);
+  }
+  if (!nodes.length && !out.findings.length) out.findings.push("missing");
+
+  if (kind === "home" && !nodes.some(isOrgNode)) out.findings.push("type");
+  if (kind === "post" && !nodes.some((n) => ldTypes(n).some((t) => ARTICLE_TYPES.has(t)))) out.findings.push("type");
+
+  if (site) {
+    const want = originOf(site);
+    for (const n of nodes) {
+      const u = typeof n.url === "string" ? originOf(n.url) : null;
+      if (u && u !== want) { out.findings.push("origin"); break; }
+    }
+  }
+  for (const n of nodes.filter(isOrgNode)) out.orgs.push(String(n.name ?? n["@id"] ?? n.url ?? "an unnamed organisation"));
+  return out;
+}
+
+const ldFindings = { missing: [], unparsable: [], type: [], origin: [] };
+const ldOrgs = new Set();
+const ldKind = (route) => (route === "/" ? "home" : postPaths.has(route) ? "post" : "page");
+function readJsonLd(html, route) {
+  const r = checkJsonLd(html, ldKind(route), siteOrigin);
+  for (const f of r.findings) ldFindings[f].push(route);
+  for (const o of r.orgs) ldOrgs.add(o);
+}
+
 // ------------------------------------------------------------------ 4. canonical
 // Self-referential means the page names ITSELF. A canonical copied between templates is the
 // commonest way a whole section collapses onto one URL in an index, and it looks correct.
@@ -514,6 +584,7 @@ for (const f of htmlFiles) {
   const route = routeOfHtml(f);
   if (NEVER_INDEXED.has(route)) continue;
   const html = read(f) || "";
+  readJsonLd(html, route);
   const m = html.match(/<link[^>]+rel=["']canonical["'][^>]*>/i);
   if (!m) {
     add("no canonical", `${relative(dir, f)} (${route}) renders no <link rel="canonical">. Every duplicate spelling of this URL competes with it.`);
@@ -619,6 +690,7 @@ if (base) {
     const ct = res.headers.get("content-type") || "";
     if (!ct.includes("text/html")) continue;
     const body = await res.text();
+    readJsonLd(body, p);
     const tag = body.match(/<link[^>]+rel=["']canonical["'][^>]*>/i);
     if (!tag) { add("no canonical", `${p} renders no <link rel="canonical"> (fetched from ${base}).`); continue; }
     const href = tag[0].match(/href=["']([^"']+)["']/i)?.[1];
@@ -638,6 +710,48 @@ if (base) {
     console.error(`gate-seo: nothing at ${base} answered. The live pass measured nothing. NOT a pass.`);
     process.exit(2);
   }
+}
+
+// Structured data, grouped. One line per fault naming up to six routes, because a site whose
+// layout emits none has the same sentence on every page and three hundred of them is how a
+// gate stops being read.
+const someRoutes = (rs) => `${rs.slice(0, 6).join(", ")}${rs.length > 6 ? `, +${rs.length - 6} more` : ""}`;
+if (ldFindings.missing.length) {
+  add(
+    "page renders no structured data",
+    `${ldFindings.missing.length} page(s): ${someRoutes(ldFindings.missing)}. Nothing tells an answer engine ` +
+    "what this page is about, and the rubric scores structured data whether or not anything emits it.",
+  );
+}
+if (ldFindings.unparsable.length) {
+  add(
+    "structured data does not parse",
+    `${ldFindings.unparsable.length} page(s): ${someRoutes(ldFindings.unparsable)}. A parser drops the whole ` +
+    "block, so the page carries the markup and none of the meaning, and it looks correct in the source.",
+  );
+}
+if (ldFindings.type.length) {
+  add(
+    "wrong type of structured data for the page",
+    `${ldFindings.type.length} page(s): ${someRoutes(ldFindings.type)}. A home page needs an ` +
+    "Organization or LocalBusiness node and a post needs an Article or BlogPosting node. " +
+    "The wrong type is not a near miss: it makes the page ineligible for the result it was written for.",
+  );
+}
+if (ldFindings.origin.length) {
+  add(
+    "structured data names another origin",
+    `${ldFindings.origin.length} page(s): ${someRoutes(ldFindings.origin)} carry a node whose url is not on ` +
+    `${siteOrigin ? hostOf(siteOrigin) : "this site"}. An entity copied from the reference a build was ` +
+    "grounded on keeps pointing at their domain, and the structured data then describes them.",
+  );
+}
+if (ldOrgs.size > 1) {
+  add(
+    "the site describes more than one organisation",
+    `${[...ldOrgs].join(", ")}. Structured data across the build names several businesses, so nothing can ` +
+    "say which one this site is about. One entity, defined once, on every page.",
+  );
 }
 
 // A canonical whose PATH was read and whose ORIGIN was not is half checked, and the unchecked
