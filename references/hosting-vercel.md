@@ -53,9 +53,20 @@ which is Humblytics (the analytics script, with its own subdomains allowed to co
 the beacon endpoint is not knowable from the template) and Cloudflare Turnstile, which also
 needs `frame-src` because the widget renders in an iframe. Resend is a server-side fetch from
 `src/pages/api/contact.ts` and is deliberately absent: widening the policy for a request the
-browser never makes is how a CSP stops describing anything. `'unsafe-inline'` is on `style-src`
-only, because Astro inlines small stylesheets, and it must never reach `script-src`, where it
-would empty the policy.
+browser never makes is how a CSP stops describing anything. Both `style-src` and `script-src`
+carry `'unsafe-inline'`: `style-src` because Astro inlines small stylesheets, `script-src` for
+the measured reason above.
+
+**`https://vercel.live` is on the Vercel policy and not on the Cloudflare one.** Vercel injects
+the Toolbar into preview HTML from that host, and the Toolbar's Comments are the headline win
+for client review below, so a policy without it would have shipped a document promising a
+feature the same repository blocks. It is on `script-src`, `connect-src` and `frame-src`,
+because the Toolbar loads a script, calls home and opens a panel in a frame. It is absent from
+the Cloudflare overlay because there is no Vercel Toolbar on a Workers deployment, and it is
+not derivable from the template source, which is why the derived-host test cannot catch it: the
+host comes from the platform, not from the build. NOT YET MEASURED against a real preview
+deployment, which is the one place the Toolbar exists; check the browser console on the first
+preview after this ships.
 
 **Add a third-party script or a client-side fetch and you add its host here.**
 `scripts/test/template-headers.test.sh` derives the host list from the template source and

@@ -58,7 +58,16 @@ for f in README.md references/testing.md; do
   present "$f documents --max-routes" "$f" "--max-routes"
 done
 
-# ============ 5. THE HYGIENE LINE leads with what the number is ===========================
+# ============ 5. THE CSP DOC MUST NOT ARGUE WITH THE POLICY IT DESCRIBES =================
+# Both files said 'unsafe-inline' must never reach script-src, in the files where it does. A
+# reader who trusted that removed the token and broke the contact form, which is the failure
+# the live CSP test exists to catch.
+for f in references/hosting-vercel.md templates/host-cloudflare/_headers; do
+  absent "$f does not forbid what its own policy does" "$f" "must never reach"
+  present "$f says the policy is a host allowlist" "$f" "host allowlist"
+done
+
+# ============ 6. THE HYGIENE LINE leads with what the number is ===========================
 # ASSERT THE RENDERED LINE, NOT THE SOURCE. The first draft grepped hygiene-loop.mjs for
 # "clears the " and failed on a correct implementation, because the verb is a ternary and the
 # words only meet at runtime. What a reader sees is the only thing worth pinning.

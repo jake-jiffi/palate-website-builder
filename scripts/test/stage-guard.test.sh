@@ -54,6 +54,51 @@ is "55 MB of small files exits 1" "$rc" "1"
 printf '%s' "$out" | grep -q ".palate/adoption" && ok "and the guard names the directory" \
   || bad "the guard refused without naming the directory (got: $out)"
 
+# ============ 3b. THE SAME DUMP AT THE REPOSITORY ROOT, which charged to nothing ==========
+# The ancestor walk stops at the first path with no slash, so eleven 5 MB files at the root
+# were charged to no directory and the total was never compared with anything: 55 MB staged,
+# exit 0, "under the limits". That is the recorded leak shape, since agents dump Playwright
+# screenshots to the repo root and a 1440-wide full-page PNG sits well under 5 MB.
+R3B="$(newrepo bigroot)"
+for i in $(seq 1 11); do mb "$R3B/shot-$i.png" 5; done
+git -C "$R3B" add -A
+out="$(bash "$GUARD" "$R3B" 2>&1)"; rc=$?
+is "55 MB at the repository root exits 1" "$rc" "1"
+printf '%s' "$out" | grep -qi "repository root" && ok "and the guard names the repository root" \
+  || bad "the guard refused without naming where the weight is (got: $out)"
+
+# A flat spread across several small directories, none of them over the limit on its own.
+R3C="$(newrepo spread)"
+for d in a b c; do mkdir -p "$R3C/$d"; for i in 1 2 3 4; do mb "$R3C/$d/f-$i.bin" 5; done; done
+git -C "$R3C" add -A
+out="$(bash "$GUARD" "$R3C" 2>&1)"; rc=$?
+is "60 MB spread across three directories exits 1" "$rc" "1"
+printf '%s' "$out" | grep -q "across the whole tree" && ok "and says the whole tree is what refused it" \
+  || bad "the guard refused without explaining the total (got: $out)"
+# One dump is named ONCE: a root dump must not also print a separate total line saying the
+# same number, or the message teaches the reader there are two problems.
+out="$(bash "$GUARD" "$R3B" 2>&1)"
+[ "$(printf '%s' "$out" | grep -c "over the 50 MB limit")" = "1" ] \
+  && ok "a single dump is reported once, not as two findings" \
+  || bad "the same weight was reported twice (got: $out)"
+
+# ============ 3d. A NON-ASCII FILENAME is measured, not refused as unreadable =============
+# git quotes paths with bytes above 0x7F, so `public/cafÃ©.jpg` came back quoted and
+# `git cat-file -s` could not resolve it. A client asset with an accent then blocked /publish
+# with advice telling them to unstage their own photo.
+R3D="$(newrepo accents)"
+mkdir -p "$R3D/public"; mb "$R3D/public/café.jpg" 1; printf 'x\n' > "$R3D/index.html"
+git -C "$R3D" add -A
+out="$(bash "$GUARD" "$R3D" 2>&1)"; rc=$?
+is "a 1 MB café.jpg passes" "$rc" "0"
+printf '%s' "$out" | grep -qi "could not be read" && bad "an accented filename is still reported unreadable" \
+  || ok "and is not reported as unreadable"
+# And it is really MEASURED: at a 0-ish limit it must be named, not skipped.
+out="$(PALATE_MAX_STAGED_FILE_MB=0 bash "$GUARD" "$R3D" 2>&1)"; rc=$?
+is "and an accented file is charged like any other" "$rc" "1"
+printf '%s' "$out" | grep -q "café.jpg" && ok "and the guard prints its real name" \
+  || bad "the guard did not name café.jpg (got: $out)"
+
 # ============ 4. THE LIMITS ARE TUNABLE, and the override is honoured =====================
 R4="$(newrepo tuned)"
 mb "$R4/photo.jpg" 2

@@ -119,6 +119,21 @@ for name in "vercel:$VERCEL_CSP" "cloudflare:$CF_CSP"; do
   esac
 done
 
+# THE VERCEL TOOLBAR, which the platform injects into every preview and the doc promises as
+# the headline win for client review. It is not in the template source, so the derived-host
+# check above cannot see it, and the Cloudflare overlay must NOT carry it: there is no Vercel
+# Toolbar on Workers, and a host that never loads has no business in a policy.
+for d in script-src connect-src frame-src; do
+  case "$(directive "$VERCEL_CSP" "$d")" in
+    *"https://vercel.live"*) ok "vercel CSP $d allows the Vercel Toolbar" ;;
+    *) bad "vercel CSP $d blocks the Vercel Toolbar, which every preview deployment loads" ;;
+  esac
+done
+case "$CF_CSP" in
+  *"vercel.live"*) bad "the Cloudflare overlay lists vercel.live, which a Workers deploy never loads" ;;
+  *) ok "the Cloudflare overlay does not carry the Vercel Toolbar host" ;;
+esac
+
 # A server-side host must NOT be in the policy: widening it for a request the browser never
 # makes is how a CSP stops describing anything.
 case "$VERCEL_CSP$CF_CSP" in
