@@ -167,9 +167,23 @@ cp "$DEEP" "$SEOB/build-manifest.json"
 make_shots "$SEOB" 0
 cp "$PASS/verify-report.json" "$SEOB/verify-report.json"
 printf -- '---\n---\n<h1>Home</h1>\n' > "$SEOB/src/pages/index.astro"
-printf '<!doctype html><html><head><link rel="canonical" href="https://x.test/"></head><body>h</body></html>' > "$SEOB/dist/index.html"
+# THE SITE HAS TO BE OTHERWISE CLEAN, or gate-seo exits 1 with findings and the done gate fails
+# rather than skipping, which is what happened when the SEO gate grew two checks under this
+# fixture: it went on asserting nothing, from an empty summary. So the home page carries an
+# Organization node and robots.txt is environment aware, leaving the answer-engine surfaces as
+# the only thing it could not check.
+cat > "$SEOB/dist/index.html" <<'HTML'
+<!doctype html><html><head><link rel="canonical" href="https://x.test/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"X","url":"https://x.test/"}</script>
+</head><body><h1>h</h1></body></html>
+HTML
 printf '<?xml version="1.0"?><urlset><url><loc>https://x.test/</loc></url></urlset>' > "$SEOB/dist/sitemap-0.xml"
-printf 'User-agent: *\nAllow: /\nSitemap: https://x.test/sitemap-index.xml\n' > "$SEOB/dist/robots.txt"
+cat > "$SEOB/dist/robots.txt" <<'ROBOTS'
+# VERCEL_ENV preview builds emit Disallow: / instead of this policy
+User-agent: *
+Allow: /
+Sitemap: https://x.test/sitemap-index.xml
+ROBOTS
 seo_summary="$(bash "$GATE" "$SEOB/build-manifest.json" 2>/dev/null)"
 if printf '%s' "$seo_summary" | grep -qF 'answer-engine surfaces'; then
   echo "ok   - the SEO skip names what could not be checked"; pass=$((pass+1))
@@ -180,6 +194,34 @@ if printf '%s' "$seo_summary" | grep -qF 'thing(s) could NOT be checked'; then
   echo "FAIL - and not gate-seo's header (got: $seo_summary)"; fail=$((fail+1))
 else
   echo "ok   - and not gate-seo's header"; pass=$((pass+1))
+fi
+
+# --- AN ADVISORY BEFORE THE REASON IS NOT THE REASON ------------------------------------
+# gate-seo prints a build-format advisory on stderr BEFORE it does anything, so on any exit-2
+# path where it fires the first stderr line is the advisory and the reason is two lines below.
+# The mapping took the first line, so a site that had simply never been built was summarised as
+# a config problem: "astro.config declares build.format file and @astrojs/vercel overrides it".
+# The operator is sent to change their host over a missing dist.
+SEOW="$TMP/seo-warned"; mkdir -p "$SEOW/src/pages"
+cp "$DEEP" "$SEOW/build-manifest.json"
+make_shots "$SEOW" 0
+cp "$PASS/verify-report.json" "$SEOW/verify-report.json"
+printf -- '---\n---\n<h1>Home</h1>\n' > "$SEOW/src/pages/index.astro"
+printf '{"name":"s","dependencies":{"@astrojs/vercel":"^8.0.0"}}' > "$SEOW/package.json"
+cat > "$SEOW/astro.config.mjs" <<'CFG'
+import vercel from "@astrojs/vercel";
+export default { output: "static", adapter: vercel(), build: { format: "file" } };
+CFG
+warn_summary="$(bash "$GATE" "$SEOW/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$warn_summary" | grep -qF 'seo: no build output'; then
+  echo "ok   - the SEO skip reports the reason, not the advisory above it"; pass=$((pass+1))
+else
+  echo "FAIL - the SEO skip reports the reason, not the advisory above it (got: $warn_summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$warn_summary" | grep -qF 'astro.config declares build.format'; then
+  echo "FAIL - and the advisory is not mistaken for it (got: $warn_summary)"; fail=$((fail+1))
+else
+  echo "ok   - and the advisory is not mistaken for it"; pass=$((pass+1))
 fi
 
 # --- THE NO-JQ SKIP SAYS HOW TO FIX IT -------------------------------------------------
