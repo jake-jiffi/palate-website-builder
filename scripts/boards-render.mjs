@@ -647,6 +647,12 @@ async function main() {
       }
       const img = `ref${r.position}.jpg`;
       writeFileSync(join(seedDir, img), buf);
+      // /explore serves the same capture, so the calibration row exists for every tool and
+      // not only for the canvas. Copied rather than linked: a `public/` cleaned between
+      // builds would otherwise empty the row that asks the question.
+      const pubRefs = join(projectDir, "public", "_explore");
+      mkdirSync(pubRefs, { recursive: true });
+      writeFileSync(join(pubRefs, img), buf);
       writeFileSync(join(seedDir, `Ref${r.position}.dc.html`), refArtboard(r, img));
       lines.push(`  reference ${r.position} ${r.slug}: Ref${r.position}.dc.html, ${img} ${Math.round(buf.length / 1024)} KB`);
     }
