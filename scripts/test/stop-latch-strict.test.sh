@@ -55,6 +55,43 @@ else
   echo "FAIL - the latch counts up across strict Stops (stuck at $unchanged)"; fail=$((fail+1))
 fi
 
+# AND THE GATE LATCH IS DROPPED ONCE THE GATE PASSES.
+#
+# Nothing dropped it. `total` never resets, so after one release cycle the site sat at
+# {"kind":"gate","total":7} against MAX_TOTAL_BLOCKS 6, and the NEXT failure of that build,
+# a different one, was released on its first Stop instead of blocked. Strict mode stopped
+# blocking that manifest for good: the previous defect made it block forever, this one made it
+# block three times and then never again.
+printf '{"status":"captured","console_errors":0,"shots":{"desktop_full":"desktop-full.png"}}' > "$P/.palate-shots/manifest.json"
+stop >/dev/null 2>&1   # a clean strict Stop
+gate_latch="$(node -e '
+try { const g = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).stop_gate;
+      console.log(g ? `${g.kind}:${g.total}` : "gone"); }
+catch { console.log("unreadable"); }' "$P/build-manifest.json" 2>/dev/null)"
+if [ "$gate_latch" = "gone" ]; then
+  echo "ok   - a passing Stop drops the spent gate latch"; pass=$((pass+1))
+else
+  echo "FAIL - a passing Stop drops the spent gate latch (latch is $gate_latch)"; fail=$((fail+1))
+fi
+
+# A DIFFERENT failure on the same build must get the full three blocks again.
+rm -f "$P/.palate-shots/desktop-full.png"   # no screenshot evidence: a new reason, same build
+blocks2=0; released2=0
+for i in 1 2 3 4 5 6 7; do
+  out="$(stop)"
+  if printf '%s' "$out" | grep -qF '"decision":"block"'; then
+    blocks2=$((blocks2 + 1))
+  elif printf '%s' "$out" | grep -qF 'RELEASING'; then
+    released2=$i
+    break
+  fi
+done
+if [ "$blocks2" -eq 3 ] && [ "$released2" -eq 4 ]; then
+  echo "ok   - a new failure after a release cycle blocks three times before releasing"; pass=$((pass+1))
+else
+  echo "FAIL - a new failure after a release cycle blocks three times before releasing (blocked $blocks2, released at $released2)"; fail=$((fail+1))
+fi
+
 # AND THE EVIDENCE LATCH STILL CLEARS. That is what the branch was for: once the console errors
 # are fixed, the next Stop must start from zero rather than inherit a spent counter.
 E="$TMP/evidence"; mkdir -p "$E/.palate-shots"

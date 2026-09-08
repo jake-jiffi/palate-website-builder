@@ -742,6 +742,23 @@ if (!doneRun.err && doneRun.status === 0) {
   gateFailure(doneRun.stderr.trim() || GATE_FALLBACK);
 }
 
+// THE GATE LATCH IS SPENT ONCE THE GATE PASSES, and nothing dropped it. `total` never resets,
+// so after one release cycle a build sat at kind "gate" with total past MAX_TOTAL_BLOCKS, and
+// the NEXT failure of that build, a different one, was released on its first Stop instead of
+// blocked. Strict mode stopped blocking that manifest for the rest of its life. This mirrors
+// the evidence clear above and is scoped the same way: only a GATE latch.
+//
+// THAT SCOPING IS DEFENSIVE AND CANNOT BE MADE TO FIRE TODAY, which is worth saying so nobody
+// reads it later as dead code. An evidence latch reaching this line would need positive
+// evidence on this run (or the branch above would have cleared it), and positive evidence on
+// this run sets releasedWithFailures, which the guard excludes. Two writers, one reachable
+// state. If a third writer ever appears, this stays correct instead of silently clearing a
+// latch that still has evidence behind it.
+if (!releasedWithFailures) {
+  const spent = readStopGate(manifest);
+  if (spent && spent.kind === "gate") writeStopGate(manifest, null);
+}
+
 // Only record the build to cross-build memory after ALL gates pass, and never when the latch
 // released one that still had failures on disk.
 if (!releasedWithFailures) recordBuild(manifest);
