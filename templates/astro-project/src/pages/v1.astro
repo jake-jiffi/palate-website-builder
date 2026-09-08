@@ -20,7 +20,7 @@ const data = await loadPage<HomeContent>(
 );
 const { hero } = data;
 ---
-<BaseLayout title={`v1 - ${business.name}`}>
+<BaseLayout title={`v1 - ${business.name}`} noindex={true}>
   <section class="bg-brand-bg relative px-6 py-24 text-center">
     <SectionMark id="v1-hero" />
     <h1 class="font-display text-brand-text mx-auto mt-3 max-w-3xl text-4xl md:text-6xl">
