@@ -152,7 +152,7 @@ before(async () => {
 
 after(() => { if (TMP) rmSync(TMP, { recursive: true, force: true }); });
 
-/** A real PNG, gradient-filled so it does not compress to nothing and the ceiling is exercised. */
+/** A real PNG: a soft gradient, which is how a website capture actually compresses. */
 function pngFixture(w, h) {
   const chunks = [];
   const crcTable = [];
@@ -180,9 +180,9 @@ function pngFixture(w, h) {
     const o = y * (1 + w * 3);
     raw[o] = 0;
     for (let x = 0; x < w; x++) {
-      raw[o + 1 + x * 3] = (x * 7 + y * 3) % 256;
-      raw[o + 2 + x * 3] = (x * 3 + y * 11) % 256;
-      raw[o + 3 + x * 3] = (x * 13 + y * 5) % 256;
+      raw[o + 1 + x * 3] = Math.round((x / w) * 255);
+      raw[o + 2 + x * 3] = Math.round((y / h) * 255);
+      raw[o + 3 + x * 3] = Math.round(((x + y) / (w + h)) * 255);
     }
   }
   chunks.push(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
@@ -294,10 +294,103 @@ test("two boards render to two artboards the canvas can open", async (t) => {
   assert.match(r.stdout, /B1\.dc\.html \d+ KB/, "the run does not report the artboard sizes");
 });
 
+test("the calibration references land on row 0 with the question", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const refsDir = join(SITE, ".palate/explore");
+  mkdirSync(join(refsDir, "refshots"), { recursive: true });
+  const refs = [
+    { slug: "aesop", name: "Aesop", position: 1, why: "Restrained: one photograph and a great deal of air.", screenshot: "refshots/aesop.png" },
+    { slug: "leoleo", name: "Leo Leo", position: 2, why: "In the middle: confident type, quiet motion.", screenshot: "refshots/leoleo.png" },
+    { slug: "utsubo", name: "Utsubo", position: 3, why: "Bold: the entrance is an interaction, not a banner.", screenshot: "refshots/utsubo.png" },
+  ];
+  for (const r of refs) writeFileSync(join(refsDir, r.screenshot), pngFixture(1440, 900));
+  writeFileSync(join(refsDir, "refs.json"), JSON.stringify(refs, null, 2));
+
+  const r = await run([SITE, "--port", String(PORT), "--no-build", "--refs", ".palate/explore/refs.json"]);
+  assert.equal(r.status, 0, `boards-render with --refs failed:\n${r.stderr}`);
+
+  const seed = join(SITE, ".palate/explore/seed");
+  for (const n of [1, 2, 3]) {
+    const f = join(seed, `Ref${n}.dc.html`);
+    assert.ok(existsSync(f), `Ref${n}.dc.html is missing`);
+    const a = readFileSync(f, "utf8");
+    assert.ok(a.startsWith("<!doctype html>"));
+    assert.ok(a.includes('<script src="./support.js"></script>'));
+    assert.ok(a.includes("<x-dc><helmet><style>"));
+    // The canvas rules require a and a:hover to be defined in the helmet.
+    assert.match(a, /a\{[^}]*color:/, `Ref${n} does not define a link colour in the helmet`);
+    assert.match(a, /a:hover\{[^}]*color:/, `Ref${n} does not define a:hover in the helmet`);
+    const img = /<img\b[^>]*\bsrc="([^"]*)"/.exec(a);
+    assert.ok(img, `Ref${n} carries no screenshot`);
+    assert.ok(!/[/:]/.test(img[1]), `Ref${n} references ${img[1]}, which is not a bare filename`);
+    assert.ok(existsSync(join(seed, img[1])));
+    assert.ok(statSync(join(seed, img[1])).size <= 70 * 1024, `${img[1]} is over the 70 KB ceiling`);
+  }
+  assert.ok(readFileSync(join(seed, "Ref1.dc.html"), "utf8").includes("one photograph and a great deal of air"),
+    "the reference does not say why it sits where it does on the range");
+
+  const canvas = JSON.parse(readFileSync(join(seed, "canvas.json"), "utf8"));
+  const row0 = canvas.artboards.filter((a) => a.y === 0);
+  assert.equal(row0.length, 3, "the three references are not all on row 0");
+  assert.equal(row0[1].x - (row0[0].x + row0[0].w), 80, "80px between the reference frames");
+  const boardRow = canvas.artboards.filter((a) => a.file.startsWith("B"));
+  assert.equal(boardRow[0].y, row0[0].h + 120, "the boards are not 120px below the references");
+  const q = canvas.annotations.find((a) => a.id === "cal-q");
+  assert.ok(q, "there is no calibration annotation");
+  assert.ok(q.y < 0, "the calibration question is not above row 0");
+  assert.match(q.text, /how bold you want to be/i);
+
+  rmSync(join(refsDir, "refs.json"), { force: true });
+});
+
+test("an SVG over the ceiling is refused rather than shipped broken", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // A RASTER ALMOST ALWAYS FITS. The ladder walks down to 640 wide at quality 38, and 1440x900
+  // of pure per-pixel noise lands at 33 KB there, so a photograph cannot exercise the refusal.
+  // An SVG can and does: it is already lossless, re-encoding a diagram as a photograph would be
+  // worse in every way, so it travels whole or not at all. A 90 KB path-heavy logo is ordinary.
+  const big = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">` +
+    Array.from({ length: 2600 }, (_, i) => `<path d="M${i % 97}.${i % 7} ${i % 89}.${i % 3}l1.5 2.25 3.75-1.125z" fill="#2f5d50"/>`).join("") +
+    `</svg>`;
+  assert.ok(Buffer.byteLength(big) > 70 * 1024, "the fixture SVG is not actually over the ceiling");
+  writeFileSync(join(SITE, "public/_fixture/big.svg"), big);
+  const page = readFileSync(join(SITE, "src/pages/boards/b1.astro"), "utf8");
+  writeFileSync(join(SITE, "src/pages/boards/b1.astro"),
+    page.replace('src="/_fixture/photo.png"', 'src="/_fixture/big.svg"'));
+
+  const rebuilt = await run([SITE, "--port", String(PORT)]);
+  assert.equal(rebuilt.status, 2, "an SVG over the ceiling must exit 2");
+  assert.match(rebuilt.stderr, /b1/, "the refusal does not name the board");
+  assert.match(rebuilt.stderr, /cannot be downsampled under 70 KB/);
+  assert.ok(!existsSync(join(SITE, ".palate/explore/seed")), "a seed was left behind");
+
+  writeFileSync(join(SITE, "src/pages/boards/b1.astro"), page);
+  rmSync(join(SITE, "public/_fixture/big.svg"), { force: true });
+  // Put the seed back so the next test has one to destroy.
+  const restored = await run([SITE, "--port", String(PORT)]);
+  assert.equal(restored.status, 0, `the restore build failed:\n${restored.stderr}`);
+});
+
+test("a calibration reference missing its screenshot is refused", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const refsDir = join(SITE, ".palate/explore");
+  writeFileSync(join(refsDir, "refs.json"), JSON.stringify([
+    { slug: "aesop", name: "Aesop", position: 1, why: "Restrained.", screenshot: "refshots/gone.png" },
+  ]));
+  const r = await run([SITE, "--port", String(PORT), "--no-build", "--refs", ".palate/explore/refs.json"]);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /aesop/, "the refusal does not name the reference");
+  rmSync(join(refsDir, "refs.json"), { force: true });
+});
+
 test("a registered board with no page leaves NO seed behind", async (t) => {
   if (!ready) return t.skip(skipReason);
   const seed = join(SITE, ".palate/explore/seed");
-  assert.ok(existsSync(seed), "the previous test should have left a seed to destroy");
+  // Its own setup, not the previous test's leftovers: every refusal clears the seed, so
+  // whether one is on disk here depends on which tests ran before this one.
+  const seeded = await run([SITE, "--port", String(PORT)]);
+  assert.equal(seeded.status, 0, `the setup render failed:\n${seeded.stderr}`);
+  assert.ok(existsSync(seed), "the setup render wrote no seed");
 
   const three = [...BOARDS, {
     id: "b3", name: "The Loud Room", ambition: 3, section: "menu", donor: "utsubo",

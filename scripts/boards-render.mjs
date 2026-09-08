@@ -71,6 +71,22 @@ export const PROPERTY_LIST = [
 ];
 
 const MAX_IMAGE_BYTES = 70 * 1024;
+/**
+ * The ladder an image is walked down to reach the ceiling: width first, then quality.
+ *
+ * Quality alone was tried and it does not get there on a photographic capture. A 1440-wide
+ * hero at quality 32 is both over the ceiling and ugly, where the same picture at 1000 wide
+ * and quality 58 is under it and still reads. Width is the cheaper axis on a frame that is
+ * never magnified, so it moves first.
+ */
+const IMAGE_LADDER = [
+  { width: 1200, quality: 78 },
+  { width: 1200, quality: 64 },
+  { width: 1000, quality: 58 },
+  { width: 860, quality: 52 },
+  { width: 720, quality: 45 },
+  { width: 640, quality: 38 },
+];
 const MAX_SCRIPT_BYTES = 20 * 1024;
 const FRAME_WIDTH = 1440;
 const HERO_HEIGHT = 900;
@@ -343,6 +359,26 @@ const TYPES = {
   ".xml": "application/xml", ".txt": "text/plain; charset=utf-8",
 };
 
+/**
+ * Serve the build, stepping past a port another run has not released yet.
+ *
+ * Back-to-back runs collide on a fixed port and the second one dies with EADDRINUSE, which
+ * reads as a broken render rather than as a socket in TIME_WAIT. It steps rather than waits,
+ * and says which port it landed on.
+ */
+async function serveOnFreePort(root, first) {
+  let last = null;
+  for (let p = first; p < first + 6; p++) {
+    try { return { server: await serve(root, p), port: p }; }
+    catch (e) {
+      last = e;
+      if (e && e.code === "EADDRINUSE") continue;
+      throw e;
+    }
+  }
+  throw last;
+}
+
 function serve(root, port) {
   return new Promise((ok, no) => {
     const server = createServer((req, res) => {
@@ -451,10 +487,11 @@ async function main() {
   mkdirSync(shotsDir, { recursive: true });
   const failSeed = die;
 
-  const server = await serve(distRoot, port).catch((e) => {
-    die(`could not serve the build on port ${port} (${e.code || e.message}). Pass --port to move it.`);
+  const served = await serveOnFreePort(distRoot, port).catch((e) => {
+    die(`could not serve the build on ports ${port} to ${port + 5} (${e.code || e.message}). Pass --port to move it.`);
   });
-  const base = `http://127.0.0.1:${port}`;
+  const server = served.server;
+  const base = `http://127.0.0.1:${served.port}`;
   const browser = await playwright.chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: FRAME_WIDTH, height: HERO_HEIGHT }, deviceScaleFactor: 1 });
 
@@ -522,18 +559,13 @@ async function main() {
             failSeed(`board ${b.id}: ${url} is an SVG of ${Math.round(out.length / 1024)} KB and cannot be downsampled under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB. Nothing written.`);
           }
         } else {
-          let ok = false;
-          for (const quality of [78, 64, 52, 42, 32]) {
-            try {
-              out = await sharp(buf).resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality }).toBuffer();
-            } catch (e) {
-              failSeed(`board ${b.id}: ${url} could not be re-encoded (${e.message}). Nothing written.`);
-            }
-            if (out.length <= MAX_IMAGE_BYTES) { ok = true; break; }
+          const fit = await fitUnder(buf, sharp).catch((e) => {
+            failSeed(`board ${b.id}: ${url} could not be re-encoded (${e.message}). Nothing written.`);
+          });
+          if (!fit.ok) {
+            failSeed(`board ${b.id}: ${url} will not come under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB (smallest was ${Math.round(fit.buffer.length / 1024)} KB at ${fit.width}px wide, quality ${fit.quality}). Replace it with a smaller or less detailed source. Nothing written.`);
           }
-          if (!ok) {
-            failSeed(`board ${b.id}: ${url} will not come under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB (smallest was ${Math.round(out.length / 1024)} KB). Replace it with a smaller source. Nothing written.`);
-          }
+          out = fit.buffer;
         }
         const name = `${b.id}-img${++imageSeq}${ext}`;
         writeFileSync(join(seedDir, name), out);
@@ -604,13 +636,14 @@ async function main() {
     // --- the calibration row ------------------------------------------------------------
     for (const r of refs) {
       let buf = readFileSync(r.__file);
-      if (buf.length > MAX_IMAGE_BYTES) {
-        let ok = false;
-        for (const quality of [78, 64, 52, 42, 32]) {
-          buf = await sharp(readFileSync(r.__file)).resize({ width: 1200, withoutEnlargement: true }).jpeg({ quality }).toBuffer();
-          if (buf.length <= MAX_IMAGE_BYTES) { ok = true; break; }
+      if (buf.length > MAX_IMAGE_BYTES || !/\.jpe?g$/i.test(r.__file)) {
+        const fit = await fitUnder(buf, sharp).catch((e) => {
+          failSeed(`the calibration screenshot for ${r.slug} could not be re-encoded (${e.message}). Nothing written.`);
+        });
+        if (!fit.ok) {
+          failSeed(`the calibration screenshot for ${r.slug} will not come under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB (smallest was ${Math.round(fit.buffer.length / 1024)} KB at ${fit.width}px wide, quality ${fit.quality}). Nothing written.`);
         }
-        if (!ok) failSeed(`the calibration screenshot for ${r.slug} will not come under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB. Nothing written.`);
+        buf = fit.buffer;
       }
       const img = `ref${r.position}.jpg`;
       writeFileSync(join(seedDir, img), buf);
@@ -631,6 +664,23 @@ async function main() {
   process.stdout.write(`  canvas.json, README.md; hero stills in ${shotsDir} and public/_explore/\n`);
   seedToClear = null;
   process.exit(0);
+}
+
+/**
+ * Walk IMAGE_LADDER until the encode fits, and report the smallest attempt when none does.
+ *
+ * Returns the smallest buffer either way, so the refusal can say what it managed rather than
+ * only that it failed: "112 KB at 640px wide, quality 38" tells the operator the source is a
+ * photograph that needs replacing, where "too big" sends them to change a setting.
+ */
+export async function fitUnder(buf, sharp, limit = MAX_IMAGE_BYTES) {
+  let smallest = null;
+  for (const step of IMAGE_LADDER) {
+    const out = await sharp(buf).resize({ width: step.width, withoutEnlargement: true }).jpeg({ quality: step.quality }).toBuffer();
+    if (out.length <= limit) return { ok: true, buffer: out, ...step };
+    if (!smallest || out.length < smallest.buffer.length) smallest = { ok: false, buffer: out, ...step };
+  }
+  return smallest;
 }
 
 /** Self-hosted faces become data URIs; a Google Fonts link is the one host the canvas allows. */
