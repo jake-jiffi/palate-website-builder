@@ -372,11 +372,18 @@ because one file had changed. After a fix:
    **2, skipped rather than passed**, because nothing was established. Measured on a
    thirty-route fixture, 25s against 187s; on a small site the fixed 15s of home-route probes
    dominates, so read the saving as a ratio of your own sweep rather than as that number.
-3. **Read the trend line on every one of these runs.** It compares against the last recorded
-   run for this project even when that run swept more routes, names which run it compared
-   against, and says when the coverage differed. Fix, re-run, read the trend is the rhythm;
-   it used to say NO COMPARISON on every incremental run and was therefore unavailable exactly
-   when it was wanted.
+3. **Read the trend line, and read what it is a trend OF.** It compares against the last
+   recorded run for this project and names which run that was. Three shapes, and only one of
+   them is a direction you may act on:
+   - **A verdict** (IMPROVING / REGRESSED / UNCHANGED) when the two runs swept the same routes.
+     This is the one to act on.
+   - **NOT COMPARABLE** when they swept different routes. Both scores are printed and neither
+     is better: the design checks are measured on the home route alone, so a blast radius that
+     excludes `/` drops four of them and the number moves by five points on a change that did
+     nothing. **Do not revert anything on this line.** Re-run with `--full` for a direction.
+   - **build hygiene was NOT measured**, when the run rendered no home route at all, which is
+     the common case for `--changed --no-vitals`. There is no score and no trend; that is
+     expected in the loop and is what the sweep before hand-over is for.
 4. `--no-vitals` for every iteration in the loop. The vitals pass runs under slow-4G with 4x
    CPU throttling on its own throttled context, and it measures the HOME route, which your
    fix to a service page did not touch.

@@ -343,18 +343,38 @@ test('the summary line is printed on a PASS too, so a lucky pass is still visibl
 // Once the rendered gate learned to render only a blast radius, every incremental run swept a
 // different route set and the basis refused every comparison. The loop this module exists for
 // was then available on a full sweep and nowhere else, which is precisely when nobody needs it.
-test('a different route set is COMPARED, with its coverage disclosed', () => {
-  const sweep = entry(61, undefined, { ...ON, routes: ['/', '/about', '/contact'] });
-  const radius = entry(75, undefined, { ...ON, routes: ['/'] });
+test('a different route set gets both numbers and NO verdict', () => {
+  // THE SCORED SETS DIFFER TOO, which is the whole mechanism and the thing the first version of
+  // this case could not see: it built both entries from the same projection helper, so only the
+  // route list moved, which is the one thing that does not happen on a real blast radius. The
+  // design checks are computed on the home route alone, so a radius that excludes `/` drops
+  // them and the denominator falls with them.
+  const sweep = entry(95, { text_contrast: 1, colour_accent_discipline: 0.9, spacing_rhythm: 0.9 },
+    { ...ON, routes: ['/', '/about', '/contact'] });
+  const radius = entry(90, { text_contrast: 1 }, { ...ON, routes: ['/about'] });
   assert.equal(sweep.basis, radius.basis, 'the route set is coverage, not configuration');
   const c = compare(radius, sweep);
-  assert.equal(c.verdict, 'improved', 'the fix loop must be able to read its own result');
-  assert.equal(c.delta, 14);
+  assert.equal(c.verdict, 'coverage', 'a coverage difference must not be given a direction');
+  assert.equal(c.delta, null, 'a delta across coverage is a number that means nothing');
   assert.match(c.coverageNote, /swept 1 of the 3 route\(s\)/);
   const line = trendLine(c, 2);
-  assert.match(line, /IMPROVING/);
+  assert.match(line, /NOT COMPARABLE/);
+  assert.match(line, /scored 90 and the run being compared scored 95/, 'both numbers are still reported');
   assert.match(line, /Compared against the run at /, 'the line must say which run it compared with');
-  assert.match(line, /the score is comparable, the coverage is not/);
+  assert.doesNotMatch(line, /IMPROVING|REGRESSED|UNCHANGED/, 'no verdict may be stated');
+  assert.doesNotMatch(line, /revert it|Keep going/, 'and no instruction may be given');
+});
+
+test('a CHANGED SCORED SET inside the same route set still reports its verdict', () => {
+  // The other half, and the one that must not regress: repairing the contrast violation drops
+  // text_contrast from the roll-up, which is the run where the agent did exactly what it was
+  // told. It reports the gain, with the denominator disclosed.
+  const before = entry(21, { colour_accent_discipline: 0.25, text_contrast: 0 });
+  const after = entry(62, { colour_accent_discipline: 0.9 });
+  const c = compare(after, before);
+  assert.equal(c.verdict, 'improved');
+  assert.equal(c.coverageNote, null, 'the routes did not move, so there is nothing to disclose');
+  assert.match(trendLine(c, 2), /IMPROVING/);
 });
 
 test('a route set that is not a subset says so differently', () => {
