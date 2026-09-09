@@ -1,0 +1,403 @@
+/**
+ * The form round-trip and the mobile nav, driven for real.
+ *
+ * A BROWSER SUITE. It is in the SLOW list in run.sh, so --fast skips it; run it by hand.
+ *
+ * The complaint it answers: `references/testing.md` described a post-deploy test that submits
+ * the contact form, and nothing anywhere submitted anything. A broken endpoint, a wrong
+ * Turnstile key, a submit handler that never bound: all of them shipped silently, because
+ * every check this gate ran read a page and none of them pressed a button.
+ *
+ * So the gate now fills the form with valid values, presses submit with `x-palate-smoke: 1`
+ * set on the page, and reads the endpoint's answer. The directions that matter:
+ *
+ *   IT REACHES THE ENDPOINT      a 2xx carrying `smoke: true` is the only pass.
+ *   A REAL SEND IS A FAILURE     a 200 without the flag means the smoke header was ignored
+ *                                and the submission took the real path, which on a live site
+ *                                is an enquiry in the client's inbox. Reported as such.
+ *   NO REQUEST IS A FAILURE      a submit handler that never bound looks identical to a
+ *                                working form until something presses the button.
+ *   NO FORM IS A SKIP            a brochure site with no contact form has not failed, and
+ *                                the run says it inspected none rather than going quiet.
+ *   A FAILED PROBE IS NOT BANKED the incremental record must not carry the route forward as
+ *                                passing, or the next run skips the route that broke.
+ *   THE ENDPOINT IS AN INPUT     editing `src/pages/api/contact.ts` changes nothing in any
+ *                                page's import closure, so without it in the global digest
+ *                                every page stays "unchanged, skipped" on exactly the run
+ *                                where the endpoint is what moved.
+ *
+ * The nav probe opens the disclosure at 390, asserts the target became visible, presses
+ * Escape and asserts it closed. A nav that opens and cannot be dismissed from the keyboard
+ * traps a keyboard-only visitor on a full-screen overlay.
+ *
+ * The server is an in-process node:http listener on port 0, so two of these can run at once
+ * in sibling worktrees without a port to collide over.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const VR = join(HERE, '..', 'reference-capture', 'verify-rendered.mjs');
+
+// Two named faces and a readable measure, not because this suite grades typography but
+// because the hygiene score files a High against `/` when it does not clear its floor, and
+// that High would delete the home route's record and mask what these tests are about.
+const shell = (title, body) => `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>${title}</title>
+<style>body{margin:0;font:16px/1.6 Verdana,Geneva,sans-serif;color:#1a1a1a;background:#fff}
+main{max-width:34rem;margin:0 auto;padding:2rem}
+h1,h2{font-family:Georgia,'Times New Roman',serif}h1{font-size:2.5rem}
+label{display:block;margin-top:1rem}
+input,textarea{font:inherit;padding:.6rem;border:1px solid #555;min-height:44px;width:18rem}
+a,button{color:#0b4a6f;min-height:44px;display:inline-block}
+:focus-visible{outline:3px solid #0b4a6f}
+[hidden]{display:none}</style></head>
+<body><main><h1>${title}</h1>${body}</main></body></html>`;
+
+const FILLER = '<p>A paragraph of ordinary body copy so the accessibility pass has something ' +
+  'real to read on this route, rather than scanning a blank page.</p>';
+
+/**
+ * The contact page. `behaviour` decides what its submit handler does, which is the only thing
+ * that changes between the fixtures: the markup is the shipped template's shape throughout
+ * (no `action` attribute, a JSON fetch from a script), because that shape is exactly what a
+ * probe keyed on `form[action="/api/contact"]` alone would never see.
+ */
+function contactPage(behaviour) {
+  const send = {
+    posts: `await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: f.name.value, email: f.email.value, message: f.message.value }) });`,
+    silent: `/* the handler that never sends: bound, prevents the default, and does nothing */`,
+    elsewhere: `await fetch("https://forms.example.invalid/submit", { method: "POST", body: "x" }).catch(() => {});`,
+  }[behaviour];
+  return shell('Contact', `${FILLER}
+    <form id="contact-form" novalidate>
+      <label for="cf-name">Name</label><input id="cf-name" name="name" type="text" required />
+      <label for="cf-email">Email</label><input id="cf-email" name="email" type="email" required />
+      <label for="cf-message">Message</label><textarea id="cf-message" name="message" rows="4" required></textarea>
+      <button type="submit">Send message</button>
+    </form>
+    <script>
+      const f = document.getElementById("contact-form");
+      f.addEventListener("submit", async (e) => { e.preventDefault(); ${send} });
+    </script>`);
+}
+
+/**
+ * The home page, with a mobile nav disclosure. `nav` picks which of the three behaviours it
+ * has: correct, opens but ignores Escape, or a button wired to nothing at all.
+ */
+function dialogMarkup(mode) {
+  if (mode === 'none') return '';
+  // A NATIVE <dialog> reached through commandfor, which is the shape a trigger with no
+  // aria-controls and no inline handler takes. Escape closes it for free unless cancel is
+  // prevented, which is exactly the fault worth catching.
+  const cancel = mode === 'traps' ? 'dlgEl.addEventListener("cancel", (e) => e.preventDefault());' : '';
+  const open = mode === 'dead' ? '' : 'dlgBtn.addEventListener("click", () => dlgEl.showModal());';
+  // The names are prefixed because classic inline scripts SHARE one top-level scope: a second
+  // `const b` on the same page is a SyntaxError that kills the whole later script, and the nav
+  // then genuinely does not open. The probe was right about that and the fixture was wrong.
+  return `
+    <button id="dlgbtn" commandfor="dlg" aria-haspopup="dialog">Book a call</button>
+    <dialog id="dlg"><h2>Book a call</h2><p>Pick a time that suits.</p>
+      <button id="dlgclose">Close</button></dialog>
+    <script>
+      const dlgEl = document.getElementById("dlg");
+      const dlgBtn = document.getElementById("dlgbtn");
+      ${open}
+      ${cancel}
+      document.getElementById("dlgclose").addEventListener("click", () => dlgEl.close());
+    </script>`;
+}
+
+function homePage(nav, dialog = 'none') {
+  if (nav === 'none') return shell('Home', FILLER + dialogMarkup(dialog));
+  const escape = nav === 'traps'
+    ? '/* no Escape handler: the trap */'
+    : `document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });`;
+  const open = nav === 'dead'
+    ? '/* the button is bound to nothing */'
+    : `b.addEventListener("click", () => {
+         const isOpen = b.getAttribute("aria-expanded") === "true";
+         if (isOpen) close(); else { b.setAttribute("aria-expanded", "true"); p.hidden = false; }
+       });`;
+  return shell('Home', `${FILLER}${dialogMarkup(dialog)}
+    <button id="navbtn" aria-controls="navpanel" aria-expanded="false">Menu</button>
+    <div id="navpanel" hidden><a href="/contact">Contact</a></div>
+    <script>
+      const b = document.getElementById("navbtn");
+      const p = document.getElementById("navpanel");
+      function close() { b.setAttribute("aria-expanded", "false"); p.hidden = true; }
+      ${open}
+      ${escape}
+    </script>`);
+}
+
+/**
+ * A fixture project plus its server.
+ *
+ * `endpoint` decides what /api/contact answers, which is how a broken deployment is
+ * reproduced without breaking the handler under test.
+ */
+function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endpoint = 'smoke' } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'palate-forms-'));
+  for (const d of ['src/pages', 'src/pages/api', 'src/styles', 'src/layouts', '.palate']) {
+    mkdirSync(join(root, d), { recursive: true });
+  }
+  writeFileSync(join(root, 'src', 'styles', 'globals.css'), ':root { --ink: #1a1a1a; }\n');
+  writeFileSync(join(root, 'src', 'layouts', 'BaseLayout.astro'), '---\nimport "../styles/globals.css";\n---\n<slot />\n');
+  writeFileSync(join(root, 'astro.config.mjs'), 'export default { output: "static" };\n');
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', private: true }, null, 2));
+  writeFileSync(join(root, 'src', 'pages', 'index.astro'), '---\n---\n<h1>Home</h1>\n');
+  writeFileSync(join(root, 'src', 'pages', 'contact.astro'), '---\n---\n<h1>Contact</h1>\n');
+  writeFileSync(join(root, 'src', 'pages', 'api', 'contact.ts'), 'export const POST = async () => new Response("{}");\n');
+
+  const routes = [
+    { path: '/', source: 'src/pages/index.astro', kind: 'static', dependsOn: [], links: [] },
+    { path: '/contact', source: 'src/pages/contact.astro', kind: 'static', dependsOn: [], links: [] },
+  ];
+  writeFileSync(join(root, '.palate', 'index.json'), JSON.stringify({
+    root, routes, entries: [], counts: { routes: routes.length, entries: 0, drafts: 0 },
+    links: { parsed: 0, files: 0, orphans: [], dead: [], stale: 0 },
+  }, null, 2));
+
+  const posts = [];
+  const server = createServer((req, res) => {
+    const path = (req.url || '/').split('?')[0].replace(/\/$/, '') || '/';
+    if (path === '/api/contact' && req.method === 'POST') {
+      let raw = '';
+      req.on('data', (d) => { raw += d; });
+      req.on('end', () => {
+        posts.push({ headers: req.headers, body: raw });
+        const smoke = req.headers['x-palate-smoke'] === '1';
+        const answers = {
+          // The correct handler: the header is honoured and nothing is sent.
+          smoke: smoke ? [200, { ok: true, smoke: true }] : [200, { ok: true }],
+          // The header is ignored, so a live deployment would have sent a real enquiry.
+          ignores: [200, { ok: true }],
+          // Validation is broken, or the mail provider is refusing.
+          broken: [500, { error: 'submission failed' }],
+          // The route is not being served: a build missing it, or a plain static file server
+          // standing in for `npm run preview`, which runs the adapter.
+          absent: [404, { error: 'not found' }],
+        }[endpoint];
+        res.writeHead(answers[0], { 'content-type': 'application/json' });
+        res.end(JSON.stringify(answers[1]));
+      });
+      return;
+    }
+    const body = path === '/' ? homePage(nav, dialog) : path === '/contact' ? contactPage(form) : null;
+    if (!body) { res.writeHead(404, { 'content-type': 'text/html' }); res.end(shell('Not found', '<p>No such page.</p>')); return; }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    res.end(body);
+  });
+  return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok({
+    root, server, posts, index: join(root, '.palate', 'index.json'),
+    url: `http://127.0.0.1:${server.address().port}`,
+    out: join(root, '.palate-shots'),
+    stop() { server.close(); rmSync(root, { recursive: true, force: true }); },
+  })));
+}
+
+function runGate(argv, env = {}) {
+  return new Promise((done) => {
+    const p = spawn('node', [VR, ...argv], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env } });
+    let out = '';
+    p.stdout.on('data', (d) => { out += d; });
+    p.stderr.on('data', (d) => { out += d; });
+    p.on('close', (status) => done({ out, status }));
+  });
+}
+const gate = (fx, extra = []) => runGate(['--url', fx.url, '--index', fx.index, '--no-vitals', ...extra]);
+
+test('a working form is submitted once, with the smoke header, and passes', async (t) => {
+  const fx = await makeFixture({ form: 'posts' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+
+  assert.equal(fx.posts.length, 1, `the form was posted ${fx.posts.length} times, not once`);
+  assert.equal(fx.posts[0].headers['x-palate-smoke'], '1', 'the smoke header did not reach the endpoint');
+  const sent = JSON.parse(fx.posts[0].body);
+  assert.equal(sent.name.trim().length > 0, true, 'the name field was submitted empty');
+  assert.match(sent.email, /^[^\s@]+@[^\s@]+\.[^\s@]+$/, `the email field was filled with "${sent.email}"`);
+  assert.equal(sent.message.trim().length > 0, true, 'the message field was submitted empty');
+  assert.match(r.out, /form round trip: \/contact answered 200 with smoke: true/,
+    `the pass was not reported\n${r.out.slice(-1200)}`);
+  assert.ok(!/\[High\].*form round trip/.test(r.out), `a clean fixture produced a form finding\n${r.out.slice(-1200)}`);
+});
+
+test('an endpoint that ignores the smoke header is a failure, named as a real send', async (t) => {
+  const fx = await makeFixture({ form: 'posts', endpoint: 'ignores' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /\[High\].*form round trip/, `no High was filed\n${r.out.slice(-1200)}`);
+  assert.match(r.out, /without `smoke: true`/, 'the finding did not say the flag was missing');
+  assert.match(r.out, /real path/, 'the finding did not warn that a real enquiry may have been sent');
+  assert.equal(r.status, 1, 'the gate did not exit 1 on a High');
+});
+
+test('an endpoint that errors is a failure carrying the status', async (t) => {
+  const fx = await makeFixture({ form: 'posts', endpoint: 'broken' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /\[High\].*form round trip.*answered 500/, `the status was not reported\n${r.out.slice(-1200)}`);
+});
+
+test('a 404 from the endpoint says the route is not served, not that it refused', async (t) => {
+  // The wrong message here sends someone debugging validation when the endpoint is simply
+  // absent, which is also what a plain static server serving dist/ looks like.
+  const fx = await makeFixture({ form: 'posts', endpoint: 'absent' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /\[High\].*form round trip.*answered 404/, `the status was not reported\n${r.out.slice(-1200)}`);
+  assert.match(r.out, /not being served at that path/, 'the finding blamed the endpoint rather than its absence');
+  assert.ok(!/endpoint refuses it/.test(r.out), 'a missing route was described as a refusal');
+});
+
+test('a form whose submit never reaches the endpoint is a failure', async (t) => {
+  const fx = await makeFixture({ form: 'silent' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.equal(fx.posts.length, 0);
+  assert.match(r.out, /\[High\].*form round trip.*no request/i, `a dead submit passed\n${r.out.slice(-1200)}`);
+});
+
+test('a form posting to a third party is reported as unmeasured, not as a pass or a failure', async (t) => {
+  const fx = await makeFixture({ form: 'elsewhere' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /forms\.example\.invalid/, `the destination was not named\n${r.out.slice(-1200)}`);
+  assert.match(r.out, /\[Medium\].*form round trip/, 'a form posting elsewhere was not reported as unmeasured');
+  assert.ok(!/\[High\].*form round trip/.test(r.out), 'a third-party form was failed rather than reported');
+});
+
+test('a site with no contact form says it inspected none rather than going quiet', async (t) => {
+  const fx = await makeFixture({ form: 'posts', nav: 'none' });
+  // Serve the contact route without a form by pointing both routes at the home page.
+  t.after(() => fx.stop());
+  const r = await gate(fx, ['--routes', '/']);
+  assert.equal(fx.posts.length, 0);
+  assert.match(r.out, /form round trip: no contact form on \d+ route\(s\), nothing submitted/,
+    `the skip was not printed\n${r.out.slice(-1200)}`);
+  assert.ok(!/form round trip.*\[High\]/.test(r.out), 'a site with no form was failed');
+});
+
+test('a route whose form probe failed is not banked as passing', async (t) => {
+  const fx = await makeFixture({ form: 'posts', endpoint: 'broken' });
+  t.after(() => fx.stop());
+  await gate(fx, ['--out', fx.out]);
+  const m = JSON.parse(readFileSync(join(fx.out, 'manifest.json'), 'utf8'));
+  assert.ok(m.routes, 'the run wrote no routes map at all');
+  assert.equal(m.routes['/contact'], undefined,
+    'the route whose form round trip failed kept a passing record, so the next run skips it');
+  assert.ok(m.routes['/'], 'an unrelated route lost its record too');
+});
+
+test('editing the contact endpoint re-renders the pages, so the form is probed again', async (t) => {
+  // src/pages/api/contact.ts is in no page's import closure. Without it in the global digest
+  // every route reads as unchanged on precisely the run where the endpoint is what moved, and
+  // the round trip is skipped on the change it exists to catch.
+  const fx = await makeFixture({ form: 'posts' });
+  t.after(() => fx.stop());
+  const first = await gate(fx, ['--out', fx.out]);
+  assert.equal(fx.posts.length, 1, `the first run posted ${fx.posts.length} times\n${first.out.slice(-900)}`);
+
+  const second = await gate(fx, ['--out', fx.out]);
+  assert.match(second.out, /\/contact unchanged, skipped/, 'nothing was skipped on an unchanged second run');
+  assert.equal(fx.posts.length, 1, 'the form was posted again on a run where nothing had changed');
+  // ...and the run says the form was not submitted BECAUSE routes were skipped, rather than
+  // leaving "nothing submitted" to read as "this site has no form".
+  assert.match(second.out, /form round trip: no route was rendered this run, so nothing was submitted\. 2 unchanged route\(s\) were skipped/,
+    `the skip did not say why nothing was submitted\n${second.out.slice(-1200)}`);
+
+  writeFileSync(join(fx.root, 'src', 'pages', 'api', 'contact.ts'),
+    'export const POST = async () => new Response(JSON.stringify({ ok: true }));\n');
+  const third = await gate(fx, ['--out', fx.out]);
+  assert.match(third.out, /global inputs changed, all routes re-rendered/,
+    `the endpoint edit did not invalidate the records\n${third.out.slice(-1200)}`);
+  assert.equal(fx.posts.length, 2, 'the form was not re-submitted after the endpoint changed');
+});
+
+test('the mobile nav opens, shows its target and closes on Escape', async (t) => {
+  const fx = await makeFixture({ nav: 'works' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /mobile nav: \/ @mobile opened and dismissed/, `the pass was not reported\n${r.out.slice(-1200)}`);
+  assert.ok(!/\[High\].*mobile nav/.test(r.out), `a working nav produced a finding\n${r.out.slice(-1200)}`);
+});
+
+test('a mobile nav that will not close on Escape is a failure', async (t) => {
+  const fx = await makeFixture({ nav: 'traps' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /\[High\].*mobile nav.*Escape/, `an undismissable nav passed\n${r.out.slice(-1200)}`);
+  assert.equal(r.status, 1);
+});
+
+test('a mobile nav button that opens nothing is a failure', async (t) => {
+  const fx = await makeFixture({ nav: 'dead' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /\[High\].*mobile nav.*did not open/i, `a dead nav button passed\n${r.out.slice(-1200)}`);
+});
+
+test('a nav failure blocks through interaction.json, not only through the exit code', async (t) => {
+  // hooks/palate-stop.mjs reads this file and blocks on a non-empty list. A finding that
+  // never reaches it is a finding the build walks past.
+  const fx = await makeFixture({ nav: 'traps' });
+  t.after(() => fx.stop());
+  await gate(fx, ['--out', fx.out]);
+  const ix = JSON.parse(readFileSync(join(fx.out, 'interaction.json'), 'utf8'));
+  const hit = ix.interaction_failures.find((f) => f.check === 'mobile-nav-escape-dismiss');
+  assert.ok(hit, `interaction.json carries no mobile-nav failure: ${JSON.stringify(ix).slice(0, 400)}`);
+  assert.match(hit.msg, /Escape/);
+});
+
+test('a dialog opens and closes on Escape', async (t) => {
+  // Reached through `commandfor`, with no aria-controls anywhere: the shape a probe keyed on
+  // aria alone would never see. Escape is native here, so this direction also proves the probe
+  // is not simply failing everything it finds.
+  const fx = await makeFixture({ dialog: 'works' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /dialog: \/ @\w+ opened and dismissed/, `the pass was not reported\n${r.out.slice(-1400)}`);
+  assert.ok(!/\[High\].*dialog:/.test(r.out), `a working dialog produced a finding\n${r.out.slice(-1400)}`);
+});
+
+test('a dialog that swallows the cancel event is a failure', async (t) => {
+  // preventDefault on `cancel` is the one line that turns a correct native dialog into a trap,
+  // and it is invisible in the markup.
+  const fx = await makeFixture({ dialog: 'traps' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /\[High\].*dialog:.*Escape/, `a trapping dialog passed\n${r.out.slice(-1400)}`);
+  assert.equal(r.status, 1);
+});
+
+test('a dialog trigger wired to nothing is a failure, and it reaches interaction.json', async (t) => {
+  const fx = await makeFixture({ dialog: 'dead' });
+  t.after(() => fx.stop());
+  const r = await gate(fx, ['--out', fx.out]);
+  assert.match(r.out, /\[High\].*dialog:.*did not open anything/i, `a dead dialog trigger passed\n${r.out.slice(-1400)}`);
+  const ix = JSON.parse(readFileSync(join(fx.out, 'interaction.json'), 'utf8'));
+  assert.ok(ix.interaction_failures.some((f) => f.check === 'dialog-open'),
+    `interaction.json carries no dialog failure: ${JSON.stringify(ix).slice(0, 400)}`);
+});
+
+test('the nav and the dialog on one page are told apart', async (t) => {
+  // Zag's dialog trigger carries aria-expanded exactly like a burger does, so a probe that
+  // took the first match and called it "mobile nav" would mislabel every dialog on the site.
+  const fx = await makeFixture({ nav: 'traps', dialog: 'traps' });
+  t.after(() => fx.stop());
+  const r = await gate(fx, ['--out', fx.out]);
+  const ix = JSON.parse(readFileSync(join(fx.out, 'interaction.json'), 'utf8'));
+  const checks = ix.interaction_failures.map((f) => f.check);
+  assert.ok(checks.includes('mobile-nav-escape-dismiss'), `no nav failure: ${checks.join(', ')}`);
+  assert.ok(checks.includes('dialog-escape-dismiss'), `no dialog failure: ${checks.join(', ')}`);
+});

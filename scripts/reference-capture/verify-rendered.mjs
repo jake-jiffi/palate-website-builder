@@ -248,7 +248,12 @@ const GLOBAL_FILES = [
   'astro.config.mjs', 'astro.config.ts', 'astro.config.js', 'astro.config.cjs',
   'package.json', 'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lockb',
 ];
-const GLOBAL_DIRS = ['src/styles', 'src/layouts'];
+// `src/pages/api` IS A GLOBAL INPUT, and it is the one entry here that is not shared styling.
+// A page that carries the contact form does not import the endpoint: it posts to a URL. So the
+// endpoint sits in no route's import closure, every page hashes the same after it is edited,
+// and the form round trip below would be skipped on precisely the run where the endpoint is
+// what moved. Over-reading costs a render; under-reading costs the whole point of the probe.
+const GLOBAL_DIRS = ['src/styles', 'src/layouts', 'src/pages/api'];
 
 function walkFiles(dir, out = []) {
   let entries;
@@ -542,7 +547,7 @@ const globalInputs = globalInputsHash(projectRoot);
 if (priorGlobal && priorGlobal !== globalInputs.hash) {
   console.error(
     `verify-rendered: global inputs changed, all routes re-rendered (${globalInputs.count} shared file(s): ` +
-    'the config and lockfile, src/styles, src/layouts and the CSS those layouts import).',
+    'the config and lockfile, src/styles, src/layouts, src/pages/api and the CSS those layouts import).',
   );
 }
 const sourcesHashes = new Map();
@@ -582,6 +587,16 @@ const VIEWPORTS = {
   mobile:  { width: 390,  height: 844  },
   tablet:  { width: 834,  height: 1112 },
   desktop: { width: 1440, height: 900  },
+};
+// The values the form round trip types in. Deliberately readable as a test if one ever does
+// escape to a real inbox, and example.com because it is the reserved domain for exactly this.
+const SAMPLE_FORM = {
+  name: 'Palate verify',
+  email: 'verify@example.com',
+  message: 'Automated round-trip check from the Palate site verifier. Nothing to action.',
+  tel: '0400000000',
+  url: 'https://example.com',
+  date: '2030-01-01',
 };
 // Console / request noise that is not the build's fault (third-party, favicon).
 const IGNORE = [/turnstile/i, /challenges\.cloudflare/i, /humblytics/i, /plausible/i, /google-analytics/i, /googletagmanager/i, /favicon/i];
@@ -624,6 +639,21 @@ const interactionFailures = [];
 // palette, the type scale and the mobile control sizes are properties of the design system,
 // not of a route, and measuring every route would multiply the cost for the same answer.
 const designFacts = {};
+// Routes that carry a contact form, found at desktop and submitted once each after the loop.
+// Collected rather than probed in place, because a submit belongs in its own context: the
+// smoke header goes on every request a page makes, and the audit pass must not carry it.
+const formRoutes = [];
+// One nav is usually one shared header, so the same fault would otherwise be filed once per
+// route. Keyed on the check and the control's label, and the route named is the first it was
+// seen on.
+const navSeen = new Set();
+// Spelled out rather than composed, so every check name this gate can emit is greppable. The
+// docs guard and hooks/palate-stop.mjs both key on these strings, and a name assembled at
+// runtime is a name no static check can find.
+const DISCLOSURE_CHECKS = {
+  dialog: { open: 'dialog-open', 'escape-dismiss': 'dialog-escape-dismiss' },
+  'mobile nav': { open: 'mobile-nav-open', 'escape-dismiss': 'mobile-nav-escape-dismiss' },
+};
 
 // ------------------------------------------------------------------ axe ----
 // The accessibility checks the GRADER scores, run locally against the same
@@ -1206,6 +1236,43 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       if (ring.focused && !ring.visible) add('Medium', route, vpName, 'first tab-focused element has no visible focus ring');
     }
 
+    /**
+     * DOES THIS PAGE CARRY THE CONTACT FORM? Found here, submitted after the loop.
+     *
+     * TWO ARMS, AND THE SECOND ONE IS THE LOAD-BEARING HALF. The obvious selector is
+     * `form[action="/api/contact"]`, and the shipped ContactForm.astro has NO action at all:
+     * it is `<form id="contact-form" novalidate>` with a bundled script that fetches the
+     * endpoint. A probe keyed on the attribute alone would therefore never once fire on the
+     * very template it was written for, which is the exists-but-never-fires class this repo
+     * keeps paying for. So a form is a contact form when it declares the action OR carries
+     * the field shape, and what it actually posts to is then measured rather than assumed.
+     */
+    if (vpName === 'desktop') {
+      const hasForm = await page.evaluate(() => {
+        for (const f of document.querySelectorAll('form')) {
+          const action = f.getAttribute('action') || '';
+          let byAction = false;
+          try { byAction = new URL(action, location.href).pathname === '/api/contact'; } catch { /* not a URL */ }
+          const has = (n) => !!f.querySelector('[name="' + n + '"]');
+          if (byAction || (has('name') && has('email') && has('message'))) return true;
+        }
+        return false;
+      }).catch(() => false);
+      if (hasForm) formRoutes.push(route);
+    }
+
+    /**
+     * THE MOBILE NAV AND ANY DIALOG, opened and closed for real.
+     *
+     * Every other check in this file reads a settled page. A burger that opens nothing, or a
+     * full-screen overlay a keyboard user cannot dismiss, looks identical to a working one in
+     * a screenshot and in the DOM, and is only found by pressing it. See disclosureProbe for
+     * what is in scope and what it cannot see.
+     */
+    if (vpName === 'mobile' || vpName === 'desktop') {
+      await disclosureProbe(page, route, vpName);
+    }
+
     // The rendered DOM text, for the route record. Desktop only: one reading per route is
     // what the record holds, and the desktop pass is the one every route gets.
     if (vpName === 'desktop') {
@@ -1218,6 +1285,191 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       await page.screenshot({ path: outDir + '/' + name, fullPage: true }).catch(() => {});
     }
     await page.close();
+  }
+  await context.close();
+}
+
+// ------------------------------------------------- form round trip -----
+/**
+ * FILL THE CONTACT FORM AND PRESS SEND.
+ *
+ * `references/testing.md` described this test for months and nothing ran it, so a submit
+ * handler that never bound, an endpoint returning 500 and a wrong Turnstile key all shipped
+ * looking exactly like a working form. Reading the markup cannot tell them apart. Pressing
+ * the button can.
+ *
+ * THE SMOKE HEADER IS WHAT MAKES IT SAFE TO RUN. `x-palate-smoke: 1` on every request this
+ * page makes tells `src/pages/api/contact.ts` to validate the body and answer
+ * `{ ok: true, smoke: true }` having sent nothing. In production the endpoint ignores the
+ * header unless `x-palate-smoke-secret` matches `PALATE_SMOKE_SECRET`, so this is passed
+ * through from the environment when it is set.
+ *
+ * A 200 WITHOUT THE FLAG IS A FAILURE, NOT A PASS. It means the header was ignored and the
+ * submission took the real path, which against a deployed site is a fake enquiry in the
+ * client's inbox. That is the one outcome worth shouting about.
+ *
+ * ITS OWN CONTEXT. `setExtraHTTPHeaders` applies to every request the page makes, and the
+ * audit pass above must not carry a header that changes what the site does.
+ */
+// A skipped route is not inspected, so a form on one of them was not submitted either. Said
+// in the same breath as "nothing submitted", because the two together are the difference
+// between a site with no form and a site whose form nobody looked at this run.
+const formSkipNote = skipped.length
+  ? ` ${skipped.length} unchanged route(s) were skipped, so a contact form on one of those was NOT submitted this run; --full covers them.`
+  : '';
+if (!rendering.length) {
+  console.error('verify-rendered: form round trip: no route was rendered this run, so nothing was submitted.' + formSkipNote);
+} else if (!formRoutes.length) {
+  console.error(`verify-rendered: form round trip: no contact form on ${rendering.length} route(s), nothing submitted.` + formSkipNote);
+} else {
+  const context = await browser.newContext({ viewport: VIEWPORTS.desktop });
+  const page = await context.newPage();
+  const smokeHeaders = { 'x-palate-smoke': '1' };
+  // Only when set. An empty value sent as a header is not the same as no header, and the
+  // endpoint fails closed on a blank secret either way.
+  if (process.env.PALATE_SMOKE_SECRET) smokeHeaders['x-palate-smoke-secret'] = process.env.PALATE_SMOKE_SECRET;
+  else console.error('verify-rendered: form round trip: PALATE_SMOKE_SECRET is not set, which is right for a preview and will make a PRODUCTION deployment take the real path.');
+  await page.setExtraHTTPHeaders(smokeHeaders);
+
+  // Every POST the page makes, in order, ANSWERED OR NOT. A predicate on waitForResponse
+  // would race an analytics beacon and lose on any site that has one, and a POST to a host
+  // that does not resolve never produces a response at all: without requestfailed here, a
+  // form wired to a dead third party looks identical to a form that never submitted.
+  let posts = [];
+  page.on('response', (r) => { if (r.request().method() === 'POST') posts.push({ url: r.url(), resp: r }); });
+  page.on('requestfailed', (r) => { if (r.method() === 'POST') posts.push({ url: r.url(), resp: null }); });
+
+  for (const route of formRoutes) {
+    posts = [];
+    try {
+      await page.goto(base + route, { waitUntil: 'load', timeout: 20000 });
+      await page.evaluate(() => new Promise((r) => setTimeout(r, 400)));
+    } catch (e) {
+      add('High', route, 'desktop', 'form round trip: the page carrying the contact form would not load (' + (e && e.message ? e.message : e) + ').');
+      continue;
+    }
+
+    const filled = await page.evaluate((sample) => {
+      const vis = (n) => {
+        const r = n.getBoundingClientRect(), s = getComputedStyle(n);
+        return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
+      };
+      let form = null;
+      for (const f of document.querySelectorAll('form')) {
+        const action = f.getAttribute('action') || '';
+        let byAction = false;
+        try { byAction = new URL(action, location.href).pathname === '/api/contact'; } catch { /* not a URL */ }
+        const has = (n) => !!f.querySelector('[name="' + n + '"]');
+        if (byAction || (has('name') && has('email') && has('message'))) { form = f; break; }
+      }
+      if (!form) return { ok: false, why: 'the form found at desktop was not on the page this pass' };
+      form.setAttribute('data-palate-form', '1');
+
+      // VISIBLE fields only. A hidden input is either machinery or a honeypot, and filling a
+      // honeypot is how an automated submission gets classified as spam by the thing it is
+      // meant to be testing.
+      const names = [];
+      const groups = new Set();
+      for (const el of form.querySelectorAll('input, textarea, select')) {
+        const type = (el.getAttribute('type') || el.tagName.toLowerCase()).toLowerCase();
+        if (type === 'hidden' || type === 'submit' || type === 'button' || type === 'image' || type === 'file' || type === 'reset') continue;
+        if (el.disabled || el.readOnly || !vis(el)) continue;
+        const key = ((el.getAttribute('name') || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '')).toLowerCase();
+        const set = (v) => {
+          el.value = v;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        if (type === 'checkbox' || type === 'radio') {
+          if (!el.required && type === 'checkbox') continue;
+          if (type === 'radio') { if (groups.has(el.name)) continue; groups.add(el.name); }
+          el.checked = true;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (el.tagName.toLowerCase() === 'select') {
+          const pick = Array.from(el.options).find((o) => o.value);
+          if (!pick) continue;
+          el.value = pick.value;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (type === 'email' || /email/.test(key)) set(sample.email);
+        else if (el.tagName.toLowerCase() === 'textarea' || /message|comment|enquir|inquir|detail/.test(key)) set(sample.message);
+        else if (type === 'tel' || /phone|mobile|tel/.test(key)) set(sample.tel);
+        else if (type === 'url') set(sample.url);
+        else if (type === 'number' || type === 'range') set('1');
+        else if (type === 'date') set(sample.date);
+        else if (type === 'time') set('09:00');
+        else set(sample.name);
+        names.push(el.getAttribute('name') || el.id || type);
+      }
+      const submit = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])')
+        || form.querySelector('button');
+      if (!submit) return { ok: false, why: 'the contact form has no submit control, so it cannot be sent at all' };
+      submit.setAttribute('data-palate-submit', '1');
+      return { ok: true, fields: names };
+    }, SAMPLE_FORM).catch((e) => ({ ok: false, why: 'the form could not be filled (' + (e && e.message ? e.message : e) + ')' }));
+
+    if (!filled.ok) { add('High', route, 'desktop', 'form round trip: ' + filled.why + '.'); continue; }
+
+    try {
+      await page.click('[data-palate-submit="1"]', { timeout: 5000 });
+    } catch (e) {
+      add('High', route, 'desktop', 'form round trip: the submit control could not be clicked (' +
+        (e && e.message ? String(e.message).split(String.fromCharCode(10))[0] : e) + ').');
+      continue;
+    }
+
+    // Poll rather than wait on a predicate: the endpoint answer is the one we want and it may
+    // not be the first POST the page makes.
+    let hit = null;
+    for (let i = 0; i < 40 && !hit; i++) {
+      hit = posts.find((p) => { try { const u = new URL(p.url); return u.origin === new URL(base).origin && u.pathname === '/api/contact'; } catch { return false; } });
+      if (!hit) await page.evaluate(() => new Promise((r) => setTimeout(r, 200)));
+    }
+
+    if (!hit) {
+      const elsewhere = posts[0];
+      if (elsewhere) {
+        add('Medium', route, 'desktop', 'form round trip: the contact form posted to ' + elsewhere.url +
+          ' rather than /api/contact, so the round trip is UNMEASURED, not clean. Point the form at the ' +
+          'template endpoint, or accept that no gate here proves the enquiry arrives.');
+        continue;
+      }
+      const complaint = await page.evaluate(() => {
+        const a = Array.from(document.querySelectorAll('[role="alert"],[aria-invalid="true"]'))
+          .filter((n) => { const r = n.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
+          .map((n) => (n.textContent || n.getAttribute('name') || n.id || '').trim()).filter(Boolean);
+        return a.slice(0, 3).join('; ');
+      }).catch(() => '');
+      add('High', route, 'desktop', 'form round trip: pressing send made no request at all, so nothing was submitted. ' +
+        (complaint
+          ? 'The form rejected the sample values: "' + complaint + '". Valid values were entered in every visible field, so the validation is refusing something it should accept.'
+          : 'The submit handler never bound, or it swallows the submit. Fields filled: ' + filled.fields.join(', ') + '.'));
+      continue;
+    }
+
+    if (!hit.resp) {
+      add('High', route, 'desktop', 'form round trip: the submission to /api/contact never got a response ' +
+        '(the request failed at the network level). The endpoint is not being served at that path.');
+      continue;
+    }
+    const status = hit.resp.status();
+    let body = null;
+    try { body = JSON.parse(await hit.resp.text()); } catch { /* a non-JSON answer is itself the finding */ }
+    if (status === 404 || status === 405) {
+      add('High', route, 'desktop', 'form round trip: /api/contact answered ' + status + ', so the endpoint is not being ' +
+        'served at that path. Either the route is missing from the build, or this preview is a plain static server ' +
+        'and not `npm run preview`, which runs the adapter and serves the endpoint. Nothing about the form is proven either way.');
+    } else if (status < 200 || status >= 300) {
+      add('High', route, 'desktop', 'form round trip: /api/contact answered ' + status +
+        (body && body.error ? ' (' + body.error + ')' : '') + '. The form reaches the endpoint and the endpoint refuses it.');
+    } else if (!body || body.smoke !== true) {
+      add('High', route, 'desktop', 'form round trip: /api/contact answered ' + status + ' without `smoke: true`, so the ' +
+        'smoke header was ignored and the submission took the real path. Against a deployed site that is a fake enquiry ' +
+        'in the inbox and, with a CMS wired, a document in the client\'s content. Either the endpoint predates the smoke ' +
+        'contract, or PUBLIC_SITE_ENV says production and PALATE_SMOKE_SECRET is unset or does not match.');
+    } else {
+      console.error('verify-rendered: form round trip: ' + route + ' answered ' + status + ' with smoke: true (' +
+        filled.fields.length + ' field(s) filled, nothing sent).');
+    }
   }
   await context.close();
 }
@@ -1789,6 +2041,172 @@ if (outDir) {
       'The next run will render every route, which is slow and never wrong.',
     );
   }
+}
+
+// ------------------------------------------------- disclosure probe -----
+/**
+ * Open the mobile nav and any dialog, assert the target appeared, press Escape, assert it went.
+ *
+ * WHY ESCAPE IS THE ASSERTION AND NOT A NICETY. A mobile nav is usually a full-screen overlay
+ * over the page it covers, and a dialog is one by definition. A visitor driving the keyboard
+ * who opens either and finds no Escape has to tab through the whole sheet to reach a close
+ * control, if there is one; the dialog and menu-button patterns both make Escape the way out.
+ * It is also the cheapest possible signal that the open state is actually managed rather than
+ * a class toggled on and forgotten. A native <dialog> gets this free, which is exactly why a
+ * hand-rolled one that does not is worth catching.
+ *
+ * SCOPED SO IT CANNOT FIRE ON A DESIGN CHOICE. The control must be a button (or role button),
+ * visible, currently CLOSED, outside a form so a click cannot submit something, and its target
+ * must be findable and currently hidden. A nav that is simply visible at 390 has nothing to
+ * open and is left alone.
+ *
+ * WHAT IT CANNOT SEE, said plainly: a <dialog> opened by a button whose handler is bound in a
+ * module, with no aria-controls, no commandfor and no data-dialog-target, is not discoverable
+ * from the DOM. Wire the trigger to the dialog with one of those and it is covered.
+ *
+ * At mobile both kinds are probed. At desktop only dialogs are, because a nav at desktop is
+ * normally already open and a third pass would cost a click per route for nothing.
+ *
+ * Findings are deduplicated on the check plus the control's label, because one nav or one
+ * dialog is normally one shared component and the alternative is the same fault filed
+ * fourteen times.
+ */
+async function disclosureProbe(page, route, vpName) {
+  let found = await detectDisclosures(page);
+  if (!found || !found.length) return;
+
+  /**
+   * ONE FAILURE LEAVES THE PAGE DIRTY, AND THE NEXT CANDIDATE PAYS FOR IT.
+   *
+   * A dialog that will not close on Escape is still open, in the top layer, over everything.
+   * The nav button underneath is then unclickable, and the run reported the nav as "did not
+   * open anything" when the nav was fine and the dialog was the fault. Two findings, one of
+   * them wrong, on a page with one real defect. So after anything that leaves state behind,
+   * the page is reloaded and the candidates re-detected before the next one is touched.
+   *
+   * Only when dirty. A page whose disclosures all opened and closed correctly costs no extra
+   * navigation, which is the common case and the one that must stay cheap.
+   */
+  let dirty = false;
+  for (let i = 0; i < found.length; i++) {
+    if (dirty) {
+      try {
+        await page.goto(base + route, { waitUntil: 'load', timeout: 20000 });
+        await page.evaluate(() => new Promise((r) => setTimeout(r, 300)));
+        const again = await detectDisclosures(page);
+        if (!again || again.length <= i) break;
+        found = again;
+      } catch { break; }
+      dirty = false;
+    }
+    const c = found[i];
+    // A nav at desktop is normally already open; only dialogs earn a second pass.
+    if (vpName !== 'mobile' && c.kind !== 'dialog') continue;
+    const where = c.kind === 'dialog' ? '' : ' at 390';
+    const file = (suffix, msg) => {
+      const check = DISCLOSURE_CHECKS[c.kind][suffix];
+      const key = check + ' ' + c.label;
+      if (navSeen.has(key)) return;
+      navSeen.add(key);
+      add('High', route, vpName, c.kind + ': ' + msg);
+      interactionFailures.push({ msg: route + ' @' + vpName + ': ' + c.kind + ': ' + msg, route, viewport: vpName, rule: check, check });
+    };
+
+    const state = () => page.evaluate((n) => {
+      const vis = (el) => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect(), st = getComputedStyle(el);
+        return r.width > 0 && r.height > 0 && st.display !== 'none' && st.visibility !== 'hidden' && parseFloat(st.opacity || '1') > 0.05;
+      };
+      const el = document.querySelector('[data-ix-dis="' + n + '"]');
+      const t = document.querySelector('[data-ix-dis-t="' + n + '"]');
+      return { expanded: !!el && el.getAttribute('aria-expanded') === 'true', targetVisible: vis(t) };
+    }, c.i);
+
+    try {
+      await page.click('[data-ix-dis="' + c.i + '"]', { timeout: 4000 });
+    } catch (e) {
+      const why = e && e.message ? String(e.message).split(String.fromCharCode(10))[0] : String(e);
+      file('open', 'the control "' + c.label + '" could not be clicked' + where + ' (' + why +
+        '). A control a pointer cannot reach is one nobody can open.');
+      dirty = true;
+      continue;
+    }
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 400)));
+    const open = await state();
+    if (!open.expanded && !open.targetVisible) {
+      file('open', 'the control "' + c.label + '" did not open anything when clicked' + where + ': ' +
+        'aria-expanded stayed false and ' + (c.hasTarget ? 'the element it controls stayed hidden' : 'no panel appeared') +
+        (c.kind === 'dialog' ? '. A dialog nobody can open is a dead end in the flow it belongs to.'
+          : '. The burger is the only way into the navigation on a phone.'));
+      dirty = true;
+      continue;
+    }
+
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => new Promise((r) => setTimeout(r, 350)));
+    const shut = await state();
+    if (shut.expanded || shut.targetVisible) {
+      file('escape-dismiss', 'what "' + c.label + '" opened cannot be dismissed with Escape' + where + '. ' +
+        'An overlay a keyboard visitor cannot close leaves them tabbing through the whole sheet to get out. ' +
+        'Close it on Escape as well as on the button (a native <dialog> does this for free unless the cancel ' +
+        'event is prevented).');
+      dirty = true;
+      continue;
+    }
+    console.error('verify-rendered: ' + c.kind + ': ' + route + ' @' + vpName + ' opened and dismissed "' + c.label + '" with Escape.');
+  }
+}
+
+/** The candidates on the page as it stands, marked so they can be found again after a click. */
+async function detectDisclosures(page) {
+  try {
+    return await page.evaluate(() => {
+      const vis = (n) => {
+        if (!n) return false;
+        const r = n.getBoundingClientRect(), s = getComputedStyle(n);
+        return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden' && parseFloat(s.opacity || '1') > 0.05;
+      };
+      const isDialog = (trigger, target) =>
+        trigger.getAttribute('aria-haspopup') === 'dialog' ||
+        (!!target && (target.tagName === 'DIALOG' || target.getAttribute('role') === 'dialog' || target.getAttribute('aria-modal') === 'true'));
+      const label = (el) => {
+        const cls = (el.className && typeof el.className === 'string') ? '.' + el.className.trim().split(/\s+/)[0] : '';
+        return (el.getAttribute('aria-label') || (el.innerText || '').trim() || el.id || cls || 'the control').slice(0, 40);
+      };
+      const out = [];
+      const taken = new Set();
+      const consider = (el, target) => {
+        if (out.length >= 3 || taken.has(el)) return;
+        if (!vis(el) || el.closest('form')) return;                // a click here could submit
+        if (el.getAttribute('aria-expanded') === 'true') return;   // already open
+        if (vis(target)) return;                                   // nothing to open
+        // With neither a target to watch nor an aria-expanded to read there is nothing to
+        // assert, so it is left alone rather than judged on a guess.
+        if (!target && !el.hasAttribute('aria-expanded')) return;
+        taken.add(el);
+        const i = String(out.length);
+        el.setAttribute('data-ix-dis', i);
+        if (target) target.setAttribute('data-ix-dis-t', i);
+        out.push({ i, label: label(el), hasTarget: !!target, kind: isDialog(el, target) ? 'dialog' : 'mobile nav' });
+      };
+      const sel = 'button[aria-expanded],[role="button"][aria-expanded],button[aria-controls],' +
+        '[role="button"][aria-controls],button[aria-haspopup="dialog"],[role="button"][aria-haspopup="dialog"]';
+      for (const el of document.querySelectorAll(sel)) {
+        const id = el.getAttribute('aria-controls');
+        consider(el, id ? document.getElementById(id) : null);
+      }
+      // A native <dialog> whose trigger names it some other way. Without this arm the commonest
+      // shape of all, `<button commandfor="dlg">` beside `<dialog id="dlg">`, is invisible here.
+      for (const d of document.querySelectorAll('dialog')) {
+        if (d.open || !d.id) continue;
+        const esc = (window.CSS && CSS.escape) ? CSS.escape(d.id) : d.id;
+        const t = document.querySelector(`[commandfor="${esc}"],[data-dialog-target="${esc}"],[aria-controls="${esc}"]`);
+        if (t) consider(t, d);
+      }
+      return out;
+    });
+  } catch { return null; }
 }
 
 // ------------------------------------------------------------- helpers -----
