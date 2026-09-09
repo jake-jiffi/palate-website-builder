@@ -96,6 +96,24 @@ test("a proportion is not a rating", () => {
   // A whole number IS a rating when something nearby says so. Both directions kept working.
   assert.deepEqual(labels("<p>Rated 5 out of 5 by the Guild.</p>"), ["rating=5"]);
   assert.deepEqual(labels("<p>5 out of 5 stars.</p>"), ["rating=5"]);
+  assert.deepEqual(labels("<p>Scored 5 out of 5.</p>"), ["rating=5"]);
+});
+
+test("a rating word in the PREVIOUS sentence does not license the proportion", () => {
+  // FOUND BY RE-REVIEW: the first guard was a window of twelve non-word characters, and a full
+  // stop and a space fit inside it, so an adjacent sentence reopened the whole class on copy no
+  // less ordinary than the sentence it was written for. A sentence terminator now ends the
+  // window, and a review count no longer licenses anything at all.
+  assert.deepEqual(
+    labels("<p>Rated by 42 reviews. 4 out of 5 customers recommend us. We are rated 4.9 stars.</p>"),
+    ["reviews=42", "rating=4.9"],
+  );
+  assert.deepEqual(labels("<p>4.9 stars. 4 out of 5 clients renew.</p>"), ["rating=4.9"]);
+  assert.deepEqual(labels("<p>42 reviews, 4 out of 5 of them five star.</p>"), ["reviews=42"]);
+  // The same rule on the other side, and the string is the one that actually reaches it: a
+  // rating word OPENING the next sentence sits three characters away and licenses nothing.
+  assert.deepEqual(labels("<p>Renewals run 4 out of 5. Stars are earned here.</p>"), []);
+  assert.deepEqual(labels("<p>5 out of 5 stars.</p>"), ["rating=5"]);
 });
 
 test("a date is not a rating", () => {
@@ -167,6 +185,21 @@ test("a service number and a mobile fold onto their national form", () => {
   assert.deepEqual(labels("<p>Call +61 (0)412 345 678 or 0412 345 678.</p>"), ["phone=0412345678"]);
 });
 
+test("the written trunk zero folds outside Australia too", () => {
+  // FOUND BY RE-REVIEW. The `(0)` strip was deleted in round 2 on a zero-failure mutation, and
+  // the reason given was that the fold already leaves a leading zero alone. That is true inside
+  // the AU branch and false everywhere else, so a UK or NZ site writing both spellings of one
+  // number was permanently in disagreement with itself. A zero-failure mutation means the suite
+  // did not cover the behaviour, not that nothing depended on it.
+  assert.deepEqual(labels("<p>Call +44 (0)20 7946 0958 or 020 7946 0958.</p>"), ["phone=02079460958"]);
+  assert.deepEqual(labels("<p>Call +44 20 7946 0958 or 020 7946 0958.</p>"), ["phone=02079460958"]);
+  assert.deepEqual(labels("<p>Call +64 (0)9 123 4567 or 09 123 4567.</p>"), ["phone=091234567"]);
+  assert.deepEqual(labels("<p>Call +64 21 123 4567 or 021 123 4567.</p>"), ["phone=0211234567"]);
+  // A UK national number is nine or ten digits, so with the country code it is eleven or twelve.
+  // The shorter one is why the fold is keyed on the country code and not on a single length.
+  assert.deepEqual(labels("<p>Call +44 16977 3234 or 016977 3234.</p>"), ["phone=0169773234"]);
+});
+
 test("an ABN is eleven digits under its own label", () => {
   assert.deepEqual(labels("<p>ABN 12 345 678 901</p>"), ["ABN=12345678901"]);
   assert.deepEqual(labels("<p>ABN: 12345678901</p>"), ["ABN=12345678901"]);
@@ -218,15 +251,49 @@ test("a listing card carrying a date is excluded too", () => {
 test("a dated card is excluded whatever element wraps it", () => {
   // The shipped scaffold uses <li> and <article>, both covered, but a hand-built listing grid
   // of <div> or <a> cards is ordinary and that is what a customer build produces.
-  assert.deepEqual(labels('<div class="card"><time datetime="2019-06-01">2019</time><p>38 reviews</p></div>'), []);
-  assert.deepEqual(labels('<a href="/p/1"><time datetime="2019-06-01">2019</time><p>38 reviews</p></a>'), []);
+  //
+  // THE CARDS SIT IN A PAGE, because that is the only condition under which they are cards. A
+  // bare fragment with nothing around it is indistinguishable from a page wrapper, and after the
+  // re-review the rule turns on exactly that difference.
+  const page = (card) => `<body><header><h1>Latest</h1></header><main><div class="grid">${card}` +
+    `</div></main><footer><p>Our 42 reviews are published in full.</p></footer></body>`;
+  assert.deepEqual(labels(page('<div class="card"><time datetime="2019-06-01">2019</time><p>38 reviews</p></div>')), ["reviews=42"]);
+  assert.deepEqual(labels(page('<a href="/p/1"><time datetime="2019-06-01">2019</time><p>38 reviews</p></a>')), ["reviews=42"]);
 });
 
-test("a dated element does not swallow the page around it", () => {
-  // The bound that makes the rule above safe. A <div> wrapping the whole body, with a
-  // copyright <time> somewhere inside it, must not silence every claim on the page.
-  const page = `<div id="app"><p>42 reviews</p>${"<p>filler</p>".repeat(400)}<footer><time datetime="2026">2026</time></footer></div>`;
-  assert.deepEqual(labels(page), ["reviews=42"]);
+test("a dated element does not swallow the page around it, at any size", () => {
+  // FOUND BY RE-REVIEW, and it is the important one: the guard was a 4,000-character bound, and
+  // an ordinary built page body is smaller than that, so a whole small page wrapped in an app
+  // div with a copyright <time> read as nothing at all. Every page in the committed fixture is
+  // under 745 bytes. SIZE WAS THE WRONG AXIS: a card is a card because it sits INSIDE the page,
+  // not because it is short. A block holding a page landmark, or covering nearly the whole
+  // document, is the page.
+  const small = `<div id="app"><p>42 reviews</p><p>Phone (02) 9876 5432.</p>` +
+    `<footer><time datetime="2026">2026</time></footer></div>`;
+  assert.deepEqual(labels(small), ["reviews=42", "phone=0298765432"]);
+  // The tel: href is read from the same stripped body, so it went too. It comes back.
+  assert.deepEqual(
+    labels(`<div id="app"><a href="tel:+61298765432">Call</a><time datetime="2026">2026</time></div>`),
+    ["phone=0298765432"],
+  );
+  // No landmark at all, and the wrapper is still almost the whole document.
+  assert.deepEqual(labels(`<div><p>42 reviews</p><time datetime="2026">2026</time></div>`), ["reviews=42"]);
+  const big = `<div id="app"><p>42 reviews</p>${"<p>filler</p>".repeat(400)}<footer><time datetime="2026">2026</time></footer></div>`;
+  assert.deepEqual(labels(big), ["reviews=42"]);
+  // A REAL PAGE HAS A HEAD, and that is what the landmark half of the rule is for. Here the app
+  // div is well under the share threshold because the head carries the weight, so only the
+  // `<footer>` inside it says this block is a page region rather than a card.
+  const withHead = `<html><head><title>Northshore Joinery</title>` +
+    `<meta name="description" content="${"Cabinetmakers on Sydney's north shore. ".repeat(12)}">` +
+    `</head><body><div id="app"><p>42 reviews</p>` +
+    `<footer><time datetime="2026">2026</time></footer></div></body></html>`;
+  assert.ok(withHead.indexOf("<div") > withHead.length * 0.4, "the head must outweigh the div or this proves nothing");
+  assert.deepEqual(labels(withHead), ["reviews=42"]);
+  // And the card it was widened for is still excluded, inside a real page.
+  const listing = `<body><header><h1>Latest</h1></header><main><div class="grid">` +
+    `<div class="card"><time datetime="2019-06-01">2019</time><p>38 reviews</p></div>` +
+    `</div></main><footer><p>Phone (02) 9876 5432.</p></footer></body>`;
+  assert.deepEqual(labels(listing), ["phone=0298765432"]);
 });
 
 test("a page whose own JSON-LD calls it an article is a dated entry, whole", () => {
@@ -424,16 +491,33 @@ function fixtureSite(name) {
 }
 
 test("the adversarial fixture is silent, and not because it read nothing", () => {
-  // THIS IS THE MEASUREMENT. Five pages of ordinary trade copy that contradict nothing, carrying
-  // every shape known to have misfired: an out-of-five proportion, three written dates, prices,
-  // order numbers, a code sample, a retired number in a pre block, a product grid of ratings,
-  // one phone in two conventions, one ABN in two spellings, two year claims in one sentence, and
-  // a 2019 post quoting the review count of its day. A check that fires here gets switched off.
+  // THIS IS THE MEASUREMENT. Seven pages of ordinary trade copy that contradict nothing, carrying
+  // every shape known to have misfired: an out-of-five proportion after a review count, three
+  // written dates, prices, order numbers, a code sample, a retired number in a pre block, a
+  // product grid of ratings, one phone in two conventions, one ABN in two spellings, two year
+  // claims in one sentence, a page wrapped in an app div with a copyright time, and a 2019 post
+  // quoting the review count of its day. A check that fires here gets switched off in a week.
+  //
+  // THE VALUE COUNT IS THE REGRESSION DETECTOR and it is pinned deliberately. Reverting the
+  // proportion guard takes it to 30 with six ratings; reverting the dated-block fix takes it to
+  // 24, because the whole services page goes quiet. Both were watched.
   const r = runMerged(fixtureSite("fixture-clean"));
   assert.match(r.out, /gate-facts: clean/, r.out);
   assert.match(r.out, /inspected 7 page\(s\), 29 labelled value\(s\)/, r.out);
   // The catalogue is the one label set aside, which is the honest outcome rather than a miss.
   assert.match(r.out, /1 label\(s\) set aside as a list rather than a claim: rating \(5 values\)/, r.out);
+});
+
+test("the fixture's only ratings are the ones the catalogue really carries", () => {
+  // The set-aside rule means a rating clash can never be REPORTED on this fixture, so the class
+  // it was built for would show only as a count. This names the values instead: five card
+  // ratings and the site's own 4.9, and no proportion smuggled in among them.
+  const out = runMerged(fixtureSite("fixture-ratings"), "--all").out;
+  for (const v of ["3.9", "4.2", "4.5", "4.7", "4.9"]) {
+    assert.match(out, new RegExp(`^ +${v.replace(".", "\\.")} {2}on `, "m"), out);
+  }
+  assert.doesNotMatch(out, /^ +4 {2}on /m, out);
+  assert.doesNotMatch(out, /^ +5 {2}on /m, out);
 });
 
 test("the same fixture fires the moment one number disagrees", () => {

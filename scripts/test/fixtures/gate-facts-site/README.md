@@ -26,6 +26,8 @@ What is deliberately planted, and which false positive each one is the regressio
 | `/about` | `25 years in the trade, 20 years in business` | two claims sharing a word |
 | `/blog/2019-milestone` | `38 reviews`, in a page declaring itself a BlogPosting | a dated entry quoting its own day |
 | `/blog` | a listing of `<div>` cards each carrying a `<time datetime>` | a dated card in a hand-built wrapper |
+| `/services` | the whole body inside `<div id="app">` with a copyright `<time>` in its footer | a page silenced wholesale by the dated-block rule |
+| `/` | `Rated by 42 reviews. 4 out of 5 customers recommend us` | a rating word in the previous sentence licensing a proportion |
 
 The real facts, consistent everywhere they appear: 42 reviews, 4.9 stars, `(02) 9876 5432`,
 ABN 12345678901, Mon-Fri 09:00 to 17:00, Sat 09:00 to 13:00.

@@ -99,11 +99,18 @@ function closeOf(html, tag, from) {
  *
  * FOUR WRAPPERS, NOT TWO. `<article>` is the post and `<li>` is the listing card, which is what
  * the shipped scaffold emits, and a hand-built listing grid of `<div>` or `<a>` cards is just as
- * ordinary on a customer build. `CARD_BYTES` is what makes the loose two safe: a `<div>` holding
- * a whole page body, with a copyright `<time>` in its footer, would otherwise silence every
- * claim on the page. A card is small; a page wrapper is not.
+ * ordinary on a customer build. Those two are loose enough to need a bound, and the first bound
+ * was the wrong one.
+ *
+ * SIZE IS THE WRONG AXIS. The bound was 4,000 characters, and an ordinary built page body is
+ * smaller than that: every page in this repo's own fixture is under 745 bytes, so a whole page
+ * wrapped in an app div with a copyright `<time>` in its footer read as nothing at all, which is
+ * exactly what the bound was written to prevent. A card is a card because it sits INSIDE the
+ * page, not because it is short. So a `<div>` or `<a>` is only a card when it holds no page
+ * landmark and does not cover nearly the whole document.
  */
-const CARD_BYTES = 4000;
+const PAGE_REGION = /<(?:main|header|footer|nav|h1|article)\b/i;
+const PAGE_SHARE = 0.8;
 function stripDatedBlocks(html) {
   let out = html;
   for (const tag of ["article", "li", "a", "div"]) {
@@ -116,7 +123,8 @@ function stripDatedBlocks(html) {
       if (end < 0) continue;                       // unbalanced markup: leave it alone
       const block = out.slice(m.index, end);
       if (!/\bdatetime\s*=/i.test(block)) continue;
-      if ((tag === "a" || tag === "div") && block.length > CARD_BYTES) continue;
+      if ((tag === "a" || tag === "div")
+          && (PAGE_REGION.test(block) || block.length > out.length * PAGE_SHARE)) continue;
       keep.push(out.slice(last, m.index));
       last = end;
       open.lastIndex = end;
@@ -164,13 +172,20 @@ const digitsOf = (s) => s.replace(/\D/g, "");
  *
  * THE LENGTH-KEYED FOLDS MISSED THE TWELVE-DIGIT SHAPES. `+61 1300 123 456` is twelve digits
  * and kept its country code while `1300 123 456` did not, so the two spellings of one service
- * number disagreed. The AU fold is now keyed on the country code rather than on a length that
- * varies by number type, and it restores the trunk zero only when the number does not already
- * carry one, which is what makes `+61 (0)412 345 678` and `0412 345 678` the same number
- * without needing to know the brackets were there.
+ * number disagreed. Every fold is now keyed on the country code rather than on a length that
+ * varies by number type.
+ *
+ * THE `(0)` STRIP WAS DELETED ONCE AND CAME BACK. A mutation check returned zero failures and
+ * the conclusion drawn was that nothing depended on it, because the AU branch preserves a
+ * leading zero it already finds. That reasoning holds only inside the AU branch: `+44 (0)20 7946
+ * 0958` folded to thirteen digits against `020 7946 0958`, so a UK or NZ site writing both
+ * spellings of one number argued with itself. A zero-failure mutation means the SUITE did not
+ * cover the behaviour, not that nothing did.
  */
 export function normalisePhone(raw) {
-  let d = digitsOf(raw);
+  // One number written for two audiences at once. The bracketed trunk digit belongs to the
+  // national form and is never dialled internationally.
+  let d = digitsOf(String(raw).replace(/\(\s*0\s*\)/g, ""));
   if (d.startsWith("00")) d = d.slice(2);                                  // international access code
   if (d.startsWith("61") && d.length >= 10 && d.length <= 12) {            // AU, landline mobile or service
     const rest = d.slice(2);
@@ -178,7 +193,8 @@ export function normalisePhone(raw) {
     // number nobody dials. Everything else gains the zero the national form is written with.
     return rest.startsWith("0") || /^1[38]00/.test(rest) ? rest : "0" + rest;
   }
-  if (d.length === 12 && d.startsWith("44")) return "0" + d.slice(2);      // UK
+  if (d.startsWith("44") && d.length >= 11 && d.length <= 12) return "0" + d.slice(2);  // UK
+  if (d.startsWith("64") && d.length >= 9 && d.length <= 11) return "0" + d.slice(2);   // NZ
   if (d.length === 11 && d.startsWith("1")) return d.slice(1);             // NANP
   return d;
 }
@@ -240,8 +256,15 @@ const P_OUT_OF_5 = /(?<![\d.,\/])(\d+(?:\.\d+)?)\s*(?:\/\s*5(?!\s*[\/\d])|\bout\
 // reading them as a rating put them in argument with the site's real 4.9 on the same page. A
 // decimal is self-evidently a measured average; a whole number needs something nearby to say
 // so, which "rated 5 out of 5" and "5 out of 5 stars" both do.
-const RATING_WORD_BEFORE = /\b(?:rated|rating|rate|scored?|stars?|reviews?)\W{0,12}$/i;
-const RATING_WORD_AFTER = /^\W{0,3}(?:stars?|★|rating)\b/i;
+//
+// ADJACENT, NOT NEARBY. The first version allowed twelve non-word characters between the rating
+// word and the number, and a full stop and a space fit inside that, so "42 reviews. 4 out of 5
+// customers recommend us." reopened the whole class from the previous sentence. A sentence
+// terminator now ends the window. `reviews?` is gone from the leading set for the same reason:
+// a review count in front of a proportion is the commonest way the two collide, and it licenses
+// nothing on its own.
+const RATING_WORD_BEFORE = /\b(?:rated|rating|rate|scored?)[^\w.!?;]{0,4}$/i;
+const RATING_WORD_AFTER = /^[^\w.!?;]{0,3}(?:stars?|★|rating)\b/i;
 const P_RATING_OF = /\brating\b\s*(?:of|is|:)?\s*(?<![\d.,])(\d+(?:\.\d+)?)/gi;
 // THE QUALIFIER IS PART OF THE LABEL, and it was not until a clean fixture proved it had to
 // be. "25 years in the trade, 20 years in business under this name" is one ordinary sentence
@@ -252,7 +275,12 @@ const P_YEARS = /(?:\b(?:over|more\s+than|for\s+over|with\s+over|almost|nearly)\
 const P_ABN = /\bABN\b\s*(?:no\.?|number)?\s*:?\s*((?:\d[\s-]?){10}\d)/gi;
 // A run of digits and phone punctuation. Validated afterwards rather than in the pattern,
 // because the pattern that tries to express "is a phone number" catches years and prices.
-const P_PHONE_TEXT = /[+(]?\d[\d\s().+-]{6,}\d/g;
+//
+// A FULL STOP ONLY COUNTS WHEN A DIGIT FOLLOWS IT. Allowing it anywhere let a run cross a
+// sentence boundary: "Phone (02) 9876 5432. 2026" read as one fourteen-digit number, which is a
+// phone number nobody has and a disagreement nobody can act on. `555.123.4567` still reads as
+// one run, and `01.05.2024` still reaches the date guard below.
+const P_PHONE_TEXT = /[+(]?\d(?:[\d\s()+-]|\.(?=\d)){6,}\d/g;
 const P_TEL_HREF = /href\s*=\s*["']tel:([^"']+)["']/gi;
 const DAYS = "mon|monday|tues|tue|tuesday|weds|wed|wednesday|thurs|thur|thu|thursday|fri|friday|sat|saturday|sun|sunday|weekdays|weekday|weekends|weekend";
 const P_HOURS = new RegExp(
