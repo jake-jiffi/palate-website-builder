@@ -473,6 +473,14 @@ if [ -n "$ca_skip" ]; then gate_skipped customer-auth "$ca_skip"; else gate_ran;
 FACTS_GATE="$HERE/gate-facts.mjs"
 facts_note="facts=skipped"
 facts_skip="gate-facts.mjs not present"
+# A COUNT WITH NO ROUTE TO THE DETAIL IS A FINDING NOBODY CAN ACT ON, which is the shape this
+# whole epic is closing. "facts=2 disagreement(s)" tells an operator something is wrong and not
+# what, and only somebody who already knows this script exists can find out. So the summary
+# carries the command, the way the MCP rung above carries `claude mcp add`. Empty unless there
+# is something to look at, and it leads with a newline so it lands as its own INDENTED line:
+# the Stop hook forwards a matched headline's indented continuation lines, so it travels with
+# the summary rather than being dropped.
+facts_detail=""
 if [ -f "$FACTS_GATE" ]; then
   if facts_err="$(node "$FACTS_GATE" "$PROJ" 2>&1)"; then facts_rc=0; else facts_rc=$?; fi
   facts_first="${facts_err%%$'\n'*}"
@@ -481,7 +489,8 @@ if [ -f "$FACTS_GATE" ]; then
     0) case "$facts_first" in
          clean*) facts_note="facts=clean"; facts_skip="" ;;
          [0-9]*disagreement*)
-           facts_note="facts=${facts_first%% *} disagreement(s)"; facts_skip="" ;;
+           facts_note="facts=${facts_first%% *} disagreement(s)"; facts_skip=""
+           facts_detail=$'\n'"  Facts: ${facts_first%% *} label(s) carry two values across pages. Advisory, nothing is blocked. See both values and a page carrying each: node \"$FACTS_GATE\" \"$PROJ\"" ;;
          # Exit 0 with a line this shell does not recognise is the gate having changed its
          # wording, not the site being clean. Say so rather than printing a bill of health.
          *) facts_skip="gate-facts printed an unrecognised result" ;;
@@ -636,5 +645,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $fidelity_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
+  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $fidelity_note, $uniq_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
 exit 0

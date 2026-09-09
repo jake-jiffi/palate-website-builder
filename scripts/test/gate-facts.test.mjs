@@ -387,9 +387,22 @@ test("the done gate folds the count in and does not block on it", () => {
   assert.doesNotMatch(r.out, /Done gate FAILED/, r.out);
 });
 
-test("the done gate reports a clean facts pass as clean", () => {
+test("the summary names the command that prints the detail", () => {
+  // A count with no route to it is a finding nobody can act on. The operator should not have
+  // to already know this script exists, and the line has to be INDENTED or the Stop hook drops
+  // it: it forwards a matched headline's indented continuation lines and nothing else.
+  const dir = doneProject("done-detail", { "/": "<p>42 reviews</p>", "/about": "<p>41 reviews</p>" });
+  const r = done(dir);
+  assert.match(r.out, /^ {2}Facts: 1 label\(s\) carry two values across pages\./m, r.out);
+  assert.match(r.out, /node "[^"]*gate-facts\.mjs" "[^"]*done-detail"/, r.out);
+});
+
+test("the done gate reports a clean facts pass as clean, and says nothing more", () => {
   const dir = doneProject("done-clean", { "/": "<p>42 reviews</p>", "/about": "<p>42 reviews</p>" });
-  assert.match(done(dir).out, /facts=clean/);
+  const r = done(dir);
+  assert.match(r.out, /facts=clean/, r.out);
+  // No pointer when there is nothing to point at: the summary is read every build.
+  assert.doesNotMatch(r.out, /^ {2}Facts:/m, r.out);
 });
 
 test("with no dist the done gate reports facts as skipped, with a reason", () => {
