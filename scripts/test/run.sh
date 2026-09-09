@@ -4,15 +4,24 @@
 # absence for weeks.
 #
 # Usage: scripts/test/run.sh [--fast]
-#   --fast  skip the browser-driven suites (hygiene-loop, verify-rendered-a11y,
-#           template-csp-live), which need Playwright and take minutes. template-csp-live
-#           also npm-installs and builds the template, which is the only honest way to prove
-#           a Content-Security-Policy.
+#   --fast  skip the browser-driven and build-driven suites, which need Playwright or an npm
+#           install and take minutes. template-csp-live, board-components, boards-render,
+#           explore-page-boards and gate-fidelity all install and build the template, which is
+#           the only honest way to prove a policy, a render or a fidelity comparison.
+#
+# THE SLOW LIST COVERS BOTH LOOPS. It used to be consulted only for the shell suites, so a
+# browser suite written as a .test.mjs ran under --fast whatever the list said.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 FAST=0; for a in "$@"; do [ "$a" = "--fast" ] && FAST=1; done
-SLOW="hygiene-loop verify-rendered-a11y template-csp-live"
+SLOW="hygiene-loop verify-rendered-a11y template-csp-live board-components boards-render explore-page-boards gate-fidelity"
 pass=0; fail=0; skipped=0; failed_names=""
+
+is_slow() { # <suite-name>; true when --fast should skip it
+  [ "$FAST" = "1" ] || return 1
+  case " $SLOW " in *" $1 "*) return 0 ;; esac
+  return 1
+}
 
 run() { # label  command...
   local label="$1"; shift
@@ -28,14 +37,16 @@ echo "shell suites"
 for t in "$DIR"/*.test.sh; do
   [ -e "$t" ] || continue
   n="$(basename "$t" .test.sh)"
-  case " $SLOW " in *" $n "*) [ "$FAST" = "1" ] && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; };; esac
+  is_slow "$n" && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; }
   run "$n" bash "$t"
 done
 
 echo "node suites"
 for t in "$DIR"/*.test.mjs; do
   [ -e "$t" ] || continue
-  run "$(basename "$t" .test.mjs)" node --test "$t"
+  n="$(basename "$t" .test.mjs)"
+  is_slow "$n" && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; }
+  run "$n" node --test "$t"
 done
 
 echo "---"

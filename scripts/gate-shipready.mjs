@@ -109,17 +109,36 @@ if (picked) {
   if (variantPages.length) {
     add("Explore not retired", `${variantPages.length} variant route(s) still live (${variantPages.slice(0, 4).join(", ")}${variantPages.length > 4 ? ", ..." : ""}) after the client picked. These are REJECTED concepts on the client's domain.`);
   }
+  // THE BOARDS ARE THE CURRENT SHAPE OF THE SAME FAULT. `/boards/bN` and `public/_explore/`
+  // are working documents for one client: they name the directions that were NOT chosen, and
+  // the card images are stills of them. Left in place they are routed, crawlable and served to
+  // answer engines exactly as the eight rejected homepages were.
+  const boardsDir = join(dir, "src/pages/boards");
+  if (existsSync(boardsDir)) {
+    let boardPages = [];
+    try { boardPages = readdirSync(boardsDir).filter((f) => f.endsWith(".astro")); } catch { /* unreadable */ }
+    add(
+      "Explore not retired",
+      `src/pages/boards/ still exists${boardPages.length ? ` with ${boardPages.length} board route(s) (${boardPages.slice(0, 4).join(", ")}${boardPages.length > 4 ? ", ..." : ""})` : ""} after the client picked. Archive it to _explore-archive/ or delete it: these are the directions they did not choose.`,
+    );
+  }
+  if (existsSync(join(dir, "public/_explore"))) {
+    add(
+      "Explore not retired",
+      "public/_explore/ still exists after the client picked. It holds the board stills and the calibration captures, which ship to the client's own domain as images of the work they turned down.",
+    );
+  }
   if (existsSync(join(dir, "src/pages/explore.astro"))) {
     add("Explore not retired", "src/pages/explore.astro is still live. It is a working document for one client (it names the rejected directions and coaches the choice), not a page of the site.");
   }
   const vts = read("src/lib/variants.ts");
-  if (vts && /\{\s*id:\s*["'](v|lp)\d+/.test(vts)) {
-    add("Explore not retired", "src/lib/variants.ts still registers variants, so the direction picker renders on the delivered site.");
+  if (vts && /\{\s*id:\s*["'](v|lp|b)\d+/.test(vts)) {
+    add("Explore not retired", "src/lib/variants.ts still registers boards, so the direction picker renders on the delivered site.");
   }
   for (const sm of ["dist/sitemap-0.xml", ".vercel/output/static/sitemap-0.xml", "public/sitemap-0.xml"]) {
     const x = read(sm);
-    if (x && /\/(v|lp)\d+\/?</.test(x)) {
-      const n = (x.match(/\/(v|lp)\d+\/?</g) || []).length;
+    if (x && /\/(v|lp)\d+\/?<|\/boards\/[^<]*</.test(x)) {
+      const n = (x.match(/\/(v|lp)\d+\/?<|\/boards\/[^<]*</g) || []).length;
       add("Explore not retired", `${sm} advertises ${n} variant URL(s). They will be crawled, indexed and fed to answer engines.`);
       break;
     }

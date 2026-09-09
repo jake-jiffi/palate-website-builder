@@ -143,6 +143,75 @@ else
   echo "FAIL - a novelty skip is counted as a skip, not a pass (got: $summary)"; fail=$((fail+1))
 fi
 
+# --- THE FIDELITY GATE IS IN THE SUMMARY, AND ITS SKIP CARRIES A REASON -----------------
+# It is the only check on the one promise Explore makes, so its absence from the line is the
+# same failure as a skip that reads as a pass: nobody can tell it did not run.
+if printf '%s' "$summary" | grep -qE 'fidelity=skipped'; then
+  echo "ok   - the fidelity gate is in the summary"; pass=$((pass+1))
+else
+  echo "FAIL - the fidelity gate is in the summary (got: $summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$summary" | grep -qF 'fidelity: no picks recorded'; then
+  echo "ok   - and its skip says why"; pass=$((pass+1))
+else
+  echo "FAIL - and its skip says why (got: $summary)"; fail=$((fail+1))
+fi
+
+# A build WITH picks but no motion proof skips for the OTHER reason, because "no picks" on a
+# build that has picks would send somebody looking in the wrong place.
+#
+# THE TRIGGER IS COMPOSE'S OWN RECORD, NOT THE FILE. It used to be "picks exist and
+# src/pages/index.astro exists", and the scaffold SHIPS src/pages/index.astro, so between /pick
+# and Compose the gate read the template's home page, found no data-palate-section and failed
+# with "the built home names no sections". Under PALATE_GATE_STRICT that blocks the stop at the
+# one moment a false block is most expensive. Compose writes explore.proof before any inner page
+# (spec 3.6), so that is the fact that says a home page exists to compare.
+FIDNC="$TMP/fidelity-nocompose"; mkdir -p "$FIDNC/src/pages"
+printf -- '---\n---\n<h1>the scaffold home</h1>\n' > "$FIDNC/src/pages/index.astro"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.explore = { ran: true, picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }] };
+fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
+' "$DEEP" "$FIDNC/build-manifest.json"
+make_shots "$FIDNC" 0
+cp "$PASS/verify-report.json" "$FIDNC/verify-report.json"
+fid_summary="$(bash "$GATE" "$FIDNC/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$fid_summary" | grep -qF 'fidelity: Compose has not recorded the motion proof'; then
+  echo "ok   - a picked build with a scaffold home page skips: Compose has not run"; pass=$((pass+1))
+else
+  echo "FAIL - a picked build with a scaffold home page must not be measured (got: $fid_summary)"; fail=$((fail+1))
+fi
+
+# AND ONCE COMPOSE HAS RECORDED THE PROOF, the gate actually runs. Without this the change
+# above could be "never run the fidelity gate", which passes the assertion above and protects
+# nothing. It gets as far as its own refusal (there are no archived board renders here), which
+# is a DIFFERENT reason and is what proves the trigger fired.
+FIDP="$TMP/fidelity-proof"; mkdir -p "$FIDP/src/pages"
+printf -- '---\n---\n<h1>the composed home</h1>\n' > "$FIDP/src/pages/index.astro"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.explore = {
+  ran: true,
+  picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-09T00:00:00Z" }],
+  proof: { url: "https://preview.example.com/", verified_at: "2026-09-09T00:05:00Z" },
+};
+fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
+' "$DEEP" "$FIDP/build-manifest.json"
+make_shots "$FIDP" 0
+cp "$PASS/verify-report.json" "$FIDP/verify-report.json"
+fidp_summary="$(bash "$GATE" "$FIDP/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$fidp_summary" | grep -qF 'fidelity: no picks recorded'; then
+  echo "FAIL - the gate still reports no picks on a build that has them (got: $fidp_summary)"; fail=$((fail+1))
+elif printf '%s' "$fidp_summary" | grep -qF 'fidelity: Compose has not recorded the motion proof'; then
+  echo "FAIL - the motion proof is recorded and the gate still says it is not (got: $fidp_summary)"; fail=$((fail+1))
+elif printf '%s' "$fidp_summary" | grep -qF 'fidelity: '; then
+  echo "ok   - a recorded motion proof makes the gate run, and it skips for its own reason"; pass=$((pass+1))
+else
+  echo "FAIL - the fidelity gate reported nothing at all (got: $fidp_summary)"; fail=$((fail+1))
+fi
+
 # --- SHIPREADY'S OTHER EXIT-2 REASONS ARE NOT ALL "not an Astro project shape" ---------
 # This epic gave gate-shipready two more exit-2 paths (nothing to inspect, and a refusal), and
 # the mapping still labelled every one of them with the one reason it knew. src/pages exists

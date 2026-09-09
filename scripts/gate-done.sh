@@ -265,10 +265,13 @@ if [ "${PALATE_GATE_BOLD:-1}" = "1" ] && [ "$intensity" = "high" ]; then
   # (c) built Explore (the surprise engine): a bold brief must not collapse to one concept
   explore_skip=$(jq -r '(.commission.explore_skip // false)' "$MANIFEST" 2>/dev/null || echo false)
   if [ "${PALATE_GATE_EXPLORE:-1}" = "1" ] && [ "$explore_skip" != "true" ]; then
-    MIN_VARIANTS="${PALATE_MIN_VARIANTS:-2}"
-    case "$MIN_VARIANTS" in ''|*[!0-9]*) MIN_VARIANTS=2 ;; esac   # numeric-only, so a garbage env can't wrongly block
-    nvar=$(jq -r '((.variants // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
-    [ "${nvar:-0}" -ge "$MIN_VARIANTS" ] || fail "Bold bar: Explore collapsed to concept-level - a high-intensity brief built only ${nvar:-0} variant(s) (need >= $MIN_VARIANTS). Build the distinct routes, or record commission.explore_skip=true with the named-direction reason. $escalate"
+    # PALATE_MIN_BOARDS, default 3. Explore builds BOARDS now, not eight complete pages, so the
+    # floor moved with the unit of work: three rungs is the fewest a client can point BETWEEN.
+    # PALATE_MIN_VARIANTS is still honoured for a site mid-flight on the old shape.
+    MIN_BOARDS="${PALATE_MIN_BOARDS:-${PALATE_MIN_VARIANTS:-3}}"
+    case "$MIN_BOARDS" in ''|*[!0-9]*) MIN_BOARDS=3 ;; esac   # numeric-only, so a garbage env can't wrongly block
+    nvar=$(jq -r '(((.explore.boards // []) | length) as $b | ((.variants // []) | length) as $v | if $b > $v then $b else $v end)' "$MANIFEST" 2>/dev/null || echo 0)
+    [ "${nvar:-0}" -ge "$MIN_BOARDS" ] || fail "Bold bar: Explore collapsed to concept-level - a high-intensity brief built only ${nvar:-0} board(s) (need >= $MIN_BOARDS). Build the distinct rungs, or record commission.explore_skip=true with the named-direction reason. $escalate"
   fi
 fi
 
@@ -470,16 +473,24 @@ UNIQ_GATE="$HERE/gate-uniqueness.mjs"
 uniq_note="uniqueness=skipped"
 uniq_skip="gate-uniqueness.mjs not present"
 if [ -f "$UNIQ_GATE" ]; then
-  uniq_skip="fewer than 2 rendered variants to compare"
+  uniq_skip="fewer than 2 rendered boards or variants to compare"
   uniq_note="uniqueness=skipped"
-  # shellcheck disable=SC2207
-  uniq_files=($(ls "$SHOTS_DIR"/v*/rendered.html 2>/dev/null || true))
-  if [ "${#uniq_files[@]}" -ge 2 ]; then
-    if uniq_err="$(node "$UNIQ_GATE" "${uniq_files[@]}" 2>&1)"; then
-      uniq_note="uniqueness=pass(${#uniq_files[@]} variants)"; uniq_skip=""
-    else
-      fail "Variants are not distinct enough to show. ${uniq_err}"
-    fi
+  # THE GATE FINDS ITS OWN RENDERS. This shell used to glob `.palate-shots/v*/rendered.html`
+  # alone, so the direction boards (which land in `.palate/explore/shots/b*/`) were invisible to
+  # it and every board build reported "fewer than 2 to compare" with five renders on disk.
+  if uniq_err="$(node "$UNIQ_GATE" --project "$PROJ" 2>&1)"; then
+    uniq_n="$(printf '%s' "$uniq_err" | sed -n 's/.*passed: \([0-9]*\) variants.*/\1/p' | head -1)"
+    uniq_note="uniqueness=pass(${uniq_n:-2} compared)"; uniq_skip=""
+  else
+    uniq_rc=$?
+    uniq_first="${uniq_err%%$'\n'*}"
+    case "$uniq_first" in
+      "uniqueness gate: skipped ("*)
+        uniq_skip="${uniq_first#uniqueness gate: skipped (}"
+        uniq_skip="${uniq_skip%%)*}"
+        uniq_note="uniqueness=skipped" ;;
+      *) fail "Boards are not distinct enough to show. ${uniq_err}" ;;
+    esac
   fi
 fi
 if [ -n "$uniq_skip" ]; then gate_skipped uniqueness "$uniq_skip"; else gate_ran; fi
@@ -514,6 +525,60 @@ if [ -f "$EXPLORE_GATE" ]; then
 fi
 if [ -n "$explore_skip_reason" ]; then gate_skipped explore "$explore_skip_reason"; else gate_ran; fi
 
+# FIDELITY: did the built home page carry the direction the client actually picked?
+#
+# This is the one promise Explore makes that nothing checked. The failure worth catching is not
+# a wrong page, which somebody notices, but a PLAUSIBLE one: the same layout in a slightly
+# different accent, the same accent at a different type scale, the picked section quietly
+# dropped because it was awkward to compose. Invisible side by side, obvious when measured.
+#
+# IT WAITS FOR COMPOSE'S OWN RECORD, NEVER FOR THE FILE. The trigger was "picks exist and
+# src/pages/index.astro exists", and the SCAFFOLD SHIPS src/pages/index.astro, so the second
+# test was true from the moment the site was created. Between /pick and Compose, a Stop-hook run
+# read the template's home page, found no data-palate-section on it, and failed with "the built
+# home names no sections"; under PALATE_GATE_STRICT that blocks the stop at the one moment a
+# false block costs the most. Compose writes explore.proof before any inner page is built
+# (spec 3.6), so that stamp is the honest signal that there is a composed home to compare, and
+# making the gate wait for it is what makes the stamp load-bearing rather than decorative.
+#
+# Same discriminator as the SEO and Explore branches: exit 2 with `gate-fidelity: skipped (` on
+# the first stderr line is a skip, any other exit 2 or an exit 1 is a block.
+FIDELITY_GATE="$HERE/gate-fidelity.mjs"
+fidelity_note="fidelity=skipped"
+fidelity_skip="gate-fidelity.mjs not present"
+if [ -f "$FIDELITY_GATE" ] && [ "${PALATE_GATE_FIDELITY:-1}" = "1" ]; then
+  # THE REASON FOLLOWS THE WORKFLOW ORDER: boards, then a pick, then Compose. A build with no
+  # picks is reported as having no picks whether or not a home page exists, because "Compose
+  # has not run" on a build nobody has picked from sends the reader to the wrong step.
+  fidelity_skip="no picks recorded"
+  npicks=$(jq -r '((.explore.picks // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
+  proof=$(jq -r '(.explore.proof.verified_at // .explore.proof.url // empty)' "$MANIFEST" 2>/dev/null || echo "")
+  if [ "${npicks:-0}" -lt 1 ]; then
+    fidelity_skip="no picks recorded"
+  elif [ -z "$proof" ]; then
+    fidelity_skip="Compose has not recorded the motion proof for src/pages/index.astro yet"
+  else
+    if fid_err="$(node "$FIDELITY_GATE" "$PROJ" 2>&1)"; then fid_rc=0; else fid_rc=$?; fi
+    fid_first="${fid_err%%$'\n'*}"
+    case "$fid_rc" in
+      0) fidelity_note="fidelity=pass"; fidelity_skip="" ;;
+      2)
+        case "$fid_first" in
+          "gate-fidelity: skipped ("*)
+            fidelity_skip="${fid_first#gate-fidelity: skipped (}"
+            fidelity_skip="${fidelity_skip%)}"
+            if [ "${#fidelity_skip}" -gt 100 ]; then fidelity_skip="${fidelity_skip:0:99}…"; fi
+            fidelity_note="fidelity=skipped" ;;
+          *) fail "The built home has drifted from the direction the client picked. ${fid_err}" ;;
+        esac ;;
+      *) fail "The built home has drifted from the direction the client picked. ${fid_err}" ;;
+    esac
+  fi
+else
+  [ "${PALATE_GATE_FIDELITY:-1}" = "1" ] || fidelity_skip="PALATE_GATE_FIDELITY=0"
+fi
+if [ -n "$fidelity_skip" ]; then gate_skipped fidelity "$fidelity_skip"; else gate_ran; fi
+
 bold_note="bold-bar=n/a(calm)"
 if [ "${intensity:-calm}" = "high" ]; then bold_note="bold-bar=enforced"; fi
 
@@ -530,5 +595,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $explore_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
+  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $explore_note, $fidelity_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
 exit 0
