@@ -164,6 +164,49 @@ test('orphans are not computed when no link was parsed at all', () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('Explore scaffolding is neither a dead link nor an orphan, in either direction', () => {
+  // MEASURED ON THE MERGED TREE BEFORE THIS TEST EXISTED: a scaffold with two boards registered
+  // and no dist reported orphans ["/404","/blog","/boards/b1","/boards/b2","/contact"]. The
+  // boards are reached from /explore and from the switcher through `href={v.href}`, which is an
+  // expression and not a literal, so a source read cannot see the link; `/explore` escapes only
+  // because the switcher happens to carry a literal href to it. `/publish` reads the report, and
+  // a board route is scaffolding either way: it is deleted at Compose and it was never meant to
+  // be linked from the site.
+  const dir = site({
+    'src/pages/index.astro': '---\nimport L from "../layouts/L.astro";\n---\n<L /><a href="/contact">c</a>',
+    'src/pages/contact.astro': '<h1>c</h1>',
+    'src/pages/explore.astro': '<h1>directions</h1>',
+    'src/pages/boards/b1.astro': '<h1>b1</h1>',
+    'src/pages/boards/b2.astro': '<h1>b2</h1>',
+    'src/pages/v3.astro': '<h1>v3</h1>',
+    'src/layouts/L.astro': '<a href="/contact">c</a>',
+  });
+  try {
+    const ix = buildIndex(dir);
+    for (const p of ['/explore', '/boards/b1', '/boards/b2', '/v3']) {
+      assert.ok(!ix.links.orphans.includes(p), `${p} is Explore scaffolding, not an orphan: ${ix.links.orphans}`);
+    }
+    assert.ok(ix.links.orphans.length === 0 || !ix.links.orphans.some((p) => p.startsWith('/boards/')),
+      `a board route reached the orphan list: ${ix.links.orphans}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a board href that outlives its route is not a dead link, and a real one still is', () => {
+  // The mirror case, and the one EXPLORE_ROUTE was written for at `/vN`: a page that still
+  // links a board after Compose has archived it. The link is real, the route is gone, and the
+  // page carrying it is on its way out too, so calling it dead stops a publish over a page that
+  // was meant to go.
+  const dir = site({
+    'src/pages/index.astro': '<a href="/boards/b1">b1</a><a href="/v2">v2</a><a href="/explore">x</a><a href="/gone">dead</a>',
+    'src/pages/contact.astro': '<h1>c</h1>',
+  });
+  try {
+    const ix = buildIndex(dir);
+    assert.deepEqual(ix.links.dead, ['/gone'],
+      `only the genuinely dead href should fire: ${JSON.stringify(ix.links.dead)}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('an asset href in the shared layout is not a dead link', () => {
   // BaseLayout carries <link rel="icon" href="/favicon.svg">. Reading the closure without
   // this filter puts a favicon in every route's link list and then reports it as a broken page.

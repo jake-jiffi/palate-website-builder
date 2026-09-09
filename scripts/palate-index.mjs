@@ -443,6 +443,28 @@ export function buildIndex(projectDir) {
     ? { source: factsFile, readBy: routes.filter((r) => r.dependsOn.includes(factsFile)).map((r) => r.path) }
     : null;
 
+  // EXPLORE SCAFFOLDING IS NOT A PAGE OF THE SITE, in either direction.
+  //
+  // `/explore`, the `/boards/bN` direction boards and the older `/vN` and `/lpN` variants all
+  // exist for one conversation and are archived at Compose. Two reports would otherwise be
+  // wrong about them, and `/publish` reads both as not done:
+  //
+  //   NOT A DEAD LINK. A page that still links a board after Compose has archived it is a real
+  //   href to a route that has gone, and the page carrying it is on its way out too. The built
+  //   page knows that; a source read cannot.
+  //
+  //   NOT AN ORPHAN. This is the half the rename exposed and it was measured on the merged
+  //   tree: a scaffold with two boards and no dist reported orphans ["/404", "/blog",
+  //   "/boards/b1", "/boards/b2", "/contact"]. `/explore` and the switcher reach the boards
+  //   through `href={v.href}`, an expression rather than a literal, so a source read cannot see
+  //   the link at all; `/explore` itself escaped only because the switcher happens to carry a
+  //   literal href to it, which is luck rather than a rule. A board is not meant to be linked
+  //   from the site: it is meant to be handed over once and then deleted.
+  //
+  // gate-seo excludes the same shapes from its sitemap expectation (`IS_VARIANT`), and
+  // gate-shipready fails a hand-over that still carries `src/pages/boards/`.
+  const EXPLORE_ROUTE = (h) => h === '/explore' || /^\/(v|lp)\d+$/.test(h) || /^\/boards\//.test(h);
+
   // Orphans: a published page nothing links to. Not an error (a campaign
   // landing page is legitimately unlinked) which is why it is reported, not
   // failed. Endpoints are excluded: robots.txt is not meant to be linked.
@@ -452,18 +474,11 @@ export function buildIndex(projectDir) {
   // rather than about the site. That is precisely the report the empty graph used to produce.
   const linked = new Set(routes.flatMap((r) => r.links));
   const orphans = linksParsed === 0 ? [] : routes
-    .filter((r) => r.kind === 'static' && r.path !== '/' && !linked.has(r.path))
+    .filter((r) => r.kind === 'static' && r.path !== '/' && !linked.has(r.path) && !EXPLORE_ROUTE(r.path))
     .map((r) => r.path);
 
   // Dead internal links: an href to a path no route serves. Dynamic routes are
   // matched by prefix, since /blog/[slug] serves /blog/anything.
-  //
-  // EXPLORE SCAFFOLDING IS NEVER A DEAD LINK. `/explore` and the `/vN` variants are deleted at
-  // Compose, and the switcher that links them renders nothing once the registry is cleared. The
-  // built page knows that; a source read cannot, so a route falling back to source would report
-  // a dead link to a page that was meant to go, and /publish reads a dead link as not done.
-  // gate-seo already excludes the same shapes from its sitemap expectation.
-  const EXPLORE_ROUTE = (h) => h === '/explore' || /^\/(v|lp)\d+$/.test(h);
   const dynamicPrefixes = routes.filter((r) => r.kind === 'dynamic').map((r) => r.path.replace(/\/\[[^\]]+\]$/, ''));
   const served = new Set(routes.map((r) => r.path));
   const dead = [...new Set(routes.flatMap((r) => r.links))]
