@@ -67,10 +67,41 @@ Nothing in this plugin runs Lighthouse. The doctrine used to say "Lighthouse CI,
   which is why the emulation is not optional.
 - **Accessibility** is a SUBSET of axe, described in `references/audit-dimensions.md`, run at
   three viewports. Clearing it is not a WCAG 2.2 AA pass.
+- **A route whose own status is meant to be non-200 is not failed for returning it.** `/404`
+  answers 404, the browser logs that as a console error, and the console rule filed a High at
+  every viewport, so every sweep on the shipped template exited 1 on a fault nobody could fix.
+  Only the navigation response itself is exempt: a script error or a missing image on `/404`
+  is still a High.
 - **Coverage.** `verify-rendered.sh` renders the first **14 routes** by default and says how
   many it dropped. On a bigger site raise it with `--max-routes <n>`, or pass `--routes` to
   name the ones that matter. A 3,400-page site is measured on 14 pages unless you say
   otherwise, and the summary prints exactly that.
+- **Re-running after a fix.** `--changed <file,...>` renders only the routes those files can
+  reach, and a file the index has never heard of falls wide and says which one.
+  `--changed` rebuilds `.palate/index.json` first, since both the blast radius and every
+  route's hash are read from it and a stale closure narrows to the wrong routes. A file the
+  index cannot place also SETS THE RECORDS ASIDE for that run, because its effect on any hash
+  is unknown too. If every selected route is unchanged the run exits 2, skipped rather than
+  passed. The saving is a ratio of your own sweep: 25s against 187s on a thirty-route fixture,
+  and about 15s of that is the home-route probes, which every run pays whatever it renders. A route whose
+  sources have not changed since it last passed is skipped and printed "unchanged, skipped";
+  the record lives in `.palate-shots/manifest.json` as `{ sourcesHash, renderedHash,
+  passed_at }` per route. Measured on a thirty-route fixture: 25s against a 187s sweep. Run
+  the lanes cheap first, ux-lint before rendered, rendered before vitals.
+  **The hygiene trend reads inside the loop**, not only on a full sweep: a run that swept a
+  different set of routes is compared and its coverage disclosed, and the line names the run it
+  compared against. Only a configuration change (vitals on or off, axe missing) refuses a
+  comparison, because that is a different quantity rather than a different sample.
+- **What the hash covers.** A route's own source, its whole import closure, the content
+  entries it renders (the collection its `getCollection` call names, so editing a post
+  re-renders the post and its listing), and the SHARED inputs no closure has to name: the Astro config, `package.json` and the lockfile, everything
+  under `src/styles` and `src/layouts`, and the CSS those layouts import, which is how the
+  brand package's `tokens.css` and `fonts.css` are reached. Change one of those and every
+  record goes, with the run printing `global inputs changed, all routes re-rendered`.
+- **The sweep before hand-over is `--full`**, which ignores every unchanged-route record.
+  Remote content, `public/` assets and environment values stay outside the hash,
+  so an unchanged source can still render differently.
+  Converge incrementally, certify on a full sweep.
 
 ## Post-deploy smoke checks
 - workers.dev returns 200

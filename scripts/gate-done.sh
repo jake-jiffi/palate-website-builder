@@ -180,9 +180,13 @@ shot_count=$(find "$SHOTS_DIR" -maxdepth 2 -type f -name '*.png' 2>/dev/null | w
 
 # Console errors are an automatic visual fail. Prefer the screenshot driver's own
 # count (the live truth off the running page) over the report's recorded number.
+# PRESENT, not defaulted. `(.console_errors // 0)` read an ABSENT field as a clean render, so
+# a shots manifest written by anything other than the capture driver silently overrode a
+# report that had recorded errors. verify-rendered.mjs now writes its per-route record into
+# this same file and creates it when the capture has not run yet, which makes that reachable.
 console_errors="$verr_report"
 if [ -f "$SHOTS_MANIFEST" ]; then
-  sc=$(jq -r '(.console_errors // 0)' "$SHOTS_MANIFEST" 2>/dev/null || echo 0)
+  sc=$(jq -r 'if has("console_errors") and (.console_errors != null) then .console_errors else "" end' "$SHOTS_MANIFEST" 2>/dev/null || echo "")
   console_errors="${sc:-$verr_report}"
 fi
 [ "${console_errors:-0}" -eq 0 ] || fail "Visual loop has $console_errors console error(s) on the rendered page (see $SHOTS_ERRORS). A thrown build cannot pass; fix the runtime error and re-render."

@@ -338,3 +338,36 @@ test('the summary line is printed on a PASS too, so a lucky pass is still visibl
   assert.match(line, /UNCHANGED/, 'passing by one point on a flat trend is not the same as converging');
   assert.match(line, /HYGIENE ONLY: measured to disagree substantially with the public grade/);
 });
+
+// ------------------------------------------------- the trend across a blast radius ----
+// Once the rendered gate learned to render only a blast radius, every incremental run swept a
+// different route set and the basis refused every comparison. The loop this module exists for
+// was then available on a full sweep and nowhere else, which is precisely when nobody needs it.
+test('a different route set is COMPARED, with its coverage disclosed', () => {
+  const sweep = entry(61, undefined, { ...ON, routes: ['/', '/about', '/contact'] });
+  const radius = entry(75, undefined, { ...ON, routes: ['/'] });
+  assert.equal(sweep.basis, radius.basis, 'the route set is coverage, not configuration');
+  const c = compare(radius, sweep);
+  assert.equal(c.verdict, 'improved', 'the fix loop must be able to read its own result');
+  assert.equal(c.delta, 14);
+  assert.match(c.coverageNote, /swept 1 of the 3 route\(s\)/);
+  const line = trendLine(c, 2);
+  assert.match(line, /IMPROVING/);
+  assert.match(line, /Compared against the run at /, 'the line must say which run it compared with');
+  assert.match(line, /the score is comparable, the coverage is not/);
+});
+
+test('a route set that is not a subset says so differently', () => {
+  const c = compare(entry(70, undefined, { ...ON, routes: ['/pricing'] }), entry(60, undefined, { ...ON, routes: ['/'] }));
+  assert.match(c.coverageNote, /a different route set/);
+});
+
+test('the same route set carries no coverage caveat', () => {
+  assert.equal(compare(entry(70), entry(60)).coverageNote, null);
+});
+
+test('a configuration change is STILL refused across route sets', () => {
+  const c = compare(entry(80, undefined, { ...ON, vitals: false, routes: ['/'] }),
+    entry(61, undefined, { ...ON, vitals: true, routes: ['/', '/about'] }));
+  assert.equal(c.verdict, 'incomparable', '--no-vitals is a different quantity whatever it swept');
+});

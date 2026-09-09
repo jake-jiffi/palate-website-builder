@@ -342,6 +342,17 @@ echo '{"console_errors":0}' > "$NOSTATUS/.palate-shots/manifest.json"
 cp "$PASS/verify-report.json" "$NOSTATUS/verify-report.json"
 check "a shots manifest with no status -> pass (absent is not bad)" 0 "$NOSTATUS/build-manifest.json"
 
+# A shots manifest with NO console_errors field must not be read as a clean render. jq's
+# `// 0` said zero for an absent field, so a manifest written by verify-rendered.mjs before
+# the capture driver ran would have overridden a report that recorded real errors.
+NOCERR="$TMP/no-console-field"; mkdir -p "$NOCERR"
+cp "$DEEP" "$NOCERR/build-manifest.json"
+make_shots "$NOCERR" 0
+echo '{"routes":{"/":{"sourcesHash":"abc","renderedHash":"def","passed_at":"2026-09-09T00:00:00.000Z"}}}' \
+  > "$NOCERR/.palate-shots/manifest.json"
+sed 's/"console_errors": 0/"console_errors": 3/' "$PASS/verify-report.json" > "$NOCERR/verify-report.json"
+check "a shots manifest with no console_errors falls back to the report" 2 "$NOCERR/build-manifest.json"
+
 # --- PROJECT DIR COMES FROM THE MANIFEST, NOT FROM WHERE THE MANIFEST SITS --------
 # A real client build kept build-manifest.json at the repo root and the Astro site (dist/,
 # .palate-shots/, verify-report.json) in a subdirectory. Deriving the project from dirname

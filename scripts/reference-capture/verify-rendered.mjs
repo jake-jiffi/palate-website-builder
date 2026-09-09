@@ -30,17 +30,26 @@
  *   node verify-rendered.mjs --url <base> [--routes /,/contact,/blog] [--out <dir>]
  *
  * Exit codes:
- *   0  clean (no finding at or above High)
+ *   0  clean (no finding at or above High), on a run that rendered at least one route
  *   1  findings at or above High
- *   2  bad arguments
+ *   2  bad arguments, OR every selected route was unchanged and no route was rendered: the run
+ *      is SKIPPED, not passed, and says so
  *   3  a browser could not be launched - the gate is BLOCKED, never a pass
  */
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'fs';
+import { createHash } from 'crypto';
+import { dirname, isAbsolute, join, relative, resolve } from 'path';
 // Commerce route resolution lives with the survey that produces the catalogue.
 // It is a NO-OP without one, so a brochure build is untouched.
 import { resolveDynamic } from '../palate-shopify.mjs';
+// The content graph already knows which routes a changed file can reach, and it fails wide
+// when it cannot tell. Imported rather than reimplemented: two answers to "what does this
+// change affect" is how a narrowed gate ends up narrower than the change.
+import { blastRadius } from '../palate-index.mjs';
 import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { execFileSync } from 'child_process';
 import { measurePage, scoreDesignFacts, DESIGN_MEASURE_VERSION, DESIGN_MEASURE_SHA } from './design-measure.mjs';
 import { measureVitals, scoreVitals, VITALS_SHA } from './vitals.mjs';
 import { score as scoreRubric } from './rubric.mjs';
@@ -93,7 +102,8 @@ function routesFromIndex(indexPath) {
     const reps = [...bySource.values()];
     const picked = [...reps, ...statics];
     return {
-      routes: picked.map((r) => r.path),
+      index: idx,
+      picked,
       reps: reps.length,
       collapsed: dynamic.length - reps.length,
       statics: statics.length,
@@ -102,27 +112,390 @@ function routesFromIndex(indexPath) {
   } catch { return null; }
 }
 
+/**
+ * Rebuild the content index in place. NEVER FATAL: a build with no src/pages, a missing script
+ * or a parse failure leaves whatever index is already there and says what happened, because a
+ * stale index is worse than none only when nobody is told.
+ */
+function rebuildIndex(projectRoot, indexPath) {
+  const script = fileURLToPath(new URL('../palate-index.mjs', import.meta.url));
+  try {
+    execFileSync(process.execPath, [script, projectRoot, '--out', resolve(indexPath)], { stdio: 'pipe' });
+    console.error(`verify-rendered: --changed rebuilt ${indexPath} first, so the blast radius and the route hashes read current source.`);
+  } catch (e) {
+    console.error(
+      `verify-rendered: could not rebuild ${indexPath} (${(e?.message ?? e).toString().split('\n')[0]}). ` +
+      'The blast radius and the route hashes are read from the index ALREADY on disk, which may be stale. ' +
+      'Run palate-index.mjs yourself, or use --full.',
+    );
+  }
+}
+
+/**
+ * WHICH OF THE SELECTED ROUTES A SET OF CHANGED FILES CAN REACH.
+ *
+ * The gate had no memory, so every re-run after every fix paid for the whole site again: one
+ * pass ran past thirty minutes, a check failed at minute twenty-five, and the next pass
+ * re-shot all of it because one file had changed. `--changed` is the answer, and the only way
+ * it can be worse than no narrowing at all is by narrowing WRONG.
+ *
+ * So it fails wide three times over. A file the index has never heard of takes every route
+ * and SAYS which file did it, because silence would read as a clean narrow. A change that
+ * reaches nothing takes every route rather than rendering none, because a gate that inspected
+ * nothing must never look like one that passed. And the blast radius itself comes from
+ * palate-index.mjs, which already falls wide on a config file and on a dynamic import its
+ * parser cannot see.
+ *
+ * A WIDE FALL ALSO SETS THE RECORDS ASIDE, and that is the half the first version missed. It
+ * printed "falling wide", took every route, and then the unchanged-route skip threw nine of
+ * eleven of them away: an unknown file is precisely one whose effect on the hashes is unknown
+ * too, so the routes it touches hash as unchanged and are skipped. The run said it had widened
+ * and rendered the two routes with no record, neither of them one the operator had edited.
+ */
+function narrowToChanged(index, picked, files) {
+  const known = (f) => index.routes.some((r) => r.source === f || (r.dependsOn || []).includes(f))
+    || (index.entries || []).some((e) => e.file === f);
+  const unknown = files.filter((f) => !known(f));
+  for (const f of unknown) console.error(`verify-rendered: ${f} is not in the index, falling wide`);
+  const wide = (why) => {
+    console.error(`verify-rendered: the unchanged-route records are set aside for this run, because ${why}.`);
+    return { picked, concrete: new Map(), wide: true };
+  };
+  if (unknown.length) return wide('a changed file could not be placed in the index, so its effect on any route hash is unknown');
+
+  const blast = blastRadius(index, files);
+  // A dynamic template is selected by its own path (`/blog/[slug]`) while the blast radius names
+  // the PAGE (`/blog/winter-pipes`). Keeping the template alone meant the gate fetched the
+  // literal bracket path, got the site's 404, and recorded a pass for a page it never opened.
+  const concrete = new Map();
+  const hit = picked.filter((r) => {
+    if (blast.includes(r.path)) return true;
+    if (r.kind !== 'dynamic') return false;
+    const stem = r.path.replace(/\/\[[^\]]+\]$/, '') + '/';
+    const page = blast.find((b) => b.startsWith(stem));
+    if (!page) return false;
+    concrete.set(r.path, page);
+    return true;
+  });
+  if (!hit.length) return wide('the change reaches no route in the index, and rendering nothing must never look like a pass');
+  console.error(`verify-rendered: --changed ${files.join(', ')} is a blast radius of ${hit.length} of ${picked.length} route(s).`);
+  return { picked: hit, concrete, wide: false };
+}
+
+/**
+ * A changed file as the INDEX spells it. An editor hands over an absolute path and the index
+ * stores paths relative to the project, so `/Users/.../src/components/ServiceCard.astro` read
+ * as a file the index had never heard of, fell wide, and then skipped the very routes that
+ * import it. Anything outside the project is left alone: it is genuinely unknown.
+ */
+function toProjectRelative(root, f) {
+  const raw = f.replace(/^\.\//, '');
+  if (!isAbsolute(raw)) return raw;
+  const rel = relative(root, raw);
+  return rel && !rel.startsWith('..') ? rel : raw;
+}
+
+/**
+ * The page a dynamic template actually serves, from the index's own entries.
+ *
+ * `resolveDynamic` maps a template to a real handle from a Shopify catalogue and does nothing
+ * on a brochure build, so `/blog/[slug]` was fetched literally, returned the site's 404, and
+ * was recorded as a pass. The entries carry the ids palate-index wrote, so a blog can answer
+ * the same question a catalogue answers for a store. Only a single trailing `[param]` is
+ * substituted, and only when the route names one collection: anything less certain keeps the
+ * literal path rather than inventing a URL.
+ *
+ * PUBLISHED ONLY, and the first version had a draft fallback that a sweep of the shipped
+ * template caught immediately. The scaffold's one post ships as a draft, so nothing is built
+ * for it, and substituting it swapped a literal path that 404s for an invented path that
+ * 404s: three Highs on a route that does not exist. A template with no published entry has no
+ * page, and the caller drops it and says so.
+ */
+function publishedPageFor(route, entries, root, fromBlast) {
+  if (route.kind !== 'dynamic' || !/\/\[[^\]]+\]$/.test(route.path)) return null;
+  const names = collectionsFor(route, root).filter((n) => n !== '*');
+  const live = entries.filter((e) => e.draft !== true && (names.length !== 1 || e.collection === names[0]));
+  if (fromBlast) {
+    // The blast radius names the page for a CHANGED entry. A changed draft still has no page.
+    const id = fromBlast.split('/').filter(Boolean).pop();
+    return live.some((e) => e.id === id) ? fromBlast : null;
+  }
+  if (names.length !== 1) return null;
+  const entry = live.find((e) => e.collection === names[0]);
+  return entry ? route.path.replace(/\[[^\]]+\]$/, entry.id) : null;
+}
+
+/**
+ * THE GLOBAL INPUTS: the shared files that change what EVERY route renders and that no
+ * route's import closure necessarily names.
+ *
+ * The closure alone was not enough, and the gap was the dangerous kind. Edit the brand
+ * tokens, globals.css, the shared layout, astro.config or a dependency and every route's
+ * own source is byte-identical, so every passing record stays valid and a plain re-run
+ * skips the whole site while the rendered output has moved underneath it. Relying on
+ * somebody remembering --full is not a safeguard, it is the shape of every silent skip
+ * this product has shipped.
+ *
+ * So the digest below is folded into every route's hash: one shared byte changes and no
+ * record survives. It reads the config and the lockfile, everything under src/styles and
+ * src/layouts, and the CSS those layouts import from anywhere, which is how the brand
+ * package's tokens.css and fonts.css are reached without hardcoding a package name.
+ *
+ * A file that is absent contributes nothing, so DELETING one changes the digest as surely
+ * as editing it does.
+ */
+const GLOBAL_FILES = [
+  'astro.config.mjs', 'astro.config.ts', 'astro.config.js', 'astro.config.cjs',
+  'package.json', 'pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'bun.lockb',
+];
+const GLOBAL_DIRS = ['src/styles', 'src/layouts'];
+
+function walkFiles(dir, out = []) {
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of [...entries].sort((a, b) => a.name.localeCompare(b.name))) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) walkFiles(p, out); else out.push(p);
+  }
+  return out;
+}
+
+/**
+ * The CSS a layout imports, resolved to real files.
+ *
+ * NODE'S RESOLVER, NOT A PATH JOIN, and the difference was a whole silent hole. A bare
+ * specifier used to become `node_modules/<spec>` and was kept only if that path existed. The
+ * brand package publishes `tokens/tokens.css` and `fonts/fonts.css` and exposes the short
+ * names through an `exports` map, so `@palate-projects/<slug>-brand/tokens.css` is never on
+ * disk: both files dropped out of the digest on every real build while the docs promised that
+ * editing the brand tokens re-renders the site. `createRequire().resolve()` honours `exports`
+ * for any subpath, `.css` included.
+ *
+ * AND AN IMPORT THAT CANNOT BE RESOLVED IS NAMED. That is the whole lesson of the defect: the
+ * exclusion was correct-looking code doing nothing, with nothing printed.
+ */
+function importedCss(root, layoutFiles) {
+  const out = new Set();
+  const unresolved = [];
+  const req = createRequire(resolve(root, 'package.json'));
+  for (const f of layoutFiles) {
+    let src;
+    try { src = readFileSync(f, 'utf8'); } catch { continue; }
+    for (const m of src.matchAll(/import\s+["']([^"']+\.css)["']/g)) {
+      const spec = m[1];
+      let cand = null;
+      if (spec.startsWith('.')) cand = resolve(dirname(f), spec);
+      else if (spec.startsWith('@/')) cand = resolve(root, 'src', spec.slice(2));
+      else {
+        try { cand = req.resolve(spec); }
+        catch { const p = resolve(root, 'node_modules', spec); cand = existsSync(p) ? p : null; }
+      }
+      if (cand && existsSync(cand)) out.add(cand);
+      else unresolved.push(`${spec} (in ${relative(root, f)})`);
+    }
+  }
+  if (unresolved.length) {
+    console.error(
+      `verify-rendered: ${unresolved.length} layout CSS import(s) could not be resolved and are NOT in the ` +
+      `global digest, so editing them will not invalidate any record: ${unresolved.join(', ')}.`,
+    );
+  }
+  return [...out];
+}
+
+function globalInputsHash(root) {
+  const layouts = walkFiles(resolve(root, 'src/layouts'));
+  const files = [
+    ...GLOBAL_FILES.map((f) => resolve(root, f)).filter((p) => existsSync(p)),
+    ...GLOBAL_DIRS.flatMap((d) => walkFiles(resolve(root, d))),
+    ...importedCss(root, layouts),
+  ];
+  const uniq = [...new Set(files)].sort();
+  const h = createHash('sha256');
+  for (const p of uniq) {
+    let body;
+    try { body = readFileSync(p); } catch { continue; }
+    h.update(relative(root, p)); h.update('\0'); h.update(body); h.update('\0');
+  }
+  return { hash: h.digest('hex'), count: uniq.length };
+}
+
+/**
+ * THE CONTENT A ROUTE RENDERS, which its import closure never names.
+ *
+ * `closure()` follows imports, and a page does not import the markdown it renders: it asks
+ * for it by collection name. So blastRadius mapped `src/content/blog/x.md` to the post's
+ * route and its listing exactly as its own comment promises, and then the skip compared a
+ * hash that had never read the post, found it unchanged, and printed "unchanged, skipped"
+ * for the very routes the operator had just named. Exit 0, nothing rendered, on any build
+ * with a blog.
+ *
+ * The collection is read the way gate-seo reads it, from a literal getCollection call, and
+ * across the closure rather than the route file alone, because a listing is often rendered by
+ * a component. A route that reaches `content.config.ts` without naming a collection folds in
+ * EVERY entry: that is the third case blastRadius selects, and over-reading there costs a
+ * render while under-reading costs the whole point of the gate.
+ *
+ * Digests are memoised per collection, so a 200-post blog is read once and not once per route.
+ */
+const COLLECTION_CALL = /\bget(?:Collection|Entry|EntryBySlug)\s*\(\s*["'`]([\w-]+)["'`]/g;
+const collectionDigests = new Map();
+
+function collectionsFor(route, root) {
+  const names = new Set();
+  let reachesConfig = false;
+  for (const f of [route.source, ...(route.dependsOn || [])].filter(Boolean)) {
+    if (/content\.config\.(ts|js|mjs)$/.test(f)) reachesConfig = true;
+    let src;
+    try { src = readFileSync(resolve(root, f), 'utf8'); } catch { continue; }
+    for (const m of src.matchAll(COLLECTION_CALL)) names.add(m[1]);
+  }
+  if (!names.size && reachesConfig) names.add('*'); // every entry: see above
+  return [...names].sort();
+}
+
+function collectionDigest(root, entries, name) {
+  if (!collectionDigests.has(name)) {
+    const h = createHash('sha256');
+    const mine = entries.filter((e) => name === '*' || e.collection === name);
+    for (const e of mine.sort((a, b) => a.file.localeCompare(b.file))) {
+      let body;
+      try { body = readFileSync(resolve(root, e.file)); } catch { body = Buffer.from('<unreadable>'); }
+      h.update(e.file); h.update('\0'); h.update(body); h.update('\0');
+    }
+    collectionDigests.set(name, h.digest('hex'));
+  }
+  return collectionDigests.get(name);
+}
+
+/**
+ * The identity of a route's SOURCE: the global inputs above, its own file, its whole import
+ * closure (which the index has already computed) and the content entries it renders. Two runs
+ * over the same bytes get the same hash, so "has this route changed since it last passed" is
+ * answered by a comparison rather than by a clock. An unreadable file hashes as its own
+ * marker, so DELETING an import changes the hash.
+ */
+function sourcesHashFor(route, root, globalHash, entries = []) {
+  const h = createHash('sha256');
+  h.update('global'); h.update('\0'); h.update(globalHash); h.update('\0');
+  for (const f of [route.source, ...(route.dependsOn || [])].filter(Boolean).sort()) {
+    let body;
+    try { body = readFileSync(resolve(root, f)); } catch { body = Buffer.from('<unreadable>'); }
+    h.update(f); h.update('\0'); h.update(body); h.update('\0');
+  }
+  for (const name of collectionsFor(route, root)) {
+    h.update('collection:' + name); h.update('\0');
+    h.update(collectionDigest(root, entries, name)); h.update('\0');
+  }
+  return h.digest('hex');
+}
+// Whitespace is collapsed first: a reflow is not a content change, and a hash that moves on
+// every render is a hash nobody can compare.
+const textHash = (s) => createHash('sha256').update(String(s).replace(/\s+/g, ' ').trim()).digest('hex');
+
 const MAX_ROUTES = Number(args['max-routes'] && args['max-routes'] !== 'true' ? args['max-routes'] : 14);
+// --changed narrows BEFORE the cap applies. The other order would make a two-file fix compete
+// with the route budget, which is the opposite of what an incremental pass is for.
+let changed = args.changed && args.changed !== 'true'
+  ? String(args.changed).split(',').map((s) => s.trim().replace(/^\.\//, '')).filter(Boolean)
+  : null;
+// The full sweep. The unchanged-route skip below is what makes a fix loop cheap, and the sweep
+// before hand-over is where it must not apply: a record is only as good as the source list it
+// was taken over, and a config or a dependency change is outside that list.
+const FULL = args.full === 'true';
+// `--changed` with nothing after it parses as the string "true", which would silently mean
+// "no narrowing" on a command the operator wrote precisely to narrow.
+if (args.changed === 'true') {
+  console.error('verify-rendered: --changed was given with no file list, so nothing was narrowed. Pass --changed <file,...>.');
+}
 let routes;
+// A rendered path back to the index record that produced it, which is the only place the
+// route's source and its import closure are known. Empty under --routes: a hand-named route
+// cannot be hashed, so it is never skipped and never recorded.
+const routeOf = new Map();
+let projectRoot = '.';
+// The index's content entries, for the collection digest a dynamic route's hash folds in.
+let indexEntries = [];
+// Set by a wide fall: the records cannot be trusted for a change that could not be placed.
+let setAside = false;
+/**
+ * THE KEY A ROUTE'S RECORD IS FILED UNDER, which is not always the path that was fetched.
+ *
+ * A dynamic template is rendered as a real page, and which page that is moves: with no
+ * --changed the representative is the first entry of the collection in index order, so adding
+ * a post that sorts earlier renamed the key from /blog/winter-pipes to /blog/<new>, orphaned
+ * the old record and rendered the page again for nothing. The TEMPLATE is what the record is
+ * about, and the template path does not move.
+ */
+const recordKeyOf = new Map();
+const keyOf = (p) => recordKeyOf.get(p) ?? p;
 if (args.routes) {
   routes = String(args.routes).split(',').map((r) => r.trim()).filter(Boolean);
+  if (changed) console.error('verify-rendered: --routes names the routes explicitly, so --changed is ignored on this run.');
 } else {
   const indexPath = args.index && args.index !== 'true' ? args.index : '.palate/index.json';
+  // The index lives at <project>/.palate/index.json and its paths are relative to <project>.
+  projectRoot = resolve(dirname(indexPath), '..');
+  // --changed READS THE INDEX TWICE OVER, for the blast radius and for every route's import
+  // closure, so a stale index narrows to the wrong routes AND leaves their records valid. The
+  // failure needs two fixes to land: add an import to a page (the page renders, its own source
+  // changed), then edit the newly imported file, and the page is neither selected nor
+  // invalidated because dependsOn predates the import. palate-index.mjs is a static parse
+  // costing well under a second, so it is rebuilt rather than trusted.
+  if (changed) {
+    // Spelled the way the INDEX spells it, before anything looks it up.
+    changed = changed.map((f) => toProjectRelative(projectRoot, f));
+    rebuildIndex(projectRoot, indexPath);
+  }
   const found = routesFromIndex(indexPath);
   if (found) {
+    const narrowed = changed
+      ? narrowToChanged(found.index, found.picked, changed)
+      : { picked: found.picked, concrete: new Map(), wide: false };
+    const picked = narrowed.picked;
+    setAside = narrowed.wide;
+    indexEntries = Array.isArray(found.index.entries) ? found.index.entries : [];
     const catPath = args.catalogue && args.catalogue !== 'true' ? args.catalogue : '.palate/catalogue.json';
-    const res = resolveDynamic(found.routes, catPath);
+    const res = resolveDynamic(picked.map((r) => r.path), catPath);
     if (res.resolved > 0) {
       console.error(`verify-rendered: ${res.resolved} dynamic route(s) resolved to real handles from ${catPath}`);
     }
-    routes = res.paths.slice(0, MAX_ROUTES);
-    const dropped = found.routes.length - routes.length;
-    console.error(
-      `verify-rendered: ${routes.length} route(s) from ${indexPath} ` +
-      `(${found.reps} dynamic template representative(s) standing in for ${found.reps + found.collapsed} page(s), ` +
-      `${found.statics} static, ${found.endpoints} endpoint(s) not rendered)` +
-      (dropped > 0 ? ` — ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : ''),
-    );
+    // A dynamic template is fetched as a real page or not at all. The blast radius names the
+    // page when a post changed; otherwise the index's entries name a representative, the way
+    // the catalogue names one for a store. Either beats fetching `/blog/[slug]` and recording
+    // the 404 it returns as a pass.
+    const substituted = [];
+    const unrenderable = [];
+    const pairs = [];
+    res.paths.forEach((p, i) => {
+      if (!p.includes('[')) { pairs.push([p, picked[i]]); return; }
+      const page = publishedPageFor(picked[i], indexEntries, projectRoot, narrowed.concrete.get(p));
+      if (!page) { unrenderable.push(p); return; }
+      substituted.push(`${p} -> ${page}`);
+      recordKeyOf.set(page, p); // the record is about the template, not about today's post
+      pairs.push([page, picked[i]]);
+    });
+    if (substituted.length) {
+      console.error(`verify-rendered: ${substituted.length} dynamic template(s) rendered as a real page from the index entries: ${substituted.join(', ')}`);
+    }
+    if (unrenderable.length) {
+      console.error(
+        `verify-rendered: ${unrenderable.length} dynamic template(s) NOT rendered, because no published entry ` +
+        `exists to render them as a real page: ${unrenderable.join(', ')}. Fetching the literal path returns the ` +
+        'site\'s 404 and would be reported as a build fault. Publish an entry, or pass --routes to name a page.',
+      );
+    }
+    routes = pairs.slice(0, MAX_ROUTES).map(([path]) => path);
+    routes.forEach((p, i) => routeOf.set(p, pairs[i][1]));
+    const dropped = pairs.length - routes.length;
+    const over = dropped > 0 ? `, ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : '';
+    // A narrowed run gets its own sentence. The index-wide tallies below describe the whole
+    // site, and printed against a blast-radius count they read as a contradiction.
+    console.error(changed
+      ? `verify-rendered: ${routes.length} route(s) from ${indexPath}, narrowed by --changed${over}`
+      : `verify-rendered: ${routes.length} route(s) from ${indexPath} ` +
+        `(${found.reps} dynamic template representative(s) standing in for ${found.reps + found.collapsed} page(s), ` +
+        `${found.statics} static, ${found.endpoints} endpoint(s) not rendered)${over}`);
   } else {
     routes = ['/', '/contact', '/blog'];
     console.error(
@@ -135,6 +508,76 @@ if (args.routes) {
 const outDir = args.out && args.out !== 'true' ? args.out : '';
 if (outDir) mkdirSync(outDir, { recursive: true });
 
+/**
+ * THE UNCHANGED-ROUTE SKIP.
+ *
+ * The shots manifest carries a `{ sourcesHash, renderedHash, passed_at }` per route, written
+ * only for a route that rendered clean. A route whose sources hash to the same value has
+ * nothing new to say, so it is not rendered again and the run says so per route.
+ *
+ * The record is the ONLY thing trusted here. It is dropped the moment a route fails, so the
+ * next run cannot skip the route that broke, and it is ignored entirely under --full.
+ *
+ * WHAT IT DOES NOT COVER, said plainly because the skip is only safe while this is understood:
+ * the hash is taken over the route's own source, its import closure and the global inputs
+ * (see globalInputsHash above). Remote content, public/ assets and environment values are
+ * outside all three, so an unchanged source can still render differently. That is why the
+ * sweep before hand-over runs --full, and why any file the index does not know falls wide
+ * rather than narrow.
+ */
+const shotsManifest = outDir ? `${outDir}/manifest.json` : '';
+let priorRoutes = {};
+let priorGlobal = '';
+if (shotsManifest) {
+  try {
+    const m = JSON.parse(readFileSync(shotsManifest, 'utf8'));
+    if (m && typeof m.routes === 'object' && m.routes && !Array.isArray(m.routes)) priorRoutes = m.routes;
+    if (typeof m?.globalInputs === 'string') priorGlobal = m.globalInputs;
+  } catch { /* no manifest yet, or an unreadable one: nothing is skipped, which is the safe way to be wrong */ }
+}
+// Recorded alongside the routes purely so the run can SAY why every record went. Folding the
+// digest into each hash is what invalidates them; without this the operator would see thirty
+// routes re-render and no reason given.
+const globalInputs = globalInputsHash(projectRoot);
+if (priorGlobal && priorGlobal !== globalInputs.hash) {
+  console.error(
+    `verify-rendered: global inputs changed, all routes re-rendered (${globalInputs.count} shared file(s): ` +
+    'the config and lockfile, src/styles, src/layouts and the CSS those layouts import).',
+  );
+}
+const sourcesHashes = new Map();
+const skipped = [];
+for (const p of routes) {
+  const r = routeOf.get(p);
+  if (!r) continue; // no index record behind this route, so it cannot be hashed and always renders
+  const sh = sourcesHashFor(r, projectRoot, globalInputs.hash, indexEntries);
+  sourcesHashes.set(p, sh);
+  const prior = priorRoutes[keyOf(p)];
+  if (!FULL && !setAside && prior && prior.sourcesHash === sh && prior.passed_at) skipped.push(p);
+}
+for (const p of skipped) console.error(`verify-rendered: ${p} unchanged, skipped`);
+const rendering = routes.filter((p) => !skipped.includes(p));
+if (skipped.length) {
+  console.error(
+    `verify-rendered: ${skipped.length} of ${routes.length} route(s) unchanged since their last passing render. ` +
+    'Pass --full to render every one; the sweep before hand-over should.',
+  );
+}
+if (skipped.includes('/')) {
+  console.error(
+    'verify-rendered: the home route was skipped, so build hygiene, the design measurement and the ' +
+    'accessibility pass on / are UNMEASURED this run. --full measures them.',
+  );
+}
+if (!rendering.length) {
+  console.error(
+    'verify-rendered: every selected route was unchanged since its last passing render, so NO route was ' +
+    'rendered this run. The home-route and 404 probes below still ran. Pass --full for a complete sweep.',
+  );
+}
+// The rendered text of each route at desktop, for the record's renderedHash.
+const renderedText = new Map();
+
 const VIEWPORTS = {
   mobile:  { width: 390,  height: 844  },
   tablet:  { width: 834,  height: 1112 },
@@ -143,6 +586,30 @@ const VIEWPORTS = {
 // Console / request noise that is not the build's fault (third-party, favicon).
 const IGNORE = [/turnstile/i, /challenges\.cloudflare/i, /humblytics/i, /plausible/i, /google-analytics/i, /googletagmanager/i, /favicon/i];
 const ignored = (s) => IGNORE.some((re) => re.test(s || ''));
+
+/**
+ * ROUTES WHOSE OWN HTTP STATUS IS NOT 200 BY DESIGN, and the one console error that follows.
+ *
+ * A 404 page answers 404. That is the whole point of it, and the browser logs the document's
+ * own load as a console error, which the console rule filed as a High at all three viewports.
+ * On the shipped template every plain run and every certify sweep therefore exited 1 on a
+ * finding no operator can fix, which makes the sweep's exit code useless: the one number the
+ * hand-over rests on could not distinguish a clean site from a broken one.
+ *
+ * SCOPED AS NARROWLY AS IT CAN BE. It is dropped only when all four hold: the route is one
+ * whose status is expected to be non-200, the navigation actually returned THAT status, the
+ * error is a console entry whose location is the navigation URL itself (a subresource that
+ * 404s on the same page has its own URL and still fires), and its text is the resource-load
+ * failure carrying that status. A real script error on /404 has the same location and
+ * different text, so it is still a High. Verified both directions in the suite.
+ */
+const EXPECTED_STATUS = new Map([['/404', 404], ['/500', 500]]);
+function expectedStatusNoise(route, status, e) {
+  const want = EXPECTED_STATUS.get(route);
+  if (!want || status !== want) return false;
+  if (!e || e.kind !== 'console' || e.loc !== base + route) return false;
+  return /failed to load resource/i.test(e.raw || '') && new RegExp(`status of ${want}\\b`).test(e.raw || '');
+}
 
 const findings = [];
 const add = (sev, route, vp, msg) => findings.push({ sev, route, vp, msg });
@@ -297,8 +764,11 @@ if (!axeSource) {
 // --------------------------------------------------------------- audit -----
 for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
   const context = await browser.newContext({ viewport: vp });
-  for (const route of routes) {
+  for (const route of rendering) {
     const page = await context.newPage();
+    // Kept as { text, loc, kind } rather than a formatted string, because whether the
+    // document's own load error is a finding depends on the status the navigation returned,
+    // and that is not known until goto resolves. See expectedStatusNoise below.
     const errors = [];
     const webglChunkError = { hit: false };
     page.on('console', (m) => {
@@ -307,12 +777,12 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       // so check both before deciding it is the build's fault.
       const loc = (m.location && m.location().url) || '';
       if (ignored(m.text()) || ignored(loc)) return;
-      errors.push('console error: ' + m.text());
+      errors.push({ kind: 'console', loc, text: 'console error: ' + m.text(), raw: m.text() });
     });
-    page.on('pageerror', (e) => errors.push('page error: ' + (e && e.message ? e.message : e)));
+    page.on('pageerror', (e) => errors.push({ kind: 'page', loc: '', text: 'page error: ' + (e && e.message ? e.message : e) }));
     page.on('requestfailed', (r) => {
       if (ignored(r.url())) return;
-      errors.push('request failed: ' + r.url());
+      errors.push({ kind: 'request', loc: r.url(), text: 'request failed: ' + r.url() });
       if (/three|webgl|r3f|fiber|drei/i.test(r.url())) webglChunkError.hit = true;
     });
 
@@ -716,7 +1186,10 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       }
     }
 
-    for (const e of errors) add('High', route, vpName, e);
+    for (const e of errors) {
+      if (expectedStatusNoise(route, status, e)) continue;
+      add('High', route, vpName, e.text);
+    }
 
     // Focus ring: one real keyboard Tab should land on an element with a visible
     // outline (globals.css ships :focus-visible). Desktop only, heuristic -> Medium.
@@ -731,6 +1204,13 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
         return { focused: true, visible };
       });
       if (ring.focused && !ring.visible) add('Medium', route, vpName, 'first tab-focused element has no visible focus ring');
+    }
+
+    // The rendered DOM text, for the route record. Desktop only: one reading per route is
+    // what the record holds, and the desktop pass is the one every route gets.
+    if (vpName === 'desktop') {
+      try { renderedText.set(route, await page.evaluate(() => (document.body && document.body.innerText) || '')); }
+      catch { /* a page that will not yield its text simply earns no record and renders again */ }
     }
 
     if (outDir) {
@@ -1168,7 +1648,7 @@ const STALL_ITERS = Math.max(1, Math.round(numEnv('PALATE_HYGIENE_STALL_ITERS', 
 // The exact command to re-run, reconstructed from this invocation so the agent can copy it
 // rather than reconstruct it. A "re-run the gate" instruction with no command is an instruction
 // to guess.
-const RERUN = ['node', process.argv[1], '--url', base, '--routes', routes.join(','),
+const RERUN = ['node', process.argv[1], '--url', base, '--routes', (rendering.length ? rendering : routes).join(','),
   ...(outDir ? ['--out', outDir] : []), ...(args['no-vitals'] === 'true' ? ['--no-vitals'] : [])].join(' ');
 
 if (projected) {
@@ -1186,7 +1666,9 @@ if (projected) {
 
   // The measurement CONFIGURATION, not the outcome: see basisOf() for why keying it on the
   // scored checks made a successful fix read as NO COMPARISON.
-  const measuredWith = { routes, vitals: args['no-vitals'] !== 'true', axe: !!axeSource };
+  // The routes actually RENDERED, never the ones selected: a run that skipped half the site
+  // measured a different set, and hygiene-loop.mjs refuses to compare across a changed basis.
+  const measuredWith = { routes: rendering, vitals: args['no-vitals'] !== 'true', axe: !!axeSource };
   const basis = basisOf(measuredWith);
   const tailBefore = comparableTail(hist.entries, basis);
   const entry = entryFor(projected, {
@@ -1262,6 +1744,51 @@ if (outDir) {
     // block. Still said out loud: a missing artefact should never be discovered by its absence.
     console.error(`verify-rendered: FAILED to write ${outDir}/design.json (${e?.message ?? e}). The scored evidence and the hygiene trend are LOST for this run.`);
   }
+
+  // THE PER-ROUTE RECORD, and why it is written here rather than inside the route loop.
+  //
+  // A route earns a record only when it rendered THIS run and nothing at or above High was
+  // filed against it, and the hygiene block above can file a High against `/` long after the
+  // loop finished. Banking a pass inside the loop would have recorded a verdict the gate had
+  // not yet reached.
+  //
+  // MERGED into the shots manifest, never written over it: screenshot-build.mjs owns status,
+  // shots and the console-error count in the same file, and this gate owns `routes`.
+  try {
+    // THE CLIENT-NAV PROBE FILES AGAINST "<path> (via client-nav)", not against the path, so a
+    // naive set never matched the route it was about.
+    const highRoutes = new Set(findings
+      .filter((f) => (RANK[f.sev] || 0) >= RANK.High)
+      .map((f) => String(f.route).replace(/ \(via client-nav\)$/, '')));
+    let m = {};
+    try { m = JSON.parse(readFileSync(shotsManifest, 'utf8')); } catch { m = {}; }
+    if (!m || typeof m !== 'object' || Array.isArray(m)) m = {};
+    const out = (m.routes && typeof m.routes === 'object' && !Array.isArray(m.routes)) ? { ...m.routes } : {};
+    for (const p of rendering) {
+      const sh = sourcesHashes.get(p);
+      const text = renderedText.get(p);
+      // A route this run could not HASH keeps whatever record it had. Deleting it threw away a
+      // real record every time a run-site command passed --routes, and every no-index fallback,
+      // so a /post between two build-loop passes emptied the loop's memory. A route that FAILED
+      // is a different case and is dropped below, whether it rendered or was skipped.
+      if (!sh || text === undefined) continue;
+      if (highRoutes.has(p)) { delete out[keyOf(p)]; continue; }
+      out[keyOf(p)] = { sourcesHash: sh, renderedHash: textHash(text), passed_at: new Date().toISOString() };
+    }
+    // A SKIPPED ROUTE IS NOT EXEMPT. The no-JS, focus, hover-nav, vitals and design probes all
+    // file against `/` and run whatever the selection is, so a skipped home route with a failing
+    // probe used to keep its passing record and be skipped again next run. The doc says a record
+    // is dropped the moment a route fails; this is what makes that true rather than nearly true.
+    for (const p of highRoutes) delete out[keyOf(p)];
+    m.routes = out;
+    m.globalInputs = globalInputs.hash;
+    writeFileSync(shotsManifest, JSON.stringify(m, null, 2) + '\n');
+  } catch (e) {
+    console.error(
+      `verify-rendered: FAILED to write the per-route record to ${shotsManifest} (${e?.message ?? e}). ` +
+      'The next run will render every route, which is slow and never wrong.',
+    );
+  }
 }
 
 // ------------------------------------------------------------- helpers -----
@@ -1306,5 +1833,22 @@ async function snapFrame(page, cap, i) {
 findings.sort((a, b) => (RANK[b.sev] || 0) - (RANK[a.sev] || 0));
 for (const f of findings) console.log(`${f.route} @${f.vp}  [${f.sev}]  ${f.msg}`);
 const highest = findings.reduce((m, f) => Math.max(m, RANK[f.sev] || 0), 0);
-console.error(`verify-rendered: ${findings.length} finding(s) across ${routes.length} route(s) x 3 viewports + the no-JS + 404 probes`);
-process.exit(highest >= RANK.High ? 1 : 0);
+console.error(
+  `verify-rendered: ${findings.length} finding(s) across ${rendering.length} rendered route(s)` +
+  (skipped.length ? ` (${skipped.length} unchanged, skipped)` : '') +
+  ' x 3 viewports + the no-JS + 404 probes',
+);
+// A FAILURE STILL WINS. Only once nothing is wrong does "nothing was inspected" become the
+// verdict: a run that rendered no route did not pass, it was SKIPPED, and exit 0 is the one
+// answer that reads as a clean site. The house rule is that a gate never exits 0 having
+// inspected nothing, and the unchanged-route skip is the one path in this file that can.
+if (highest >= RANK.High) process.exit(1);
+if (!rendering.length) {
+  console.error(
+    'verify-rendered: SKIPPED, not passed (exit 2). No route was rendered: every selected route was ' +
+    'unchanged since its last passing render, so this run establishes nothing about them. The ' +
+    'home-route and 404 probes did run. Pass --full to render every route.',
+  );
+  process.exit(2);
+}
+process.exit(0);

@@ -71,6 +71,60 @@ for f in references/hosting-vercel.md templates/host-cloudflare/_headers; do
   present "$f says the policy is a host allowlist" "$f" "host allowlist"
 done
 
+# ============ 7. INCREMENTAL RE-VERIFY, where the person re-running it will look ==========
+# A gate that renders only the blast radius is a promise about what was NOT checked, so the
+# escape hatch has to be documented in the same breath as the saving. Both halves are pinned:
+# the flag that narrows, and the flag that stops narrowing before hand-over.
+for f in README.md references/testing.md; do
+  present "$f documents --changed" "$f" "--changed"
+  present "$f documents the full sweep before hand-over" "$f" "--full"
+  present "$f says an unknown file falls wide" "$f" "falls wide"
+done
+present "the verifier agent re-runs the blast radius after a fix" \
+  "agents/palate-verifier.md" "--changed <the files you edited>"
+present "the verifier agent rebuilds the index under --changed" \
+  "agents/palate-verifier.md" "rebuilds \`.palate/index.json\` first"
+present "testing.md says --changed rebuilds the index" \
+  "references/testing.md" "rebuilds \`.palate/index.json\` first"
+present "testing.md says the content a route renders is in the hash" \
+  "references/testing.md" "the collection its \`getCollection\` call names"
+# THE DOCTRINE'S FIRST COMMAND IS RUN, not just matched. It named a file list, and ux-lint
+# takes a project directory and nothing else, so the cheap lane the re-run rule leads with
+# exited 2 for anyone who followed it literally: a gate that did not run, reading as one that
+# did. Pinning the sentence alone is what let that ship, so the sentence is executed.
+present "the verifier agent lints the project directory, not a file list" \
+  "agents/palate-verifier.md" "bash scripts/ux-lint.sh <project-dir>"
+UXSITE="$(mktemp -d)"
+mkdir -p "$UXSITE/src/pages"
+printf '<h1>Hello</h1>\n' > "$UXSITE/src/pages/index.astro"
+bash "$ROOT/scripts/ux-lint.sh" "$UXSITE" >/dev/null 2>&1; ux_dir=$?
+bash "$ROOT/scripts/ux-lint.sh" "$UXSITE/src/pages/index.astro" >/dev/null 2>&1; ux_file=$?
+rm -rf "$UXSITE"
+[ "$ux_dir" -ne 2 ] && ok "the doctrine's ux-lint command runs (exit $ux_dir, not 2)" \
+  || bad "the doctrine's ux-lint command exits 2, so the cheap lane never runs"
+[ "$ux_file" -eq 2 ] && ok "a file path still exits 2, which is why the doctrine names a directory" \
+  || bad "ux-lint accepts a file path now, so the doctrine should say so (exit $ux_file)"
+
+present "the verifier agent runs the cheap lane first" \
+  "agents/palate-verifier.md" "ux-lint before rendered, rendered before vitals"
+present "the verifier agent certifies on one full sweep" \
+  "agents/palate-verifier.md" "THE LAST RUN BEFORE HAND-OVER IS ONE FULL SWEEP"
+# The per-route record is the thing the skip rests on, so the doc names its fields.
+present "testing.md names the per-route record" \
+  "references/testing.md" "sourcesHash, renderedHash,"
+present "testing.md names the shared inputs the hash covers" \
+  "references/testing.md" "global inputs changed, all routes re-rendered"
+present "testing.md says a 404 route is not failed for answering 404" \
+  "references/testing.md" "is not failed for returning it"
+present "testing.md says a real error on that route still fires" \
+  "references/testing.md" "is still a High"
+present "testing.md says the trend reads inside the loop" \
+  "references/testing.md" "The hygiene trend reads inside the loop"
+present "the verifier agent is told to read the trend on every run" \
+  "agents/palate-verifier.md" "Read the trend line on every one of these runs"
+present "testing.md names what the hash does NOT cover" \
+  "references/testing.md" "so an unchanged source can still render differently"
+
 # ============ 6. THE HYGIENE LINE leads with what the number is ===========================
 # ASSERT THE RENDERED LINE, NOT THE SOURCE. The first draft grepped hygiene-loop.mjs for
 # "clears the " and failed on a correct implementation, because the verb is a ternary and the

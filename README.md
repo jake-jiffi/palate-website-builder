@@ -71,6 +71,21 @@ wide, and prints how many it dropped. On a larger site raise the cap with `--max
 or name the routes that matter with `--routes /a,/b`. A 3,400-page site is measured on 14
 pages unless you say otherwise.
 
+After a fix, `--changed src/components/Nav.astro,src/pages/about.astro` renders only the
+routes those files can reach. A file the index has never heard of falls wide, renders
+everything and says which file did it. A route whose sources have not changed since it last
+passed is skipped and named. On a thirty-route fixture that is 25s against 187s.
+
+The hash covers a route's own source, its import closure, the content entries it renders, and
+the shared inputs no closure has to name: the config, `package.json` and the lockfile,
+`src/styles`, `src/layouts` and the CSS those layouts import. Edit your brand tokens and every
+record goes, with the reason printed. `--changed` rebuilds `.palate/index.json` first, because
+that is where both the blast radius and the hashes come from.
+
+**The run before hand-over is `--full`**, which ignores those records. Remote content,
+`public/` assets and environment values stay outside the hash, so an unchanged source can
+still render differently.
+
 Accessibility is a subset of axe rather than a WCAG pass, and performance is a throttled local
 lab run of Core Web Vitals on the home route. `references/testing.md` says exactly what each
 one covers; nothing here runs Lighthouse.

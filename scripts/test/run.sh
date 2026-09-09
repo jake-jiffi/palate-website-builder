@@ -8,20 +8,20 @@
 #           install and take minutes. template-csp-live, board-components, boards-render,
 #           explore-page-boards and gate-fidelity all install and build the template, which is
 #           the only honest way to prove a policy, a render or a fidelity comparison.
-#
-# THE SLOW LIST COVERS BOTH LOOPS. It used to be consulted only for the shell suites, so a
-# browser suite written as a .test.mjs ran under --fast whatever the list said.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 FAST=0; for a in "$@"; do [ "$a" = "--fast" ] && FAST=1; done
-SLOW="hygiene-loop verify-rendered-a11y template-csp-live board-components boards-render explore-page-boards gate-fidelity"
+# FULL FILE NAMES, and the extension is load-bearing. The list used to hold bare names and
+# only filtered the shell loop, so a browser suite written as .test.mjs was named here and
+# ran under --fast anyway. Filtering both loops on a bare name is worse again: hygiene-loop
+# is BOTH a browser suite and a 72ms unit suite, and the bare name silently took the unit one
+# out of every fast run. A missing entry is warned about below, because a list that names a
+# file nobody has skips nothing and says nothing.
+SLOW="hygiene-loop.test.sh verify-rendered-a11y.test.sh verify-rendered-incremental.test.mjs template-csp-live.test.sh board-components.test.sh boards-render.test.mjs explore-page-boards.test.sh gate-fidelity.test.mjs"
+for s in $SLOW; do
+  [ -e "$DIR/$s" ] || echo "  WARNING: the slow list names $s, which does not exist"
+done
 pass=0; fail=0; skipped=0; failed_names=""
-
-is_slow() { # <suite-name>; true when --fast should skip it
-  [ "$FAST" = "1" ] || return 1
-  case " $SLOW " in *" $1 "*) return 0 ;; esac
-  return 1
-}
 
 run() { # label  command...
   local label="$1"; shift
@@ -37,7 +37,7 @@ echo "shell suites"
 for t in "$DIR"/*.test.sh; do
   [ -e "$t" ] || continue
   n="$(basename "$t" .test.sh)"
-  is_slow "$n" && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; }
+  case " $SLOW " in *" $(basename "$t") "*) [ "$FAST" = "1" ] && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; };; esac
   run "$n" bash "$t"
 done
 
@@ -45,7 +45,7 @@ echo "node suites"
 for t in "$DIR"/*.test.mjs; do
   [ -e "$t" ] || continue
   n="$(basename "$t" .test.mjs)"
-  is_slow "$n" && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; }
+  case " $SLOW " in *" $(basename "$t") "*) [ "$FAST" = "1" ] && { printf '  %-34s skipped (--fast)\n' "$n"; skipped=$((skipped+1)); continue; };; esac
   run "$n" node --test "$t"
 done
 
