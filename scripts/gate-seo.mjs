@@ -997,7 +997,27 @@ if (findings.length) {
   process.exit(1);
 }
 
-if (blocked.length) process.exit(2);
+// A GATE THAT READ THE SITE IS NOT A GATE THAT DID NOT RUN.
+//
+// Reaching this line means every finding-producing check came back clean and at least one
+// thing above could not be judged. The scaffold ships one blog post and it is a draft, so
+// `/blog/[slug]` has no publishable entry and this fires on EVERY Palate site until the client
+// publishes something: three routes inspected, canonicals read, sitemap coverage confirmed,
+// robots environment-aware, and one unknown. The caller could only read exit 2 as "did not
+// run", so the operator's summary said `seo=skipped` about a gate that had read the site.
+//
+// The exit code does NOT move. Cannot-check is never a pass, that rule is load-bearing and
+// every earlier rung here (no src/pages, no index, no build output, no sitemap, no route to
+// compare) exits 2 having genuinely read nothing. What changes is that this path now SAYS how
+// much it read, so the caller can tell the two apart and report `seo=partial (3 route(s)
+// checked, 1 unknown)`. The unknowns themselves are already printed above.
+if (blocked.length) {
+  console.error(
+    `gate-seo: partial (${expected.length} route(s) checked, ${blocked.length} unknown); everything ` +
+    `checked was clean and the unknown(s) above are unknown, not clean (${scope}). NOT a full pass.`,
+  );
+  process.exit(2);
+}
 
 console.log(`gate-seo: clean (${scope}); sitemap covers every route, no advertised redirect, canonicals self-referential, robots is environment aware (inspected ${expected.length} route(s)).`);
 process.exit(0);

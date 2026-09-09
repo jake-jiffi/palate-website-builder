@@ -227,10 +227,11 @@ else
   echo "FAIL - gate-shipready's skip carries its own reason (got: $sr_summary)"; fail=$((fail+1))
 fi
 
-# --- THE SEO SKIP REASON IS THE FINDING, NOT THE HEADER --------------------------------
-# gate-seo opens a cannot-check report with "N thing(s) could NOT be checked. These are unknown,
-# not clean." and names the actual unknown two lines later. Taking the first line verbatim put
-# the header in the summary and dropped the one part that says what was not checked.
+# --- A GATE THAT READ THE SITE IS REPORTED AS PARTIAL, NOT AS A SKIP -------------------
+# gate-seo exits 2 when anything could not be checked, and the caller could only read that as
+# "did not run". On this fixture it read one route, found it clean, and could not judge the
+# answer-engine surfaces, so `seo=skipped` filed a gate that had read the site as one that had
+# not. That is the normal state of every Palate site until the client publishes a post.
 SEOB="$TMP/seo-blocked"; mkdir -p "$SEOB/src/pages" "$SEOB/dist"
 cp "$DEEP" "$SEOB/build-manifest.json"
 make_shots "$SEOB" 0
@@ -254,15 +255,20 @@ Allow: /
 Sitemap: https://x.test/sitemap-index.xml
 ROBOTS
 seo_summary="$(bash "$GATE" "$SEOB/build-manifest.json" 2>/dev/null)"
-if printf '%s' "$seo_summary" | grep -qF 'answer-engine surfaces'; then
-  echo "ok   - the SEO skip names what could not be checked"; pass=$((pass+1))
+if printf '%s' "$seo_summary" | grep -qE 'seo=partial \([0-9]+ route\(s\) checked, [0-9]+ unknown\)'; then
+  echo "ok   - a gate that read the site and could not judge one thing reports partial, with both numbers"; pass=$((pass+1))
 else
-  echo "FAIL - the SEO skip names what could not be checked (got: $seo_summary)"; fail=$((fail+1))
+  echo "FAIL - a gate that read the site reports partial with both numbers (got: $seo_summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$seo_summary" | grep -qF 'seo=skipped'; then
+  echo "FAIL - and it is not filed as a skip (got: $seo_summary)"; fail=$((fail+1))
+else
+  echo "ok   - and it is not filed as a skip"; pass=$((pass+1))
 fi
 if printf '%s' "$seo_summary" | grep -qF 'thing(s) could NOT be checked'; then
-  echo "FAIL - and not gate-seo's header (got: $seo_summary)"; fail=$((fail+1))
+  echo "FAIL - and gate-seo's header does not reach the summary (got: $seo_summary)"; fail=$((fail+1))
 else
-  echo "ok   - and not gate-seo's header"; pass=$((pass+1))
+  echo "ok   - and gate-seo's header does not reach the summary"; pass=$((pass+1))
 fi
 
 # --- AN ADVISORY BEFORE THE REASON IS NOT THE REASON ------------------------------------
