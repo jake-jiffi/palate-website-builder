@@ -18,7 +18,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, cpSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,6 +30,8 @@ const DONE = join(ROOT, "scripts", "gate-done.sh");
 const DEEP = join(HERE, "fixtures", "manifest-deep.json");
 
 const { extractFacts, disagreements } = await import(join(ROOT, "scripts", "gate-facts.mjs"));
+
+const SITE_FIXTURE = join(HERE, "fixtures", "gate-facts-site");
 
 const TMP = mkdtempSync(join(tmpdir(), "gate-facts-"));
 process.on("exit", () => { try { rmSync(TMP, { recursive: true, force: true }); } catch { /* best effort */ } });
@@ -57,14 +59,9 @@ function run(dir) {
   }
 }
 /** stdout and stderr together, the way gate-done.sh captures a sub-gate. */
-function runMerged(dir) {
-  const r = run(dir);
-  if (r.code === 0) {
-    // execFileSync only hands back stdout on success, so re-run capturing both streams.
-    const merged = execFileSync("bash", ["-c", `node ${JSON.stringify(CLI)} ${JSON.stringify(dir)} 2>&1; exit 0`], { encoding: "utf8" });
-    return { code: 0, out: merged };
-  }
-  return r;
+function runMerged(dir, ...flags) {
+  const argv = ["node", JSON.stringify(CLI), JSON.stringify(dir), ...flags].join(" ");
+  return { code: 0, out: execFileSync("bash", ["-c", `${argv} 2>&1; exit 0`], { encoding: "utf8" }) };
 }
 
 const labels = (html) => extractFacts(html).map((f) => `${f.label}=${f.value}`);
@@ -88,6 +85,17 @@ test("stars and rating are ONE label, and 4.9 and 4.90 are ONE value", () => {
   assert.deepEqual(labels("<p>Our rating: 4.90</p>"), ["rating=4.9"]);
   assert.deepEqual(labels("<p>4.9 out of 5</p>"), ["rating=4.9"]);
   assert.deepEqual(labels("<p>4.9/5 stars</p>"), ["rating=4.9"]);
+});
+
+test("a proportion is not a rating", () => {
+  // FOUND BY REVIEW, reproduced on the committed code: "4 out of 5 customers recommend us"
+  // extracted rating=4 and argued with the real 4.9 on the same page. It is ordinary
+  // testimonial copy, and so is "4/5 calls answered within the hour".
+  assert.deepEqual(labels("<p>4 out of 5 customers recommend us. We are rated 4.9 stars.</p>"), ["rating=4.9"]);
+  assert.deepEqual(labels("<p>4/5 calls answered within the hour.</p>"), []);
+  // A whole number IS a rating when something nearby says so. Both directions kept working.
+  assert.deepEqual(labels("<p>Rated 5 out of 5 by the Guild.</p>"), ["rating=5"]);
+  assert.deepEqual(labels("<p>5 out of 5 stars.</p>"), ["rating=5"]);
 });
 
 test("a date is not a rating", () => {
@@ -138,6 +146,27 @@ test("a year range and a price are not phone numbers", () => {
   assert.deepEqual(labels("<p>Trading 2019 - 2024. From $1,299 installed.</p>").filter((l) => l.startsWith("phone")), []);
 });
 
+test("a written date is not a phone number", () => {
+  // FOUND BY REVIEW, reproduced: "Effective 01.05.2024" extracted phone=01052024, so a policy
+  // page carrying an effective date argued with the site's real phone number and the operator
+  // was handed a phone disagreement whose second value was a date.
+  assert.deepEqual(labels("<p>Effective 01.05.2024 until further notice.</p>"), []);
+  assert.deepEqual(labels("<p>Signed 01-05-2024.</p>"), []);
+  assert.deepEqual(labels("<p>Updated 2024-05-01.</p>"), []);
+  // Dots are not how a phone number is punctuated at this length either.
+  assert.deepEqual(labels("<p>0.5 1.0 2.0 4.5</p>"), []);
+  // And every grouping a phone is actually written in is a different shape, so it still reads.
+  assert.deepEqual(labels("<p>Call 02 9876 5432.</p>"), ["phone=0298765432"]);
+  assert.deepEqual(labels("<p>Call 0412 345 678.</p>"), ["phone=0412345678"]);
+});
+
+test("a service number and a mobile fold onto their national form", () => {
+  // The country-code fold missed the twelve-digit shapes, so a site writing both spellings of
+  // its own number was permanently in disagreement with itself.
+  assert.deepEqual(labels("<p>Call +61 1300 123 456 or 1300 123 456.</p>"), ["phone=1300123456"]);
+  assert.deepEqual(labels("<p>Call +61 (0)412 345 678 or 0412 345 678.</p>"), ["phone=0412345678"]);
+});
+
 test("an ABN is eleven digits under its own label", () => {
   assert.deepEqual(labels("<p>ABN 12 345 678 901</p>"), ["ABN=12345678901"]);
   assert.deepEqual(labels("<p>ABN: 12345678901</p>"), ["ABN=12345678901"]);
@@ -184,6 +213,20 @@ test("a listing card carrying a date is excluded too", () => {
   const list = `<ul><li><a href="/blog/x"><h2>Old news</h2>
     <time datetime="2019-06-01">1 June 2019</time><p>38 reviews and counting.</p></a></li></ul>`;
   assert.deepEqual(labels(list), []);
+});
+
+test("a dated card is excluded whatever element wraps it", () => {
+  // The shipped scaffold uses <li> and <article>, both covered, but a hand-built listing grid
+  // of <div> or <a> cards is ordinary and that is what a customer build produces.
+  assert.deepEqual(labels('<div class="card"><time datetime="2019-06-01">2019</time><p>38 reviews</p></div>'), []);
+  assert.deepEqual(labels('<a href="/p/1"><time datetime="2019-06-01">2019</time><p>38 reviews</p></a>'), []);
+});
+
+test("a dated element does not swallow the page around it", () => {
+  // The bound that makes the rule above safe. A <div> wrapping the whole body, with a
+  // copyright <time> somewhere inside it, must not silence every claim on the page.
+  const page = `<div id="app"><p>42 reviews</p>${"<p>filler</p>".repeat(400)}<footer><time datetime="2026">2026</time></footer></div>`;
+  assert.deepEqual(labels(page), ["reviews=42"]);
 });
 
 test("a page whose own JSON-LD calls it an article is a dated entry, whole", () => {
@@ -303,6 +346,27 @@ test("a label with many values is a list, set aside by name rather than reported
   assert.match(r.out, /rating \(5 values\)/, r.out);
 });
 
+test("a clash hidden inside a set-aside list has a route to it", () => {
+  // THE HALF THAT WAS MISSING. A genuine clash can hide under a catalogue: the home page's 4.9
+  // against the reviews page's 4.7, buried beneath three card ratings. Suppressing the label
+  // was the right call and leaving the operator no way to look was not.
+  const dir = site({
+    "/": "<p>4.9 stars</p>", "/reviews": "<p>Our rating: 4.7</p>",
+    "/a": "<p>4.5 stars</p>", "/b": "<p>4.2 stars</p>", "/c": "<p>3.9 stars</p>",
+  });
+  const quiet = runMerged(dir);
+  assert.match(quiet.out, /gate-facts: clean/, quiet.out);
+  assert.match(quiet.out, /Re-run with --all for their values and pages/, quiet.out);
+  assert.doesNotMatch(quiet.out, /\/reviews/, quiet.out);      // no values printed without it
+
+  const all = runMerged(dir, "--all");
+  assert.match(all.out, /set aside as a list rather than a claim:/, all.out);
+  assert.match(all.out, /4\.9 {2}on \//, all.out);
+  assert.match(all.out, /4\.7 {2}on \/reviews/, all.out);
+  // The clause stops advertising the flag once the flag is in use.
+  assert.doesNotMatch(all.out, /Re-run with --all/, all.out);
+});
+
 test("a real disagreement still fires beside a list that was set aside", () => {
   const dir = site({
     "/": "<p>4.9 stars. 42 reviews.</p>", "/a": "<p>4.7 stars</p>", "/b": "<p>4.5 stars</p>",
@@ -345,6 +409,44 @@ test("it refuses to grade the plugin itself", () => {
   const r = run(ROOT);
   assert.equal(r.code, 2, r.out);
   assert.match(r.out, /gate-facts: refused:/, r.out);
+});
+
+// ------------------------------------------- the standing false-positive measurement
+
+/**
+ * The fixture is copied out of the repo before it is read, because it lives inside a plugin
+ * checkout and the gate refuses to grade one. Every other suite here does the same.
+ */
+function fixtureSite(name) {
+  const dir = join(TMP, name);
+  cpSync(SITE_FIXTURE, dir, { recursive: true });
+  return dir;
+}
+
+test("the adversarial fixture is silent, and not because it read nothing", () => {
+  // THIS IS THE MEASUREMENT. Five pages of ordinary trade copy that contradict nothing, carrying
+  // every shape known to have misfired: an out-of-five proportion, three written dates, prices,
+  // order numbers, a code sample, a retired number in a pre block, a product grid of ratings,
+  // one phone in two conventions, one ABN in two spellings, two year claims in one sentence, and
+  // a 2019 post quoting the review count of its day. A check that fires here gets switched off.
+  const r = runMerged(fixtureSite("fixture-clean"));
+  assert.match(r.out, /gate-facts: clean/, r.out);
+  assert.match(r.out, /inspected 7 page\(s\), 29 labelled value\(s\)/, r.out);
+  // The catalogue is the one label set aside, which is the honest outcome rather than a miss.
+  assert.match(r.out, /1 label\(s\) set aside as a list rather than a claim: rating \(5 values\)/, r.out);
+});
+
+test("the same fixture fires the moment one number disagrees", () => {
+  // Silence is only evidence if the fixture is capable of speaking. One number changed on one
+  // page reproduces the engineer's complaint exactly, and names both sides.
+  const dir = fixtureSite("fixture-clash");
+  const page = join(dir, "build", "about", "index.html");   // `build`, not `dist`: the repo gitignores dist/
+  writeFileSync(page, readFileSync(page, "utf8").replace("42 reviews", "41 reviews"));
+  const r = runMerged(dir);
+  assert.match(r.out, /gate-facts: 1 disagreement\(s\)/, r.out);
+  assert.match(r.out, /\[reviews\]/, r.out);
+  assert.match(r.out, /42 {2}on \//, r.out);
+  assert.match(r.out, /41 {2}on \/about/, r.out);
 });
 
 // -------------------------------------------------------- folded into the done gate
@@ -403,6 +505,19 @@ test("the done gate reports a clean facts pass as clean, and says nothing more",
   assert.match(r.out, /facts=clean/, r.out);
   // No pointer when there is nothing to point at: the summary is read every build.
   assert.doesNotMatch(r.out, /^ {2}Facts:/m, r.out);
+});
+
+test("the done gate carries the route to a set-aside list too", () => {
+  // `facts=clean` over a suppressed label reads as a bill of health. The summary says a label
+  // was set aside and how to look at it, on its own indented line so the Stop hook forwards it.
+  const dir = doneProject("done-aside", {
+    "/": "<p>4.9 stars</p>", "/reviews": "<p>Our rating: 4.7</p>",
+    "/a": "<p>4.5 stars</p>", "/b": "<p>4.2 stars</p>", "/c": "<p>3.9 stars</p>",
+  });
+  const r = done(dir);
+  assert.match(r.out, /facts=clean/, r.out);
+  assert.match(r.out, /^ {2}Facts: 1 label\(s\) set aside as a list/m, r.out);
+  assert.match(r.out, /gate-facts\.mjs" "[^"]*done-aside" --all/, r.out);
 });
 
 test("with no dist the done gate reports facts as skipped, with a reason", () => {

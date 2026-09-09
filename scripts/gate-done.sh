@@ -494,7 +494,17 @@ if [ -f "$FACTS_GATE" ]; then
          # Exit 0 with a line this shell does not recognise is the gate having changed its
          # wording, not the site being clean. Say so rather than printing a bill of health.
          *) facts_skip="gate-facts printed an unrecognised result" ;;
-       esac ;;
+       esac
+       # A LABEL SET ASIDE AS A LIST IS NOT NOTHING, and "facts=clean" over one reads as a bill
+       # of health. The gate suppresses a label carrying more than three values (a rating per
+       # product card, a phone per branch) because reporting those is the false alarm that gets
+       # a check switched off, and a genuine clash can hide underneath one. So the count travels
+       # with the command that prints the values, on its own indented line like the one above.
+       facts_aside=""
+       [ -z "$facts_skip" ] && facts_aside="$(printf '%s' "$facts_first" | sed -n 's/.*[^0-9]\([0-9][0-9]*\) label(s) set aside.*/\1/p' | head -1)"
+       if [ -n "${facts_aside:-}" ]; then
+         facts_detail="$facts_detail"$'\n'"  Facts: ${facts_aside} label(s) set aside as a list rather than a claim (a rating per card, a phone per branch). See their values: node \"$FACTS_GATE\" \"$PROJ\" --all"
+       fi ;;
     2) case "$facts_first" in
          "skipped ("*)
            facts_skip="${facts_first#skipped (}"

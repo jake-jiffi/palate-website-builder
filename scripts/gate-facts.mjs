@@ -38,9 +38,14 @@
  *                                        branch. Named and set aside, never reported as a
  *                                        contradiction and never silently dropped.
  *
- * Usage:  node gate-facts.mjs [project-dir]
+ * Usage:  node gate-facts.mjs [project-dir] [--all]
+ *          --all also prints the labels set aside as lists, with their values and pages.
  * Exit:   0 always when it could run (clean OR findings: it is advisory),
  *         2 cannot check (never a pass).
+ *
+ * KNOWN AND ACCEPTED: tags are stripped with a regex, so an attribute value containing a literal
+ * `>` leaks its text into the prose. Built output essentially never carries one, and a scanner
+ * that respects quoted attributes buys accuracy this check does not need.
  */
 import { readFileSync, statSync } from "node:fs";
 import { relative } from "node:path";
@@ -90,12 +95,18 @@ function closeOf(html, tag, from) {
  * THE BLOCK, NOT THE PAGE. Excluding a whole page the moment any `<time datetime>` appears
  * would be simpler and would switch the gate off across an entire site the first time a footer
  * carried a copyright year in a `<time>`. A check that silently stops looking is the class of
- * fault this repo hunts, so the exclusion is scoped to the entry that carries the date:
- * `<article>` is the post, `<li>` is the listing card.
+ * fault this repo hunts, so the exclusion is scoped to the entry that carries the date.
+ *
+ * FOUR WRAPPERS, NOT TWO. `<article>` is the post and `<li>` is the listing card, which is what
+ * the shipped scaffold emits, and a hand-built listing grid of `<div>` or `<a>` cards is just as
+ * ordinary on a customer build. `CARD_BYTES` is what makes the loose two safe: a `<div>` holding
+ * a whole page body, with a copyright `<time>` in its footer, would otherwise silence every
+ * claim on the page. A card is small; a page wrapper is not.
  */
+const CARD_BYTES = 4000;
 function stripDatedBlocks(html) {
   let out = html;
-  for (const tag of ["article", "li"]) {
+  for (const tag of ["article", "li", "a", "div"]) {
     const open = new RegExp(`<${tag}\\b[^>]*>`, "gi");
     const keep = [];
     let last = 0;
@@ -105,6 +116,7 @@ function stripDatedBlocks(html) {
       if (end < 0) continue;                       // unbalanced markup: leave it alone
       const block = out.slice(m.index, end);
       if (!/\bdatetime\s*=/i.test(block)) continue;
+      if ((tag === "a" || tag === "div") && block.length > CARD_BYTES) continue;
       keep.push(out.slice(last, m.index));
       last = end;
       open.lastIndex = end;
@@ -148,15 +160,46 @@ const digitsOf = (s) => s.replace(/\D/g, "");
  * Stripping punctuation alone (which is all "ignores spaces and brackets" asks for) leaves
  * `+61 2 9876 5432` and `(02) 9876 5432` looking like two different numbers, and a site that
  * writes the international form in its schema and the local form in its footer would be
- * permanently in disagreement with itself. Three folds, for the markets this product serves.
+ * permanently in disagreement with itself.
+ *
+ * THE LENGTH-KEYED FOLDS MISSED THE TWELVE-DIGIT SHAPES. `+61 1300 123 456` is twelve digits
+ * and kept its country code while `1300 123 456` did not, so the two spellings of one service
+ * number disagreed. The AU fold is now keyed on the country code rather than on a length that
+ * varies by number type, and it restores the trunk zero only when the number does not already
+ * carry one, which is what makes `+61 (0)412 345 678` and `0412 345 678` the same number
+ * without needing to know the brackets were there.
  */
 export function normalisePhone(raw) {
   let d = digitsOf(raw);
   if (d.startsWith("00")) d = d.slice(2);                                  // international access code
-  if (d.length === 11 && d.startsWith("61")) return "0" + d.slice(2);      // AU
+  if (d.startsWith("61") && d.length >= 10 && d.length <= 12) {            // AU, landline mobile or service
+    const rest = d.slice(2);
+    // A 1300 or 1800 service number has no trunk zero to restore, and giving it one invents a
+    // number nobody dials. Everything else gains the zero the national form is written with.
+    return rest.startsWith("0") || /^1[38]00/.test(rest) ? rest : "0" + rest;
+  }
   if (d.length === 12 && d.startsWith("44")) return "0" + d.slice(2);      // UK
   if (d.length === 11 && d.startsWith("1")) return d.slice(1);             // NANP
   return d;
+}
+
+/**
+ * Is this candidate a written date rather than a number anyone can ring?
+ *
+ * FOUND BY REVIEW: "Effective 01.05.2024" is eight digits with a leading zero, which is exactly
+ * the shape the phone guard accepts, so a policy page carrying an effective date argued with the
+ * site's real phone number.
+ *
+ * THE SHAPE ALONE DECIDES IT. A first draft also checked that the month was one to twelve, so a
+ * run like `12 34 5678` could stay a phone, and no test could be written for it: there is no
+ * real phone number written in two-two-four. An undemonstrable guard is the thing this file
+ * removed once already, so it went. Every grouping a phone is actually written in (two-four-four
+ * bracketed, four-three-three mobile or service, one-plus-country-code) is a different shape and
+ * is untouched.
+ */
+function looksLikeDate(raw) {
+  const shape = String(raw).trim().split(/\D+/).filter(Boolean).map((g) => g.length).join(",");
+  return shape === "2,2,4" || shape === "4,2,2";
 }
 
 const DAY_KEY = {
@@ -192,6 +235,13 @@ const P_STARS = /(?<![\d.,])(\d+\.\d+)\s*(?:\/\s*5)?\s*(?:★\s*)?\b(?:stars?|st
 // of one. The slash form therefore refuses a neighbour on either side: a digit or a slash
 // before it, and a slash or another digit after the 5.
 const P_OUT_OF_5 = /(?<![\d.,\/])(\d+(?:\.\d+)?)\s*(?:\/\s*5(?!\s*[\/\d])|\bout\s+of\s+5\b)/gi;
+// A WHOLE NUMBER OUT OF FIVE IS USUALLY A PROPORTION, NOT A RATING. "4 out of 5 customers
+// recommend us" and "4/5 calls answered within the hour" are ordinary testimonial copy, and
+// reading them as a rating put them in argument with the site's real 4.9 on the same page. A
+// decimal is self-evidently a measured average; a whole number needs something nearby to say
+// so, which "rated 5 out of 5" and "5 out of 5 stars" both do.
+const RATING_WORD_BEFORE = /\b(?:rated|rating|rate|scored?|stars?|reviews?)\W{0,12}$/i;
+const RATING_WORD_AFTER = /^\W{0,3}(?:stars?|★|rating)\b/i;
 const P_RATING_OF = /\brating\b\s*(?:of|is|:)?\s*(?<![\d.,])(\d+(?:\.\d+)?)/gi;
 // THE QUALIFIER IS PART OF THE LABEL, and it was not until a clean fixture proved it had to
 // be. "25 years in the trade, 20 years in business under this name" is one ordinary sentence
@@ -261,6 +311,9 @@ export function extractFacts(html) {
     for (const m of text.matchAll(re)) {
       const n = Number.parseFloat(m[1]);
       if (!Number.isFinite(n) || n < 0 || n > 5) continue;
+      if (re === P_OUT_OF_5 && !m[1].includes(".")
+          && !RATING_WORD_BEFORE.test(text.slice(0, m.index))
+          && !RATING_WORD_AFTER.test(text.slice(m.index + m[0].length))) continue;
       push("rating", String(n), text, m.index, m[0].length);
     }
   }
@@ -277,6 +330,10 @@ export function extractFacts(html) {
     // code, a leading trunk zero, or one of the AU service prefixes. Anything else in this
     // shape is a year range, a price or an order number.
     if (!(/^[+(]/.test(raw.trim()) || d.startsWith("0") || /^1[38]00/.test(d))) continue;
+    if (looksLikeDate(raw)) continue;
+    // Nobody punctuates a number this short with full stops, and plenty of pages punctuate a
+    // date that way. Longer dotted runs (555.123.4567) are left alone.
+    if (raw.includes(".") && d.length < 9) continue;
     push("phone", normalisePhone(raw), text, m.index, raw.length);
   }
 
@@ -340,8 +397,12 @@ const PAGES_NAMED = 3;
  * a contradiction is the false alarm that gets a check switched off. Two values is somebody
  * having typed the number twice; twelve is a catalogue.
  *
- * SET ASIDE, NEVER SILENT. A check that quietly stops looking is the fault this repo hunts, so
- * the label is still named on its own line with its count. The operator can see it decided.
+ * SET ASIDE, NEVER SILENT, AND NOW WITH A ROUTE TO THE DETAIL. Naming the label and its count
+ * was half the job: a genuine clash can hide inside a suppressed label (the home page's 4.9
+ * against the reviews page's 4.7, buried under five card ratings) and nothing printed the
+ * values, so the operator could not judge whether the suppression mattered. `--all` prints
+ * them, and the set-aside clause says so. A count with no route to the detail is the same
+ * defect this gate's own summary line was fixed for.
  */
 const MAX_VALUES_REPORTED = 3;
 const namePages = (pages) =>
@@ -350,7 +411,9 @@ const namePages = (pages) =>
     : `${pages.slice(0, PAGES_NAMED).join(", ")} and ${pages.length - PAGES_NAMED} more`;
 
 function main() {
-  const dir = process.argv[2] && !process.argv[2].startsWith("-") ? process.argv[2] : ".";
+  const args = process.argv.slice(2);
+  const showAll = args.includes("--all");
+  const dir = args.find((a) => !a.startsWith("-")) || ".";
 
   // NEVER GRADE THE PLUGIN'S OWN FILES. This defaults to ".", and the plugin's own templates
   // and doctrine quote example numbers on purpose.
@@ -403,13 +466,25 @@ function main() {
   const setAside = all.filter((d) => d.values.length > MAX_VALUES_REPORTED);
   const asideClause = setAside.length
     ? ` ${setAside.length} label(s) set aside as a list rather than a claim: ` +
-      `${setAside.map((d) => `${d.label} (${d.values.length} values)`).join(", ")}.`
+      `${setAside.map((d) => `${d.label} (${d.values.length} values)`).join(", ")}.` +
+      (showAll ? "" : " Re-run with --all for their values and pages.")
     : "";
+  const printValues = (d) => {
+    for (const v of d.values) console.error(`      ${v.value}  on ${namePages(v.pages)}  "${v.context}"`);
+  };
+  const printSetAside = () => {
+    if (!showAll || !setAside.length) return;
+    for (const d of setAside) {
+      console.error(`  [${d.label}] ${d.values.length} values, set aside as a list rather than a claim:`);
+      printValues(d);
+    }
+  };
 
   if (!found.length) {
     console.log(
       `gate-facts: clean (inspected ${inspected} page(s), ${values} labelled value(s); no label carries two values).${asideClause}`,
     );
+    printSetAside();
     process.exit(0);
   }
 
@@ -419,8 +494,9 @@ function main() {
   );
   for (const d of found) {
     console.error(`  [${d.label}] ${d.values.length} values across ${new Set(d.values.flatMap((v) => v.pages)).size} page(s):`);
-    for (const v of d.values) console.error(`      ${v.value}  on ${namePages(v.pages)}  "${v.context}"`);
+    printValues(d);
   }
+  printSetAside();
   process.exit(0);
 }
 

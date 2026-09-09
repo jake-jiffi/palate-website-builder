@@ -152,7 +152,9 @@ Read the wording, not the exit code:
   different claims and the second one is a skip wearing a pass.
 - **N disagreement(s)** each one names the label, both values, and a page carrying each. Put
   them under REVIEW, never under BLOCKING: the answer is a question for the owner, not a fix.
-- **2** it could not check. There is no built output, so nothing was compared. Build first.
+- **2** it could not check, which covers three things: there is no built output, the output
+  holds no indexable page, or the path given was the Palate plugin rather than a site. It says
+  which. Nothing was compared either way, so do not record it as clean.
 
 Dated content is excluded by design, so a 2019 post quoting the review count of the day is
 never quoted back at the owner. So is anything inside a code block. Structured data is not
@@ -161,7 +163,15 @@ record, and section 5 owns that question.
 
 A label carrying more than three values is a LIST, not a claim: a rating on every product
 card, a phone number per branch. Those are named on the same line and set aside rather than
-reported. If a label you expected to see is in that clause, that is the reason.
+reported. If a label you expected to see is in that clause, that is the reason, and a genuine
+clash can hide under one, so look:
+
+```bash
+node "$PALATE/scripts/gate-facts.mjs" "$SITE" --all
+```
+
+That prints the set-aside labels with every value and the pages carrying each. Read it whenever
+the clean line names one, and put anything real under REVIEW with the rest.
 
 ## 7. Orphans and dead internal links
 
