@@ -80,6 +80,28 @@ const existing = Array.isArray(explore.picks) ? explore.picks.slice() : [];
  * is read from `explore.boards`, which boards-render recorded when the set went out.
  */
 const registryPath = join(dir, "src/lib/variants.ts");
+
+/**
+ * IS THIS A PALATE SITE AT ALL? The registry check used to answer that as a side effect, and
+ * scoping it to the pick flags took the answer with it: `--proof` against an empty directory
+ * exited 0 and printed "motion proof recorded" while stderr muttered that there was no manifest.
+ *
+ * That is the failure this repo has already paid for. The doctrine's invocation takes a
+ * `<project-dir>` the model supplies, and on a real client build the manifest sat at a repo root
+ * while the site sat one level down: every gate resolved to a directory holding none of the
+ * artefacts and the whole suite went quiet. A success line on the wrong directory is that fault
+ * with a reassuring message on top.
+ *
+ * EITHER file is enough, which is what keeps a post-Compose `--proof` working: after the clear
+ * the registry is empty or gone and the manifest is the site's identity.
+ */
+if (!existsSync(registryPath) && !existsSync(manifestPath)) {
+  badArgs(
+    `Not an Explore build: no src/lib/variants.ts and no build-manifest.json under ${dir}. ` +
+    "Nothing recorded. Name the site directory, not the repository root.",
+  );
+}
+
 const registryBoards = existsSync(registryPath) ? parseRegistry(readFileSync(registryPath, "utf8")) : [];
 const recordedBoards = (Array.isArray(explore.boards) ? explore.boards : [])
   .filter((b) => b && b.id)
@@ -117,7 +139,9 @@ function resolvePick(surface, id) {
   if (!b) refuse(`${id} is not a registered board. Registered in ${boardsSource}: ${ids}.`);
   const rung = Number(b.ambition);
   if (!Number.isFinite(rung) || rung < 1 || rung > N) {
-    refuse(`${id} carries rung ${b.ambition}, which is outside 1 to ${N}. The ladder is broken; fix src/lib/variants.ts before recording a pick against it.`);
+    // Named from the source the rung was actually read from. Sending someone to the registry
+    // for a number the manifest supplied is sending them to a file that may not exist any more.
+    refuse(`${id} carries rung ${b.ambition}, which is outside 1 to ${N}. The ladder is broken; fix ${boardsSource} before recording a pick against it.`);
   }
   if (existing.some((p) => p.surface === surface) && !flag("--replace")) {
     const held = existing.find((p) => p.surface === surface);

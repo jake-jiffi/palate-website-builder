@@ -214,6 +214,41 @@ test("a pick after the registry is gone is judged against what boards-render rec
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a directory that is not a Palate site is refused, never reported as recorded", async () => {
+  const empty = mkdtempSync(join(tmpdir(), "palate-pick-empty-"));
+  // THE WRONG PROJECT DIRECTORY IS THE FAILURE THIS REPO HAS ALREADY PAID FOR. The doctrine's
+  // invocation takes a <project-dir> the model supplies, and on a real build the manifest sat at
+  // a repo root while the site sat one level down, which turned every gate off. A success line
+  // on an empty directory is that fault with a reassuring message on top of it.
+  const r = await run([empty, "--proof", "https://palate-fixture.vercel.app/"]);
+  assert.equal(r.status, 2, `an empty directory must be bad arguments, not a recorded proof:\n${r.stdout}${r.stderr}`);
+  assert.match(r.stderr, /Not an Explore build/);
+  assert.ok(!/motion proof recorded/.test(r.stdout), "it printed a success line for a directory holding nothing");
+  rmSync(empty, { recursive: true, force: true });
+
+  // And the case N3 opened stays open: the registry gone, the manifest present.
+  const dir = project();
+  rmSync(join(dir, "src/lib/variants.ts"));
+  const ok = await run([dir, "--proof", "https://palate-fixture.vercel.app/"]);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.ok(manifestOf(dir).explore.proof.url);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a broken rung names the record it was read from", async () => {
+  const dir = project();
+  rmSync(join(dir, "src/lib/variants.ts"));
+  const m = manifestOf(dir);
+  m.explore.boards[2].rung = 9;
+  writeFileSync(join(dir, "build-manifest.json"), JSON.stringify(m, null, 2));
+  const r = await run([dir, "--hero", "b3"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /rung 9/);
+  assert.match(r.stderr, /build-manifest/, "it sent the reader to the registry, which is not where the rung came from");
+  assert.ok(!/fix src\/lib\/variants\.ts/.test(r.stderr), "it named the registry as the thing to fix");
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("an intensity outside 1 to 4 is refused", async () => {
   const dir = project();
   const r = await run([dir, "--intensity", "7"]);
