@@ -92,11 +92,20 @@ const variant = variants.find((v) => v.id === ${JSON.stringify(b.id)});
 ---
 {variant && (
   <BoardFrame variant={variant}>
-    <section slot="hero" class="bg-brand-bg relative px-6 py-24">
+    <Fragment slot="head">
+      {/* A cross-origin stylesheet. Reading its rules throws, and the head is never
+          serialised, so without explicit handling the faces a brand-creation Explore
+          chose are simply absent from the artboard. */}
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fixture+Face:wght@400&display=swap" />
+    </Fragment>
+    <section slot="hero" class="bg-brand-bg relative px-6 py-24" style="background-image:url('/_fixture/bg.png');background-size:cover">
       <SectionMark id="${b.id}-hero" />
       <h1 class="font-display text-brand-text text-5xl">${b.name}</h1>
       <p class="text-brand-muted mt-6 max-w-xl">${b.what}</p>
       <img src="/_fixture/photo.png" alt="A fixture photograph" width="640" height="400" />
+      {/* A band the page never scrolls to, held at opacity 0 until a reveal fires. */}
+      <div style="height:1400px"></div>
+      <p data-reveal class="reveal-band" style="opacity:0">The band a scroll reveal brings in.</p>
     </section>
     <section slot="section" class="bg-brand-bg relative px-6 py-20">
       <SectionMark id="${b.id}-${b.section}" />
@@ -105,9 +114,14 @@ const variant = variants.find((v) => v.id === ${JSON.stringify(b.id)});
           artboard never serialises, so without this the stripping assertions would be true by
           construction and would pass on a script-stripper that had been deleted. */}
       <script is:inline src="https://tracker.example.com/t.js"></script>
-      {/* And the site's own motion, self-contained and declared, which SHOULD travel. */}
+      {/* And the site's own motion, self-contained and declared, which SHOULD travel. It is a
+          real IntersectionObserver, so the reveal only resolves if something actually scrolls
+          the page before the harvest. */}
       <script is:inline data-palate-motion>
-        document.querySelectorAll("[data-reveal]").forEach((n) => n.classList.add("is-in"));
+        const io = new IntersectionObserver((entries) => {
+          for (const e of entries) if (e.isIntersecting) { e.target.style.opacity = "1"; e.target.setAttribute("data-revealed", "1"); }
+        });
+        document.querySelectorAll("[data-reveal]").forEach((n) => io.observe(n));
       </script>
     </section>
   </BoardFrame>
@@ -144,9 +158,11 @@ before(async () => {
   mkdirSync(join(SITE, "src/pages/boards"), { recursive: true });
   rmSync(join(SITE, "src/pages/boards/b1.astro"), { force: true });
   for (const b of BOARDS) writeFileSync(join(SITE, `src/pages/boards/${b.id}.astro`), boardPage(b));
-  // A real raster the flattener has to carry into the seed directory.
+  // Real rasters the flattener has to carry into the seed directory: one as an <img>, one as
+  // a CSS background, which is the shape a hero photograph usually takes.
   mkdirSync(join(SITE, "public/_fixture"), { recursive: true });
   writeFileSync(join(SITE, "public/_fixture/photo.png"), pngFixture(640, 400));
+  writeFileSync(join(SITE, "public/_fixture/bg.png"), pngFixture(1440, 900));
   ready = true;
 });
 
@@ -274,6 +290,52 @@ test("two boards render to two artboards the canvas can open", async (t) => {
     // The flattening actually happened: the panel has something to edit.
     assert.ok(/style="[^"]*font-size:/.test(a), `${f} has no inline font-size, so the property panel edits nothing`);
     assert.ok(/style="[^"]*color:/.test(a), `${f} has no inline colour`);
+
+    // I3. A CSS BACKGROUND IMAGE IS AN IMAGE. A hero photograph is usually set as one, and
+    // `rule.cssText` serialises its URL absolute, so it survived as a link to the local build
+    // server: no egress in the canvas, no refusal either, and the hero renders blank on the one
+    // surface the client picks from.
+    // Google's two font hosts are the ONLY external origins the canvas allows, so they are the
+    // only ones a url() may name. Everything else has to be a file beside the artboard.
+    const remote = [...a.matchAll(/url\((["']?)(https?:\/\/[^)"']+)\1\)/g)]
+      .map((m) => m[2])
+      .filter((u) => !/^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(u));
+    assert.equal(remote.length, 0,
+      `${f} points a url() at an origin the canvas cannot reach: ${remote.slice(0, 2).join(", ")}`);
+    const bgs = [...a.matchAll(/url\((["']?)([^)"']+)\1\)/g)]
+      .map((m) => m[2])
+      .filter((u) => !u.startsWith("data:") && !/^https?:\/\//.test(u));
+    assert.ok(bgs.length, `${f} carries no url() at all, so this assertion is measuring nothing`);
+    for (const u of bgs) {
+      assert.ok(!/[/:]/.test(u), `${f} references ${u} in a url(), which is not a bare filename`);
+      assert.ok(existsSync(join(seed, u)), `${f} references ${u} in a url(), which is not in the seed directory`);
+      assert.ok(statSync(join(seed, u)).size <= 70 * 1024, `${u} is over the 70 KB ceiling`);
+    }
+
+    // I4. THE GOOGLE FONTS SHEET IS CROSS-ORIGIN, so cssRules throws and the head is never
+    // serialised. Without explicit handling the faces a brand-creation Explore chose are simply
+    // absent, and the fidelity gate's own copy calls the faces the loudest thing a client picked.
+    assert.match(a, /@import url\(["']?https:\/\/fonts\.googleapis\.com/,
+      `${f} lost its Google Fonts stylesheet, so the artboard renders in a face nobody chose`);
+    const helmetStyle = /<helmet><style>([\s\S]*?)<\/style>/.exec(a);
+    assert.ok(helmetStyle, `${f} has no helmet style`);
+    assert.match(helmetStyle[1].trimStart(), /^@import/,
+      `${f} puts @import after other rules, where CSS ignores it`);
+
+    // I5. THE DIRECTION PICKER IS OPERATOR SCAFFOLDING. Its links 404 inside the canvas and a
+    // client can select and restyle it.
+    // Keyed on the ELEMENT, not on any mention: the picker's own rules survive in the helmet
+    // stylesheet, which is dead CSS rather than scaffolding a client can select and restyle.
+    assert.ok(!/class="[^"]*\bev-(switcher|panel|pill)\b/.test(a), `${f} carries the direction picker`);
+    assert.ok(!/<a\b[^>]*href="\/boards\//.test(a), `${f} carries a link to another board, which 404s inside the canvas`);
+
+    // I6. A REVEAL HELD BELOW THE FOLD IS CAPTURED IN ITS UNSEEN STATE unless something scrolls
+    // the page first. The bold rungs are the ones told to use scroll-as-timeline, so they are
+    // the ones most likely to flatten with everything below the hero invisible.
+    assert.match(a, /data-revealed="1"/,
+      `${f} was captured before its scroll reveals fired, so it holds the unseen state`);
+    assert.ok(!/data-reveal[^>]*style="[^"]*opacity:\s*0(;|")/.test(a),
+      `${f} carries a reveal still at opacity 0`);
   }
 
   const canvas = JSON.parse(readFileSync(join(seed, "canvas.json"), "utf8"));
@@ -292,6 +354,11 @@ test("two boards render to two artboards the canvas can open", async (t) => {
     assert.ok(existsSync(join(SITE, "public/_explore", `${id}.png`)));
 
     const archived = readFileSync(join(SITE, ".palate/explore/shots", id, "rendered.html"), "utf8");
+
+    // The archived render is the fidelity gate's evidence and the uniqueness gate's, so it has
+    // to hold the SEEN state too: a page captured at scroll 0 archives its reveals unfired.
+    assert.match(archived, /data-revealed="1"/,
+      `${id}'s archived render was taken before its scroll reveals fired`);
 
     // BUILT IN EXPLORE MODE, or the boards do not exist in the output. SectionMark renders
     // nothing without PUBLIC_EXPLORE_MODE, so the archived renders came back with no section

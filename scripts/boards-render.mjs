@@ -274,8 +274,11 @@ export async function inlineComputedStyles(page, propertyList) {
  * The support.js line is copied verbatim because the editor replaces it; changing its spelling
  * is how an artboard stops being editable with nothing saying so.
  */
-export function toArtboard({ html, css, fonts = "", script = "", name = "" }) {
+export function toArtboard({ html, css, fonts = "", imports = [], script = "", name = "" }) {
   const head = [
+    // @import MUST COME FIRST. CSS ignores an @import that follows any other rule, so a
+    // Google Fonts sheet appended after the stylesheet is a sheet that never loads, silently.
+    ...imports.map((href) => `@import url("${href}");`),
     fonts,
     css,
     // The frame is fixed at 1440. Without this the flattened body inherits the canvas's own
@@ -517,27 +520,53 @@ async function main() {
       const res = await page.goto(`${base}/${route}/`, { waitUntil: "networkidle", timeout: 45000 }).catch(() => null);
       if (!res || !res.ok()) failSeed(`board ${b.id} did not load at /${route}/ (${res ? res.status() : "no response"}). Nothing written.`);
       await page.waitForTimeout(400);
+      await settle(page);
 
       // --- what the artboard is made of, read from the rendered page ---------------------
       const harvest = await page.evaluate(() => {
         const css = [];
+        // A CROSS-ORIGIN SHEET THROWS ON cssRules and is not a sheet we can inline, but it is
+        // also not a sheet we may lose: a Google Fonts link is the one external host the canvas
+        // allows, and the head is never serialised, so it has to be carried explicitly.
+        const imports = [];
         for (const sheet of document.styleSheets) {
           try {
             for (const rule of sheet.cssRules) css.push(rule.cssText);
-          } catch { /* a sheet we cannot read is a sheet we cannot inline */ }
+          } catch {
+            if (sheet.href && /^https:\/\/fonts\.googleapis\.com\//.test(sheet.href)) imports.push(sheet.href);
+          }
+        }
+        for (const l of document.querySelectorAll('link[rel="stylesheet"][href*="fonts.googleapis.com"]')) {
+          if (l.href && !imports.includes(l.href)) imports.push(l.href);
         }
         const images = [];
         for (const img of document.images) {
           const src = img.currentSrc || img.src;
           if (src) images.push(src);
         }
+        // A HERO PHOTOGRAPH IS USUALLY A BACKGROUND, not an <img>, and `rule.cssText`
+        // serialises its URL absolute, so it survived into the artboard as a link to the local
+        // build server. The canvas has no egress, so it renders blank, with no refusal.
+        const backgrounds = [];
+        const readUrls = (text) => {
+          for (const m of String(text || "").matchAll(/url\((["']?)([^)"']+)\1\)/g)) {
+            const u = m[2];
+            if (!u || u.startsWith("data:")) continue;
+            if (/\.(woff2?|ttf|otf|eot)(\?|$)/i.test(u)) continue;   // faces are inlineFonts' work
+            backgrounds.push(new URL(u, document.baseURI).toString());
+          }
+        };
+        for (const el of document.querySelectorAll("*")) readUrls(getComputedStyle(el).backgroundImage);
+        readUrls(css.join("\n"));
         const scripts = [];
         for (const s of document.querySelectorAll("script")) {
           scripts.push({ src: s.src || null, text: s.src ? "" : s.textContent || "", motion: s.hasAttribute("data-palate-motion") });
         }
         return {
           css: css.join("\n"),
+          imports,
           images: [...new Set(images)],
+          backgrounds: [...new Set(backgrounds)],
           scripts,
           height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
         };
@@ -563,8 +592,11 @@ async function main() {
       await page.screenshot({ path: join(boardShots, "hero.png"), fullPage: false });
 
       // --- images: written beside the artboard, bare filenames, under the ceiling --------
+      // Both kinds in one loop, deliberately: an <img> and a `background-image` are the same
+      // problem to a canvas with no network, and two loops is how one of them gets forgotten.
       const imageMap = {};
-      for (const url of harvest.images) {
+      for (const url of [...harvest.images, ...harvest.backgrounds]) {
+        if (imageMap[url]) continue;
         let buf;
         try {
           const r = await ctx.request.get(url);
@@ -629,13 +661,38 @@ async function main() {
           img.removeAttribute("sizes");
           img.removeAttribute("loading");
         }
-        for (const el of document.querySelectorAll("source, script, link, noscript, template")) el.remove();
+        // The same rewrite for every url() the page carries inline. The helmet copy is done in
+        // Node, below, over the collected CSS.
+        for (const el of document.querySelectorAll("[style]")) {
+          const st = el.getAttribute("style");
+          if (!st || !st.includes("url(")) continue;
+          el.setAttribute("style", st.replace(/url\((["']?)([^)"']+)\1\)/g, (whole, q, u) => {
+            if (!u || u.startsWith("data:")) return whole;
+            let abs = u;
+            try { abs = new URL(u, document.baseURI).toString(); } catch { /* leave it */ }
+            // SINGLE QUOTES, deliberately. This lands in a `style` ATTRIBUTE, and the
+            // serialiser escapes a double quote there as &quot;, which is not a URL any more.
+            return map[abs] ? `url('${map[abs]}')` : whole;
+          }));
+        }
+        // THE DIRECTION PICKER IS OPERATOR SCAFFOLDING. It is a fixed pill linking to
+        // /boards/bN, which 404s inside the canvas, and a client can select it and restyle it
+        // as though it were part of the design. The SectionMark badges STAY: they are how a
+        // client points at a section by name, and the seed README says so.
+        for (const el of document.querySelectorAll(".ev-switcher, source, script, link, noscript, template")) el.remove();
       }, imageMap);
       await inlineComputedStyles(page, PROPERTY_LIST);
       const bodyHtml = await page.evaluate(() => document.body.innerHTML);
 
       const file = `B${b.ambition}.dc.html`;
-      const artboard = toArtboard({ html: bodyHtml, css, fonts, script: motionScript, name: `${b.id} ${b.name}` });
+      const artboard = toArtboard({
+        html: bodyHtml,
+        css: rewriteUrls(css, imageMap),
+        fonts,
+        imports: harvest.imports,
+        script: motionScript,
+        name: `${b.id} ${b.name}`,
+      });
       writeFileSync(join(seedDir, file), artboard);
 
       // The card image /explore renders. Copied rather than linked so a `public/` that is
@@ -711,6 +768,48 @@ export async function fitUnder(buf, sharp, limit = MAX_IMAGE_BYTES) {
 }
 
 /**
+ * Point every url() at the file written beside the artboard.
+ *
+ * The in-page pass covers inline styles; this covers the collected stylesheet, where a hero
+ * photograph set by a class lives. Absolute already, because `rule.cssText` serialises them
+ * that way, which is exactly why they had to be rewritten rather than left alone.
+ */
+export function rewriteUrls(css, map) {
+  return String(css || "").replace(/url\((["']?)([^)"']+)\1\)/g, (whole, q, u) => {
+    if (!u || u.startsWith("data:")) return whole;
+    return map[u] ? `url("${map[u]}")` : whole;
+  });
+}
+
+/**
+ * Scroll the page through, then back to the top, so scroll-driven state has actually happened.
+ *
+ * A board captured at scroll 0 archives every reveal in its UNSEEN state: an
+ * IntersectionObserver has never fired, so anything below the fold sits at opacity 0 or
+ * translated, and that is what lands in the artboard and in the archived render. The inlined
+ * motion script cannot rescue it either, because anything on GSAP is excluded by the
+ * self-contained rule, and GSAP ships in the template. The bold rungs are the ones told to use
+ * scroll-as-timeline, so they are the ones that would flatten with the strip, the section and
+ * the notes invisible.
+ */
+async function settle(page) {
+  await page.evaluate(async () => {
+    const step = Math.max(200, Math.round(window.innerHeight * 0.8));
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const end = () => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    // Bounded by the page's height AND by a hard step count: a page that grows as it is
+    // scrolled (an infinite list, a lazy grid) must not scroll this script for ever.
+    for (let y = 0, n = 0; y < end() && n < 60; y += step, n++) {
+      window.scrollTo(0, y);
+      await wait(120);
+    }
+    window.scrollTo(0, 0);
+    await wait(250);
+  });
+  await page.waitForTimeout(200);
+}
+
+/**
  * Replace a page's linked stylesheets with the collected CSS, inline.
  *
  * The archived render has to outlive the build it came from, and an `/_astro/<hash>.css` link
@@ -725,7 +824,14 @@ export function selfContained(html, css) {
     : `${style}${stripped}`;
 }
 
-/** Self-hosted faces become data URIs; a Google Fonts link is the one host the canvas allows. */
+/**
+ * Self-hosted faces become data URIs.
+ *
+ * It does NOT handle Google Fonts, and the comment here used to claim it did: a
+ * fonts.googleapis.com sheet is cross-origin, so its rules never reach `css` at all. The
+ * harvest collects those hrefs separately and `toArtboard` emits them as @import lines, which
+ * is the one external host the canvas allows.
+ */
 async function inlineFonts(css, ctx, base) {
   const urls = [...new Set([...css.matchAll(/url\((["']?)([^)"']+)\1\)/g)].map((m) => m[2]))]
     .filter((u) => /\.(woff2?|ttf|otf)(\?|$)/i.test(u));
@@ -786,6 +892,14 @@ function seedReadme(boards, refs) {
     "",
     "- `canvas.json` - the layout, the annotations and the launch view.",
     "- the `.jpg` / `.svg` files beside each artboard are its images, referenced by bare filename.",
+    "",
+    "## The small labels in the corners",
+    "",
+    "Each section carries a short badge naming it (`b1-hero`, `b1-services`). They are pointing",
+    "aids, so the client can say \"the b3 hero\" instead of \"the big one on the third board\", and",
+    "they are not part of the design. Ignore them, or delete them on the canvas if they get in",
+    "the way: nothing downstream reads them from here. The direction picker is NOT on the",
+    "artboards, because its links go nowhere inside the canvas.",
     "",
     "The canvas is not the source of truth. Anything the client changes on it is feedback, read",
     "back with `palate-pick.mjs --canvas <extract-dir>` and honoured at Compose.",

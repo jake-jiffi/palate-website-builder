@@ -36,6 +36,10 @@ const total = byAmbition(variants).length || undefined;
   description={variant.what}
   noindex={true}
 >
+  {/* A board may need a face the brand package does not ship: a Google Fonts link goes here,
+      and boards-render carries it into the artboard as an @import. Forwarded rather than
+      re-declared so a board says it in exactly the place every other page says it. */}
+  <slot name="head" slot="head" />
   <slot name="hero" />
   <SystemStrip />
   <slot name="section" />
