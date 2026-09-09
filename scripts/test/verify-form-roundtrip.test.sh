@@ -132,15 +132,12 @@ start smoke && {
     || bad "an unknown environment with a secret exited $c: $(cat "$TMP/out")"
 }
 
-# THE LOCAL PREVIEW BUILDS AS PREVIEW, which is what lets the round trip run against it with no
-# secret now that an unbaked build is closed.
-grep -q "PUBLIC_SITE_ENV=preview npm run build" "$ROOT/scripts/serve-preview.sh" \
-  && ok "serve-preview builds the local preview as preview" || bad "serve-preview leaves the local build unbaked"
-# ...and the overlay's own deploy script BUILDS rather than shipping whatever dist/ holds.
-grep -q '"deploy": "PUBLIC_SITE_ENV=production npm run build && wrangler deploy"' \
-  "$ROOT/templates/host-cloudflare/package.json" \
-  && ok "the Cloudflare deploy script builds as production first" \
-  || bad "npm run deploy still ships whatever dist/ currently holds"
+# THE LOCAL PREVIEW BUILDING AS PREVIEW, and the overlay's deploy script building as production
+# before it deploys, were both asserted here by grepping for the command line. That passes
+# whether the command works or not and only goes red when someone deletes the text, so both
+# moved to scripts/test/docs-truth.test.sh, which RUNS serve-preview.sh and the deploy script
+# against stub CLIs and reads back the environment each was actually given. Two greps deleted
+# rather than kept beside the real check, because a weak duplicate reads as a second opinion.
 grep -q "Never a bare .wrangler deploy" "$ROOT/references/cache-invalidation.md" \
   && ok "the manual-refresh doctrine no longer recommends the unbaked command" \
   || bad "cache-invalidation.md still tells the operator to run a bare wrangler deploy"

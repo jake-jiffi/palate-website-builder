@@ -6,10 +6,22 @@
 # WCAG 2.2 AA promise over eleven axe rules, a route cap no customer-facing page mentioned,
 # and a hygiene line that led with the number rather than with what the number is.
 #
-# HOW TO ADD A CASE. `absent <desc> <file> <string>` and `present <desc> <file> <string>` take
-# a path relative to the repo root and a literal string. Add the pair when you delete a claim
-# and when you land the thing that makes a claim true again, so the doc and the code can only
-# drift with a red test in between.
+# HOW TO ADD A CASE, and READ THIS BEFORE REACHING FOR `present`. `absent <desc> <file>
+# <string>` and `present <desc> <file> <string>` take a path relative to the repo root and a
+# literal string. Add the pair when you delete a claim and when you land the thing that makes a
+# claim true again, so the doc and the code can only drift with a red test in between.
+#
+# BUT A GREP ONLY TESTS WHETHER SOMEONE WROTE A SENTENCE. It returns the same pass whether the
+# sentence is true or false, and goes red only when the sentence is deleted. That is the right
+# check for a claim about a DOCUMENT'S WORDING and it is not a check at all for a claim about
+# what a SCRIPT DOES. Four assertions of the second kind shipped here in one epic; one of them
+# certified a false claim for a whole review round.
+#
+# So: if the claim's subject is a command line, RUN IT. `runs <desc> <function>` further down
+# does that, with a stubbed `npm`, `astro` and `wrangler` that record the environment each was
+# given, which needs no network and no real build. Where a claim genuinely cannot be executed,
+# or is executed by another suite, say so in one line at the assertion rather than leaving a
+# grep that looks like verification.
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$DIR/../.."
@@ -62,6 +74,8 @@ present "testing.md says the attribute alone would never match the template" \
 present "testing.md says the endpoint is in the global digest" \
   'references/testing.md' 'src/pages/api` is part of the global digest'
 # ...and the code that makes each of those true.
+# EXECUTED BY scripts/test/contact-smoke.test.mjs, not by the line(s) below: a grep here pins the WORDING and would pass
+# just as happily if the behaviour it names were reversed.
 for f in templates/astro-project/src/pages/api/contact.ts templates/cms-sanity/src/pages/api/contact.ts; do
   present "$f honours the smoke header" "$f" 'SMOKE_HEADER = "x-palate-smoke"'
   present "$f gates the header on the build's own environment" "$f" "const siteEnv = import.meta.env.PUBLIC_SITE_ENV"
@@ -78,6 +92,8 @@ present "the Cloudflare worker config carries the smoke secret" \
   "templates/host-cloudflare/wrangler.toml" "PALATE_SMOKE_SECRET"
 present "the production handover carries the smoke secret" \
   "references/production-handoff.md" "PALATE_SMOKE_SECRET"
+# EXECUTED BY scripts/test/verify-form-roundtrip.test.sh, not by the line(s) below: a grep here pins the WORDING and would pass
+# just as happily if the behaviour it names were reversed.
 present "the deployed round trip exists" \
   "scripts/verify-form-roundtrip.sh" "x-palate-smoke: 1"
 present "the deployed round trip skips with exit 2" \
@@ -85,9 +101,13 @@ present "the deployed round trip skips with exit 2" \
 # THE INVOCATION, not the filename. Both scripts name the round trip in their header comment,
 # so a guard on the bare filename stayed green with the call cut out of both of them, proven by
 # mutation. What the call actually does is executed in verify-form-roundtrip.test.sh.
+# EXECUTED BY scripts/test/verify-form-roundtrip.test.sh, not by the line(s) below: a grep here pins the WORDING and would pass
+# just as happily if the behaviour it names were reversed.
 for f in scripts/verify-vercel.sh scripts/verify-cloudflare.sh; do
   present "$f runs the form round trip" "$f" 'verify-form-roundtrip.sh" "$URL"'
 done
+# EXECUTED BY scripts/test/verify-rendered-forms.test.mjs, not by the line(s) below: a grep here pins the WORDING and would pass
+# just as happily if the behaviour it names were reversed.
 present "the verifier submits the form against the preview" \
   "scripts/reference-capture/verify-rendered.mjs" "form round trip"
 present "the verifier works the mobile nav" \
@@ -112,11 +132,17 @@ present "testing.md says the secret is provisioned rather than asked for" \
   "references/testing.md" "The secret is provisioned, not asked for"
 present "the round trip skips instead of posting in that case" \
   "scripts/verify-form-roundtrip.sh" "PALATE_SMOKE_SECRET is not set"
+# EXECUTED BY scripts/test/verify-form-roundtrip.test.sh, not by the line(s) below: a grep here pins the WORDING and would pass
+# just as happily if the behaviour it names were reversed.
 for f in scripts/provision-vercel.sh scripts/provision-cloudflare.sh; do
   present "$f provisions the smoke secret" "$f" "ensure_smoke_secret"
 done
 # THE BUILD THAT BAKES THE GUARD. Empty is safe for indexing and unsafe for the smoke header,
 # and the comment that only said the first half is what let the bootstrap deploy ship with it off.
+# EXECUTED ELSEWHERE, not here: verify-form-roundtrip.test.sh RUNS provision-cloudflare.sh
+# against stub CLIs and reads the environment the bootstrap build was actually given. This line
+# only pins the command's wording, which is why it is not the guard that would catch a
+# regression.
 present "the Cloudflare bootstrap deploy builds as production" \
   "scripts/provision-cloudflare.sh" "PUBLIC_SITE_ENV=production npm run build"
 present "the Cloudflare config says an empty value disables the smoke guard too" \
@@ -128,10 +154,7 @@ present "testing.md says an unbaked build is closed" \
 # first is true, and a reader could not tell which behaviour shipped.
 absent "testing.md no longer claims an empty value ships an open endpoint" \
   "references/testing.md" "ships a live site whose endpoint honours the smoke header from anyone"
-# ...and the serve-preview claim is keyed on the DEFAULT mode, which is the one people use. The
-# old guard grepped a string that lived in --built while the default path shipped unbaked.
-present "serve-preview bakes the environment in its DEFAULT mode, not only in --built" \
-  "scripts/serve-preview.sh" "PUBLIC_SITE_ENV=preview npm run dev"
+# ...and the serve-preview claim is RUN rather than grepped, for the reason in the block below.
 present "testing.md says both serve-preview modes bake it" \
   "references/testing.md" "sets \`preview\` in BOTH modes"
 # ...and it names the one local path that is still not covered, because the finding names it too
@@ -142,10 +165,139 @@ present "the refusal finding names the build environment before Turnstile" \
   "scripts/reference-capture/verify-rendered.mjs" "PUBLIC_SITE_ENV was set at BUILD time first"
 absent "cache-invalidation.md no longer lists serve-preview as leaving it unbaked" \
   "references/cache-invalidation.md" "\`serve-preview.sh\`, \`phantom-utility-check.mjs\`"
-for f in templates/astro-project/package.json templates/host-cloudflare/package.json; do
-  present "$f dev script bakes an explicit environment" "$f" 'PUBLIC_SITE_ENV=preview astro dev'
-done
 # R4: which environment the secret is read from, said where the operator sets it.
+# ============ EXECUTED, NOT GREPPED ======================================================
+# `present <file> <string>` returns the same pass whether the sentence it finds is TRUE or
+# FALSE. It only goes red when someone DELETES the sentence. For a claim about a document's
+# wording that is the correct check and the only one available. For a claim about what a
+# SCRIPT DOES it is not verification at all, and this file shipped four of those in one epic.
+#
+# So the claims below RUN the script and read back what it actually did. Every one of them
+# has an executable subject: a command line whose effect is a value in an environment. The
+# stub records that value, which is the thing the doctrine promises, and no Astro, no network
+# and no real build are needed to read it.
+runs() { # <desc> <function name>
+  local out
+  if out="$("$2" 2>&1)"; then ok "$1"; else bad "$1 ($out)"; fi
+}
+
+# A throwaway project whose `npm` is a stub: it writes down the environment each script was
+# given, and for a long-running script serves one 200 so serve-preview.sh can finish and hand
+# over a URL the way it does for a real site.
+#
+# TWO THINGS IN HERE ARE DELIBERATE AND BOTH ARE ABOUT NOT HARMING THE MACHINE OR THIS SUITE.
+# `lsof` is stubbed to nothing, because serve-preview.sh's kill_dev kills whatever holds
+# ${PORT:-4321} and on a machine running several agents that is somebody else's dev server;
+# choosing a free port instead would still hand kill_dev a port some other process could take
+# between the choosing and the killing. And the server binds port 0 and prints the port it was
+# GIVEN, so there is no window in which a port picked in advance can be taken by someone else
+# and turn this into a flaky check in the fast suite.
+make_stub_project() { # <dir>
+  mkdir -p "$1/bin" "$1/witness"
+  printf '%s\n' '{"name":"stub","private":true,"scripts":{"dev":"astro dev","build":"astro build","preview":"wrangler dev"}}' > "$1/package.json"
+  cat > "$1/bin/npm" <<'STUB'
+#!/bin/sh
+# Called as `npm run <script>`.
+printf '%s' "${PUBLIC_SITE_ENV-<unset>}" > "$WITNESS/$2.env"
+if [ "$2" = "build" ]; then exit 0; fi
+exec node -e 'const s=require("http").createServer((q,r)=>r.end("ok"));s.listen(0,()=>console.log("Local    http://localhost:"+s.address().port+"/"));'
+STUB
+  printf '%s\n' '#!/bin/sh' 'exit 0' > "$1/bin/lsof"
+  chmod +x "$1/bin/npm" "$1/bin/lsof"
+}
+stop_stub() { # <dir>
+  local pid; pid="$(cat "$1/.palate-devserver.pid" 2>/dev/null || true)"
+  [ -n "$pid" ] && { kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true; }
+  return 0
+}
+# <dir> <witness> <extra serve-preview args...>; echoes nothing on success.
+run_serve_preview() {
+  local d="$1" w="$2"; shift 2
+  ( cd "$d" && WITNESS="$w" PATH="$d/bin:$PATH" \
+      bash "$ROOT/scripts/serve-preview.sh" . "$@" > "$d/out" 2>&1 )
+  local rc=$?
+  stop_stub "$d"
+  [ "$rc" = "0" ] || { echo "serve-preview.sh exited $rc: $(tail -3 "$d/out" 2>/dev/null | tr '\n' ' ')"; return 1; }
+  grep -q "SERVE_HTTP=200" "$d/out" || { echo "the preview never answered 200: $(tail -3 "$d/out" | tr '\n' ' ')"; return 1; }
+  return 0
+}
+
+# R1, and this is the assertion that would have caught it. The old guard grepped a string that
+# lives in --built while the DEFAULT path, the one every operator takes, shipped unbaked.
+serve_preview_default_bakes() {
+  local d; d="$(mktemp -d)" || return 1
+  make_stub_project "$d"
+  run_serve_preview "$d" "$d/witness" || { rm -rf "$d"; return 1; }
+  local got; got="$(cat "$d/witness/dev.env" 2>/dev/null || echo '<npm run dev never ran>')"
+  rm -rf "$d"
+  [ "$got" = "preview" ] || { echo "the default mode ran the dev server with PUBLIC_SITE_ENV=$got"; return 1; }
+}
+# ...and --built has to bake it at BUILD, because that is the value Vite substitutes into the
+# endpoint. Baking it only on the preview server would prove nothing about the built handler.
+serve_preview_built_bakes() {
+  local d; d="$(mktemp -d)" || return 1
+  make_stub_project "$d"
+  run_serve_preview "$d" "$d/witness" --built || { rm -rf "$d"; return 1; }
+  local b p; b="$(cat "$d/witness/build.env" 2>/dev/null || echo '<npm run build never ran>')"
+  p="$(cat "$d/witness/preview.env" 2>/dev/null || echo '<npm run preview never ran>')"
+  rm -rf "$d"
+  [ "$b" = "preview" ] || { echo "the build ran with PUBLIC_SITE_ENV=$b, so the endpoint is baked unknown"; return 1; }
+  [ "$p" = "preview" ] || { echo "the preview server ran with PUBLIC_SITE_ENV=$p"; return 1; }
+}
+# ...and the caveat is executed too, since a doc that only said "both modes bake it" would read
+# as though the whole class were closed: an existing dist/ is REUSED and never rebuilt, so a
+# directory left by a bare `npm run build` is still served unbaked.
+serve_preview_built_reuses_dist() {
+  local d; d="$(mktemp -d)" || return 1
+  make_stub_project "$d"; mkdir -p "$d/dist"
+  run_serve_preview "$d" "$d/witness" --built || { rm -rf "$d"; return 1; }
+  local built=no; [ -f "$d/witness/build.env" ] && built=yes
+  rm -rf "$d"
+  [ "$built" = "no" ] || { echo "it rebuilt an existing dist/, so the documented caveat is stale"; return 1; }
+}
+runs "serve-preview.sh bakes a non-production environment in its DEFAULT mode" serve_preview_default_bakes
+runs "serve-preview.sh --built bakes it at BUILD and on the preview server" serve_preview_built_bakes
+runs "serve-preview.sh --built reuses an existing dist/ rather than rebuilding it" serve_preview_built_reuses_dist
+
+# The templates' own `dev` script, run rather than read, because the docs send people straight
+# to `npm run dev` and an unbaked dev server refuses the smoke header exactly as a build does.
+template_dev_script_bakes() { # <package.json path>
+  local d script got; d="$(mktemp -d)" || return 1
+  mkdir -p "$d/bin"
+  script="$(node -e 'process.stdout.write((require(process.argv[1]).scripts||{}).dev||"")' "$ROOT/$1" 2>/dev/null)"
+  [ -n "$script" ] || { rm -rf "$d"; echo "$1 has no dev script at all"; return 1; }
+  printf '%s\n' '#!/bin/sh' 'printf "%s" "${PUBLIC_SITE_ENV-<unset>}" > "$WITNESS/astro.env"' > "$d/bin/astro"
+  chmod +x "$d/bin/astro"
+  ( cd "$d" && WITNESS="$d" PATH="$d/bin:$PATH" sh -c "$script" ) >/dev/null 2>&1
+  got="$(cat "$d/astro.env" 2>/dev/null || echo '<astro was never reached>')"
+  rm -rf "$d"
+  [ "$got" = "preview" ] || { echo "$1 ran astro with PUBLIC_SITE_ENV=$got"; return 1; }
+}
+astro_template_dev_bakes() { template_dev_script_bakes templates/astro-project/package.json; }
+cloudflare_template_dev_bakes() { template_dev_script_bakes templates/host-cloudflare/package.json; }
+runs "the astro-project dev script runs astro with an explicit environment" astro_template_dev_bakes
+runs "the host-cloudflare dev script runs astro with an explicit environment" cloudflare_template_dev_bakes
+
+# And the overlay's `deploy`, which is the command that ships the guard ON or OFF. Two facts,
+# both executed: the build carries `production`, and the deploy happens AFTER it. A deploy that
+# ran first would upload the previous dist/ and the ordering is the whole point.
+cloudflare_deploy_builds_as_production() {
+  local d script b order; d="$(mktemp -d)" || return 1
+  mkdir -p "$d/bin"
+  script="$(node -e 'process.stdout.write((require(process.argv[1]).scripts||{}).deploy||"")' "$ROOT/templates/host-cloudflare/package.json" 2>/dev/null)"
+  [ -n "$script" ] || { rm -rf "$d"; echo "host-cloudflare has no deploy script"; return 1; }
+  printf '%s\n' '#!/bin/sh' 'printf "%s" "${PUBLIC_SITE_ENV-<unset>}" > "$WITNESS/$2.env"' 'echo "npm-$2" >> "$WITNESS/order"' > "$d/bin/npm"
+  printf '%s\n' '#!/bin/sh' 'echo "wrangler-$1" >> "$WITNESS/order"' > "$d/bin/wrangler"
+  chmod +x "$d/bin/npm" "$d/bin/wrangler"
+  ( cd "$d" && WITNESS="$d" PATH="$d/bin:$PATH" sh -c "$script" ) >/dev/null 2>&1
+  b="$(cat "$d/build.env" 2>/dev/null || echo '<npm run build never ran>')"
+  order="$(tr '\n' ',' < "$d/order" 2>/dev/null || true)"
+  rm -rf "$d"
+  [ "$b" = "production" ] || { echo "the deploy built with PUBLIC_SITE_ENV=$b, so the guard ships off"; return 1; }
+  [ "$order" = "npm-build,wrangler-deploy," ] || { echo "build and deploy ran in the order: $order"; return 1; }
+}
+runs "the host-cloudflare deploy script builds as production BEFORE wrangler deploys" cloudflare_deploy_builds_as_production
+
 present "hosting-vercel.md says the smoke secret is read at runtime" \
   "references/hosting-vercel.md" "is read at RUNTIME on both hosts"
 present "the endpoint layers process.env over the baked object" \
