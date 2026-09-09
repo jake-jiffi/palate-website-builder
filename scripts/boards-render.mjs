@@ -45,7 +45,7 @@
  * Exit: 0 wrote the seed, 2 could not (with the reason and the board named).
  */
 import {
-  existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, copyFileSync,
+  existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, copyFileSync, realpathSync,
 } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { createServer } from "node:http";
@@ -808,12 +808,42 @@ async function main() {
       mkdirSync(pub, { recursive: true });
       copyFileSync(join(boardShots, "hero.png"), join(pub, `${b.id}.png`));
 
-      rendered.push({ ...b, file, height: harvest.height });
+      /**
+       * MEASURE THE ARTBOARD, NOT THE PAGE IT CAME FROM.
+       *
+       * The height used to be `document.documentElement.scrollHeight` read on the LIVE page,
+       * before the flatten. The flatten re-lays the page out: on a real five-board seed the
+       * artboards rendered 26 to 42px taller than the frames canvas.json declared, almost all
+       * of it the system strip, whose grid resolves differently once its computed track sizes
+       * are written as fixed values. A frame neither scales nor crops and `x-dc` carries
+       * `overflow: hidden`, so every board lost its last few pixels with nothing reporting it.
+       * On that set the difference fell inside the notes panel's bottom padding and cost
+       * nothing visible, which is exactly why it would go unnoticed.
+       *
+       * Opened from the file rather than served: the artboard's images are bare filenames
+       * beside it and its CSS is in its own helmet, so a `file://` load is the same layout the
+       * canvas draws, and it needs no second server.
+       */
+      await page.goto(`file://${join(seedDir, file)}`, { waitUntil: "load", timeout: 30000 }).catch(() => null);
+      await page.waitForTimeout(150);
+      const drawn = await page.evaluate(() => {
+        const dc = document.querySelector("x-dc");
+        if (!dc) return null;
+        return Math.ceil(Math.max(dc.getBoundingClientRect().height, dc.scrollHeight));
+      });
+      // A measurement that failed is not a reason to write a wrong number quietly: fall back to
+      // the live height and say the frame may clip.
+      const height = drawn || harvest.height;
+      if (!drawn) {
+        lines.push(`  ${b.id}: the artboard's own height could not be measured, so the frame is the live page's ${harvest.height}px and may clip`);
+      }
+
+      rendered.push({ ...b, file, height });
       lines.push(
         `  ${b.id} rung ${b.ambition} ${b.name}: ${file} ${Math.round(artboard.length / 1024)} KB, ` +
         `hero.png ${Math.round(statSync(join(boardShots, "hero.png")).size / 1024)} KB, ` +
         `${Object.keys(imageMap).length} image(s), ${motionScript ? "motion inlined" : "no motion script"}, ` +
-        `${harvest.height}px tall`,
+        `${height}px tall`,
       );
       await page.close();
     }
@@ -1097,9 +1127,24 @@ function recordShown(projectDir, boards) {
   } catch { /* the manifest is a record, never a gate on rendering */ }
 }
 
-// ONLY AS A CLI. The helpers above are imported by the test suite and by gate-fidelity, and a
-// module that runs its own main() on import turns `import { PROPERTY_LIST }` into a build.
-const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+/**
+ * ONLY AS A CLI. The helpers above are imported by the test suite and by gate-fidelity, and a
+ * module that runs its own main() on import turns `import { PROPERTY_LIST }` into a build.
+ *
+ * BOTH SIDES ARE REAL PATHS, and that is the whole of the fix. This compared
+ * `resolve(process.argv[1])`, which does not follow symlinks, against `import.meta.url`, which
+ * Node's loader has already resolved. On macOS `/tmp` is a symlink to `/private/tmp`, which is
+ * where every `mktemp -d` lands, so through any such path the two strings differed, `main()`
+ * never ran, and the script printed nothing and exited 0. An operator reads that as a render
+ * that wrote no seed. Found by a real seed run from `/tmp`, twice, before anyone checked the
+ * exit path: the exists-but-never-fires class with the worst possible reporting, success.
+ *
+ * `realpathSync` throws on a path that is not there, which is not a reason to skip main(): a
+ * missing argv[1] is already handled and anything else is better spent failing loudly.
+ */
+const realOrSelf = (p) => { try { return realpathSync(p); } catch { return p; } };
+const invokedDirectly = process.argv[1]
+  && realOrSelf(resolve(process.argv[1])) === realOrSelf(fileURLToPath(import.meta.url));
 if (invokedDirectly) {
   main().catch((e) => {
     process.stderr.write(`boards-render: ${e && e.stack ? e.stack : e}\n`);
