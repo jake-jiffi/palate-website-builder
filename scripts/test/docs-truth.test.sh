@@ -39,16 +39,162 @@ absent "connective-tissue.md does not promise a Lighthouse baseline" \
 present "testing.md says what performance IS measured" \
   "references/testing.md" "vitals.mjs"
 
-# ============ 2. THE FORM ROUND-TRIP, promised as the most important post-deploy check ====
-# Nothing submits the form. The section says so plainly until E5 lands the real test.
-absent "testing.md does not call an unrun test the most important post-deploy check" \
-  "references/testing.md" "The most important post-deploy check: submit the contact form"
-present "testing.md names the form round-trip as not yet implemented" \
+# ============ 2. THE FORM ROUND-TRIP, which is now real and has to stay described =========
+# It was promised for months and nothing ran it. E3 deleted the promise; E5 built the test, so
+# the pairs flip: the placeholder must be gone, and every load-bearing part of the contract has
+# to be findable in the doc AND present in the code it describes.
+absent "testing.md no longer carries the E5 placeholder" \
   "references/testing.md" "Implemented by E5"
-# ...and the smoke-check list two lines above must not promise the same test as done. The
-# file argued with itself about the exact claim this guard exists to remove.
-absent "the smoke-check list does not promise the POST either" \
+absent "testing.md no longer says the round trip is not implemented" \
+  "references/testing.md" "**Not implemented."
+present "the smoke-check list promises the POST, now that something makes it" \
   "references/testing.md" "a test POST to /api/contact"
+present "testing.md names the smoke header" \
+  "references/testing.md" "x-palate-smoke: 1"
+present "testing.md names the production secret" \
+  "references/testing.md" "PALATE_SMOKE_SECRET"
+present "testing.md says a 2xx without the flag is a failure" \
+  "references/testing.md" "A 2xx WITHOUT it is a failure, not a pass"
+present "testing.md says a deployment with no endpoint skips with exit 2" \
+  "references/testing.md" "2 with a printed reason"
+present "testing.md says the attribute alone would never match the template" \
+  'references/testing.md' 'has no action at all and posts with `fetch`'
+present "testing.md says the endpoint is in the global digest" \
+  'references/testing.md' 'src/pages/api` is part of the global digest'
+# ...and the code that makes each of those true.
+for f in templates/astro-project/src/pages/api/contact.ts templates/cms-sanity/src/pages/api/contact.ts; do
+  present "$f honours the smoke header" "$f" 'SMOKE_HEADER = "x-palate-smoke"'
+  present "$f gates the header on the build's own environment" "$f" "const siteEnv = import.meta.env.PUBLIC_SITE_ENV"
+  present "$f opens only for an explicit non-production build" "$f" 'known && siteEnv.trim().toLowerCase() !== "production"'
+  present "$f fails closed with no secret" "$f" "if (!secret) return false;"
+done
+# THE SECRET HAS TO BE SETTABLE. A production guard whose value nobody is told to set is a
+# feature that cannot be used, and the failure it produces reads as a broken endpoint.
+present "the template env example carries the smoke secret" \
+  "templates/astro-project/.env.example" "PALATE_SMOKE_SECRET"
+present "the Vercel env table carries the smoke secret" \
+  "references/hosting-vercel.md" "PALATE_SMOKE_SECRET"
+present "the Cloudflare worker config carries the smoke secret" \
+  "templates/host-cloudflare/wrangler.toml" "PALATE_SMOKE_SECRET"
+present "the production handover carries the smoke secret" \
+  "references/production-handoff.md" "PALATE_SMOKE_SECRET"
+present "the deployed round trip exists" \
+  "scripts/verify-form-roundtrip.sh" "x-palate-smoke: 1"
+present "the deployed round trip skips with exit 2" \
+  "scripts/verify-form-roundtrip.sh" "exit 2"
+# THE INVOCATION, not the filename. Both scripts name the round trip in their header comment,
+# so a guard on the bare filename stayed green with the call cut out of both of them, proven by
+# mutation. What the call actually does is executed in verify-form-roundtrip.test.sh.
+for f in scripts/verify-vercel.sh scripts/verify-cloudflare.sh; do
+  present "$f runs the form round trip" "$f" 'verify-form-roundtrip.sh" "$URL"'
+done
+present "the verifier submits the form against the preview" \
+  "scripts/reference-capture/verify-rendered.mjs" "form round trip"
+present "the verifier works the mobile nav" \
+  "scripts/reference-capture/verify-rendered.mjs" "mobile-nav-escape-dismiss"
+present "the verifier works a dialog too, which the spec asks for alongside the nav" \
+  "scripts/reference-capture/verify-rendered.mjs" "commandfor="
+present "testing.md says which trigger shapes are discoverable" \
+  "references/testing.md" "data-dialog-target"
+# THE SEVERITY SPLIT. A doc that called the Escape finding blocking would send an operator
+# hunting a build failure that never happens, and one that called the dead-control finding
+# advisory would let a dead burger ship.
+present "testing.md says the Escape finding does not block" \
+  "references/testing.md" "a **Medium and does not block**"
+present "the verifier files the Escape finding as a Medium" \
+  "scripts/reference-capture/verify-rendered.mjs" "'escape-dismiss': { check: 'dialog-escape-dismiss', sev: 'Medium' }"
+present "the verifier still files a dead control as a High" \
+  "scripts/reference-capture/verify-rendered.mjs" "open: { check: 'mobile-nav-open', sev: 'High' }"
+# THE PRODUCTION SKIP, and the provisioning that makes it rare.
+present "testing.md says production with no secret skips rather than fails" \
+  "references/testing.md" "production and \`PALATE_SMOKE_SECRET\` is not set"
+present "testing.md says the secret is provisioned rather than asked for" \
+  "references/testing.md" "The secret is provisioned, not asked for"
+present "the round trip skips instead of posting in that case" \
+  "scripts/verify-form-roundtrip.sh" "PALATE_SMOKE_SECRET is not set"
+for f in scripts/provision-vercel.sh scripts/provision-cloudflare.sh; do
+  present "$f provisions the smoke secret" "$f" "ensure_smoke_secret"
+done
+# THE BUILD THAT BAKES THE GUARD. Empty is safe for indexing and unsafe for the smoke header,
+# and the comment that only said the first half is what let the bootstrap deploy ship with it off.
+present "the Cloudflare bootstrap deploy builds as production" \
+  "scripts/provision-cloudflare.sh" "PUBLIC_SITE_ENV=production npm run build"
+present "the Cloudflare config says an empty value disables the smoke guard too" \
+  "templates/host-cloudflare/astro.config.mjs" "EMPTY IS NOT SAFE IN EVERY DIRECTION"
+present "testing.md says an unbaked build is closed" \
+  "references/testing.md" "an unbaked one is CLOSED"
+# THE CONTRADICTION THIS GUARD MISSED. The bullet kept the paragraph the inversion replaced, so
+# it asserted both that a forgotten build costs a skip and that it ships a live hole. Only the
+# first is true, and a reader could not tell which behaviour shipped.
+absent "testing.md no longer claims an empty value ships an open endpoint" \
+  "references/testing.md" "ships a live site whose endpoint honours the smoke header from anyone"
+# ...and the serve-preview claim is keyed on the DEFAULT mode, which is the one people use. The
+# old guard grepped a string that lived in --built while the default path shipped unbaked.
+present "serve-preview bakes the environment in its DEFAULT mode, not only in --built" \
+  "scripts/serve-preview.sh" "PUBLIC_SITE_ENV=preview npm run dev"
+present "testing.md says both serve-preview modes bake it" \
+  "references/testing.md" "sets \`preview\` in BOTH modes"
+# ...and it names the one local path that is still not covered, because the finding names it too
+# and a doc that stopped short would read as though baking both modes closed the whole class.
+present "testing.md says the built mode reuses an existing dist" \
+  "references/testing.md" "REUSES an existing \`dist/\`"
+present "the refusal finding names the build environment before Turnstile" \
+  "scripts/reference-capture/verify-rendered.mjs" "PUBLIC_SITE_ENV was set at BUILD time first"
+absent "cache-invalidation.md no longer lists serve-preview as leaving it unbaked" \
+  "references/cache-invalidation.md" "\`serve-preview.sh\`, \`phantom-utility-check.mjs\`"
+for f in templates/astro-project/package.json templates/host-cloudflare/package.json; do
+  present "$f dev script bakes an explicit environment" "$f" 'PUBLIC_SITE_ENV=preview astro dev'
+done
+# R4: which environment the secret is read from, said where the operator sets it.
+present "hosting-vercel.md says the smoke secret is read at runtime" \
+  "references/hosting-vercel.md" "is read at RUNTIME on both hosts"
+present "the endpoint layers process.env over the baked object" \
+  "templates/astro-project/src/pages/api/contact.ts" "...import.meta.env, ...process.env"
+present "production-handoff.md stops claiming every secret comes from locals.runtime.env" \
+  "references/production-handoff.md" "on Vercel there is no \`locals.runtime\`"
+# R3: a form the probe could not read is named rather than reported as absent.
+present "the verifier names a visible form it did not recognise" \
+  "scripts/reference-capture/verify-rendered.mjs" "recognise as a contact form and did not submit"
+present "the verifier skips a form with nothing visible to submit rather than failing it" \
+  "scripts/reference-capture/verify-rendered.mjs" "have no submit control visible at desktop"
+# THE INVERSION, in the code and in the doc. The guard shipped off five times because the test
+# was "is this production"; it is "does this build say it is not production" now.
+present "the endpoint requires the secret unless the build says it is not production" \
+  "templates/astro-project/src/pages/api/contact.ts" "AN UNKNOWN ENVIRONMENT REQUIRES THE SECRET"
+present "testing.md says the test is not is-this-production" \
+  "references/testing.md" 'The test is not "is this production"'
+present "the round trip skips on an unknown environment too" \
+  "scripts/verify-form-roundtrip.sh" "environment is UNKNOWN"
+present "the local preview build says it is a preview" \
+  "scripts/serve-preview.sh" "PUBLIC_SITE_ENV=preview npm run build"
+present "the Cloudflare deploy script builds before deploying" \
+  "templates/host-cloudflare/package.json" "PUBLIC_SITE_ENV=production npm run build && wrangler deploy"
+present "the manual-refresh doctrine stops recommending a bare wrangler deploy" \
+  "references/cache-invalidation.md" "Never a bare"
+# N2: the secret rides one request, and the probe refuses a cross-origin redirect itself.
+present "the secret is attached to the contact POST alone" \
+  "scripts/reference-capture/verify-rendered.mjs" "smokeSecret && isEndpoint"
+# THE CALL SITE, not the string. `maxRedirects: 0` also appears in the docblock above it, so
+# deleting the option left this green: the third time a guard has been satisfied by a comment in
+# this epic. The behaviour is proven by the browser suite; this is the cheap redundancy.
+present "the probe follows the POST itself rather than letting the browser follow a redirect" \
+  "scripts/reference-capture/verify-rendered.mjs" "        maxRedirects: 0,"
+present "testing.md says a redirect defeats a per-origin check" \
+  "references/testing.md" "never reaches a Playwright route handler"
+# The narrowing fixes, each pinned where a reader would look for them.
+present "testing.md says a cross-origin POST is aborted" \
+  "references/testing.md" "aborted at the wire"
+present "the verifier aborts it" \
+  "scripts/reference-capture/verify-rendered.mjs" "await route.abort('blockedbyclient')"
+present "testing.md says the secret rides one request only" \
+  "references/testing.md" "attached to one request, and the probe follows that request itself"
+present "testing.md says the verifiers fail on any other exit code" \
+  "references/testing.md" "Both verifiers fail on any other"
+for f in scripts/verify-vercel.sh scripts/verify-cloudflare.sh; do
+  present "$f fails on an exit code it cannot read as a verdict" "$f" "without reaching a verdict"
+done
+present "the contact endpoint is a global input, so an edit re-renders the pages" \
+  "scripts/reference-capture/verify-rendered.mjs" "'src/pages/api'"
 
 # ============ 3. THE AXE SUBSET is a subset, and says which rules =========================
 present "audit-dimensions.md says the automated pass is a subset" \

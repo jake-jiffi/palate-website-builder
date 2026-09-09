@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "astro dev",
+    "dev": "PUBLIC_SITE_ENV=preview astro dev",
     "build": "astro build",
     "preview": "vercel dev",
     "deploy": "vercel deploy --prod",
