@@ -97,6 +97,12 @@ const variant = variants.find((v) => v.id === ${JSON.stringify(b.id)});
           serialised, so without explicit handling the faces a brand-creation Explore
           chose are simply absent from the artboard. */}
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fixture+Face:wght@400&display=swap" />
+      {/* A REAL SAME-ORIGIN STYLESHEET, served from public/ rather than written inline.
+          An inline style in an .astro template is raw text that Astro and Vite may hoist,
+          resolve or drop, and two attempts at one produced a fixture that measured nothing.
+          A linked file gives exactly what the harvest has to cope with: a CSSImportRule, a
+          fragment url(), a class-set background and one that 404s. */}
+      <link rel="stylesheet" href="/_fixture/extra.css" />
     </Fragment>
     <section slot="hero" class="bg-brand-bg relative px-6 py-24" style="background-image:url('/_fixture/bg.png');background-size:cover">
       <SectionMark id="${b.id}-hero" />
@@ -104,6 +110,19 @@ const variant = variants.find((v) => v.id === ${JSON.stringify(b.id)});
       <p class="text-brand-muted mt-6 max-w-xl">${b.what}</p>
       <img src="/_fixture/photo.png" alt="A fixture photograph" width="640" height="400" />
       {/* A band the page never scrolls to, held at opacity 0 until a reveal fires. */}
+      {/* url(#id): an SVG filter reference. It resolves to the page's own URL, so harvesting it
+          as an image fetches HTML and refuses the whole seed. Grain is the canonical technique
+          and the bold mandate names it. */}
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <filter id="fixture-grain"><feTurbulence baseFrequency="0.8" /></filter>
+      </svg>
+      <div class="fixture-grain" style="width:80px;height:80px;background:#2f5d50"></div>
+      {/* A class-set background that IS an image: the helmet-CSS rewrite path, which the inline
+          style above does not exercise. */}
+      <div class="fixture-bg" style="width:200px;height:120px"></div>
+      {/* And one that 404s, from a rule that may belong to another page entirely. */}
+      <div class="fixture-missing" style="width:80px;height:80px"></div>
+      <div class="fixture-notimage" style="width:80px;height:80px"></div>
       <div style="height:1400px"></div>
       <p data-reveal class="reveal-band" style="opacity:0">The band a scroll reveal brings in.</p>
     </section>
@@ -163,10 +182,24 @@ before(async () => {
   mkdirSync(join(SITE, "public/_fixture"), { recursive: true });
   writeFileSync(join(SITE, "public/_fixture/photo.png"), pngFixture(640, 400));
   writeFileSync(join(SITE, "public/_fixture/bg.png"), pngFixture(1440, 900));
+  writeFileSync(join(SITE, "public/_fixture/tile.png"), pngFixture(320, 320));
+  writeFileSync(join(SITE, "public/_fixture/notes.txt"), "not an image, and it answers 200\n");
+  // The @import is FIRST because CSS ignores one that follows any other rule.
+  writeFileSync(join(SITE, "public/_fixture/extra.css"), [
+    '@import url("https://fonts.googleapis.com/css2?family=Fixture+Import&display=swap");',
+    ".fixture-grain { filter: url(#fixture-grain); }",
+    '.fixture-bg { background-image: url("/_fixture/tile.png"); background-size: cover; }',
+    '.fixture-missing { background-image: url("/_fixture/gone.png"); }',
+    // Fetches perfectly and is not an image. sharp refusing to decode it says the harvest
+    // reached too far, not that the board is broken.
+    '.fixture-notimage { background-image: url("/_fixture/notes.txt"); }',
+    "",
+  ].join("\n"));
   ready = true;
 });
 
-after(() => { if (TMP) rmSync(TMP, { recursive: true, force: true }); });
+after(() => { if (TMP && !process.env.BOARDS_RENDER_KEEP) rmSync(TMP, { recursive: true, force: true }); });
+if (process.env.BOARDS_RENDER_KEEP) process.on("exit", () => console.log("KEPT " + TMP));
 
 /** A real PNG: a soft gradient, which is how a website capture actually compresses. */
 function pngFixture(w, h) {
@@ -302,9 +335,11 @@ test("two boards render to two artboards the canvas can open", async (t) => {
       .filter((u) => !/^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(u));
     assert.equal(remote.length, 0,
       `${f} points a url() at an origin the canvas cannot reach: ${remote.slice(0, 2).join(", ")}`);
+    // A fragment names an element in this very document and is deliberately left as written,
+    // so it is not a file that has to exist beside the artboard.
     const bgs = [...a.matchAll(/url\((["']?)([^)"']+)\1\)/g)]
       .map((m) => m[2])
-      .filter((u) => !u.startsWith("data:") && !/^https?:\/\//.test(u));
+      .filter((u) => !u.startsWith("data:") && !u.startsWith("#") && !/^https?:\/\//.test(u));
     assert.ok(bgs.length, `${f} carries no url() at all, so this assertion is measuring nothing`);
     for (const u of bgs) {
       assert.ok(!/[/:]/.test(u), `${f} references ${u} in a url(), which is not a bare filename`);
@@ -317,6 +352,23 @@ test("two boards render to two artboards the canvas can open", async (t) => {
     // absent, and the fidelity gate's own copy calls the faces the loudest thing a client picked.
     assert.match(a, /@import url\(["']?https:\/\/fonts\.googleapis\.com/,
       `${f} lost its Google Fonts stylesheet, so the artboard renders in a face nobody chose`);
+    // Both forms reach the artboard: the <link> Google's embed dialog offers first, and the
+    // @import form it offers beside it, which is what a component-scoped <style> reaches for.
+    assert.match(a, /family=Fixture\+Face/, `${f} lost the Google Fonts <link> form`);
+    assert.match(a, /family=Fixture\+Import/, `${f} lost the Google Fonts @import form`);
+
+    // A FRAGMENT URL IS NOT AN IMAGE. `filter: url(#grain)` resolves against the page, so
+    // harvesting it fetches the board's own HTML; it must survive untouched.
+    assert.match(a, /url\((["']?)#fixture-grain\1\)/, `${f} rewrote or dropped an SVG filter reference`);
+
+    // A url NOTHING COULD FETCH is removed, not left pointing at a dead path: inside a canvas
+    // with no egress that is a blank box rather than a broken-image icon.
+    assert.ok(!/gone\.png/.test(a), `${f} kept a url() that could not be fetched`);
+
+    // A class-set background IS an image and takes the helmet-CSS rewrite path.
+    assert.ok(/\.fixture-bg\{[^}]*background-image:\s*url\((["']?)b\d+-img\d+\.[a-z]+\1\)/.test(a.replace(/\s+/g, " ")) ||
+      /fixture-bg[^}]*url\((["']?)b\d+-img/.test(a),
+      `${f} left a class-set background pointing somewhere the canvas cannot fetch`);
     const helmetStyle = /<helmet><style>([\s\S]*?)<\/style>/.exec(a);
     assert.ok(helmetStyle, `${f} has no helmet style`);
     assert.match(helmetStyle[1].trimStart(), /^@import/,
@@ -376,6 +428,23 @@ test("two boards render to two artboards the canvas can open", async (t) => {
       `${id}'s archived render still links a stylesheet, which the next build renames`);
   }
   assert.match(r.stdout, /B1\.dc\.html \d+ KB/, "the run does not report the artboard sizes");
+
+  // A URL THAT CANNOT BE FETCHED IS DROPPED AND NAMED, never a refusal. A rule in a shared
+  // stylesheet can point at an asset that belongs to another page; before this it refused every
+  // board, with a message that read as a broken image rather than as the harvest over-reaching.
+  assert.match(r.stdout + r.stderr, /gone\.png/,
+    "a url that could not be fetched was dropped without saying which one");
+
+  // AND A FRAGMENT IS NEVER FETCHED AT ALL. Resolved against the page it becomes the board's
+  // own URL, so harvesting one costs a pointless request and prints a line naming the board
+  // itself as an image that could not be read, which is the harvest over-reaching in public.
+  assert.ok(!/dropped\s+\S*#fixture-grain/.test(`${r.stdout}\n${r.stderr}`),
+    "an SVG filter reference was fetched as though it were an image");
+
+  // A URL THAT FETCHES AND IS NOT AN IMAGE is dropped and named too. Before this it reached
+  // sharp, threw, and refused the whole seed with a message about a broken image.
+  assert.match(r.stdout + r.stderr, /notes\.txt.*not a decodable image/,
+    "a url that fetched but is not an image was not dropped and named");
 });
 
 test("the calibration references land on row 0 with the question", async (t) => {

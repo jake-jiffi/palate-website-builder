@@ -28,6 +28,7 @@
  * Usage:
  *   node scripts/palate-pick.mjs <projectDir> --hero b3 [--section b5] [--cta "Book a table"]
  *        [--intensity 3] [--note "..."] [--canvas <extract-dir>] [--second-pass] [--replace]
+ *        [--proof <preview-url>]
  * Exit: 0 recorded, 1 refused (with the reason), 2 bad arguments.
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -39,7 +40,7 @@ import { parseRegistry } from "./boards-render.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
-const VALUE_FLAGS = new Set(["--hero", "--section", "--cta", "--intensity", "--note", "--canvas"]);
+const VALUE_FLAGS = new Set(["--hero", "--section", "--cta", "--intensity", "--note", "--canvas", "--proof"]);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : null; };
 const flag = (k) => args.includes(k);
 const positional = [];
@@ -134,6 +135,23 @@ if (note) {
   ];
 }
 
+/**
+ * The motion proof: Compose has built the home page and shown it to the client, moving.
+ *
+ * IT IS A COMMAND BECAUSE THE GATE DEPENDS ON IT. `scripts/gate-done.sh` runs the fidelity gate
+ * only once `explore.proof` is recorded, so a model that has to hand-edit JSON to write it is a
+ * model that will sometimes not, and every build after Compose would then read
+ * `fidelity=skipped` in the done summary with nothing saying a check had been lost. A flag can
+ * be named in the doctrine and copied verbatim.
+ */
+const proofUrl = opt("--proof");
+if (proofUrl) {
+  if (!/^https?:\/\/\S+$/.test(proofUrl)) {
+    refuse(`--proof ${proofUrl} is not a URL. It is the preview the client was shown the home page moving on, so it has to be one they can open.`);
+  }
+  patch.explore.proof = { url: proofUrl, verified_at: new Date().toISOString() };
+}
+
 if (flag("--second-pass")) {
   // COUNTS, never latches. A boolean would answer "did they ask for changes" and lose the
   // question worth asking, which is how many rounds a direction takes before it is settled.
@@ -156,8 +174,8 @@ if (canvasDir) {
 
 // ------------------------------------------------------------------------------- record
 if (!made.length && !patch.commission && !patch.explore.cta && !patch.explore.notes
-    && patch.explore.second_passes === undefined && canvasDir === null) {
-  badArgs("nothing to record. Pass at least one of --hero, --section, --intensity, --cta, --note, --second-pass or --canvas.");
+    && !patch.explore.proof && patch.explore.second_passes === undefined && canvasDir === null) {
+  badArgs("nothing to record. Pass at least one of --hero, --section, --intensity, --cta, --note, --proof, --second-pass or --canvas.");
 }
 
 if (existsSync(manifestPath)) {
@@ -184,6 +202,11 @@ for (const p of made) {
 }
 if (patch.commission) process.stdout.write(`palate-pick: the client pointed at calibration reference ${patch.commission.intensity_asked}.\n`);
 if (patch.explore.cta) process.stdout.write(`palate-pick: call to action "${patch.explore.cta}".\n`);
+if (patch.explore.proof) {
+  process.stdout.write(
+    `palate-pick: motion proof recorded at ${patch.explore.proof.url}. The done gate measures the built home against the picked board from here.\n`,
+  );
+}
 if (patch.explore.second_passes !== undefined) process.stdout.write(`palate-pick: second pass ${patch.explore.second_passes}.\n`);
 if (feedbackCount !== null) {
   process.stdout.write(feedbackCount

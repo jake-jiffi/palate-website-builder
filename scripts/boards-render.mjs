@@ -520,7 +520,7 @@ async function main() {
       const res = await page.goto(`${base}/${route}/`, { waitUntil: "networkidle", timeout: 45000 }).catch(() => null);
       if (!res || !res.ok()) failSeed(`board ${b.id} did not load at /${route}/ (${res ? res.status() : "no response"}). Nothing written.`);
       await page.waitForTimeout(400);
-      await settle(page);
+      const scrolled = await settle(page);
 
       // --- what the artboard is made of, read from the rendered page ---------------------
       const harvest = await page.evaluate(() => {
@@ -529,15 +529,40 @@ async function main() {
         // also not a sheet we may lose: a Google Fonts link is the one external host the canvas
         // allows, and the head is never serialised, so it has to be carried explicitly.
         const imports = [];
-        for (const sheet of document.styleSheets) {
-          try {
-            for (const rule of sheet.cssRules) css.push(rule.cssText);
-          } catch {
-            if (sheet.href && /^https:\/\/fonts\.googleapis\.com\//.test(sheet.href)) imports.push(sheet.href);
+        const droppedSheets = [];
+        const FONT_SHEET = /^https:\/\/fonts\.googleapis\.com\//;
+        const addImport = (href) => { if (href && !imports.includes(href)) imports.push(href); };
+
+        /**
+         * An @import's target is a STYLESHEET, never an image.
+         *
+         * Collected as a background it was fetched, handed to sharp and refused the whole seed,
+         * and that is the form Google's embed dialog offers beside the link. Same-origin
+         * imports are followed and inlined; a Google Fonts one is carried as an import; anything
+         * else cross-origin is dropped and named.
+         */
+        const collect = (sheet, depth) => {
+          let rules = null;
+          try { rules = sheet.cssRules; }
+          catch {
+            if (sheet.href && FONT_SHEET.test(sheet.href)) addImport(sheet.href);
+            else if (sheet.href) droppedSheets.push(sheet.href);
+            return;
           }
-        }
-        for (const l of document.querySelectorAll('link[rel="stylesheet"][href*="fonts.googleapis.com"]')) {
-          if (l.href && !imports.includes(l.href)) imports.push(l.href);
+          for (const rule of rules) {
+            const isImport = typeof rule.href === "string" && /^@import\b/i.test(rule.cssText || "");
+            if (!isImport) { css.push(rule.cssText); continue; }
+            let abs = rule.href;
+            try { abs = new URL(rule.href, document.baseURI).toString(); } catch { /* as written */ }
+            if (FONT_SHEET.test(abs)) { addImport(abs); continue; }
+            if (depth < 3 && rule.styleSheet) { collect(rule.styleSheet, depth + 1); continue; }
+            droppedSheets.push(abs);
+          }
+        };
+        for (const sheet of document.styleSheets) collect(sheet, 0);
+
+        for (const l of document.querySelectorAll('link[rel="stylesheet"]')) {
+          if (l.href && FONT_SHEET.test(l.href)) addImport(l.href);
         }
         const images = [];
         for (const img of document.images) {
@@ -547,13 +572,25 @@ async function main() {
         // A HERO PHOTOGRAPH IS USUALLY A BACKGROUND, not an <img>, and `rule.cssText`
         // serialises its URL absolute, so it survived into the artboard as a link to the local
         // build server. The canvas has no egress, so it renders blank, with no refusal.
-        const backgrounds = [];
+        // PAIRS, not just absolutes. `rule.cssText` keeps a root-relative url as written
+        // (`/img/hero.jpg`), so a rewrite keyed on the absolute form finds nothing and the
+        // artboard keeps a path that resolves to nowhere inside the canvas. The raw text is
+        // what has to be replaced; the absolute form is what has to be fetched.
+        const backgroundPairs = [];
         const readUrls = (text) => {
           for (const m of String(text || "").matchAll(/url\((["']?)([^)"']+)\1\)/g)) {
             const u = m[2];
             if (!u || u.startsWith("data:")) continue;
+            // A FRAGMENT IS NOT A FILE. `filter: url(#grain)`, `clip-path: url(#c)` and
+            // `mask: url(#m)` name an element in this very document, and resolving one against
+            // the base URI produced the board's own page URL: fetched, handed to sharp, and the
+            // whole seed refused. SVG filter grain is the canonical technique and the bold
+            // mandate names grain by name, so it lands on the bold rungs first.
+            if (u.startsWith("#")) continue;
             if (/\.(woff2?|ttf|otf|eot)(\?|$)/i.test(u)) continue;   // faces are inlineFonts' work
-            backgrounds.push(new URL(u, document.baseURI).toString());
+            let abs = u;
+            try { abs = new URL(u, document.baseURI).toString(); } catch { continue; }
+            if (!backgroundPairs.some((pr) => pr.raw === u && pr.abs === abs)) backgroundPairs.push({ raw: u, abs });
           }
         };
         for (const el of document.querySelectorAll("*")) readUrls(getComputedStyle(el).backgroundImage);
@@ -565,8 +602,10 @@ async function main() {
         return {
           css: css.join("\n"),
           imports,
+          droppedSheets: [...new Set(droppedSheets)],
           images: [...new Set(images)],
-          backgrounds: [...new Set(backgrounds)],
+          backgrounds: [...new Set(backgroundPairs.map((pr) => pr.abs))],
+          backgroundPairs,
           scripts,
           height: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight),
         };
@@ -594,16 +633,30 @@ async function main() {
       // --- images: written beside the artboard, bare filenames, under the ceiling --------
       // Both kinds in one loop, deliberately: an <img> and a `background-image` are the same
       // problem to a canvas with no network, and two loops is how one of them gets forgotten.
+      //
+      // THEY ARE NOT EQUALLY LOAD-BEARING, THOUGH. An <img> is on this board and a client will
+      // see it break, so a fetch that fails is a refusal. A url() from the shared stylesheet may
+      // belong to another page entirely, and refusing every board over an asset no board shows
+      // reads as a broken image rather than as the harvest over-reaching. Those are DROPPED and
+      // NAMED. The refusal an operator can act on stays exactly where it was: an image that
+      // fetches, decodes, and still will not come under the ceiling.
       const imageMap = {};
-      for (const url of [...harvest.images, ...harvest.backgrounds]) {
-        if (imageMap[url]) continue;
-        let buf;
+      const droppedUrls = [];
+      const sources = [
+        ...harvest.images.map((url) => ({ url, required: true })),
+        ...harvest.backgrounds.map((url) => ({ url, required: false })),
+      ];
+      for (const { url, required } of sources) {
+        if (imageMap[url] || droppedUrls.some((d) => d.url === url)) continue;
+        let buf = null;
         try {
           const r = await ctx.request.get(url);
           if (!r.ok()) throw new Error(`HTTP ${r.status()}`);
           buf = Buffer.from(await r.body());
         } catch (e) {
-          failSeed(`board ${b.id}: could not read the image ${url} (${e.message}). Nothing written.`);
+          if (required) failSeed(`board ${b.id}: could not read the image ${url} (${e.message}). Nothing written.`);
+          droppedUrls.push({ url, why: e.message });
+          continue;
         }
         let out = buf;
         let ext = ".jpg";
@@ -615,9 +668,17 @@ async function main() {
             failSeed(`board ${b.id}: ${url} is an SVG of ${Math.round(out.length / 1024)} KB and cannot be downsampled under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB. Nothing written.`);
           }
         } else {
-          const fit = await fitUnder(buf, sharp).catch((e) => {
-            failSeed(`board ${b.id}: ${url} could not be re-encoded (${e.message}). Nothing written.`);
-          });
+          let fit = null;
+          try {
+            fit = await fitUnder(buf, sharp);
+          } catch (e) {
+            // NOT AN IMAGE AT ALL. A url() can name a stylesheet, a page or a font we did not
+            // recognise, and sharp refusing to decode it says the harvest reached too far, not
+            // that the board is broken.
+            if (required) failSeed(`board ${b.id}: ${url} could not be re-encoded (${e.message}). Nothing written.`);
+            droppedUrls.push({ url, why: "not a decodable image" });
+            continue;
+          }
           if (!fit.ok) {
             failSeed(`board ${b.id}: ${url} will not come under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB (smallest was ${Math.round(fit.buffer.length / 1024)} KB at ${fit.width}px wide, quality ${fit.quality}). Replace it with a smaller or less detailed source. Nothing written.`);
           }
@@ -626,6 +687,17 @@ async function main() {
         const name = `${b.id}-img${++imageSeq}${ext}`;
         writeFileSync(join(seedDir, name), out);
         imageMap[url] = name;
+      }
+      for (const d of droppedUrls) {
+        lines.push(`  ${b.id}: dropped ${d.url} (${d.why}); the rule that named it now reads none`);
+      }
+      // SAY WHEN THE SCROLL DID NOT GET THERE. A page whose own script fights the scroll leaves
+      // its reveals unfired, and a board flattened in that state looks like a design decision.
+      if (scrolled && scrolled.deepest + 40 < scrolled.end - 900) {
+        lines.push(`  ${b.id}: the settling scroll reached ${scrolled.deepest}px of ${scrolled.end}px; anything a reveal holds below that is captured UNSEEN`);
+      }
+      for (const href of harvest.droppedSheets || []) {
+        lines.push(`  ${b.id}: dropped the cross-origin stylesheet ${href}; only fonts.googleapis.com travels`);
       }
 
       // --- the motion script, when it is self-contained and small ------------------------
@@ -651,7 +723,8 @@ async function main() {
       }
 
       // --- flatten: bare image filenames, no scripts, computed styles inline -------------
-      await page.evaluate((map) => {
+      const droppedAbs = new Set(droppedUrls.map((d) => d.url));
+      await page.evaluate(({ map, dropped }) => {
         for (const img of document.images) {
           const src = img.currentSrc || img.src;
           if (map[src]) img.setAttribute("src", map[src]);
@@ -667,9 +740,12 @@ async function main() {
           const st = el.getAttribute("style");
           if (!st || !st.includes("url(")) continue;
           el.setAttribute("style", st.replace(/url\((["']?)([^)"']+)\1\)/g, (whole, q, u) => {
-            if (!u || u.startsWith("data:")) return whole;
+            if (!u || u.startsWith("data:") || u.startsWith("#")) return whole;
             let abs = u;
             try { abs = new URL(u, document.baseURI).toString(); } catch { /* leave it */ }
+            // A url nothing could fetch is REMOVED rather than left pointing at a dead path:
+            // inside the canvas the difference is a blank box versus a broken-image icon.
+            if (dropped.includes(abs)) return "none";
             // SINGLE QUOTES, deliberately. This lands in a `style` ATTRIBUTE, and the
             // serialiser escapes a double quote there as &quot;, which is not a URL any more.
             return map[abs] ? `url('${map[abs]}')` : whole;
@@ -680,14 +756,14 @@ async function main() {
         // as though it were part of the design. The SectionMark badges STAY: they are how a
         // client points at a section by name, and the seed README says so.
         for (const el of document.querySelectorAll(".ev-switcher, source, script, link, noscript, template")) el.remove();
-      }, imageMap);
+      }, { map: imageMap, dropped: [...droppedAbs] });
       await inlineComputedStyles(page, PROPERTY_LIST);
       const bodyHtml = await page.evaluate(() => document.body.innerHTML);
 
       const file = `B${b.ambition}.dc.html`;
       const artboard = toArtboard({
         html: bodyHtml,
-        css: rewriteUrls(css, imageMap),
+        css: rewriteUrls(css, imageMap, harvest.backgroundPairs, droppedAbs),
         fonts,
         imports: harvest.imports,
         script: motionScript,
@@ -774,10 +850,23 @@ export async function fitUnder(buf, sharp, limit = MAX_IMAGE_BYTES) {
  * photograph set by a class lives. Absolute already, because `rule.cssText` serialises them
  * that way, which is exactly why they had to be rewritten rather than left alone.
  */
-export function rewriteUrls(css, map) {
+export function rewriteUrls(css, map, pairs = [], dropped = new Set()) {
+  // Keyed on the url AS WRITTEN, because that is what is in the text. The pairs carry the
+  // absolute form the fetch loop used, which is the only thing `map` knows about.
+  const byRaw = new Map();
+  const goneRaw = new Set();
+  for (const { raw, abs } of pairs) {
+    if (map[abs]) byRaw.set(raw, map[abs]);
+    else if (dropped.has(abs)) goneRaw.add(raw);
+  }
   return String(css || "").replace(/url\((["']?)([^)"']+)\1\)/g, (whole, q, u) => {
-    if (!u || u.startsWith("data:")) return whole;
-    return map[u] ? `url("${map[u]}")` : whole;
+    if (!u || u.startsWith("data:") || u.startsWith("#")) return whole;
+    // A url nothing could fetch is REMOVED, not left pointing at a dead path: inside a canvas
+    // with no egress that is a blank box rather than a broken-image icon, and `none` is valid
+    // wherever a url() is (background-image, mask-image, border-image-source, content).
+    if (goneRaw.has(u) || dropped.has(u)) return "none";
+    const name = byRaw.get(u) || map[u];
+    return name ? `url("${name}")` : whole;
   });
 }
 
@@ -791,22 +880,34 @@ export function rewriteUrls(css, map) {
  * self-contained rule, and GSAP ships in the template. The bold rungs are the ones told to use
  * scroll-as-timeline, so they are the ones that would flatten with the strip, the section and
  * the notes invisible.
+ *
+ * IT CAPTURES ONE-SHOT REVEALS ONLY, and that is the whole of what it claims. An observer that
+ * un-reveals on exit, or a GSAP scrub tied to scroll position, is back in its unseen state by
+ * the time the page returns to the top. Those are captured as they are at scroll 0, and the
+ * printed line below says how far the scroll actually reached so the operator can tell.
  */
 async function settle(page) {
-  await page.evaluate(async () => {
+  const reached = await page.evaluate(async () => {
     const step = Math.max(200, Math.round(window.innerHeight * 0.8));
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const end = () => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-    // Bounded by the page's height AND by a hard step count: a page that grows as it is
-    // scrolled (an infinite list, a lazy grid) must not scroll this script for ever.
+    let deepest = 0;
+    // BEHAVIOR "instant", never a bare scrollTo(x, y). The scaffold's own globals.css sets
+    // `scroll-behavior: smooth`, so a bare call ANIMATES, and a loop that retargets every
+    // 120ms never arrives: measured on a 3,973px board it reached about a quarter of the way
+    // down and came back, so the reveal below it stayed at opacity 0 and I6 was inert on any
+    // page tall enough to need it. A site running Lenis has the same shape.
     for (let y = 0, n = 0; y < end() && n < 60; y += step, n++) {
-      window.scrollTo(0, y);
+      window.scrollTo({ top: y, behavior: "instant" });
       await wait(120);
+      deepest = Math.max(deepest, window.scrollY);
     }
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: "instant" });
     await wait(250);
+    return { deepest, end: end() };
   });
   await page.waitForTimeout(200);
+  return reached;
 }
 
 /**

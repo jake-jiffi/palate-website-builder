@@ -127,9 +127,20 @@ CTA labels to choose between, and the reference the craft came from.
 
    **THE MOTION PROOF COMES FIRST, AND NOTHING IS BUILT ON TOP OF IT UNTIL IT
    HAS BEEN SEEN.** Write `src/pages/index.astro`, run the full verify loop on
-   `/` alone (`scripts/verify-rendered.sh <url> --routes /`), record
-   `manifest.explore.proof = { url, verified_at }`, and hand the preview URL to
-   the client. A board is a still, so a bold rung has been chosen on a picture of
+   `/` alone (`scripts/verify-rendered.sh <url> --routes /`), record the proof
+   with the command below, and hand the preview URL to the client.
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> --proof <preview-url>
+   ```
+
+   **RECORD IT WITH THAT COMMAND, never by editing the manifest.** It writes
+   `explore.proof = { url, verified_at }` through `manifest-merge.mjs`, which is
+   the only write that survives the PostToolUse hook's own. It is also what
+   `scripts/gate-done.sh` reads to decide whether there is a composed home page to
+   measure at all: without it every build after Compose reports
+   `fidelity=skipped (Compose has not recorded the motion proof ...)` and the one
+   check on the picked direction never runs. A board is a still, so a bold rung has been chosen on a picture of
    itself; the client sees it MOVING before three thousand pages are built on it.
    The cost of finding out here is one page.
 
@@ -502,8 +513,10 @@ The mechanic when the client says "b3 hero + b5 menu":
    is ambiguous. Token overrides live in `src/styles/globals.css` (or the
    brand-package overrides layer) - keep them inside the brand's range.
 3b. **PROVE IT MOVING BEFORE BUILDING ANYTHING ELSE.** Run the full verify loop
-   on `/` alone, record `explore.proof`, and hand the client the URL. Only after
-   that is the rest of the site built.
+   on `/` alone, hand the client the URL, and record the proof:
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> --proof <preview-url>`.
+   Only after that is the rest of the site built. The fidelity gate does not run
+   until that stamp exists, so skipping it silently turns the check off.
 4. Build the rest of the site's pages (`about`, `services`, etc.) in the same
    direction, ONE PER PAGE in `manifest.architecture` (W16). They get the chosen tokens
    automatically via the brand layer.

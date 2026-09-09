@@ -152,6 +152,18 @@ grep -qiE "inferred one still governs" references/build-commission.md \
   && ok "and says which one governs the bold bar when they disagree" \
   || bad "build-commission.md does not say which intensity wins when the two disagree"
 
+# --- 10. THE MOTION PROOF IS A COMMAND, NOT A FACT ABOUT A JSON FIELD ----------------------
+# `gate-done.sh` runs the fidelity gate only once `explore.proof` is recorded, so the stamp is
+# load-bearing. Doctrine that says "record manifest.explore.proof" and never says HOW leaves the
+# model to hand-edit a file the PostToolUse hook also writes, and a model that sometimes does
+# not leaves `fidelity=skipped` on every build after Compose with nothing saying a check was
+# lost. Both files that tell Compose to prove the home page have to carry the command.
+for f in SKILL.md references/explore-stage.md; do
+  grep -q "palate-pick.mjs" "$f" && grep -q -- "--proof" "$f" \
+    && ok "$f: the motion proof is recorded by a named command" \
+    || bad "$f tells Compose to record the motion proof without naming the command that writes it"
+done
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

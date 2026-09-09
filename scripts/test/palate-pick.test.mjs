@@ -150,6 +150,19 @@ test("the calibration answer, the CTA, a note and a second pass are all recorded
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("the motion proof is a command, not a JSON edit", async () => {
+  const dir = project();
+  const r = await run([dir, "--proof", "https://palate-fixture.vercel.app/"]);
+  assert.equal(r.status, 0, r.stderr);
+  const proof = manifestOf(dir).explore.proof;
+  assert.equal(proof.url, "https://palate-fixture.vercel.app/");
+  assert.ok(Date.parse(proof.verified_at) > 0, "the proof carries no timestamp");
+  // The done gate reads exactly this to decide whether there is a composed home to measure, so
+  // a model that cannot write it leaves the fidelity gate skipped on every real build.
+  assert.match(r.stdout, /motion proof/i);
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("an intensity outside 1 to 4 is refused", async () => {
   const dir = project();
   const r = await run([dir, "--intensity", "7"]);

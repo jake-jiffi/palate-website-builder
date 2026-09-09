@@ -1,6 +1,6 @@
 ---
 description: Record which direction the client picked, what they said, and anything they changed on the canvas.
-argument-hint: "--hero b3 [--section b5] [--intensity 3] [--cta \"...\"] [--note \"...\"] [--canvas <dir>] [--second-pass]"
+argument-hint: "--hero b3 [--section b5] [--intensity 3] [--cta \"...\"] [--note \"...\"] [--canvas <dir>] [--proof <url>] [--second-pass]"
 ---
 
 Record the client's pick from the Explore boards. This is the only moment the Explore stage
@@ -56,7 +56,19 @@ kinds land in it:
 
 The canvas is never the source of truth. The Astro project is.
 
-## 4. Say what happens next
+## 4. At Compose, record the motion proof
+
+Once Compose has written the home page and you have shown it to the client MOVING, record it:
+
+```bash
+node "$PALATE/scripts/palate-pick.mjs" "$SITE" --proof <preview-url>
+```
+
+That stamp is what `gate-done.sh` reads to decide there is a composed home page to measure
+against the picked board. Without it the fidelity gate skips on every build after Compose, and
+the one check on whether the client got the direction they chose never runs.
+
+## 5. Say what happens next
 
 Read the picks back in one sentence, then name the next step: the home page is built first, in
 full, and shown to them moving before anything else is written on top of it. Do not go straight
