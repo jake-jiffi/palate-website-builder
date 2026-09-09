@@ -278,12 +278,21 @@ const P_OUT_OF_5 = /(?<![\d.,\/])(\d+(?:\.\d+)?)\s*(?:\/\s*5(?!\s*[\/\d])|\bout\
 // terminator now ends the window. `reviews?` is gone from the leading set for the same reason:
 // a review count in front of a proportion is the commonest way the two collide, and it licenses
 // nothing on its own.
-// THE CHARACTER CLASS IS THE GUARD AND THE DISTANCE WAS NEVER DOING ANYTHING. Widening either
-// count from four to twelve passed the whole suite, because any intervening WORD already breaks
-// the match and only punctuation can sit in the gap. A number that cannot fail is worse than no
-// number, so the counts are gone and the class carries it alone.
-const RATING_WORD_BEFORE = /\b(?:rated|rating|rate|scored?)[^\w.!?;]*$/i;
-const RATING_WORD_AFTER = /^[^\w.!?;]*(?:stars?|★|rating)\b/i;
+// TWO GUARDS, AND EACH ONE STOPS WHAT THE OTHER CANNOT. The character class stops an intervening
+// WORD and a sentence terminator. The count stops an intervening run of PUNCTUATION, which is
+// what a star glyph row is: "Rated ★★★★★ 4 out of 5 customers recommend us" put the whole class
+// back on the commonest markup a rating has.
+//
+// The counts were deleted once, for being inert: widening either from four to twelve passed the
+// whole suite. That was true and the conclusion was wrong. Nothing in the suite separated four
+// from twelve because every case tested had a WORD in the gap, which the class already handled,
+// so the measurement said the tests were thin rather than that the bound did nothing. Restored,
+// with the punctuation cases that make the number able to fail.
+const RATING_WORD_BEFORE = /\b(?:rated|rating|rate|scored?)[^\w.!?;]{0,4}$/i;
+// The word boundary belongs to the WORDS. `★\b` can never match a row of stars, because the
+// character after a star is another star and neither is a word character, so the glyph
+// alternative sat there unable to fire until the boundary was moved inside the alternation.
+const RATING_WORD_AFTER = /^[^\w.!?;]{0,3}(?:stars?\b|rating\b|★)/i;
 const P_RATING_OF = /\brating\b\s*(?:of|is|:)?\s*(?<![\d.,])(\d+(?:\.\d+)?)/gi;
 // THE QUALIFIER IS PART OF THE LABEL, and it was not until a clean fixture proved it had to
 // be. "25 years in the trade, 20 years in business under this name" is one ordinary sentence

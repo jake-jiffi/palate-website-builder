@@ -27,7 +27,7 @@ What is deliberately planted, and which false positive each one is the regressio
 | `/blog/2019-milestone` | `38 reviews`, in a page declaring itself a BlogPosting | a dated entry quoting its own day |
 | `/blog` | a listing of `<div>` cards each carrying a `<time datetime>` | a dated card in a hand-built wrapper |
 | `/services` | the whole body inside `<div id="app">` with a copyright `<time>` in its footer | a page silenced wholesale by the dated-block rule |
-| `/` | `Rated by 42 reviews. 4 out of 5 customers recommend us` | a rating word in the previous sentence licensing a proportion |
+| `/` | `Rated ★★★★★ 4 out of 5 customers recommend us` | a star row between a rating word and a proportion |
 | `/`, `/about` | a landline, an after-hours mobile and a fax in one footer | a second contact number read as a contradiction |
 | `/` | a contact table with a bay number in the cell before the line | a stray digit absorbed into the number beside it |
 | `/services` | delivery and site-measure times after a day name | a time range that is not the trading hours |

@@ -116,6 +116,24 @@ test("a rating word in the PREVIOUS sentence does not license the proportion", (
   assert.deepEqual(labels("<p>5 out of 5 stars.</p>"), ["rating=5"]);
 });
 
+test("a run of punctuation between the rating word and the number breaks the licence", () => {
+  // FOUND BY THE CRITIC after I deleted both distance counts for being inert. They were inert
+  // against an intervening WORD, which the character class already stops, and they were the only
+  // guard against intervening PUNCTUATION. A star glyph row is punctuation, so the whole class
+  // came back on the commonest markup there is for a rating.
+  assert.deepEqual(
+    labels("<p>Rated ★★★★★ 4 out of 5 customers recommend us. We are rated 4.9 stars.</p>"),
+    ["rating=4.9"],
+  );
+  assert.deepEqual(labels("<p>Scored ..... 4 out of 5 sites.</p>"), []);
+  // A COUNT THAT CAN FAIL. These two are what make the bound testable rather than decorative:
+  // the short separators a real page puts between the word and the number still license it.
+  assert.deepEqual(labels("<p>Rated: 5 out of 5.</p>"), ["rating=5"]);
+  assert.deepEqual(labels("<p>Rated - 5 out of 5.</p>"), ["rating=5"]);
+  assert.deepEqual(labels("<p>4 out of 5 ★★★★★</p>"), ["rating=4"]);
+  assert.deepEqual(labels("<p>4 out of 5 &mdash;&mdash;&mdash;&mdash; stars</p>"), []);
+});
+
 test("a date is not a rating", () => {
   // FOUND BY READING THE OUTPUT: `1/5/2024` was read as a rating of one, so any site printing
   // a day/month date in May argued with its own star rating. The slash form now refuses a
@@ -225,10 +243,21 @@ test("an opening-hours line carries its days as the label and a 24-hour range as
 test("a block of day lines is licensed once and reads to the end", () => {
   // A real hours block is a heading and then a line per day, so the licence has to carry down
   // the list rather than sit beside every line.
-  assert.deepEqual(
-    labels("<p>Opening hours</p><ul><li>Monday 9-5</li><li>Tuesday 9-5</li><li>Saturday 9-1</li></ul>"),
-    ["hours mon=09:00-17:00", "hours tue=09:00-17:00", "hours sat=09:00-13:00"],
-  );
+  //
+  // THE TABLE IS SIX ROWS OF FULL TIMES ON PURPOSE, and the first version of this test was
+  // three rows of "9-5" that fitted inside the 90-character window from the heading. It
+  // therefore passed whether the chain existed or not, and the mutation row this report claimed
+  // for the chain was produced by a patch that broke the file's syntax rather than removing the
+  // line. Written out in full, Friday and Saturday sit past the window and only the chain
+  // reaches them: with it, all six; without it, Monday to Thursday and nothing else.
+  const day = (d, close) => `<tr><td>${d}</td><td>9:00am - ${close}</td></tr>`;
+  const table = `<h2>Opening hours</h2><table>` +
+    ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((d) => day(d, "5:00pm")).join("") +
+    day("Saturday", "1:00pm") + `</table>`;
+  assert.deepEqual(labels(table), [
+    "hours mon=09:00-17:00", "hours tue=09:00-17:00", "hours wed=09:00-17:00",
+    "hours thu=09:00-17:00", "hours fri=09:00-17:00", "hours sat=09:00-13:00",
+  ]);
 });
 
 test("a time range after a day name is not automatically the trading hours", () => {
