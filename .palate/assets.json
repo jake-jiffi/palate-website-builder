@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "dir": ".",
+  "counts": {
+    "total": 1,
+    "measured": 1,
+    "photos": 1,
+    "icons": 0,
+    "unreadable": 0,
+    "reviewed": 0,
+    "heroCapable": 0,
+    "byOrientation": {
+      "landscape": 1
+    }
+  },
+  "slots": [
+    {
+      "name": "full-bleed hero",
+      "ratio": 3
+    },
+    {
+      "name": "wide banner",
+      "ratio": 1.778
+    },
+    {
+      "name": "landscape card",
+      "ratio": 1.5
+    },
+    {
+      "name": "square tile",
+      "ratio": 1
+    },
+    {
+      "name": "portrait card",
+      "ratio": 0.8
+    }
+  ],
+  "assets": {
+    "templates/astro-project/public/og/default.png": {
+      "width": 1200,
+      "height": 630,
+      "format": "png",
+      "bytes": 11121,
+      "kind": "photo",
+      "ratio": 1.905,
+      "orientation": "landscape",
+      "maxCssWidth": {
+        "at1x": 1200,
+        "at2x": 600
+      },
+      "heroCapable": false,
+      "fits": [
+        {
+          "slot": "full-bleed hero",
+          "ratio": 3,
+          "visible": 0.635,
+          "verdict": "risky"
+        },
+        {
+          "slot": "wide banner",
+          "ratio": 1.778,
+          "visible": 0.933,
+          "verdict": "ok"
+        },
+        {
+          "slot": "landscape card",
+          "ratio": 1.5,
+          "visible": 0.788,
+          "verdict": "ok"
+        },
+        {
+          "slot": "square tile",
+          "ratio": 1,
+          "visible": 0.525,
+          "verdict": "risky"
+        },
+        {
+          "slot": "portrait card",
+          "ratio": 0.8,
+          "visible": 0.42,
+          "verdict": "destructive"
+        }
+      ],
+      "notes": [
+        "only 1200px wide: a full-bleed hero would upscale it (600px is its honest 2x limit)",
+        "destroys the frame in: portrait card"
+      ],
+      "subject": null,
+      "treatment": null,
+      "reviewed": false
+    }
+  },
+  "generatedAt": "2026-09-09T06:31:50.406Z"
+}

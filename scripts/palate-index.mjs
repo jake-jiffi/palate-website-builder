@@ -46,7 +46,7 @@
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve, dirname, extname, basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 const SOURCE_EXT = new Set(['.astro', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.svelte', '.vue']);
 const CONTENT_EXT = new Set(['.md', '.mdx']);
@@ -601,4 +601,4 @@ function main() {
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (invokedDirectly(import.meta.url)) main();
