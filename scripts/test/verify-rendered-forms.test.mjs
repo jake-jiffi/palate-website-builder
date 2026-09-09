@@ -332,12 +332,22 @@ test('the mobile nav opens, shows its target and closes on Escape', async (t) =>
   assert.ok(!/\[High\].*mobile nav/.test(r.out), `a working nav produced a finding\n${r.out.slice(-1200)}`);
 });
 
-test('a mobile nav that will not close on Escape is a failure', async (t) => {
+test('a mobile nav that will not close on Escape is reported, and does NOT block', async (t) => {
+  // Medium on purpose. Closing only from the button is a real accessibility fault and a common
+  // deliberate implementation, and a gate that blocks a client's build on it gets the whole
+  // interaction pass switched off. Both halves are asserted: it is said, and it costs nothing.
   const fx = await makeFixture({ nav: 'traps' });
   t.after(() => fx.stop());
-  const r = await gate(fx);
-  assert.match(r.out, /\[High\].*mobile nav.*Escape/, `an undismissable nav passed\n${r.out.slice(-1200)}`);
-  assert.equal(r.status, 1);
+  const r = await gate(fx, ['--out', fx.out]);
+  assert.match(r.out, /\[Medium\].*mobile nav.*Escape/, `an undismissable nav was not reported\n${r.out.slice(-1400)}`);
+  assert.ok(!/\[High\].*mobile nav/.test(r.out), 'the Escape finding is still filed as a High');
+  assert.equal(r.status, 0, `an advisory finding failed the run\n${r.out.slice(-1400)}`);
+  const ix = JSON.parse(readFileSync(join(fx.out, 'interaction.json'), 'utf8'));
+  assert.ok(!ix.interaction_failures.some((f) => f.check === 'mobile-nav-escape-dismiss'),
+    'the advisory finding reached interaction.json, which is the file the stop hook blocks on');
+  // ...and the route keeps its record, because nothing at or above High was filed against it.
+  const m = JSON.parse(readFileSync(join(fx.out, 'manifest.json'), 'utf8'));
+  assert.ok(m.routes['/'], 'an advisory finding dropped the route record');
 });
 
 test('a mobile nav button that opens nothing is a failure', async (t) => {
@@ -347,16 +357,17 @@ test('a mobile nav button that opens nothing is a failure', async (t) => {
   assert.match(r.out, /\[High\].*mobile nav.*did not open/i, `a dead nav button passed\n${r.out.slice(-1200)}`);
 });
 
-test('a nav failure blocks through interaction.json, not only through the exit code', async (t) => {
+test('a dead nav button blocks through interaction.json, not only through the exit code', async (t) => {
   // hooks/palate-stop.mjs reads this file and blocks on a non-empty list. A finding that
-  // never reaches it is a finding the build walks past.
-  const fx = await makeFixture({ nav: 'traps' });
+  // never reaches it is a finding the build walks past. Keyed on the OPEN check, which is the
+  // one that blocks: a control that opens nothing is a dead control in any design.
+  const fx = await makeFixture({ nav: 'dead' });
   t.after(() => fx.stop());
   await gate(fx, ['--out', fx.out]);
   const ix = JSON.parse(readFileSync(join(fx.out, 'interaction.json'), 'utf8'));
-  const hit = ix.interaction_failures.find((f) => f.check === 'mobile-nav-escape-dismiss');
+  const hit = ix.interaction_failures.find((f) => f.check === 'mobile-nav-open');
   assert.ok(hit, `interaction.json carries no mobile-nav failure: ${JSON.stringify(ix).slice(0, 400)}`);
-  assert.match(hit.msg, /Escape/);
+  assert.match(hit.msg, /did not open anything/);
 });
 
 test('a dialog opens and closes on Escape', async (t) => {
@@ -370,14 +381,15 @@ test('a dialog opens and closes on Escape', async (t) => {
   assert.ok(!/\[High\].*dialog:/.test(r.out), `a working dialog produced a finding\n${r.out.slice(-1400)}`);
 });
 
-test('a dialog that swallows the cancel event is a failure', async (t) => {
+test('a dialog that swallows the cancel event is reported, and does NOT block', async (t) => {
   // preventDefault on `cancel` is the one line that turns a correct native dialog into a trap,
-  // and it is invisible in the markup.
+  // and it is invisible in the markup. Same severity call as the nav: said, not blocking.
   const fx = await makeFixture({ dialog: 'traps' });
   t.after(() => fx.stop());
   const r = await gate(fx);
-  assert.match(r.out, /\[High\].*dialog:.*Escape/, `a trapping dialog passed\n${r.out.slice(-1400)}`);
-  assert.equal(r.status, 1);
+  assert.match(r.out, /\[Medium\].*dialog:.*Escape/, `a trapping dialog was not reported\n${r.out.slice(-1400)}`);
+  assert.ok(!/\[High\].*dialog:/.test(r.out), 'the Escape finding is still filed as a High');
+  assert.equal(r.status, 0, `an advisory finding failed the run\n${r.out.slice(-1400)}`);
 });
 
 test('a dialog trigger wired to nothing is a failure, and it reaches interaction.json', async (t) => {
@@ -393,11 +405,13 @@ test('a dialog trigger wired to nothing is a failure, and it reaches interaction
 test('the nav and the dialog on one page are told apart', async (t) => {
   // Zag's dialog trigger carries aria-expanded exactly like a burger does, so a probe that
   // took the first match and called it "mobile nav" would mislabel every dialog on the site.
+  // Read from the findings rather than interaction.json, because both are advisory now.
   const fx = await makeFixture({ nav: 'traps', dialog: 'traps' });
   t.after(() => fx.stop());
-  const r = await gate(fx, ['--out', fx.out]);
-  const ix = JSON.parse(readFileSync(join(fx.out, 'interaction.json'), 'utf8'));
-  const checks = ix.interaction_failures.map((f) => f.check);
-  assert.ok(checks.includes('mobile-nav-escape-dismiss'), `no nav failure: ${checks.join(', ')}`);
-  assert.ok(checks.includes('dialog-escape-dismiss'), `no dialog failure: ${checks.join(', ')}`);
+  const r = await gate(fx);
+  assert.match(r.out, /\[Medium\]\s+mobile nav:.*Escape/, `no nav finding\n${r.out.slice(-1600)}`);
+  assert.match(r.out, /\[Medium\]\s+dialog:.*Escape/, `no dialog finding\n${r.out.slice(-1600)}`);
+  // One defect each, not the nav reported twice under two names.
+  assert.equal((r.out.match(/mobile nav: what /g) || []).length, 1, 'the nav was filed more than once');
+  assert.equal((r.out.match(/dialog: what /g) || []).length, 1, 'the dialog was filed more than once');
 });

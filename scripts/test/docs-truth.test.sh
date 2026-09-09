@@ -95,6 +95,25 @@ present "the verifier works a dialog too, which the spec asks for alongside the 
   "scripts/reference-capture/verify-rendered.mjs" "commandfor="
 present "testing.md says which trigger shapes are discoverable" \
   "references/testing.md" "data-dialog-target"
+# THE SEVERITY SPLIT. A doc that called the Escape finding blocking would send an operator
+# hunting a build failure that never happens, and one that called the dead-control finding
+# advisory would let a dead burger ship.
+present "testing.md says the Escape finding does not block" \
+  "references/testing.md" "a **Medium and does not block**"
+present "the verifier files the Escape finding as a Medium" \
+  "scripts/reference-capture/verify-rendered.mjs" "'escape-dismiss': { check: 'dialog-escape-dismiss', sev: 'Medium' }"
+present "the verifier still files a dead control as a High" \
+  "scripts/reference-capture/verify-rendered.mjs" "open: { check: 'mobile-nav-open', sev: 'High' }"
+# THE PRODUCTION SKIP, and the provisioning that makes it rare.
+present "testing.md says production with no secret skips rather than fails" \
+  "references/testing.md" "production and \`PALATE_SMOKE_SECRET\` is not set"
+present "testing.md says the secret is provisioned rather than asked for" \
+  "references/testing.md" "The secret is provisioned, not asked for"
+present "the round trip skips instead of posting in that case" \
+  "scripts/verify-form-roundtrip.sh" "this is a PRODUCTION deployment and PALATE_SMOKE_SECRET is not set"
+for f in scripts/provision-vercel.sh scripts/provision-cloudflare.sh; do
+  present "$f provisions the smoke secret" "$f" "ensure_smoke_secret"
+done
 present "the contact endpoint is a global input, so an edit re-renders the pages" \
   "scripts/reference-capture/verify-rendered.mjs" "'src/pages/api'"
 

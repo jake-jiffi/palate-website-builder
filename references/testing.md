@@ -140,11 +140,23 @@ Where it runs:
   would never match the template this was written for. Where the form posts is then measured
   rather than assumed, and a form posting to a third party is reported as UNMEASURED with the
   destination named, never as clean.
-- **Against the deployed URL**, by `scripts/verify-form-roundtrip.sh <url>`, which
-  `verify-vercel.sh` and `verify-cloudflare.sh` both call after their 200 check. It exits 0
-  on a proven round trip, 1 on a failure, and **2 with a printed reason** when the deployment
-  serves no `/api/contact`, because a brochure site has not failed by having no form. Set
-  `PALATE_SMOKE_SECRET` in the environment it runs in when the target is production.
+- **Against the deployed URL**, by `scripts/verify-form-roundtrip.sh <url> [--env production]`,
+  which `verify-vercel.sh` and `verify-cloudflare.sh` both call after their 200 check. It exits
+  0 on a proven round trip, 1 on a failure, and **2 with a printed reason** in two cases: the
+  deployment serves no `/api/contact`, because a brochure site has not failed by having no
+  form; or it is **production and `PALATE_SMOKE_SECRET` is not set**, in which case it posts
+  nothing at all and prints which variable to set and where. Without that second skip the
+  request falls through to the real path, Turnstile refuses the token the script does not have,
+  and the operator reads a 400 on their contact endpoint minutes after going live with nothing
+  actually broken. Production is read from `--env`, then `PALATE_SITE_ENV` / `PUBLIC_SITE_ENV`
+  / `VERCEL_ENV`, then the build's own `.palate-skill-state.json` stage.
+- **The secret is provisioned, not asked for.** `provision-vercel.sh` and
+  `provision-cloudflare.sh` generate `PALATE_SMOKE_SECRET` when it is absent, write it to
+  `.env` (gitignored) and push it to the deployment: Vercel on the production target only,
+  Cloudflare as a Worker secret. The verifier reads `.env` when the variable is not already
+  exported, so the ordinary path needs no manual step. An existing value is kept rather than
+  regenerated, because a new one would leave the deployment holding the old and every later
+  round trip failing on a mismatch.
 - **The endpoint's own contract** is exercised as code by
   `scripts/test/contact-smoke.test.mjs`, against BOTH copies of the handler. `add-sanity.sh`
   copies `templates/cms-sanity/src/pages/api/contact.ts` over the base file, so the two carry
@@ -158,6 +170,15 @@ a keyboard visitor tabbing through the whole sheet to get out, and looks perfect
 screenshot; a native `<dialog>` gets Escape for free unless the `cancel` event is prevented,
 which is one invisible line. The finding is deduplicated on the control's label, because one
 nav or one dialog is normally one shared component.
+
+**The two halves carry different severities, and the difference is deliberate.** A control
+that opens NOTHING is a **High** and blocks: there is no design in which a dead burger is the
+intent. A control that opens and will not close on Escape is a **Medium and does not block**:
+closing only from the button is a real accessibility fault and a common deliberate
+implementation, the disclosure pattern does not require Escape (only the dialog and
+menu-button patterns do), and a gate that fails a client's build over it gets the whole
+interaction pass switched off, which costs more than the finding is worth. Only the High
+reaches `.palate-shots/interaction.json`, which is the file the stop hook blocks on.
 
 A trigger is discoverable through `aria-controls`, `aria-haspopup="dialog"`, `commandfor` or
 `data-dialog-target`. A `<dialog>` whose opener is bound in a module with none of those cannot

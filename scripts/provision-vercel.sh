@@ -32,6 +32,27 @@ upsert_env() {
 
 set -a; [ -f .env ] && . ./.env; set +a
 
+# THE POST-DEPLOY FORM ROUND TRIP'S SECRET, generated here rather than read from .env like the
+# others, because it is the one value nobody has a reason to invent: it exists only so
+# verify-form-roundtrip.sh can reach /api/contact on a PRODUCTION deployment without the
+# endpoint sending a real enquiry. Without it that check skips, and a check that always skips
+# is a check nobody runs. Written back to .env (gitignored) so the verifier finds it with no
+# manual step, and only generated when it is not already there, so a re-run keeps the value the
+# deployment already holds.
+ensure_smoke_secret() {
+  [ -n "${PALATE_SMOKE_SECRET:-}" ] && return 0
+  if command -v openssl >/dev/null 2>&1; then
+    PALATE_SMOKE_SECRET="$(openssl rand -hex 24)"
+  else
+    PALATE_SMOKE_SECRET="$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 48)"
+  fi
+  export PALATE_SMOKE_SECRET
+  [ -f .env ] || : > .env
+  printf '\n# Post-deploy form round trip (verify-form-roundtrip.sh). Production only.\nPALATE_SMOKE_SECRET=%s\n' "$PALATE_SMOKE_SECRET" >> .env
+  echo "generated PALATE_SMOKE_SECRET and wrote it to ./.env"
+}
+ensure_smoke_secret
+
 echo "pushing build-time vars (all environments)..."
 for target in production preview development; do
   upsert_env SANITY_PROJECT_ID    "${SANITY_PROJECT_ID:-}"            "$target"
@@ -54,6 +75,10 @@ for target in production preview; do
   upsert_env RESEND_API_KEY         "${RESEND_API_KEY:-}"         "$target"
   upsert_env TURNSTILE_SECRET       "${TURNSTILE_SECRET:-}"       "$target"
 done
+
+# Production only. On a preview the endpoint honours the smoke header without a secret, so a
+# value there would be consulted by nothing.
+upsert_env PALATE_SMOKE_SECRET "${PALATE_SMOKE_SECRET:-}" production
 
 echo "deploying to production..."
 URL=$(vercel deploy --prod --yes | tail -1)

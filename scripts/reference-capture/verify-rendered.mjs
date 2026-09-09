@@ -650,9 +650,26 @@ const navSeen = new Set();
 // Spelled out rather than composed, so every check name this gate can emit is greppable. The
 // docs guard and hooks/palate-stop.mjs both key on these strings, and a name assembled at
 // runtime is a name no static check can find.
+//
+// THE TWO SEVERITIES ARE THE WHOLE JUDGEMENT HERE.
+//
+//   open           HIGH, and it blocks. A burger or a dialog trigger that opens nothing is a
+//                  dead control. There is no design in which that is deliberate.
+//   escape-dismiss MEDIUM, and it does NOT block. A nav that closes only from its own button
+//                  is a real accessibility fault and a common, deliberate implementation; the
+//                  disclosure pattern does not require Escape, only the dialog and menu-button
+//                  patterns do. Blocking a client's build on it would get the whole
+//                  interaction pass switched off, which costs more than the finding is worth.
+//                  It is reported, and the operator decides.
 const DISCLOSURE_CHECKS = {
-  dialog: { open: 'dialog-open', 'escape-dismiss': 'dialog-escape-dismiss' },
-  'mobile nav': { open: 'mobile-nav-open', 'escape-dismiss': 'mobile-nav-escape-dismiss' },
+  dialog: {
+    open: { check: 'dialog-open', sev: 'High' },
+    'escape-dismiss': { check: 'dialog-escape-dismiss', sev: 'Medium' },
+  },
+  'mobile nav': {
+    open: { check: 'mobile-nav-open', sev: 'High' },
+    'escape-dismiss': { check: 'mobile-nav-escape-dismiss', sev: 'Medium' },
+  },
 };
 
 // ------------------------------------------------------------------ axe ----
@@ -2104,12 +2121,16 @@ async function disclosureProbe(page, route, vpName) {
     if (vpName !== 'mobile' && c.kind !== 'dialog') continue;
     const where = c.kind === 'dialog' ? '' : ' at 390';
     const file = (suffix, msg) => {
-      const check = DISCLOSURE_CHECKS[c.kind][suffix];
+      const { check, sev } = DISCLOSURE_CHECKS[c.kind][suffix];
       const key = check + ' ' + c.label;
       if (navSeen.has(key)) return;
       navSeen.add(key);
-      add('High', route, vpName, c.kind + ': ' + msg);
-      interactionFailures.push({ msg: route + ' @' + vpName + ': ' + c.kind + ': ' + msg, route, viewport: vpName, rule: check, check });
+      add(sev, route, vpName, c.kind + ': ' + msg);
+      // Only a High reaches interaction.json, which is the file hooks/palate-stop.mjs blocks
+      // on. A Medium that blocked would make "Medium" mean nothing.
+      if (sev === 'High') {
+        interactionFailures.push({ msg: route + ' @' + vpName + ': ' + c.kind + ': ' + msg, route, viewport: vpName, rule: check, check });
+      }
     };
 
     const state = () => page.evaluate((n) => {
@@ -2150,7 +2171,7 @@ async function disclosureProbe(page, route, vpName) {
       file('escape-dismiss', 'what "' + c.label + '" opened cannot be dismissed with Escape' + where + '. ' +
         'An overlay a keyboard visitor cannot close leaves them tabbing through the whole sheet to get out. ' +
         'Close it on Escape as well as on the button (a native <dialog> does this for free unless the cancel ' +
-        'event is prevented).');
+        'event is prevented). Advisory: this does not block the build.');
       dirty = true;
       continue;
     }
