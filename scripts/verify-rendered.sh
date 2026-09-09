@@ -34,7 +34,10 @@
 #                                    outside them.
 #
 # Exit codes:
-#   0  clean        1  findings at or above High        2  bad args
+#   0  clean, on a run that rendered at least one route
+#   1  findings at or above High
+#   2  bad args, OR every selected route was unchanged so nothing was rendered: SKIPPED, not
+#      passed. Re-run with --full to render every route.
 #   3  no browser available - the gate is BLOCKED; surface it, never pass.
 set -uo pipefail
 

@@ -30,15 +30,16 @@
  *   node verify-rendered.mjs --url <base> [--routes /,/contact,/blog] [--out <dir>]
  *
  * Exit codes:
- *   0  clean (no finding at or above High)
+ *   0  clean (no finding at or above High), on a run that rendered at least one route
  *   1  findings at or above High
- *   2  bad arguments
+ *   2  bad arguments, OR every selected route was unchanged and no route was rendered: the run
+ *      is SKIPPED, not passed, and says so
  *   3  a browser could not be launched - the gate is BLOCKED, never a pass
  */
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'fs';
 import { createHash } from 'crypto';
-import { dirname, join, relative, resolve } from 'path';
+import { dirname, isAbsolute, join, relative, resolve } from 'path';
 // Commerce route resolution lives with the survey that produces the catalogue.
 // It is a NO-OP without one, so a brochure build is untouched.
 import { resolveDynamic } from '../palate-shopify.mjs';
@@ -144,25 +145,74 @@ function rebuildIndex(projectRoot, indexPath) {
  * nothing must never look like one that passed. And the blast radius itself comes from
  * palate-index.mjs, which already falls wide on a config file and on a dynamic import its
  * parser cannot see.
+ *
+ * A WIDE FALL ALSO SETS THE RECORDS ASIDE, and that is the half the first version missed. It
+ * printed "falling wide", took every route, and then the unchanged-route skip threw nine of
+ * eleven of them away: an unknown file is precisely one whose effect on the hashes is unknown
+ * too, so the routes it touches hash as unchanged and are skipped. The run said it had widened
+ * and rendered the two routes with no record, neither of them one the operator had edited.
  */
 function narrowToChanged(index, picked, files) {
   const known = (f) => index.routes.some((r) => r.source === f || (r.dependsOn || []).includes(f))
     || (index.entries || []).some((e) => e.file === f);
   const unknown = files.filter((f) => !known(f));
   for (const f of unknown) console.error(`verify-rendered: ${f} is not in the index, falling wide`);
-  if (unknown.length) return picked;
+  const wide = (why) => {
+    console.error(`verify-rendered: the unchanged-route records are set aside for this run, because ${why}.`);
+    return { picked, concrete: new Map(), wide: true };
+  };
+  if (unknown.length) return wide('a changed file could not be placed in the index, so its effect on any route hash is unknown');
 
   const blast = blastRadius(index, files);
-  // A dynamic template is selected by its own path (`/blog/[slug]`), while the blast radius
-  // names the page (`/blog/welcome`), so the template is kept when the radius lands inside it.
-  const hit = picked.filter((r) => blast.includes(r.path)
-    || (r.kind === 'dynamic' && blast.some((b) => b.startsWith(r.path.replace(/\/\[[^\]]+\]$/, '') + '/'))));
-  if (!hit.length) {
-    console.error(`verify-rendered: --changed ${files.join(', ')} reaches no route in the index, falling wide rather than rendering nothing.`);
-    return picked;
-  }
+  // A dynamic template is selected by its own path (`/blog/[slug]`) while the blast radius names
+  // the PAGE (`/blog/winter-pipes`). Keeping the template alone meant the gate fetched the
+  // literal bracket path, got the site's 404, and recorded a pass for a page it never opened.
+  const concrete = new Map();
+  const hit = picked.filter((r) => {
+    if (blast.includes(r.path)) return true;
+    if (r.kind !== 'dynamic') return false;
+    const stem = r.path.replace(/\/\[[^\]]+\]$/, '') + '/';
+    const page = blast.find((b) => b.startsWith(stem));
+    if (!page) return false;
+    concrete.set(r.path, page);
+    return true;
+  });
+  if (!hit.length) return wide('the change reaches no route in the index, and rendering nothing must never look like a pass');
   console.error(`verify-rendered: --changed ${files.join(', ')} is a blast radius of ${hit.length} of ${picked.length} route(s).`);
-  return hit;
+  return { picked: hit, concrete, wide: false };
+}
+
+/**
+ * A changed file as the INDEX spells it. An editor hands over an absolute path and the index
+ * stores paths relative to the project, so `/Users/.../src/components/ServiceCard.astro` read
+ * as a file the index had never heard of, fell wide, and then skipped the very routes that
+ * import it. Anything outside the project is left alone: it is genuinely unknown.
+ */
+function toProjectRelative(root, f) {
+  const raw = f.replace(/^\.\//, '');
+  if (!isAbsolute(raw)) return raw;
+  const rel = relative(root, raw);
+  return rel && !rel.startsWith('..') ? rel : raw;
+}
+
+/**
+ * The page a dynamic template actually serves, from the index's own entries.
+ *
+ * `resolveDynamic` maps a template to a real handle from a Shopify catalogue and does nothing
+ * on a brochure build, so `/blog/[slug]` was fetched literally, returned the site's 404, and
+ * was recorded as a pass. The entries carry the ids palate-index wrote, so a blog can answer
+ * the same question a catalogue answers for a store. Only a single trailing `[param]` is
+ * substituted, and only when the route names one collection: anything less certain keeps the
+ * literal path rather than inventing a URL.
+ */
+function resolveFromEntries(route, entries, root) {
+  if (route.kind !== 'dynamic' || !/\/\[[^\]]+\]$/.test(route.path)) return null;
+  const names = collectionsFor(route, root).filter((n) => n !== '*');
+  if (names.length !== 1) return null;
+  const entry = entries.find((e) => e.collection === names[0] && e.draft !== true)
+    || entries.find((e) => e.collection === names[0]);
+  if (!entry) return null;
+  return route.path.replace(/\[[^\]]+\]$/, entry.id);
 }
 
 /**
@@ -336,7 +386,7 @@ const textHash = (s) => createHash('sha256').update(String(s).replace(/\s+/g, ' 
 const MAX_ROUTES = Number(args['max-routes'] && args['max-routes'] !== 'true' ? args['max-routes'] : 14);
 // --changed narrows BEFORE the cap applies. The other order would make a two-file fix compete
 // with the route budget, which is the opposite of what an incremental pass is for.
-const changed = args.changed && args.changed !== 'true'
+let changed = args.changed && args.changed !== 'true'
   ? String(args.changed).split(',').map((s) => s.trim().replace(/^\.\//, '')).filter(Boolean)
   : null;
 // The full sweep. The unchanged-route skip below is what makes a fix loop cheap, and the sweep
@@ -356,6 +406,8 @@ const routeOf = new Map();
 let projectRoot = '.';
 // The index's content entries, for the collection digest a dynamic route's hash folds in.
 let indexEntries = [];
+// Set by a wide fall: the records cannot be trusted for a change that could not be placed.
+let setAside = false;
 if (args.routes) {
   routes = String(args.routes).split(',').map((r) => r.trim()).filter(Boolean);
   if (changed) console.error('verify-rendered: --routes names the routes explicitly, so --changed is ignored on this run.');
@@ -369,20 +421,43 @@ if (args.routes) {
   // changed), then edit the newly imported file, and the page is neither selected nor
   // invalidated because dependsOn predates the import. palate-index.mjs is a static parse
   // costing well under a second, so it is rebuilt rather than trusted.
-  if (changed) rebuildIndex(projectRoot, indexPath);
+  if (changed) {
+    // Spelled the way the INDEX spells it, before anything looks it up.
+    changed = changed.map((f) => toProjectRelative(projectRoot, f));
+    rebuildIndex(projectRoot, indexPath);
+  }
   const found = routesFromIndex(indexPath);
   if (found) {
-    const picked = changed ? narrowToChanged(found.index, found.picked, changed) : found.picked;
+    const narrowed = changed
+      ? narrowToChanged(found.index, found.picked, changed)
+      : { picked: found.picked, concrete: new Map(), wide: false };
+    const picked = narrowed.picked;
+    setAside = narrowed.wide;
+    indexEntries = Array.isArray(found.index.entries) ? found.index.entries : [];
     const catPath = args.catalogue && args.catalogue !== 'true' ? args.catalogue : '.palate/catalogue.json';
     const res = resolveDynamic(picked.map((r) => r.path), catPath);
     if (res.resolved > 0) {
       console.error(`verify-rendered: ${res.resolved} dynamic route(s) resolved to real handles from ${catPath}`);
     }
-    routes = res.paths.slice(0, MAX_ROUTES);
+    // A dynamic template is fetched as a real page or not at all. The blast radius names the
+    // page when a post changed; otherwise the index's entries name a representative, the way
+    // the catalogue names one for a store. Either beats fetching `/blog/[slug]` and recording
+    // the 404 it returns as a pass.
+    const substituted = [];
+    const resolvedPaths = res.paths.map((p, i) => {
+      if (!p.includes('[')) return p;
+      const page = narrowed.concrete.get(p) || resolveFromEntries(picked[i], indexEntries, projectRoot);
+      if (!page) return p;
+      substituted.push(`${p} -> ${page}`);
+      return page;
+    });
+    if (substituted.length) {
+      console.error(`verify-rendered: ${substituted.length} dynamic template(s) rendered as a real page from the index entries: ${substituted.join(', ')}`);
+    }
+    routes = resolvedPaths.slice(0, MAX_ROUTES);
     routes.forEach((p, i) => routeOf.set(p, picked[i]));
-    indexEntries = Array.isArray(found.index.entries) ? found.index.entries : [];
     const dropped = picked.length - routes.length;
-    const over = dropped > 0 ? ` — ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : '';
+    const over = dropped > 0 ? `, ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : '';
     // A narrowed run gets its own sentence. The index-wide tallies below describe the whole
     // site, and printed against a blast-radius count they read as a contradiction.
     console.error(changed
@@ -447,7 +522,7 @@ for (const p of routes) {
   const sh = sourcesHashFor(r, projectRoot, globalInputs.hash, indexEntries);
   sourcesHashes.set(p, sh);
   const prior = priorRoutes[p];
-  if (!FULL && prior && prior.sourcesHash === sh && prior.passed_at) skipped.push(p);
+  if (!FULL && !setAside && prior && prior.sourcesHash === sh && prior.passed_at) skipped.push(p);
 }
 for (const p of skipped) console.error(`verify-rendered: ${p} unchanged, skipped`);
 const rendering = routes.filter((p) => !skipped.includes(p));
@@ -1631,9 +1706,12 @@ if (outDir) {
     for (const p of rendering) {
       const sh = sourcesHashes.get(p);
       const text = renderedText.get(p);
-      // A route that failed, or one whose sources could not be hashed, must not keep an older
-      // passing record: the next run would skip the very route that just broke.
-      if (!sh || text === undefined || highRoutes.has(p)) { delete out[p]; continue; }
+      // A route this run could not HASH keeps whatever record it had. Deleting it threw away a
+      // real record every time a run-site command passed --routes, and every no-index fallback,
+      // so a /post between two build-loop passes emptied the loop's memory. A route that FAILED
+      // is a different case and is dropped below, whether it rendered or was skipped.
+      if (!sh || text === undefined) continue;
+      if (highRoutes.has(p)) { delete out[p]; continue; }
       out[p] = { sourcesHash: sh, renderedHash: textHash(text), passed_at: new Date().toISOString() };
     }
     // A SKIPPED ROUTE IS NOT EXEMPT. The no-JS, focus, hover-nav, vitals and design probes all
@@ -1699,4 +1777,17 @@ console.error(
   (skipped.length ? ` (${skipped.length} unchanged, skipped)` : '') +
   ' x 3 viewports + the no-JS + 404 probes',
 );
-process.exit(highest >= RANK.High ? 1 : 0);
+// A FAILURE STILL WINS. Only once nothing is wrong does "nothing was inspected" become the
+// verdict: a run that rendered no route did not pass, it was SKIPPED, and exit 0 is the one
+// answer that reads as a clean site. The house rule is that a gate never exits 0 having
+// inspected nothing, and the unchanged-route skip is the one path in this file that can.
+if (highest >= RANK.High) process.exit(1);
+if (!rendering.length) {
+  console.error(
+    'verify-rendered: SKIPPED, not passed (exit 2). No route was rendered: every selected route was ' +
+    'unchanged since its last passing render, so this run establishes nothing about them. The ' +
+    'home-route and 404 probes did run. Pass --full to render every route.',
+  );
+  process.exit(2);
+}
+process.exit(0);

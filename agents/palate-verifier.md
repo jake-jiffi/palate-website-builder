@@ -355,9 +355,11 @@ rubric score is rejected, not accepted as progress.
 thirty minutes, a check failed at minute twenty-five, and the next pass re-shot everything
 because one file had changed. After a fix:
 
-1. `scripts/ux-lint.sh <the changed files>` first. It reads code, costs seconds, and catches
-   the banned faces, the AI-tell copy and the eyebrow structures. There is no point paying
-   for a browser to tell you what a regex already knows.
+1. `bash scripts/ux-lint.sh <project-dir>` first. **It takes the PROJECT DIRECTORY and nothing
+   else**, and it lints every file a rule's glob matches; handing it a file path exits 2 with
+   "project dir not found", which is a gate that did not run rather than one that passed. It
+   is seconds on a whole site, so there is nothing to save by narrowing it, and there is no
+   point paying for a browser to tell you what a regex already knows.
    **The lane order is ux-lint before rendered, rendered before vitals.**
 2. `bash scripts/verify-rendered.sh $SERVE_URL --changed <the files you edited> --no-vitals
    --out .palate-shots`. `--changed` renders only the routes those files can reach, and a
@@ -365,8 +367,11 @@ because one file had changed. After a fix:
    guess. **`--changed` rebuilds `.palate/index.json` first**, because both the blast radius
    and every route's hash are read from it: a fix that adds an import leaves the old closure
    on disk, and the next fix to that imported file would neither select the page nor
-   invalidate its record. A route whose sources have not changed since it last passed is skipped and named
-   "unchanged, skipped". Measured on a thirty-route fixture: 25s against 187s.
+   invalidate its record. A route whose sources have not changed since it last passed is
+   skipped and named "unchanged, skipped"; if EVERY selected route is unchanged the run exits
+   **2, skipped rather than passed**, because nothing was established. Measured on a
+   thirty-route fixture, 25s against 187s; on a small site the fixed 15s of home-route probes
+   dominates, so read the saving as a ratio of your own sweep rather than as that number.
 3. `--no-vitals` for every iteration in the loop. The vitals pass runs under slow-4G with 4x
    CPU throttling on its own throttled context, and it measures the HOME route, which your
    fix to a service page did not touch.

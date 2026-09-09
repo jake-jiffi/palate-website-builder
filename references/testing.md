@@ -74,7 +74,11 @@ Nothing in this plugin runs Lighthouse. The doctrine used to say "Lighthouse CI,
 - **Re-running after a fix.** `--changed <file,...>` renders only the routes those files can
   reach, and a file the index has never heard of falls wide and says which one.
   `--changed` rebuilds `.palate/index.json` first, since both the blast radius and every
-  route's hash are read from it and a stale closure narrows to the wrong routes. A route whose
+  route's hash are read from it and a stale closure narrows to the wrong routes. A file the
+  index cannot place also SETS THE RECORDS ASIDE for that run, because its effect on any hash
+  is unknown too. If every selected route is unchanged the run exits 2, skipped rather than
+  passed. The saving is a ratio of your own sweep: 25s against 187s on a thirty-route fixture,
+  and about 15s of that is the home-route probes, which every run pays whatever it renders. A route whose
   sources have not changed since it last passed is skipped and printed "unchanged, skipped";
   the record lives in `.palate-shots/manifest.json` as `{ sourcesHash, renderedHash,
   passed_at }` per route. Measured on a thirty-route fixture: 25s against a 187s sweep. Run

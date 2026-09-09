@@ -88,6 +88,23 @@ present "testing.md says --changed rebuilds the index" \
   "references/testing.md" "rebuilds \`.palate/index.json\` first"
 present "testing.md says the content a route renders is in the hash" \
   "references/testing.md" "the collection its \`getCollection\` call names"
+# THE DOCTRINE'S FIRST COMMAND IS RUN, not just matched. It named a file list, and ux-lint
+# takes a project directory and nothing else, so the cheap lane the re-run rule leads with
+# exited 2 for anyone who followed it literally: a gate that did not run, reading as one that
+# did. Pinning the sentence alone is what let that ship, so the sentence is executed.
+present "the verifier agent lints the project directory, not a file list" \
+  "agents/palate-verifier.md" "bash scripts/ux-lint.sh <project-dir>"
+UXSITE="$(mktemp -d)"
+mkdir -p "$UXSITE/src/pages"
+printf '<h1>Hello</h1>\n' > "$UXSITE/src/pages/index.astro"
+bash "$ROOT/scripts/ux-lint.sh" "$UXSITE" >/dev/null 2>&1; ux_dir=$?
+bash "$ROOT/scripts/ux-lint.sh" "$UXSITE/src/pages/index.astro" >/dev/null 2>&1; ux_file=$?
+rm -rf "$UXSITE"
+[ "$ux_dir" -ne 2 ] && ok "the doctrine's ux-lint command runs (exit $ux_dir, not 2)" \
+  || bad "the doctrine's ux-lint command exits 2, so the cheap lane never runs"
+[ "$ux_file" -eq 2 ] && ok "a file path still exits 2, which is why the doctrine names a directory" \
+  || bad "ux-lint accepts a file path now, so the doctrine should say so (exit $ux_file)"
+
 present "the verifier agent runs the cheap lane first" \
   "agents/palate-verifier.md" "ux-lint before rendered, rendered before vitals"
 present "the verifier agent certifies on one full sweep" \

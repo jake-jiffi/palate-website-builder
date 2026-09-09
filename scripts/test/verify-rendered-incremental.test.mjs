@@ -337,7 +337,8 @@ function makeBlogFixture() {
   const html = new Map();
   html.set('/', page('Home', filler(2)));
   html.set('/blog', page('Blog', filler(2)));
-  html.set('/blog/[slug]', page('Hello', filler(2)));
+  html.set('/blog/[slug]', page('Template, not a page', filler(2)));
+  html.set('/blog/hello', page('Hello', filler(2)));
   return { root, html, index: join(root, '.palate', 'index.json') };
 }
 
@@ -351,7 +352,9 @@ test('editing a post is not skipped as unchanged', async (t) => {
 
   const first = await runGate(common);
   const m1 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
-  assert.deepEqual(Object.keys(m1.routes).sort(), ['/blog', '/blog/[slug]'],
+  // The template is rendered as a REAL post, from the index's entries, so the record is of a
+  // page that exists rather than of the site's 404.
+  assert.deepEqual(Object.keys(m1.routes).sort(), ['/blog', '/blog/hello'],
     `the blog fixture recorded ${Object.keys(m1.routes)}\n${first.out.slice(-900)}`);
 
   writeFileSync(join(fx.root, 'src', 'content', 'blog', 'hello.md'), '---\ntitle: Hello\n---\nEdited post.\n');
@@ -359,8 +362,10 @@ test('editing a post is not skipped as unchanged', async (t) => {
   assert.ok(!/unchanged, skipped/.test(second.out),
     `a route named by the blast radius was skipped anyway\n${second.out.slice(-900)}`);
   assert.match(second.out, /rebuilt .*index\.json first/, '--changed did not rebuild the index');
+  assert.match(second.out, /rendered as a real page from the index entries: \/blog\/\[slug\] -> \/blog\/hello/,
+    'the post\'s own page was never fetched');
   const m2 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
-  assert.notEqual(m2.routes['/blog/[slug]'].sourcesHash, m1.routes['/blog/[slug]'].sourcesHash);
+  assert.notEqual(m2.routes['/blog/hello'].sourcesHash, m1.routes['/blog/hello'].sourcesHash);
   assert.notEqual(m2.routes['/blog'].sourcesHash, m1.routes['/blog'].sourcesHash);
 });
 
@@ -440,4 +445,71 @@ test('a probe failure drops the record of a route that was skipped', async (t) =
   const m2 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
   assert.equal(m2.routes['/'], undefined, 'a route with a High finding kept its passing record');
   assert.ok(m2.routes['/p01'], 'an unrelated route lost its record');
+});
+
+test('a wide fall sets the records aside, and an absolute path is a known file', async (t) => {
+  // The wide fall used to print "falling wide" and then let the unchanged-route skip throw the
+  // selection away: on a real site that rendered two routes out of eleven, neither of them one
+  // the operator had touched, under a line saying everything was being checked.
+  const fx = makeFixture(3, (i) => (i <= 1 ? 'Alpha' : 'Beta'));
+  const server = await serve(fx.html);
+  const out = join(fx.root, '.palate-shots');
+  const common = ['--url', `http://127.0.0.1:${server.address().port}`, '--index', fx.index,
+    '--no-vitals', '--out', out];
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  await runGate(common);
+  const m1 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.equal(Object.keys(m1.routes).length, 3, 'the records were not established');
+
+  mkdirSync(join(fx.root, 'src', 'data'), { recursive: true });
+  writeFileSync(join(fx.root, 'src', 'data', 'prices.json'), '{"call-out": 120}\n');
+  const wide = await runGate([...common, '--changed', 'src/data/prices.json']);
+  assert.match(wide.out, /prices\.json is not in the index, falling wide/);
+  assert.match(wide.out, /records are set aside for this run/);
+  assert.ok(!/unchanged, skipped/.test(wide.out),
+    `a wide fall skipped recorded routes anyway\n${wide.out.slice(-900)}`);
+  assert.match(wide.out, /across 3 rendered route\(s\)/);
+
+  // The path an editor hands over. Relative to the project it is a file the index knows.
+  const abs = join(fx.root, 'src', 'components', 'Alpha.astro');
+  writeFileSync(abs, '<div class="alpha">Alpha, edited</div>\n');
+  const narrow = await runGate([...common, '--changed', abs]);
+  assert.ok(!/is not in the index, falling wide/.test(narrow.out),
+    `an absolute path to a known file fell wide\n${narrow.out.slice(-900)}`);
+  assert.match(narrow.out, /blast radius of 1 of 3 route\(s\)/);
+});
+
+test('a run that renders nothing exits 2, skipped rather than passed', async (t) => {
+  const fx = makeFixture(1, () => 'Alpha');
+  const server = await serve(fx.html);
+  const out = join(fx.root, '.palate-shots');
+  const common = ['--url', `http://127.0.0.1:${server.address().port}`, '--index', fx.index,
+    '--no-vitals', '--out', out];
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  const first = await runGate(common);
+  assert.equal(first.status, 0, `the first run did not pass\n${first.out.slice(-900)}`);
+
+  const nothing = await runGate(common);
+  assert.match(nothing.out, /SKIPPED, not passed \(exit 2\)/);
+  assert.equal(nothing.status, 2, 'a run that inspected no route reported a pass');
+});
+
+test('--routes leaves the records it cannot hash alone', async (t) => {
+  // Every run-site command passes --routes, so deleting the records of a route it cannot hash
+  // meant one /post between two build-loop passes emptied the loop's memory.
+  const fx = makeFixture(2, () => 'Alpha');
+  const server = await serve(fx.html);
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const out = join(fx.root, '.palate-shots');
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  await runGate(['--url', url, '--index', fx.index, '--no-vitals', '--out', out]);
+  const m1 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.equal(Object.keys(m1.routes).length, 2);
+
+  await runGate(['--url', url, '--routes', '/p01', '--no-vitals', '--out', out]);
+  const m2 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.deepEqual(m2.routes, m1.routes, 'a --routes run threw away records it could not hash');
 });
