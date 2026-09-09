@@ -58,24 +58,33 @@ fi
 # would only turn a clear skip into a confusing 400.
 case "$SECRET" in *[![:space:]]*) ;; *) SECRET="" ;; esac
 
-# IS THIS PRODUCTION? Any signal saying yes is taken as yes, because the two errors are not
-# equal: over-reading costs a printed skip that names its own reason, and under-reading costs
-# the 400 described above. The stage file is the build's own word for it, and is read with grep
-# rather than jq so a missing jq cannot turn this guard off silently.
+# CAN WE PROVE THIS IS NOT PRODUCTION? That is the question, not "is it production", and the
+# inversion mirrors the endpoint's. The guard there is open only for a build that says out loud
+# it is not production, so a script that ran whenever it could not see the word "production"
+# would post into a 400 on every deployment whose environment it simply could not read. The
+# stage file is the build's own word for it, and is read with grep rather than jq so a missing
+# jq cannot turn this guard off silently.
 [ -z "$SITE_ENV" ] && SITE_ENV="${PALATE_SITE_ENV:-${PUBLIC_SITE_ENV:-${VERCEL_ENV:-}}}"
 IS_PROD=0
-case "$(printf '%s' "$SITE_ENV" | tr '[:upper:]' '[:lower:]')" in production) IS_PROD=1 ;; esac
+KNOWN=0
+case "$(printf '%s' "$SITE_ENV" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
+  production) IS_PROD=1; KNOWN=1 ;;
+  "")         ;;
+  *)          KNOWN=1 ;;
+esac
 if [ -f .palate-skill-state.json ] \
   && grep -q '"stage"[[:space:]]*:[[:space:]]*"production"' .palate-skill-state.json; then
-  IS_PROD=1
+  IS_PROD=1; KNOWN=1
 fi
 
-if [ "$IS_PROD" = "1" ] && [ -z "$SECRET" ]; then
+if [ -z "$SECRET" ] && { [ "$IS_PROD" = "1" ] || [ "$KNOWN" != "1" ]; }; then
+  if [ "$IS_PROD" = "1" ]; then why="this is a PRODUCTION deployment"; else why="this deployment's environment is UNKNOWN, which the endpoint treats as production"; fi
   cat >&2 <<EOF
-FORM_ROUNDTRIP: SKIPPED - this is a PRODUCTION deployment and PALATE_SMOKE_SECRET is not set,
-so the endpoint would ignore the smoke header, take the real path, and answer 400. Nothing is
-broken. Nothing was posted. To measure the form round trip here, set the SAME value in two
-places:
+FORM_ROUNDTRIP: SKIPPED - $why and PALATE_SMOKE_SECRET is not set,
+so the endpoint would refuse the smoke header, take the real path, and answer 400. Nothing is
+broken. Nothing was posted. Either build the deployment with PUBLIC_SITE_ENV set (production, or
+preview on a preview, which is what every automatic path already does), or set the SAME secret
+value in two places:
   1. the deployment, so the endpoint honours the header:
        Vercel      vercel env add PALATE_SMOKE_SECRET production
        Cloudflare  wrangler secret put PALATE_SMOKE_SECRET --name <slug>-site

@@ -140,7 +140,10 @@ const SMOKE = { "x-palate-smoke": "1" };
  * handlers prefer; on Vercel the same object is `import.meta.env`. Either way it is where the
  * runtime secrets live.
  */
-async function post(POST, { body = VALID, headers = {}, siteEnv = "", env = {}, turnstile = true, host = "cloudflare" } = {}) {
+// The default is an EXPLICIT preview, not an empty value. Empty now means "this build does not
+// know what it is" and is closed, which is the whole point of the inversion; the ordinary cases
+// below are about the header contract, so they run on a build that says what it is.
+async function post(POST, { body = VALID, headers = {}, siteEnv = "preview", env = {}, turnstile = true, host = "cloudflare" } = {}) {
   globalThis.__SITE_ENV = siteEnv || undefined;
   globalThis.__CALLS = [];
   const realFetch = globalThis.fetch;
@@ -225,6 +228,46 @@ for (const ep of ENDPOINTS) {
     for (const v of ["0", "01", "true", "yes", ""]) {
       const r = await call({ headers: { "x-palate-smoke": v } });
       assert.notEqual(r.body?.smoke, true, `"${v}" was treated as a smoke request`);
+    }
+  });
+
+  T("an UNKNOWN environment requires the secret, which is the inversion", async () => {
+    // The guard used to ask "is this production" and treat everything else as open, so every
+    // build path that forgot to bake a value shipped the header wide open on a live site. It
+    // was found that way five times: the Cloudflare bootstrap deploy, its revalidate workflow,
+    // two more workflows, and a bare `wrangler deploy`, which does not build at all. The test
+    // is now "does this build say it is not production", and empty does not say that.
+    // "" is the genuinely ABSENT case: the harness maps a falsy value to an undefined global,
+    // which is what an unbaked build looks like. `undefined` here would hit the destructuring
+    // default and quietly test "preview" instead, which is the trap this list used to contain.
+    // "PRODUCTION" is in this list, not the open one. A CI variable typed in capitals must not
+    // read as a non-production build, and with the case fold removed it did: the open branch
+    // only ever compared against the lowercase literal, so the fold mattered in exactly this
+    // direction and nothing asserted it.
+    for (const siteEnv of ["", "   ", "PRODUCTION", " Production "]) {
+      const r = await call({ headers: SMOKE, siteEnv });
+      assert.notEqual(r.body?.smoke, true, `a build with siteEnv ${JSON.stringify(siteEnv)} honoured the header with no secret`);
+      assert.match(r.calls[0] ?? "", /challenges\.cloudflare\.com/, "the refused request did not take the real path");
+    }
+  });
+
+  T("...and accepts it with the secret, so an unknown build is testable rather than dead", async () => {
+    const r = await call({
+      headers: { ...SMOKE, "x-palate-smoke-secret": "s3cret" },
+      siteEnv: "",
+      env: { PALATE_SMOKE_SECRET: "s3cret" },
+    });
+    assert.deepEqual(r.body, { ok: true, smoke: true }, `an unknown build refused a valid secret: ${JSON.stringify(r.body)}`);
+    assert.deepEqual(r.calls, [], "the authorised path reached " + r.calls.join(", "));
+  });
+
+  T("an explicit non-production build stays open with no secret", async () => {
+    // The other half of the inversion. If this closed too, the round trip would need a secret
+    // on every preview and the check would run nowhere by default.
+    for (const siteEnv of ["preview", "development", "PREVIEW", " staging "]) {
+      const r = await call({ headers: SMOKE, siteEnv });
+      assert.deepEqual(r.body, { ok: true, smoke: true }, `siteEnv ${JSON.stringify(siteEnv)} was closed`);
+      assert.deepEqual(r.calls, [], "an explicit preview sent something");
     }
   });
 

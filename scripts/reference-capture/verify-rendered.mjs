@@ -1347,32 +1347,79 @@ if (!rendering.length) {
   const siteOrigin = new URL(base).origin;
 
   /**
-   * TWO THINGS THIS ROUTE HANDLER STOPS, and neither is visible without it.
+   * WHAT THIS ROUTE HANDLER STOPS, and the one that was measured rather than reasoned about.
    *
-   * THE SECRET WOULD TRAVEL TO EVERY HOST THE PAGE TOUCHES. setExtraHTTPHeaders is per PAGE,
-   * not per origin, so a header set there rides Google Fonts, the analytics beacon, Turnstile
-   * and any CDN the client's site uses. `x-palate-smoke: 1` is a flag and harmless there; the
-   * SECRET is a production credential and has no business leaving in cleartext to hosts that
-   * never needed it. It is attached here instead, same-origin only.
+   * THE SECRET GOES ON EXACTLY ONE REQUEST. setExtraHTTPHeaders is per PAGE, not per origin, so
+   * a header set there rides Google Fonts, the analytics beacon, Turnstile and any CDN the
+   * client's site uses. `x-palate-smoke: 1` is a flag and harmless there; the SECRET is a
+   * production credential. Narrowing it to same-origin was not enough either: ANY same-origin
+   * path that redirects to a CDN or an image host handed it over, because a request produced by
+   * a redirect never reaches this handler and the browser carries the injected header across.
+   * Measured on two real servers: a same-origin GET that 302s and a same-origin POST that 307s
+   * both delivered `x-palate-smoke-secret` to the second origin, and the POST delivered its body
+   * as well. So the secret is attached to the ONE request that needs it, the POST to
+   * /api/contact, and to nothing else.
    *
-   * AND A CROSS-ORIGIN POST WOULD BE DELIVERED FOR REAL. A form wired to Formspree, HubSpot or
-   * a client CRM is not our endpoint and the smoke header means nothing to it, so filling and
-   * submitting one puts a fake enquiry in the client's actual inbox, once per verify run. The
-   * POST is aborted at the wire. The attempt still fires `requestfailed`, so the probe still
-   * sees where the form went and still files the Medium naming the destination: the report
-   * does not change, only the delivery.
+   * AND THIS HANDLER FOLLOWS THAT REQUEST ITSELF. `route.fetch({ maxRedirects: 0 })` means a
+   * cross-origin `Location` is refused here rather than followed by the browser, which is the
+   * only place the decision can be made: once the browser follows it, the request is invisible
+   * to us and the secret and the body have already gone.
+   *
+   * A CROSS-ORIGIN POST IS ABORTED AT THE WIRE. A form wired to Formspree, HubSpot or a client
+   * CRM is not our endpoint and the smoke header means nothing to it, so submitting one puts a
+   * fake enquiry in the client's actual inbox, once per verify run. The attempt still fires
+   * `requestfailed`, so the probe still sees where the form went and still files the Medium
+   * naming the destination: the report does not change, only the delivery.
+   *
+   * WHAT IT CANNOT STOP, said plainly rather than fixed: a same-origin path that proxies onward
+   * server-side receives the secret legitimately and could forward it. Narrowing to the contact
+   * endpoint shrinks that to one route, and the secret only ever authorises a no-op smoke answer
+   * on that one site.
    */
+  let refusedRedirect = '';
   await context.route('**/*', async (route) => {
     const req = route.request();
-    let origin = '';
-    try { origin = new URL(req.url()).origin; } catch { /* an opaque URL is not our origin */ }
-    if (origin !== siteOrigin) {
+    let url = null;
+    try { url = new URL(req.url()); } catch { /* an opaque URL is not our origin */ }
+    const sameOrigin = !!url && url.origin === siteOrigin;
+
+    if (!sameOrigin) {
       if (req.method() === 'POST') { await route.abort('blockedbyclient'); return; }
       await route.continue();
       return;
     }
-    if (!smokeSecret) { await route.continue(); return; }
-    await route.continue({ headers: { ...req.headers(), 'x-palate-smoke-secret': smokeSecret } });
+    // EVERY same-origin POST is followed here, not just the contact endpoint, because the
+    // delivery this stops is the redirect and a form can post to any path. Only the contact
+    // endpoint gets the secret.
+    if (req.method() !== 'POST') { await route.continue(); return; }
+    const isEndpoint = url.pathname === '/api/contact';
+
+    let res;
+    try {
+      res = await route.fetch({
+        maxRedirects: 0,
+        headers: (smokeSecret && isEndpoint) ? { ...req.headers(), 'x-palate-smoke-secret': smokeSecret } : req.headers(),
+      });
+    } catch (e) {
+      await route.abort('failed');
+      return;
+    }
+    const status = res.status();
+    const loc = res.headers().location;
+    if (status >= 300 && status < 400 && loc) {
+      let target = null;
+      try { target = new URL(loc, req.url()); } catch { /* an unparseable Location is not ours */ }
+      if (!target || target.origin !== siteOrigin) {
+        refusedRedirect = target ? target.origin : String(loc);
+        await route.fulfill({
+          status: 599,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'cross-origin redirect refused', to: refusedRedirect }),
+        });
+        return;
+      }
+    }
+    await route.fulfill({ response: res });
   });
 
   // Every POST the page makes, in order, ANSWERED OR NOT. A predicate on waitForResponse
@@ -1399,6 +1446,7 @@ if (!rendering.length) {
   }
   for (const route of probing) {
     posts = [];
+    refusedRedirect = '';
     try {
       await page.goto(base + route, { waitUntil: 'load', timeout: 20000 });
       await page.evaluate(() => new Promise((r) => setTimeout(r, 400)));
@@ -1512,7 +1560,12 @@ if (!rendering.length) {
     const status = hit.resp.status();
     let body = null;
     try { body = JSON.parse(await hit.resp.text()); } catch { /* a non-JSON answer is itself the finding */ }
-    if (status === 404 || status === 405) {
+    if (refusedRedirect) {
+      add('High', route, 'desktop', 'form round trip: /api/contact redirected the submission to ' + refusedRedirect +
+        ', a different origin, and the redirect was REFUSED rather than followed. Nothing was delivered there and the ' +
+        'smoke secret did not leave this site. A contact endpoint that hands the submission to another host is not the ' +
+        'endpoint this gate can measure: point the form at the vendor directly, or keep the handoff server-side.');
+    } else if (status === 404 || status === 405) {
       add('High', route, 'desktop', 'form round trip: /api/contact answered ' + status + ', so the endpoint is not being ' +
         'served at that path. Either the route is missing from the build, or this preview is a plain static server ' +
         'and not `npm run preview`, which runs the adapter and serves the endpoint. Nothing about the form is proven either way.');

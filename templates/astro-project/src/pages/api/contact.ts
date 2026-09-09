@@ -19,8 +19,9 @@ export const prerender = false;
  * `{ ok: true, smoke: true }` having sent nothing. `verify-rendered.mjs` uses it against the
  * preview, `verify-vercel.sh` and `verify-cloudflare.sh` against the deployed URL.
  *
- * IN PRODUCTION THE HEADER DOES NOTHING unless `x-palate-smoke-secret` matches
- * `PALATE_SMOKE_SECRET`, and an unset or blank secret refuses every request rather than
+ * THE HEADER DOES NOTHING WITHOUT `x-palate-smoke-secret` MATCHING `PALATE_SMOKE_SECRET`
+ * unless the build says out loud that it is not production. Production and an UNKNOWN
+ * environment are both closed, and an unset or blank secret refuses every request rather than
  * matching every request. The failure that guards against is not an attacker: it is a proxy,
  * a scanner or a browser extension adding a header to a real visitor's submission, on a
  * deployment where nobody set the variable, and the enquiry quietly evaporating.
@@ -39,8 +40,25 @@ function smokeAllowed(request: Request, env: any) {
   if (request.headers.get(SMOKE_HEADER) !== "1") return false;
   // WRITTEN AS THIS EXACT EXPRESSION so the Vite `define` in astro.config.mjs substitutes it
   // at build time. Read through the `env` alias it is never substituted, so it would be
-  // undefined on Vercel and the production guard would never engage.
-  if (import.meta.env.PUBLIC_SITE_ENV !== "production") return true;
+  // undefined on Vercel and the guard would never engage.
+  const siteEnv = import.meta.env.PUBLIC_SITE_ENV;
+  //
+  // AN UNKNOWN ENVIRONMENT REQUIRES THE SECRET. THE TEST IS NOT "is this production".
+  //
+  // It used to be, and that shipped the guard switched OFF five separate times: the Cloudflare
+  // bootstrap deploy, its revalidate workflow (which a CMS publish triggers, so it reopened on
+  // every content publish), two more workflows, and finally a bare `wrangler deploy`, which does
+  // not build at all and ships whatever dist/ holds after any local gate rebuilt it. Each was a
+  // live site honouring `x-palate-smoke: 1` from anyone and discarding the enquiry. Chasing the
+  // sixth build command is not a fix, because the DEFAULT was wrong: every new path inherited
+  // "I do not know what this build is" meaning "no secret needed".
+  //
+  // So: only a build that says out loud it is not production is open. Empty, unset, or anything
+  // this file cannot read is closed. Every path that matters already bakes an explicit value,
+  // Cloudflare preview builds and Vercel from VERCEL_ENV alike, so the cost of a forgotten
+  // command is a printed skip that names itself, never a silent hole on a client's live site.
+  const known = typeof siteEnv === "string" && siteEnv.trim() !== "";
+  if (known && siteEnv.trim().toLowerCase() !== "production") return true;
   // NOT trimmed. What is configured is what must be sent, and a trim here would quietly
   // accept a secret different from the one in the dashboard.
   const secret = typeof env?.PALATE_SMOKE_SECRET === "string" ? env.PALATE_SMOKE_SECRET : "";

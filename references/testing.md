@@ -122,13 +122,24 @@ A 2xx WITHOUT it is a failure, not a pass: it means the header was ignored, the 
 took the real path, and against a deployed site that is a fake enquiry in the client's inbox
 and, with a CMS wired, a document in their content.
 
-**In production the header does nothing** unless `x-palate-smoke-secret` matches
-`PALATE_SMOKE_SECRET`, and an unset or blank secret refuses every request rather than
-matching every request. That guard is not aimed at an attacker. It is aimed at a proxy or a
-browser extension adding a header to a real visitor's submission on a deployment where nobody
-set the variable, which would make the enquiry evaporate. A refused smoke request therefore
-goes through the real path rather than being rejected, because whoever sent it may be a
-customer who never chose the header.
+**The header does nothing without the matching secret unless the build says out loud that it is
+not production.** Production and an UNKNOWN environment are both closed; only an explicit
+non-production `PUBLIC_SITE_ENV` (preview, development, anything that is not "production") is
+open. An unset or blank secret refuses every request rather than matching every request.
+
+**The test is not "is this production", and that inversion is the whole lesson.** It used to be,
+and the guard shipped switched OFF five separate times: the Cloudflare bootstrap deploy, its
+revalidate workflow (which a CMS publish triggers, so it reopened on every content publish), two
+more workflows, and a bare `wrangler deploy`, which does not build at all and ships whatever
+`dist/` holds after any local gate rebuilt it. Chasing the sixth build command is not the fix,
+because the DEFAULT was wrong: every new path inherited "I do not know what this build is"
+meaning "no secret needed". Now a forgotten build command costs a printed skip that names
+itself, never a live site quietly discarding enquiries.
+
+The guard is not aimed at an attacker. It is aimed at a proxy or a browser extension adding a
+header to a real visitor's submission on a deployment where nobody set the variable, which would
+make the enquiry evaporate. A refused smoke request therefore goes through the real path rather
+than being rejected, because whoever sent it may be a customer who never chose the header.
 
 Where it runs:
 
@@ -143,10 +154,15 @@ Where it runs:
   **A cross-origin POST is aborted at the wire**, so a site wired to Formspree, HubSpot or a
   client CRM never collects a fake enquiry from a verify run; the attempt still fires
   `requestfailed`, so the finding is unchanged and only the delivery is not.
-  **The secret is attached per origin, not per page.** `setExtraHTTPHeaders` carries a header to
-  every host the page touches, including fonts, analytics and any CDN, so only the plain
-  `x-palate-smoke: 1` goes there and `x-palate-smoke-secret` is added by a route handler for the
-  site's own origin alone. At most three form-carrying routes are submitted per run, and the
+  **The secret is attached to one request, and the probe follows that request itself.**
+  `setExtraHTTPHeaders` carries a header to every host the page touches, so only the plain
+  `x-palate-smoke: 1` goes there. Same-origin was not narrow enough either: a request produced
+  by a redirect never reaches a Playwright route handler, so ANY same-origin path that redirects
+  to a CDN handed the secret over, measured on two real servers. The secret now rides only the
+  POST to `/api/contact`, and every same-origin POST is fetched with `maxRedirects: 0` so a
+  cross-origin `Location` is refused here rather than followed by the browser. What that cannot
+  stop, said rather than fixed: a same-origin path that proxies onward server-side receives the
+  secret legitimately and could forward it. At most three form-carrying routes are submitted per run, and the
   rest are named as not submitted: on an Explore build every variant carries the same form and
   the extra submissions buy the same answer.
 - **Against the deployed URL**, by `scripts/verify-form-roundtrip.sh <url> [--env production]`,
@@ -171,8 +187,12 @@ Where it runs:
   round trip failing on a mismatch. The write is an upsert and `.env` is chmod 600. The read
   takes the LAST assignment, which is what sourcing the file does, tolerates an `export`
   prefix, and treats a blank or whitespace value as unset.
-- **On Cloudflare, every production build must set `PUBLIC_SITE_ENV=production`,** and that is
-  a security property rather than an SEO one. The guard reads the value baked at BUILD time and
+- **Every build should say what it is, and an unbaked one is now closed rather than open.**
+  Setting `PUBLIC_SITE_ENV` is still correct on every production build and is a security
+  property rather than an SEO one, but it is no longer load-bearing: a build that forgets costs
+  a skip, not a hole. `npm run deploy` on the Cloudflare overlay builds as production before
+  deploying, and `serve-preview.sh` builds the local preview as `preview` so the round trip runs
+  there with no secret. **Never a bare `wrangler deploy`:** it does not build. The guard reads the value baked at BUILD time and
   the overlay has no `VERCEL_ENV` to fall back on, so a build that leaves it empty ships a live
   site whose endpoint honours the smoke header from anyone and discards the enquiry. The
   bootstrap `npm run build` in `provision-cloudflare.sh` sets it, and so do `deploy.yml` and

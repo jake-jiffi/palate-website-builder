@@ -65,7 +65,11 @@ start_dev() {
 start_built() {
   # SSR site: build it, then run the built worker with wrangler dev (npm run
   # preview). A static file server cannot run server-rendered pages.
-  [ -d dist ] || npm run build > "$LOG" 2>&1
+  # PUBLIC_SITE_ENV IS BAKED AT BUILD, and an unbaked build is now closed: the contact
+  # endpoint requires the smoke secret unless the build says out loud it is not production.
+  # Saying so here is what lets verify-rendered's form round trip run against a local preview
+  # with no secret configured.
+  [ -d dist ] || PUBLIC_SITE_ENV=preview npm run build > "$LOG" 2>&1
   ( npm run preview > "$LOG" 2>&1 & echo $! > "$PIDFILE" )
 }
 

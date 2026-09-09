@@ -64,7 +64,8 @@ present "testing.md says the endpoint is in the global digest" \
 # ...and the code that makes each of those true.
 for f in templates/astro-project/src/pages/api/contact.ts templates/cms-sanity/src/pages/api/contact.ts; do
   present "$f honours the smoke header" "$f" 'SMOKE_HEADER = "x-palate-smoke"'
-  present "$f gates the header on production" "$f" 'PUBLIC_SITE_ENV !== "production"'
+  present "$f gates the header on the build's own environment" "$f" "const siteEnv = import.meta.env.PUBLIC_SITE_ENV"
+  present "$f opens only for an explicit non-production build" "$f" 'known && siteEnv.trim().toLowerCase() !== "production"'
   present "$f fails closed with no secret" "$f" "if (!secret) return false;"
 done
 # THE SECRET HAS TO BE SETTABLE. A production guard whose value nobody is told to set is a
@@ -110,7 +111,7 @@ present "testing.md says production with no secret skips rather than fails" \
 present "testing.md says the secret is provisioned rather than asked for" \
   "references/testing.md" "The secret is provisioned, not asked for"
 present "the round trip skips instead of posting in that case" \
-  "scripts/verify-form-roundtrip.sh" "this is a PRODUCTION deployment and PALATE_SMOKE_SECRET is not set"
+  "scripts/verify-form-roundtrip.sh" "PALATE_SMOKE_SECRET is not set"
 for f in scripts/provision-vercel.sh scripts/provision-cloudflare.sh; do
   present "$f provisions the smoke secret" "$f" "ensure_smoke_secret"
 done
@@ -120,15 +121,39 @@ present "the Cloudflare bootstrap deploy builds as production" \
   "scripts/provision-cloudflare.sh" "PUBLIC_SITE_ENV=production npm run build"
 present "the Cloudflare config says an empty value disables the smoke guard too" \
   "templates/host-cloudflare/astro.config.mjs" "EMPTY IS NOT SAFE IN EVERY DIRECTION"
-present "testing.md says the production build must set it, and why" \
-  'references/testing.md' 'every production build must set `PUBLIC_SITE_ENV=production`'
+present "testing.md says an unbaked build is closed rather than open" \
+  "references/testing.md" "an unbaked one is now closed rather than open"
+# THE INVERSION, in the code and in the doc. The guard shipped off five times because the test
+# was "is this production"; it is "does this build say it is not production" now.
+present "the endpoint requires the secret unless the build says it is not production" \
+  "templates/astro-project/src/pages/api/contact.ts" "AN UNKNOWN ENVIRONMENT REQUIRES THE SECRET"
+present "testing.md says the test is not is-this-production" \
+  "references/testing.md" 'The test is not "is this production"'
+present "the round trip skips on an unknown environment too" \
+  "scripts/verify-form-roundtrip.sh" "environment is UNKNOWN"
+present "the local preview build says it is a preview" \
+  "scripts/serve-preview.sh" "PUBLIC_SITE_ENV=preview npm run build"
+present "the Cloudflare deploy script builds before deploying" \
+  "templates/host-cloudflare/package.json" "PUBLIC_SITE_ENV=production npm run build && wrangler deploy"
+present "the manual-refresh doctrine stops recommending a bare wrangler deploy" \
+  "references/cache-invalidation.md" "Never a bare"
+# N2: the secret rides one request, and the probe refuses a cross-origin redirect itself.
+present "the secret is attached to the contact POST alone" \
+  "scripts/reference-capture/verify-rendered.mjs" "smokeSecret && isEndpoint"
+# THE CALL SITE, not the string. `maxRedirects: 0` also appears in the docblock above it, so
+# deleting the option left this green: the third time a guard has been satisfied by a comment in
+# this epic. The behaviour is proven by the browser suite; this is the cheap redundancy.
+present "the probe follows the POST itself rather than letting the browser follow a redirect" \
+  "scripts/reference-capture/verify-rendered.mjs" "        maxRedirects: 0,"
+present "testing.md says a redirect defeats a per-origin check" \
+  "references/testing.md" "never reaches a Playwright route handler"
 # The narrowing fixes, each pinned where a reader would look for them.
 present "testing.md says a cross-origin POST is aborted" \
   "references/testing.md" "aborted at the wire"
 present "the verifier aborts it" \
   "scripts/reference-capture/verify-rendered.mjs" "await route.abort('blockedbyclient')"
-present "testing.md says the secret is attached per origin" \
-  "references/testing.md" "attached per origin, not per page"
+present "testing.md says the secret rides one request only" \
+  "references/testing.md" "attached to one request, and the probe follows that request itself"
 present "testing.md says the verifiers fail on any other exit code" \
   "references/testing.md" "Both verifiers fail on any other"
 for f in scripts/verify-vercel.sh scripts/verify-cloudflare.sh; do

@@ -57,7 +57,11 @@ start() { # <mode>
 }
 stop() { kill "$SRV" 2>/dev/null; wait "$SRV" 2>/dev/null; }
 
-run() { bash "$ROOT/scripts/verify-form-roundtrip.sh" "$URL" > "$TMP/out" 2>&1; echo $?; }
+# PREVIEW BY DEFAULT, because an UNKNOWN environment is now a skip: the endpoint refuses the
+# header unless the build says out loud it is not production, so a script that posted anyway
+# would only ever collect a 400. The ordinary cases below are about the round trip, so they run
+# against a deployment that says what it is; the unknown case has its own tests further down.
+run() { PALATE_SITE_ENV=preview bash "$ROOT/scripts/verify-form-roundtrip.sh" "$URL" > "$TMP/out" 2>&1; echo $?; }
 
 start smoke   && { c=$(run); stop
   [ "$c" = "0" ] && ok "a smoke-aware endpoint passes (exit 0)" || bad "a smoke-aware endpoint exited $c: $(cat "$TMP/out")"
@@ -105,6 +109,41 @@ start smoke && {
     && ok "the skip says where to set it, on both hosts" || bad "the skip does not say where to set it"
   [ ! -s "$TMP/log" ] && ok "the skip posted nothing at all" || bad "the skip still posted: $(cat "$TMP/log")"
 }
+
+# AN UNKNOWN ENVIRONMENT IS A SKIP TOO, and that is the inversion. The guard was found switched
+# off five times because "I cannot tell what this build is" meant "no secret needed", so the
+# script mirrors the endpoint: it posts only when it can prove the target is not production.
+start smoke && {
+  ( cd "$TMP" && env -u PALATE_SITE_ENV -u PUBLIC_SITE_ENV -u VERCEL_ENV -u PALATE_SMOKE_SECRET \
+      bash "$ROOT/scripts/verify-form-roundtrip.sh" "$URL" > "$TMP/out" 2>&1 ); c=$?
+  stop
+  [ "$c" = "2" ] && ok "an UNKNOWN environment with no secret SKIPS (exit 2)" \
+    || bad "an unknown environment exited $c rather than skipping: $(cat "$TMP/out")"
+  grep -q "UNKNOWN" "$TMP/out" && ok "and says the environment is why" || bad "the skip did not name the reason"
+  [ ! -s "$TMP/log" ] && ok "and posted nothing" || bad "the unknown-environment skip still posted"
+}
+
+# ...with a secret, an unknown environment is testable rather than dead.
+start smoke && {
+  ( cd "$TMP" && env -u PALATE_SITE_ENV -u PUBLIC_SITE_ENV -u VERCEL_ENV PALATE_SMOKE_SECRET=sekrit \
+      bash "$ROOT/scripts/verify-form-roundtrip.sh" "$URL" > "$TMP/out" 2>&1 ); c=$?
+  stop
+  [ "$c" = "0" ] && ok "an unknown environment WITH the secret runs the round trip" \
+    || bad "an unknown environment with a secret exited $c: $(cat "$TMP/out")"
+}
+
+# THE LOCAL PREVIEW BUILDS AS PREVIEW, which is what lets the round trip run against it with no
+# secret now that an unbaked build is closed.
+grep -q "PUBLIC_SITE_ENV=preview npm run build" "$ROOT/scripts/serve-preview.sh" \
+  && ok "serve-preview builds the local preview as preview" || bad "serve-preview leaves the local build unbaked"
+# ...and the overlay's own deploy script BUILDS rather than shipping whatever dist/ holds.
+grep -q '"deploy": "PUBLIC_SITE_ENV=production npm run build && wrangler deploy"' \
+  "$ROOT/templates/host-cloudflare/package.json" \
+  && ok "the Cloudflare deploy script builds as production first" \
+  || bad "npm run deploy still ships whatever dist/ currently holds"
+grep -q "Never a bare .wrangler deploy" "$ROOT/references/cache-invalidation.md" \
+  && ok "the manual-refresh doctrine no longer recommends the unbaked command" \
+  || bad "cache-invalidation.md still tells the operator to run a bare wrangler deploy"
 
 # ...and with the secret set, production runs the real thing rather than skipping forever.
 start smoke && {
@@ -181,6 +220,28 @@ start smoke && {
   perms="$(ls -l "$UP/.env" | cut -c1-10)"
   case "$perms" in -rw-------) ok "the .env it writes is not world-readable ($perms)" ;;
                    *) bad "the .env is $perms" ;; esac
+  # AND THE OTHER SECRETS TOO. The temp file is created by copying the existing .env, which on
+  # the real pipeline already holds the Sanity, Resend and Turnstile values, so locking it only
+  # before the NEW secret went in left those exposed for the length of the copy. Observed by
+  # shadowing `grep`, which is the command that does the copying: whatever mode .env.tmp has
+  # when it runs is the mode those other secrets sit at. Deterministic, no polling.
+  UP2="$TMP/upsert2"; rm -rf "$UP2"; mkdir -p "$UP2"
+  sed -n '/^ensure_smoke_secret() {/,/^}/p' "$ROOT/scripts/provision-vercel.sh" > "$UP2/fn.sh"
+  printf 'RESEND_API_KEY=re_live_other_secret\n' > "$UP2/.env"; chmod 644 "$UP2/.env"
+  (
+    cd "$UP2" || exit 1
+    grep() { [ -e .env.tmp ] && ls -l .env.tmp | cut -c1-10 > tmpmode; command grep "$@"; }
+    . ./fn.sh && ensure_smoke_secret >/dev/null 2>&1
+  ) || true
+  tmpmode="$(cat "$UP2/tmpmode" 2>/dev/null || echo "never-created-before-the-copy")"
+  case "$tmpmode" in
+    -rw-------) ok "the temp file is locked BEFORE the other secrets are copied into it" ;;
+    *) bad "the temp file was $tmpmode while it held RESEND_API_KEY" ;;
+  esac
+  grep -q '^RESEND_API_KEY=re_live_other_secret$' "$UP2/.env" && ok "and the other secrets survive the upsert" \
+    || bad "the upsert lost an unrelated secret"
+  case "$(ls -l "$UP2/.env" | cut -c1-10)" in -rw-------) ok "a loose .env is tightened by the upsert" ;;
+                                              *) bad "a loose .env stayed loose" ;; esac
 }
 
 # The secret can come from ./.env, which is where the provisioning scripts write it. Without
@@ -305,7 +366,7 @@ for v in verify-vercel.sh verify-cloudflare.sh; do
   start smoke || continue
   MISS="$TMP/miss"; rm -rf "$MISS"; mkdir -p "$MISS"
   cp "$ROOT/scripts/$v" "$MISS/"
-  bash "$MISS/$v" "$URL" > "$TMP/out" 2>&1; c=$?
+  PALATE_SITE_ENV=preview bash "$MISS/$v" "$URL" > "$TMP/out" 2>&1; c=$?
   stop
   [ "$c" != "0" ] && ok "$v fails when the round-trip script is missing" \
     || bad "$v PASSED with no round-trip script: the form was never checked"
@@ -315,7 +376,7 @@ for v in verify-vercel.sh verify-cloudflare.sh; do
   start smoke || continue
   cp "$ROOT/scripts/verify-form-roundtrip.sh" "$MISS/"
   chmod -x "$MISS/verify-form-roundtrip.sh"
-  bash "$MISS/$v" "$URL" > "$TMP/out" 2>&1; c=$?
+  PALATE_SITE_ENV=preview bash "$MISS/$v" "$URL" > "$TMP/out" 2>&1; c=$?
   stop
   # `bash <file>` ignores the mode bit, so this one proves the exit-code case rather than the
   # permission: what matters is that a non-zero, non-1, non-2 code can never read as a pass.
@@ -337,7 +398,7 @@ grep -q "no response from" "$TMP/out" && ok "an unreachable deployment gets its 
 # it: proven by mutation, where cutting the call out of both scripts left the docs guard green.
 hostrun() { # <script> <mode>
   start "$2" || return 1
-  bash "$ROOT/scripts/$1" "$URL" > "$TMP/out" 2>&1; local c=$?
+  PALATE_SITE_ENV=preview bash "$ROOT/scripts/$1" "$URL" > "$TMP/out" 2>&1; local c=$?
   stop
   echo "$c"
 }

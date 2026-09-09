@@ -51,12 +51,14 @@ ensure_smoke_secret() {
   # UPSERT, the way provision-sanity.sh already does it here. Appending left a blank
   # `PALATE_SMOKE_SECRET=` from .env.example above a real one, and a reader taking the first
   # match then concluded the secret was unset.
-  { grep -v '^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}PALATE_SMOKE_SECRET[[:space:]]*=' .env || true; } > .env.tmp
-  # BEFORE the secret goes in, and on the TEMP file, which is the one that carries it. A chmod
-  # after the mv closes the window only once the value has already sat on disk at the default
-  # umask, and mv carries the temp file's mode onto .env anyway. One chmod, in the one place
-  # where removing it leaves a world-readable secret.
+  # THE TEMP FILE IS LOCKED BEFORE ANYTHING IS WRITTEN TO IT, not just before the new secret.
+  # The grep copies the EXISTING .env into it, which on the normal pipeline already holds
+  # SANITY_API_READ_TOKEN, RESEND_API_KEY and TURNSTILE_SECRET, so creating it by redirect at
+  # the default umask left those world-readable for the length of the copy. mv then carries
+  # this mode onto .env, which also tightens a .env that was already loose.
+  : > .env.tmp
   chmod 600 .env.tmp 2>/dev/null || true
+  { grep -v '^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}PALATE_SMOKE_SECRET[[:space:]]*=' .env || true; } >> .env.tmp
   printf '\n# Post-deploy form round trip (verify-form-roundtrip.sh). Production only.\nPALATE_SMOKE_SECRET=%s\n' "$PALATE_SMOKE_SECRET" >> .env.tmp
   mv .env.tmp .env
   echo "generated PALATE_SMOKE_SECRET and wrote it to ./.env"

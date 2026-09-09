@@ -120,7 +120,13 @@ function dialogMarkup(mode) {
 }
 
 function homePage(nav, dialog = 'none', thirdParty = '') {
-  const pixel = thirdParty ? `<img src="${thirdParty}/pixel.png" alt="" width="1" height="1">` : '';
+  // TWO subresources: one straight to the third party, and one to a SAME-ORIGIN path that
+  // redirects there. The second is the shape that defeated the origin check, because the
+  // request the handler sees is same-origin and the one that arrives at the third party is not.
+  const pixel = thirdParty
+    ? `<img src="${thirdParty}/pixel.png" alt="" width="1" height="1">` +
+      '<img src="/redirects-away" alt="" width="1" height="1">'
+    : '';
   if (nav === 'none') return shell('Home', FILLER + pixel + dialogMarkup(dialog));
   const escape = nav === 'traps'
     ? '/* no Escape handler: the trap */'
@@ -201,6 +207,11 @@ async function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endp
       req.on('end', () => {
         posts.push({ headers: req.headers, body: raw });
         const smoke = req.headers['x-palate-smoke'] === '1';
+        if (endpoint === 'redirects') {
+          res.writeHead(307, { location: thirdUrl + '/handed-over' });
+          res.end();
+          return;
+        }
         const answers = {
           // The correct handler: the header is honoured and nothing is sent.
           smoke: smoke ? [200, { ok: true, smoke: true }] : [200, { ok: true }],
@@ -211,10 +222,19 @@ async function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endp
           // The route is not being served: a build missing it, or a plain static file server
           // standing in for `npm run preview`, which runs the adapter.
           absent: [404, { error: 'not found' }],
+          // Same-origin, and it hands the submission to another host. Playwright does NOT run a
+          // route handler for a request produced by a redirect, so before the fix the browser
+          // followed this and delivered the body AND the injected secret to the second origin.
+          redirects: [307, null],
         }[endpoint];
         res.writeHead(answers[0], { 'content-type': 'application/json' });
         res.end(JSON.stringify(answers[1]));
       });
+      return;
+    }
+    if (path === '/redirects-away' && thirdUrl) {
+      res.writeHead(302, { location: thirdUrl + '/followed-from-same-origin' });
+      res.end();
       return;
     }
     const body = path === '/' ? homePage(nav, dialog, thirdUrl)
@@ -312,6 +332,23 @@ test('a form posting to a third party is reported as unmeasured, and DELIVERS NO
     `${delivered.length} submission(s) were DELIVERED to the third party: ${JSON.stringify(delivered[0] || {}).slice(0, 200)}`);
 });
 
+test('a same-origin endpoint that redirects off-site is refused, and delivers nothing', async (t) => {
+  // Measured against the reviewer's probe before this existed: Playwright never invokes a route
+  // handler for a request produced by a redirect, so a same-origin /api/contact that 307s to a
+  // form vendor handed over the body AND the injected secret. The handler follows the POST
+  // itself now, with maxRedirects 0, and refuses a cross-origin Location.
+  const fx = await makeFixture({ form: 'posts', endpoint: 'redirects', thirdParty: true });
+  t.after(() => fx.stop());
+  const r = await gate(fx, [], { PALATE_SMOKE_SECRET: 'do-not-leak-me' });
+
+  assert.equal(fx.thirdSeen.filter((q) => q.url.startsWith('/handed-over')).length, 0,
+    'the submission was delivered to the third party through the redirect');
+  assert.equal(fx.thirdSeen.filter((q) => q.headers['x-palate-smoke-secret']).length, 0,
+    'the secret crossed the redirect to the third party');
+  assert.match(r.out, /\[High\].*form round trip.*REFUSED rather than followed/,
+    `the refusal was not reported\n${r.out.slice(-1400)}`);
+});
+
 test('the smoke secret never leaves for a third-party host', async (t) => {
   // setExtraHTTPHeaders is per PAGE, not per origin, so a secret set there rides every
   // subresource: fonts, analytics, Turnstile, any CDN. It is a production credential and those
@@ -322,6 +359,10 @@ test('the smoke secret never leaves for a third-party host', async (t) => {
   const r = await gate(fx, [], { PALATE_SMOKE_SECRET: 'do-not-leak-me' });
 
   assert.ok(fx.thirdSeen.length > 0, 'the cross-origin subresource was never requested, so nothing was measured');
+  // The direct subresource AND the one that arrives via a same-origin redirect. Without the
+  // second, the origin check alone looked sufficient and the measured leak had no route to take.
+  assert.ok(fx.thirdSeen.some((q) => q.url.startsWith('/followed-from-same-origin')),
+    `the same-origin redirect never reached the third party, so the leak path was not exercised: ${fx.thirdSeen.map((q) => q.url).join(', ')}`);
   const leaked = fx.thirdSeen.filter((q) => q.headers['x-palate-smoke-secret']);
   assert.equal(leaked.length, 0,
     `the secret went to the third party on ${leaked.length} request(s): ${leaked.map((q) => q.url).join(', ')}`);
