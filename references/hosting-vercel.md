@@ -70,6 +70,14 @@ dead Comments: half an allowlist reads as a working feature until a client opens
 Toolbar's image hosts need no entry of their own because `img-src` already allows every
 `https:` source.
 
+**AND ALL SIX ARE ON THE CLIENT'S LIVE SITE TOO, for a feature that only exists on previews.**
+`vercel.json` is one static file with one `Content-Security-Policy` header, so there is no
+production variant of it to narrow: production allows `https://vercel.live` and
+`wss://ws-us3.pusher.com` and always will, unless the header is moved to middleware and varied
+on `VERCEL_ENV`. The widening is deliberate and it is not temporary. It costs one origin the
+client does not control on script-src, which is worth saying out loud to anybody whose security
+review reads this file.
+
 None of it is on the Cloudflare overlay: there is no Vercel Toolbar on a Workers deployment.
 And none of it is derivable from the template source, which is why the derived-host test cannot
 catch a mistake here; the host comes from the platform, not from the build, so the test pins
