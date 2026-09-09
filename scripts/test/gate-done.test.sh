@@ -103,6 +103,19 @@ if printf '%s' "$summary" | grep -qE 'Done gate: [0-9]+ of [0-9]+ sub-gates ran,
 else
   echo "FAIL - the summary opens with how many sub-gates ran (got: $summary)"; fail=$((fail+1))
 fi
+# THE ARITHMETIC IS PINNED AGAINST ITS OWN ROLL-CALL. The regex above matches any three
+# numbers, so a sub-gate added without a gate_ran / gate_skipped call still satisfies it and
+# the count silently stops describing the line beneath it. `intensity` and `bold-bar` are
+# excluded because they are properties of the commission rather than sub-gates.
+passed_line="$(printf '%s\n' "$summary" | grep '^  Passed:')"
+roll_call="$(printf '%s' "$passed_line" | grep -oE '[a-z][a-z-]*=' | grep -vcE '^(intensity|bold-bar)=')"
+headline_total="$(printf '%s\n' "$summary" | sed -n 's/^Done gate: [0-9]* of \([0-9]*\) sub-gates ran.*/\1/p')"
+if [ -n "$headline_total" ] && [ "$roll_call" = "$headline_total" ]; then
+  echo "ok   - and the count equals the number of gates named in the roll-call ($headline_total)"; pass=$((pass+1))
+else
+  echo "FAIL - the count says ${headline_total:-?} and the roll-call names $roll_call: $summary"; fail=$((fail+1))
+fi
+
 if printf '%s' "$summary" | grep -qE 'explore=skipped([^(]|$)'; then
   echo "ok   - gate-explore's skip is mapped, not read as a pass"; pass=$((pass+1))
 else

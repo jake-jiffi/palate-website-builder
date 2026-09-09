@@ -42,7 +42,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, basename } from "node:path";
-import { buildIndex, resolveBuildFormat, OUT_CANDIDATES, findOutputRoot } from "./palate-index.mjs";
+import { buildIndex, resolveBuildFormat, OUT_CANDIDATES, findOutputRoot, NEVER_INDEXED } from "./palate-index.mjs";
 
 // ------------------------------------------------------------------------ args
 const argv = process.argv.slice(2);
@@ -258,7 +258,6 @@ const siteFrom = siteOverride && originOf(siteOverride)
 // Enumerated from the content graph. Reading the file system instead is precisely how the
 // dynamic routes went missing: on disk `[slug].astro` is one file, and the sitemap it is
 // absent from needs one URL per entry.
-const NEVER_INDEXED = new Set(["/404", "/500"]);
 // Explore variants are never DEMANDED in the sitemap. Whether they belong on the domain at all
 // depends on the client having picked, which gate-shipready knows and this gate does not; the
 // one thing that is certain either way is that no gate should tell a build to go and advertise

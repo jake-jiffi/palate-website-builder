@@ -191,6 +191,30 @@ test('Explore scaffolding is neither a dead link nor an orphan, in either direct
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('a 404 page is not an orphan, because nothing is meant to link to it', () => {
+  // The scaffold ships src/pages/404.astro and nothing links to it, which is correct: it is
+  // served on a miss. It was reported as an orphan on every build the scaffold has ever
+  // produced, because the orphan filter excluded `/` and the Explore scaffolding and had no
+  // idea the never-indexed routes existed. gate-seo and gate-facts each carried their own copy
+  // of that set; it is exported from here now and all three read the one list.
+  const dir = site({
+    'src/pages/index.astro': '<a href="/contact">c</a>',
+    'src/pages/contact.astro': '<h1>c</h1>',
+    'src/pages/404.astro': '<h1>not found</h1>',
+    'src/pages/500.astro': '<h1>error</h1>',
+    'src/pages/about.astro': '<h1>about</h1>',
+  });
+  try {
+    const ix = buildIndex(dir);
+    for (const p of ['/404', '/500']) {
+      assert.ok(!ix.links.orphans.includes(p), `${p} is served on a miss, not an orphan: ${ix.links.orphans}`);
+    }
+    // AND A REAL ORPHAN STILL IS ONE, or the fix above is "stop reporting orphans".
+    assert.ok(ix.links.orphans.includes('/about'),
+      `an unlinked ordinary page must still be reported: ${ix.links.orphans}`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('a board href that outlives its route is not a dead link, and a real one still is', () => {
   // The mirror case, and the one EXPLORE_ROUTE was written for at `/vN`: a page that still
   // links a board after Compose has archived it. The link is real, the route is gone, and the

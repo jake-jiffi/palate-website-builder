@@ -55,11 +55,7 @@ import { readFileSync, statSync } from "node:fs";
 import { relative } from "node:path";
 import { pluginRootRefusal } from "../hooks/project-dir.mjs";
 import { invokedDirectly } from "./lib/invoked-directly.mjs";
-import { findOutputRoot, builtPages, OUT_CANDIDATES, EXPLORE_ROUTE } from "./palate-index.mjs";
-
-// Mirrors gate-seo.mjs. These routes exist to be served on a miss and are nobody's claim about
-// the business, so a stale number on a 404 page is not the site disagreeing with itself.
-const NEVER_INDEXED = new Set(["/404", "/500"]);
+import { findOutputRoot, builtPages, OUT_CANDIDATES, EXPLORE_ROUTE, NEVER_INDEXED } from "./palate-index.mjs";
 
 /**
  * Not a page of the site: `/explore`, the direction boards, the older variants.
