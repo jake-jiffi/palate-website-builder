@@ -18,7 +18,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync, statSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync, statSync, readdirSync, symlinkSync, realpathSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -588,6 +588,79 @@ test("a calibration reference missing its screenshot is refused", async (t) => {
   assert.equal(r.status, 2);
   assert.match(r.stderr, /aesop/, "the refusal does not name the reference");
   rmSync(join(refsDir, "refs.json"), { force: true });
+});
+
+test("it renders through a symlinked path, instead of exiting 0 having done nothing", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // FOUND BY A REAL SEED RUN, NOT BY THIS SUITE, and the suite could not have found it: every
+  // test here invokes the script by its real path. The guard compared `resolve(process.argv[1])`
+  // with `fileURLToPath(import.meta.url)`, and `resolve` does not follow symlinks while Node's
+  // module loader does. On macOS `/tmp` is a symlink to `/private/tmp`, which is where every
+  // `mktemp -d` lands, so `main()` never ran: no stdout, no stderr, exit 0, no seed. An operator
+  // reads that as a render that wrote nothing.
+  // unlink, not rm: on macOS rmSync on a symlink to a directory reports the TARGET's type and
+  // refuses, which would have this test tear down the repo's own path if it ever followed.
+  const link = join(TMP, "plugin-link");
+  try { unlinkSync(link); } catch { /* not there yet */ }
+  symlinkSync(realpathSync(ROOT), link);
+  const linkedCli = join(link, "scripts", "boards-render.mjs");
+  assert.notEqual(linkedCli, join(realpathSync(ROOT), "scripts", "boards-render.mjs"),
+    "the symlink resolves to the same string, so this test is measuring nothing");
+
+  rmSync(join(SITE, ".palate/explore/seed"), { recursive: true, force: true });
+  const r = await promisify(execFile)(process.execPath, [linkedCli, SITE, "--port", String(PORT), "--no-build"], {
+    encoding: "utf8", maxBuffer: 32 * 1024 * 1024,
+  }).then((o) => ({ status: 0, ...o })).catch((e) => ({ status: e.code ?? 1, stdout: e.stdout ?? "", stderr: e.stderr ?? "" }));
+
+  assert.equal(r.status, 0, `through a symlink it failed:\n${r.stderr}`);
+  assert.match(r.stdout, /board\(s\) written/, "it exited 0 having printed nothing, which reads as a render that wrote nothing");
+  assert.ok(existsSync(join(SITE, ".palate/explore/seed/B1.dc.html")), "no seed was written through the symlinked path");
+  unlinkSync(link);
+});
+
+test("the declared frame height is the height the artboard actually renders", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // THE FRAME NEITHER SCALES NOR CROPS, and `x-dc` carries `overflow: hidden`, so a frame
+  // declared shorter than its content clips the bottom off every board with nothing reporting
+  // it. The height used to be read from the LIVE page before the flatten, and the flatten
+  // re-lays the page out: measured on a real five-board seed the artboards rendered 26 to 42px
+  // taller than their frames, almost all of it the system strip.
+  const seeded = await run([SITE, "--port", String(PORT), "--no-build"]);
+  assert.equal(seeded.status, 0, seeded.stderr);
+  const seed = join(SITE, ".palate/explore/seed");
+  const canvas = JSON.parse(readFileSync(join(seed, "canvas.json"), "utf8"));
+
+  const { chromium } = await import(join(ROOT, "scripts/reference-capture/node_modules/playwright/index.mjs"));
+  const browser = await chromium.launch();
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+    const page = await ctx.newPage();
+    let sawADifference = false;
+    for (const frame of canvas.artboards.filter((a) => a.file.startsWith("B"))) {
+      await page.goto(`file://${join(seed, frame.file)}`, { waitUntil: "load" });
+      await page.waitForTimeout(200);
+      const rendered = await page.evaluate(() => {
+        const dc = document.querySelector("x-dc");
+        return dc ? Math.ceil(Math.max(dc.getBoundingClientRect().height, dc.scrollHeight)) : null;
+      });
+      assert.ok(rendered, `${frame.file} has no x-dc to measure`);
+      assert.equal(frame.h, rendered,
+        `${frame.file} declares ${frame.h}px and renders ${rendered}px; the canvas clips the difference`);
+
+    }
+    // The fixture has to exercise the defect or this test proves nothing. The board pages are
+    // built pages; open one and compare the height a pre-flatten read would have recorded.
+    const distRoot = ["dist/client", "dist"].map((d) => join(SITE, d)).find((d) => existsSync(join(d, "index.html")));
+    await page.goto(`file://${join(distRoot, "boards/b1/index.html")}`, { waitUntil: "load" });
+    await page.waitForTimeout(200);
+    const liveHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
+    const b1 = canvas.artboards.find((a) => a.file === "B1.dc.html");
+    if (liveHeight !== b1.h) sawADifference = true;
+    assert.ok(sawADifference,
+      `the flatten no longer changes this fixture's layout (live ${liveHeight}, artboard ${b1.h}), so this test measures nothing; give a board an element whose layout the flatten moves`);
+  } finally {
+    await browser.close().catch(() => {});
+  }
 });
 
 test("a registered board with no page leaves NO seed behind", async (t) => {
