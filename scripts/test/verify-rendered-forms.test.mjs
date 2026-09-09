@@ -63,12 +63,43 @@ a,button{color:#0b4a6f;min-height:44px;display:inline-block}
 const FILLER = '<p>A paragraph of ordinary body copy so the accessibility pass has something ' +
   'real to read on this route, rather than scanning a blank page.</p>';
 
+// Set per fixture, read by contactPage. A module-level switch keeps every existing call site
+// and every existing assertion untouched.
+let SHAPE = 'plain';
+
 /**
  * The contact page. `behaviour` decides what its submit handler does, which is the only thing
  * that changes between the fixtures: the markup is the shipped template's shape throughout
  * (no `action` attribute, a JSON fetch from a script), because that shape is exactly what a
  * probe keyed on `form[action="/api/contact"]` alone would never see.
  */
+/**
+ * The shapes a real build produces that the probe used to get wrong.
+ *
+ *   duplicate  a `display: none` copy kept for a breakpoint, ABOVE the working one. The probe
+ *              took the first form in DOM order and spent five seconds waiting for a submit
+ *              control it could never click, then filed a High about a pointer.
+ *   modal      the form inside a <dialog> the disclosure probe had just certified in the same
+ *              run. Same five-second timeout, same High, on ordinary work.
+ *   renamed    `full-name` instead of `name`, which is what an agent writes when it is not
+ *              copying ContactForm.astro. The form was invisible to the probe and the run said
+ *              "no contact form", which is a claim about the site rather than about the probe.
+ */
+function shapedForm(shape, fields) {
+  if (shape === 'duplicate') {
+    return `<form id="cf-dup" style="display:none">${fields}<button type="submit">Send</button></form>`;
+  }
+  if (shape === 'unreadable') {
+    // Visible, two real fields, and nothing the probe can key on: no action, no name/email/
+    // message, no email input, no textarea. It is not a contact form and may never be one, but
+    // the run must say it could not read it rather than implying the page has no form.
+    return '<form id="booking"><label for="br">Reference</label><input id="br" name="booking-ref">' +
+      '<label for="bd">Date</label><input id="bd" name="enquiry-body" type="date">' +
+      '<button type="submit">Check</button></form>';
+  }
+  return '';
+}
+
 function contactPage(behaviour) {
   const send = {
     posts: `await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" },
@@ -79,13 +110,28 @@ function contactPage(behaviour) {
     // nothing was DELIVERED, and only a listening server can show that.
     elsewhere: `await fetch("__THIRD__/submit", { method: "POST", body: "x" }).catch(() => {});`,
   }[behaviour];
-  return shell('Contact', `${FILLER}
-    <form id="contact-form" novalidate>
-      <label for="cf-name">Name</label><input id="cf-name" name="name" type="text" required />
+  const nameField = SHAPE === 'renamed' ? 'full-name' : 'name';
+  const inner = `
+      <label for="cf-name">Name</label><input id="cf-name" name="${nameField}" type="text" required />
       <label for="cf-email">Email</label><input id="cf-email" name="email" type="email" required />
-      <label for="cf-message">Message</label><textarea id="cf-message" name="message" rows="4" required></textarea>
+      <label for="cf-message">Message</label><textarea id="cf-message" name="message" rows="4" required></textarea>`;
+  // A WORKING dialog, opened and closed correctly, which is the critic's actual scenario: the
+  // disclosure probe certifies it in the same run and the form probe must then not fail the
+  // form inside it. A trigger wired to nothing would fail the run for an unrelated reason.
+  const open = SHAPE === 'modal'
+    ? '<button id="enqBtn" commandfor="enq" aria-haspopup="dialog">Enquire</button><dialog id="enq">'
+    : '';
+  const close = SHAPE === 'modal'
+    ? '</dialog><script>const enqEl=document.getElementById("enq");' +
+      'document.getElementById("enqBtn").addEventListener("click",()=>enqEl.showModal());</script>'
+    : '';
+  return shell('Contact', `${FILLER}
+    ${shapedForm(SHAPE, inner)}
+    ${open}
+    <form id="contact-form" novalidate>${inner}
       <button type="submit">Send message</button>
     </form>
+    ${close}
     <script>
       const f = document.getElementById("contact-form");
       f.addEventListener("submit", async (e) => { e.preventDefault(); ${send} });
@@ -155,7 +201,8 @@ function homePage(nav, dialog = 'none', thirdParty = '') {
  * `endpoint` decides what /api/contact answers, which is how a broken deployment is
  * reproduced without breaking the handler under test.
  */
-async function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endpoint = 'smoke', thirdParty = false } = {}) {
+async function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endpoint = 'smoke', thirdParty = false, shape = 'plain' } = {}) {
+  SHAPE = shape;
   const root = mkdtempSync(join(tmpdir(), 'palate-forms-'));
   for (const d of ['src/pages', 'src/pages/api', 'src/styles', 'src/layouts', '.palate']) {
     mkdirSync(join(root, d), { recursive: true });
@@ -511,4 +558,54 @@ test('the nav and the dialog on one page are told apart', async (t) => {
   // One defect each, not the nav reported twice under two names.
   assert.equal((r.out.match(/mobile nav: what /g) || []).length, 1, 'the nav was filed more than once');
   assert.equal((r.out.match(/dialog: what /g) || []).length, 1, 'the dialog was filed more than once');
+});
+
+test('a hidden duplicate kept for a breakpoint does not block the build', async (t) => {
+  // A `display: none` copy above the working form. The probe took the first match in DOM order
+  // and spent five seconds on a `page.click` that could never land, then filed a High about a
+  // pointer on a site with nothing wrong with it.
+  const fx = await makeFixture({ form: 'posts', shape: 'duplicate' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.equal(fx.posts.length, 1, `the visible form was not the one submitted (${fx.posts.length} posts)`);
+  assert.match(r.out, /form round trip: \/contact answered 200 with smoke: true/,
+    `the working form was not submitted\n${r.out.slice(-1400)}`);
+  assert.ok(!/\[High\].*form round trip/.test(r.out), `a hidden duplicate blocked the build\n${r.out.slice(-1400)}`);
+  assert.ok(!/could not be clicked/.test(r.out), 'the probe still waited on an unclickable control');
+});
+
+test('a form inside a closed modal is SKIPPED with a reason, not failed', async (t) => {
+  // The dialog the disclosure probe certifies a moment earlier. Nothing here is a fault, and a
+  // High would fail a correct build, which is how a whole interaction pass gets switched off.
+  const fx = await makeFixture({ form: 'posts', shape: 'modal' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.ok(!/\[High\].*form round trip/.test(r.out), `a modal form blocked the build\n${r.out.slice(-1600)}`);
+  assert.match(r.out, /no submit control visible at desktop/, `the skip was not printed\n${r.out.slice(-1600)}`);
+  assert.match(r.out, /UNMEASURED, not clean/, 'the skip read as a pass');
+  assert.equal(r.status, 0, 'a skipped form failed the run');
+});
+
+test('a form whose fields are named differently is still found and submitted', async (t) => {
+  // `full-name` rather than `name`, which is what an agent writes when it is not copying the
+  // template. It used to be invisible, and the run said "no contact form": the same
+  // exists-but-never-fires defect the action-only selector had, moved into its replacement.
+  const fx = await makeFixture({ form: 'posts', shape: 'renamed' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.equal(fx.posts.length, 1, `a renamed contact form was not submitted (${fx.posts.length} posts)`);
+  assert.match(r.out, /form round trip: \/contact answered 200 with smoke: true/,
+    `the renamed form was not recognised\n${r.out.slice(-1400)}`);
+  assert.ok(!/no contact form/.test(r.out), 'the run still claimed the site has no contact form');
+});
+
+test('a visible form the probe cannot classify is NAMED, never reported as absent', async (t) => {
+  // The honest-report half of the same finding: "no contact form" is a claim about the site,
+  // and it must never stand in for "a form I did not recognise".
+  const fx = await makeFixture({ form: 'posts', shape: 'unreadable' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /did not \s*recognise as a contact form|recognise as a contact form/,
+    `an unrecognised visible form was not named\n${r.out.slice(-1600)}`);
+  assert.match(r.out, /booking-ref|enquiry-body|<form>|#/, 'the report did not identify which form');
 });

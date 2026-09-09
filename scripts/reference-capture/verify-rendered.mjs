@@ -643,6 +643,12 @@ const designFacts = {};
 // Collected rather than probed in place, because a submit belongs in its own context: the
 // smoke header goes on every request a page makes, and the audit pass must not carry it.
 const formRoutes = [];
+// Routes carrying a VISIBLE form the probe could not classify, and routes whose only contact
+// form is hidden at desktop. Both are reported rather than filed as findings: neither is a
+// fault in the site, and a build blocked by one is a build whose whole interaction pass gets
+// switched off.
+const unrecognisedForms = [];
+const hiddenOnlyFormRoutes = [];
 // One nav is usually one shared header, so the same fault would otherwise be filed once per
 // route. Keyed on the check and the control's label, and the route named is the first it was
 // seen on.
@@ -1256,26 +1262,69 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
     /**
      * DOES THIS PAGE CARRY THE CONTACT FORM? Found here, submitted after the loop.
      *
-     * TWO ARMS, AND THE SECOND ONE IS THE LOAD-BEARING HALF. The obvious selector is
-     * `form[action="/api/contact"]`, and the shipped ContactForm.astro has NO action at all:
-     * it is `<form id="contact-form" novalidate>` with a bundled script that fetches the
-     * endpoint. A probe keyed on the attribute alone would therefore never once fire on the
-     * very template it was written for, which is the exists-but-never-fires class this repo
-     * keeps paying for. So a form is a contact form when it declares the action OR carries
-     * the field shape, and what it actually posts to is then measured rather than assumed.
+     * THREE ARMS, AND EVERY ONE OF THEM EXISTS BECAUSE THE PREVIOUS ONE MISSED A REAL SITE.
+     *
+     *   the action      `form[action="/api/contact"]`, which the brief asked for and which the
+     *                   shipped ContactForm.astro does not set: it is `<form id="contact-form"
+     *                   novalidate>` with a bundled script that fetches the endpoint. Keyed on
+     *                   this alone the probe would never once fire on its own template.
+     *   the field names name + email + message, which is the template's shape and nothing else.
+     *                   A form the agent wrote with `full-name`, `your-name` or `enquiry` was
+     *                   invisible, and the run said "no contact form": the same
+     *                   exists-but-never-fires defect, moved rather than closed.
+     *   the field SHAPE an email-ish control and a textarea in the same form. That is what a
+     *                   contact form IS, whatever its fields are called.
+     *
+     * AND ANYTHING VISIBLE THAT MATCHES NONE OF THEM IS STILL REPORTED. "No contact form" is a
+     * statement about the site; "a form I did not recognise" is a statement about the probe, and
+     * only the second one is ever honest when a form is sitting there on the page.
      */
     if (vpName === 'desktop') {
-      const hasForm = await page.evaluate(() => {
+      const forms = await page.evaluate(() => {
+        const vis = (n) => {
+          if (!n) return false;
+          const r = n.getBoundingClientRect(), st = getComputedStyle(n);
+          return r.width > 0 && r.height > 0 && st.display !== 'none' && st.visibility !== 'hidden';
+        };
+        const out = { contact: 0, visibleContact: 0, unrecognised: [] };
         for (const f of document.querySelectorAll('form')) {
           const action = f.getAttribute('action') || '';
           let byAction = false;
           try { byAction = new URL(action, location.href).pathname === '/api/contact'; } catch { /* not a URL */ }
           const has = (n) => !!f.querySelector('[name="' + n + '"]');
-          if (byAction || (has('name') && has('email') && has('message'))) return true;
+          const byName = has('name') && has('email') && has('message');
+          const emailish = f.querySelector('input[type="email"]') ||
+            [...f.querySelectorAll('input,textarea')].some((el) =>
+              /e-?mail/i.test((el.getAttribute('name') || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '')));
+          const byShape = !!emailish && !!f.querySelector('textarea');
+          if (byAction || byName || byShape) {
+            out.contact++;
+            if (vis(f)) out.visibleContact++;
+            continue;
+          }
+          // A search box or a newsletter signup is not a miss, so only a form with more than one
+          // real field is worth naming: the point is to catch a CONTACT form we failed to read.
+          const fields = [...f.querySelectorAll('input,textarea,select')].filter((el) => {
+            const t = (el.getAttribute('type') || el.tagName).toLowerCase();
+            return !['hidden', 'submit', 'button', 'image', 'reset'].includes(t);
+          });
+          if (vis(f) && fields.length > 1) {
+            out.unrecognised.push(
+              (f.id ? '#' + f.id : f.getAttribute('name') ? '[name=' + f.getAttribute('name') + ']' : '<form>') +
+              ' with ' + fields.length + ' fields (' +
+              fields.slice(0, 4).map((el) => el.getAttribute('name') || el.id || (el.getAttribute('type') || el.tagName.toLowerCase())).join(', ') + ')');
+          }
         }
-        return false;
-      }).catch(() => false);
-      if (hasForm) formRoutes.push(route);
+        return out;
+      }).catch(() => ({ contact: 0, visibleContact: 0, unrecognised: [] }));
+
+      if (forms.contact) formRoutes.push(route);
+      // NAMED, NOT COUNTED. A route with a visible form the probe could not classify is the one
+      // case where silence would be a lie about the site rather than about the probe.
+      if (forms.unrecognised.length) {
+        unrecognisedForms.push(route + ': ' + forms.unrecognised.join('; '));
+      }
+      if (forms.contact && !forms.visibleContact) hiddenOnlyFormRoutes.push(route);
     }
 
     /**
@@ -1338,6 +1387,14 @@ if (!rendering.length) {
   console.error('verify-rendered: form round trip: no route was rendered this run, so nothing was submitted.' + formSkipNote);
 } else if (!formRoutes.length) {
   console.error(`verify-rendered: form round trip: no contact form on ${rendering.length} route(s), nothing submitted.` + formSkipNote);
+  if (unrecognisedForms.length) {
+    console.error(
+      `verify-rendered: form round trip: but ${unrecognisedForms.length} route(s) DO carry a visible form this probe did not ` +
+      `recognise as a contact form, so "no contact form" is about the probe and not about the site: ` +
+      unrecognisedForms.join(' | ') + '. A contact form is recognised by action="/api/contact", by name/email/message ' +
+      'fields, or by an email field beside a textarea.',
+    );
+  }
 } else {
   const context = await browser.newContext({ viewport: VIEWPORTS.desktop });
   const page = await context.newPage();
@@ -1435,6 +1492,13 @@ if (!rendering.length) {
   // endpoint, the same answer, at a page load and up to eight seconds of polling each. Three is
   // enough to catch a route where the form differs; the rest are named as not submitted, never
   // silently dropped.
+  if (hiddenOnlyFormRoutes.length) {
+    console.error(
+      `verify-rendered: form round trip: ${hiddenOnlyFormRoutes.length} route(s) carry a contact form with nothing ` +
+      `visible to submit at desktop (${hiddenOnlyFormRoutes.join(', ')}), which is ordinary for a modal or a ` +
+      'breakpoint duplicate. Those routes are UNMEASURED, not clean.',
+    );
+  }
   const FORM_ROUTE_CAP = 3;
   const probing = formRoutes.slice(0, FORM_ROUTE_CAP);
   if (formRoutes.length > probing.length) {
@@ -1442,6 +1506,12 @@ if (!rendering.length) {
       `verify-rendered: form round trip: ${formRoutes.length} route(s) carry a contact form; submitting the first ` +
       `${probing.length} (${probing.join(', ')}) and NOT ${formRoutes.slice(probing.length).join(', ')}. ` +
       'They post to the same endpoint, so the extra submissions buy the same answer.',
+    );
+  }
+  if (unrecognisedForms.length) {
+    console.error(
+      `verify-rendered: form round trip: ${unrecognisedForms.length} route(s) carry a visible form this probe did not ` +
+      `recognise as a contact form and did not submit: ` + unrecognisedForms.join(' | ') + '.',
     );
   }
   for (const route of probing) {
@@ -1460,15 +1530,35 @@ if (!rendering.length) {
         const r = n.getBoundingClientRect(), s = getComputedStyle(n);
         return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
       };
+      // THE FIRST form whose SUBMIT CONTROL IS VISIBLE, not the first in DOM order. A
+      // `display: none` duplicate kept for a breakpoint, or a form inside a dialog this run's
+      // own disclosure probe just opened and closed, both sat first in the document and both
+      // ended the probe on a five-second `page.click` timeout reported as a High about a
+      // pointer, on a site with nothing wrong with it.
       let form = null;
+      let candidates = 0;
       for (const f of document.querySelectorAll('form')) {
         const action = f.getAttribute('action') || '';
         let byAction = false;
         try { byAction = new URL(action, location.href).pathname === '/api/contact'; } catch { /* not a URL */ }
         const has = (n) => !!f.querySelector('[name="' + n + '"]');
-        if (byAction || (has('name') && has('email') && has('message'))) { form = f; break; }
+        const byName = has('name') && has('email') && has('message');
+        const emailish = f.querySelector('input[type="email"]') ||
+          [...f.querySelectorAll('input,textarea')].some((el) =>
+            /e-?mail/i.test((el.getAttribute('name') || '') + ' ' + (el.id || '') + ' ' + (el.getAttribute('autocomplete') || '')));
+        const byShape = !!emailish && !!f.querySelector('textarea');
+        if (!(byAction || byName || byShape)) continue;
+        candidates++;
+        const sub = f.querySelector('button[type="submit"], input[type="submit"], button:not([type])') || f.querySelector('button');
+        if (!sub) continue;
+        const r = sub.getBoundingClientRect(), st = getComputedStyle(sub);
+        if (r.width > 0 && r.height > 0 && st.display !== 'none' && st.visibility !== 'hidden') { form = f; break; }
       }
-      if (!form) return { ok: false, why: 'the form found at desktop was not on the page this pass' };
+      if (!form) {
+        return candidates
+          ? { ok: false, hidden: true, why: candidates + ' contact form(s) on this route have no submit control visible at desktop' }
+          : { ok: false, why: 'the form found at desktop was not on the page this pass' };
+      }
       form.setAttribute('data-palate-form', '1');
 
       // VISIBLE fields only. A hidden input is either machinery or a honeypot, and filling a
@@ -1509,10 +1599,18 @@ if (!rendering.length) {
       const submit = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])')
         || form.querySelector('button');
       if (!submit) return { ok: false, why: 'the contact form has no submit control, so it cannot be sent at all' };
+      form.setAttribute('data-palate-form', '1');
       submit.setAttribute('data-palate-submit', '1');
       return { ok: true, fields: names };
     }, SAMPLE_FORM).catch((e) => ({ ok: false, why: 'the form could not be filled (' + (e && e.message ? e.message : e) + ')' }));
 
+    if (!filled.ok && filled.hidden) {
+      // NOT a finding. A form behind a modal or duplicated for a breakpoint is ordinary work,
+      // and the gate that certified the dialog a moment ago must not then fail the form in it.
+      console.error('verify-rendered: form round trip: ' + route + ' SKIPPED, ' + filled.why +
+        '. Nothing was submitted for this route, so its form is UNMEASURED rather than clean.');
+      continue;
+    }
     if (!filled.ok) { add('High', route, 'desktop', 'form round trip: ' + filled.why + '.'); continue; }
 
     try {

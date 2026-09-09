@@ -143,7 +143,7 @@ const SMOKE = { "x-palate-smoke": "1" };
 // The default is an EXPLICIT preview, not an empty value. Empty now means "this build does not
 // know what it is" and is closed, which is the whole point of the inversion; the ordinary cases
 // below are about the header contract, so they run on a build that says what it is.
-async function post(POST, { body = VALID, headers = {}, siteEnv = "preview", env = {}, turnstile = true, host = "cloudflare" } = {}) {
+async function post(POST, { body = VALID, headers = {}, siteEnv = "preview", env = {}, procEnv = null, turnstile = true, host = "cloudflare" } = {}) {
   globalThis.__SITE_ENV = siteEnv || undefined;
   globalThis.__CALLS = [];
   const realFetch = globalThis.fetch;
@@ -170,6 +170,9 @@ async function post(POST, { body = VALID, headers = {}, siteEnv = "preview", env
     // takes the first that exists, and until this parameter existed every case here supplied the
     // Cloudflare shape, so the Vercel branch was never once executed.
     globalThis.__IMPORT_META_ENV = host === "vercel" ? runtimeEnv : undefined;
+    // `procEnv` is the genuinely-runtime source on Vercel: process.env at invocation time,
+    // which is what a dashboard edit or a rotation changes without a redeploy.
+    for (const k of Object.keys(procEnv || {})) process.env[k] = procEnv[k];
     const res = await POST({
       request,
       locals: host === "vercel" ? {} : { runtime: { env: runtimeEnv } },
@@ -179,6 +182,7 @@ async function post(POST, { body = VALID, headers = {}, siteEnv = "preview", env
     return { status: res.status, body: parsed, calls: globalThis.__CALLS };
   } finally {
     globalThis.fetch = realFetch;
+    for (const k of Object.keys(procEnv || {})) delete process.env[k];
   }
 }
 
@@ -339,6 +343,53 @@ for (const ep of ENDPOINTS) {
 
     const none = await call({ host: "vercel", headers: SMOKE, siteEnv: "production" });
     assert.notEqual(none.body?.smoke, true, "the Vercel branch opened with no secret configured");
+  });
+
+  T("on Vercel the secret is read at RUNTIME, so setting it after the deploy works", async () => {
+    // The handler used to fall back to `import.meta.env` alone, which Vite bakes at BUILD. A
+    // value set in the Vercel dashboard after the deploy therefore did nothing, and a rotation
+    // silently did not take, while the env table listed it beside RESEND_API_KEY as an ordinary
+    // runtime secret. Measured on a compiled function rather than reasoned about.
+    const r = await call({
+      host: "vercel",
+      headers: { ...SMOKE, "x-palate-smoke-secret": "set-after-the-deploy" },
+      siteEnv: "production",
+      procEnv: { PALATE_SMOKE_SECRET: "set-after-the-deploy" },   // runtime only, never baked
+    });
+    assert.deepEqual(r.body, { ok: true, smoke: true },
+      `a secret set at runtime did not take: ${JSON.stringify(r.body)}`);
+    assert.deepEqual(r.calls, [], "the authorised path reached " + r.calls.join(", "));
+  });
+
+  T("...and a rotation wins over the value baked at build", async () => {
+    // The direction that matters for a rotation: both are present and the NEW one has to win,
+    // or the operator rotates the secret and the deployment keeps honouring the old one.
+    const rotated = await call({
+      host: "vercel",
+      headers: { ...SMOKE, "x-palate-smoke-secret": "the-new-one" },
+      siteEnv: "production",
+      env: { PALATE_SMOKE_SECRET: "the-old-baked-one" },
+      procEnv: { PALATE_SMOKE_SECRET: "the-new-one" },
+    });
+    assert.deepEqual(rotated.body, { ok: true, smoke: true }, "the rotated secret was not honoured");
+    const stale = await call({
+      host: "vercel",
+      headers: { ...SMOKE, "x-palate-smoke-secret": "the-old-baked-one" },
+      siteEnv: "production",
+      env: { PALATE_SMOKE_SECRET: "the-old-baked-one" },
+      procEnv: { PALATE_SMOKE_SECRET: "the-new-one" },
+    });
+    assert.notEqual(stale.body?.smoke, true, "the superseded secret still opened the smoke path");
+  });
+
+  T("Cloudflare still wins from locals.runtime.env, so process.env cannot override a Worker secret", async () => {
+    const r = await call({
+      headers: { ...SMOKE, "x-palate-smoke-secret": "worker-secret" },
+      siteEnv: "production",
+      env: { PALATE_SMOKE_SECRET: "worker-secret" },
+      procEnv: { PALATE_SMOKE_SECRET: "something-else" },
+    });
+    assert.deepEqual(r.body, { ok: true, smoke: true }, "the Worker secret stopped being authoritative");
   });
 
   T("a refused smoke request is the visitor's enquiry, so it goes through rather than 403", async () => {

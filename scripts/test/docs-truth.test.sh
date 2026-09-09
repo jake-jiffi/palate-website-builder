@@ -121,8 +121,36 @@ present "the Cloudflare bootstrap deploy builds as production" \
   "scripts/provision-cloudflare.sh" "PUBLIC_SITE_ENV=production npm run build"
 present "the Cloudflare config says an empty value disables the smoke guard too" \
   "templates/host-cloudflare/astro.config.mjs" "EMPTY IS NOT SAFE IN EVERY DIRECTION"
-present "testing.md says an unbaked build is closed rather than open" \
-  "references/testing.md" "an unbaked one is now closed rather than open"
+present "testing.md says an unbaked build is closed" \
+  "references/testing.md" "an unbaked one is CLOSED"
+# THE CONTRADICTION THIS GUARD MISSED. The bullet kept the paragraph the inversion replaced, so
+# it asserted both that a forgotten build costs a skip and that it ships a live hole. Only the
+# first is true, and a reader could not tell which behaviour shipped.
+absent "testing.md no longer claims an empty value ships an open endpoint" \
+  "references/testing.md" "ships a live site whose endpoint honours the smoke header from anyone"
+# ...and the serve-preview claim is keyed on the DEFAULT mode, which is the one people use. The
+# old guard grepped a string that lived in --built while the default path shipped unbaked.
+present "serve-preview bakes the environment in its DEFAULT mode, not only in --built" \
+  "scripts/serve-preview.sh" "PUBLIC_SITE_ENV=preview npm run dev"
+present "testing.md says both serve-preview modes bake it" \
+  "references/testing.md" "sets \`preview\` in BOTH modes"
+absent "cache-invalidation.md no longer lists serve-preview as leaving it unbaked" \
+  "references/cache-invalidation.md" "\`serve-preview.sh\`, \`phantom-utility-check.mjs\`"
+for f in templates/astro-project/package.json templates/host-cloudflare/package.json; do
+  present "$f dev script bakes an explicit environment" "$f" 'PUBLIC_SITE_ENV=preview astro dev'
+done
+# R4: which environment the secret is read from, said where the operator sets it.
+present "hosting-vercel.md says the smoke secret is read at runtime" \
+  "references/hosting-vercel.md" "is read at RUNTIME on both hosts"
+present "the endpoint layers process.env over the baked object" \
+  "templates/astro-project/src/pages/api/contact.ts" "...import.meta.env, ...process.env"
+present "production-handoff.md stops claiming every secret comes from locals.runtime.env" \
+  "references/production-handoff.md" "on Vercel there is no \`locals.runtime\`"
+# R3: a form the probe could not read is named rather than reported as absent.
+present "the verifier names a visible form it did not recognise" \
+  "scripts/reference-capture/verify-rendered.mjs" "recognise as a contact form and did not submit"
+present "the verifier skips a form with nothing visible to submit rather than failing it" \
+  "scripts/reference-capture/verify-rendered.mjs" "have no submit control visible at desktop"
 # THE INVERSION, in the code and in the doc. The guard shipped off five times because the test
 # was "is this production"; it is "does this build say it is not production" now.
 present "the endpoint requires the secret unless the build says it is not production" \

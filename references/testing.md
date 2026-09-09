@@ -187,17 +187,17 @@ Where it runs:
   round trip failing on a mismatch. The write is an upsert and `.env` is chmod 600. The read
   takes the LAST assignment, which is what sourcing the file does, tolerates an `export`
   prefix, and treats a blank or whitespace value as unset.
-- **Every build should say what it is, and an unbaked one is now closed rather than open.**
-  Setting `PUBLIC_SITE_ENV` is still correct on every production build and is a security
-  property rather than an SEO one, but it is no longer load-bearing: a build that forgets costs
-  a skip, not a hole. `npm run deploy` on the Cloudflare overlay builds as production before
-  deploying, and `serve-preview.sh` builds the local preview as `preview` so the round trip runs
-  there with no secret. **Never a bare `wrangler deploy`:** it does not build. The guard reads the value baked at BUILD time and
-  the overlay has no `VERCEL_ENV` to fall back on, so a build that leaves it empty ships a live
-  site whose endpoint honours the smoke header from anyone and discards the enquiry. The
-  bootstrap `npm run build` in `provision-cloudflare.sh` sets it, and so do `deploy.yml` and
-  `revalidate.yml`; revalidate is the one that matters most, because it fires on every content
-  publish and a miss there would reopen the hole for the life of the site.
+- **Every build says what it is, and an unbaked one is CLOSED.** The guard reads
+  `PUBLIC_SITE_ENV` as baked at build time, so a build that leaves it empty is treated as
+  production: the endpoint refuses the smoke header without the secret and the round trip skips
+  with a reason. That is the inversion, and it means a forgotten build command costs a skip
+  rather than a live site quietly discarding enquiries.
+  **So every local path bakes it too**, because a skip on the path an operator uses every day is
+  still a check that never runs: `serve-preview.sh` sets `preview` in BOTH modes, the default
+  `npm run dev` and `--built`, and both templates' own `dev` script sets it as well. The
+  Cloudflare overlay's `npm run deploy` builds as production before deploying, and so do
+  `provision-cloudflare.sh`'s bootstrap build, `deploy.yml` and `revalidate.yml`.
+  **Never a bare `wrangler deploy`:** it does not build, so it ships whatever `dist/` holds.
 - **The endpoint's own contract** is exercised as code by
   `scripts/test/contact-smoke.test.mjs`, against BOTH copies of the handler. `add-sanity.sh`
   copies `templates/cms-sanity/src/pages/api/contact.ts` over the base file, so the two carry

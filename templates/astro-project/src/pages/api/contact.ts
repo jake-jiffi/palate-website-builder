@@ -87,7 +87,18 @@ function validate(d: { name?: unknown; email?: unknown; message?: unknown }) {
 // ---- SMOKE CONTRACT END ----
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const env = (locals as any).runtime?.env ?? import.meta.env;
+  // THREE SOURCES, AND THE ORDER IS THE POINT. Cloudflare puts the runtime env on
+  // `locals.runtime.env`. Vercel's adapter never sets that, so the fallback used to be
+  // `import.meta.env` alone, which is BAKED AT BUILD: a value set in the dashboard after the
+  // deploy did nothing, and a rotation silently did not take, while the docs listed it beside
+  // RESEND_API_KEY as an ordinary runtime secret. Measured on a compiled function, not reasoned
+  // about: the build-time value answered and the runtime one did not. `process.env` is layered
+  // over the baked object on the node runtime so the documented path works and a rotation takes
+  // effect on the next invocation. `typeof process` is guarded because Workers has no process.
+  const env = (locals as any).runtime?.env
+    ?? (typeof process !== "undefined" && process?.env
+      ? { ...import.meta.env, ...process.env }
+      : import.meta.env);
   try {
     const data = await request.json();
     const { name, email, message, turnstileToken } = (data ?? {}) as Record<string, unknown>;

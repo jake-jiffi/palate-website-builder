@@ -160,6 +160,14 @@ to both the build step AND the runtime serverless functions, so there is no
 | `RESEND_API_KEY`, `TURNSTILE_SECRET` | yes | yes | optional |
 | `PALATE_SMOKE_SECRET` (the post-deploy form round trip) | yes | no | no |
 
+`PALATE_SMOKE_SECRET` is read at RUNTIME on both hosts, and it was not always: the endpoint used
+to fall back to `import.meta.env`, which Vite bakes at build, so on Vercel a value set in the
+dashboard after the deploy did nothing and a rotation silently did not take. The handler layers
+`process.env` over the baked object on the node runtime, so setting or rotating it takes effect
+on the next invocation with no redeploy. On Cloudflare it arrives as a Worker secret through
+`locals.runtime.env`. The PUBLIC_ vars above are a different matter and are genuinely baked:
+`PUBLIC_SITE_ENV` is read from the build and changing it DOES need a redeploy.
+
 `scripts/provision-vercel.sh` pushes all of these via `vercel env add`,
 idempotently (it removes any existing value first).
 
