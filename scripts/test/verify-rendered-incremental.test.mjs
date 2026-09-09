@@ -497,6 +497,54 @@ test('a run that renders nothing exits 2, skipped rather than passed', async (t)
   assert.equal(nothing.status, 2, 'a run that inspected no route reported a pass');
 });
 
+test('the run records how much of the site it covered', async (t) => {
+  // NOTHING DOWNSTREAM COULD TELL A FULL SWEEP FROM A PARTIAL ONE. `public/` sits outside the
+  // per-route digest, so replacing a hero photograph moves no route's hash; the mitigation is
+  // the full sweep before hand-over, and until this field existed nothing recorded whether one
+  // had happened. A pass from a run that rendered one route of three looked exactly like a
+  // pass from one that rendered all three.
+  const fx = makeFixture(3, () => 'Alpha');
+  const server = await serve(fx.html);
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const out = join(fx.root, '.palate-shots');
+  const read = () => JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8')).sweep;
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  const first = await runGate(['--url', url, '--index', fx.index, '--out', out, '--no-vitals']);
+  const s1 = read();
+  assert.ok(s1, `the first run recorded no sweep (exit ${first.status})\n${first.out.slice(-900)}`);
+  assert.deepEqual(
+    { full: s1.full, selected: s1.selected, rendered: s1.rendered, skipped: s1.skipped, narrowed: s1.narrowed },
+    { full: false, selected: 3, rendered: 3, skipped: 0, narrowed: null },
+    'a run without --full rendered every route and still is not a full sweep',
+  );
+  assert.ok(Date.parse(s1.at) > 0, 'the sweep carries no timestamp');
+
+  // Every route unchanged: the run exits 2 and the record says nothing was rendered, which is
+  // the case that was already handled and must stay handled.
+  const nothing = await runGate(['--url', url, '--index', fx.index, '--out', out, '--no-vitals']);
+  assert.equal(nothing.status, 2);
+  const s2 = read();
+  assert.equal(s2.rendered, 0, 'a run that rendered nothing recorded routes it did not render');
+  assert.equal(s2.skipped, 3);
+
+  // --full is the sweep that certifies.
+  await runGate(['--url', url, '--index', fx.index, '--out', out, '--no-vitals', '--full']);
+  const s3 = read();
+  assert.equal(s3.full, true, '--full over every route was not recorded as a full sweep');
+  assert.equal(s3.rendered, 3);
+  assert.equal(s3.skipped, 0);
+
+  // --full OVER A BLAST RADIUS IS NOT A FULL SWEEP, and recording the flag rather than the
+  // answer would have said it was. That is the same silence one layer down.
+  await runGate(['--url', url, '--index', fx.index, '--out', out, '--no-vitals', '--full',
+    '--changed', 'src/components/Alpha.astro']);
+  const s4 = read();
+  assert.equal(s4.full, false, 'a narrowed run was recorded as a full sweep');
+  assert.equal(s4.requested_full, true, 'the flag as given was not recorded');
+  assert.equal(s4.narrowed, 'changed');
+});
+
 test('--routes leaves the records it cannot hash alone', async (t) => {
   // Every run-site command passes --routes, so deleting the records of a route it cannot hash
   // meant one /post between two build-loop passes emptied the loop's memory.

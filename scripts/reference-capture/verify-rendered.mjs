@@ -434,8 +434,16 @@ let setAside = false;
  */
 const recordKeyOf = new Map();
 const keyOf = (p) => recordKeyOf.get(p) ?? p;
+// WHY THE SELECTION IS NOT THE WHOLE SITE, recorded rather than inferred. `routes.length` is
+// the number this run looked at, and on its own it cannot say whether that WAS the site: a
+// --changed blast radius, an explicit --routes list, a fall back to three guessed paths and a
+// site capped by --max-routes all produce a short list for different reasons, and only one of
+// them is "this site is small". The sweep record below reads these.
+let narrowedBy = null;   // 'routes' | 'changed' | 'fallback' | null
+let overCap = 0;         // route(s) dropped by --max-routes
 if (args.routes) {
   routes = String(args.routes).split(',').map((r) => r.trim()).filter(Boolean);
+  narrowedBy = 'routes';
   if (changed) console.error('verify-rendered: --routes names the routes explicitly, so --changed is ignored on this run.');
 } else {
   const indexPath = args.index && args.index !== 'true' ? args.index : '.palate/index.json';
@@ -493,6 +501,8 @@ if (args.routes) {
     routes = pairs.slice(0, MAX_ROUTES).map(([path]) => path);
     routes.forEach((p, i) => routeOf.set(p, pairs[i][1]));
     const dropped = pairs.length - routes.length;
+    overCap = dropped;
+    if (changed) narrowedBy = 'changed';
     const over = dropped > 0 ? `, ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : '';
     // A narrowed run gets its own sentence. The index-wide tallies below describe the whole
     // site, and printed against a blast-radius count they read as a contradiction.
@@ -503,6 +513,7 @@ if (args.routes) {
         `${found.statics} static, ${found.endpoints} endpoint(s) not rendered)${over}`);
   } else {
     routes = ['/', '/contact', '/blog'];
+    narrowedBy = 'fallback';
     console.error(
       `verify-rendered: no readable ${indexPath}, so falling back to ${routes.join(', ')}. ` +
       'THESE ARE GUESSES AND MAY NOT EXIST. Run palate-index.mjs first, or pass --routes, ' +
@@ -574,6 +585,41 @@ if (skipped.includes('/')) {
     'accessibility pass on / are UNMEASURED this run. --full measures them.',
   );
 }
+
+/**
+ * WHAT THIS RUN ACTUALLY COVERED, written down where a gate can read it.
+ *
+ * Two accepted rulings met here and neither could see the other. The first: `public/**` stays
+ * out of the per-route digest, because an asset swap sits with remote content and the full
+ * sweep before hand-over is what covers it. The second: nothing recorded whether the last run
+ * WAS a full sweep, so that mitigation was a sentence of doctrine and nothing more.
+ *
+ * The narrow case was already honoured, and still is: if EVERY selected route is unchanged,
+ * `rendering` is empty and the run exits 2 saying SKIPPED, not passed. The case that was
+ * invisible is the ordinary one. Change an image in `public/` and anything else at the same
+ * time, the other thing renders, the run exits 0, and the routes whose only change was the
+ * image are skipped. A pass from a run that rendered one route of twelve then looked exactly
+ * like a pass from one that rendered all twelve.
+ *
+ * So the run records its own coverage. It does NOT fail a partial sweep: a partial sweep is
+ * the whole point of the incremental path and blocking on it would delete the optimisation.
+ * It makes the coverage LEGIBLE, so gate-done can say which it was rather than imply the
+ * larger one.
+ *
+ * `full` is the derived answer to "did this cover the site", not the flag: --full over a
+ * --changed blast radius, or over a site capped by --max-routes, is not a full sweep and
+ * saying it was would be the same silence one layer down.
+ */
+const sweep = {
+  full: FULL && !narrowedBy && overCap === 0,
+  requested_full: FULL,
+  narrowed: narrowedBy,
+  selected: routes.length,
+  rendered: rendering.length,
+  skipped: skipped.length,
+  over_cap: overCap,
+  at: new Date().toISOString(),
+};
 if (!rendering.length) {
   console.error(
     'verify-rendered: every selected route was unchanged since its last passing render, so NO route was ' +
@@ -2268,6 +2314,7 @@ if (outDir) {
     for (const p of highRoutes) delete out[keyOf(p)];
     m.routes = out;
     m.globalInputs = globalInputs.hash;
+    m.sweep = sweep;
     writeFileSync(shotsManifest, JSON.stringify(m, null, 2) + '\n');
   } catch (e) {
     console.error(
@@ -2275,6 +2322,22 @@ if (outDir) {
       'The next run will render every route, which is slow and never wrong.',
     );
   }
+
+  // THE SHOTS MANIFEST IS THE AUTHORITY AND THIS IS THE CONVENIENCE COPY, in that order.
+  // verify-report.json is written by the palate-verifier AGENT, so a copy of the sweep there
+  // is one an LLM can overwrite; gate-done reads the tool-written manifest first and only
+  // falls back to this. Merged into an existing report and never created, because creating
+  // one would turn "no renderable preview, skip" into a gate that runs on a stub.
+  try {
+    const reportPath = join(dirname(resolve(outDir)), 'verify-report.json');
+    if (existsSync(reportPath)) {
+      const rep = JSON.parse(readFileSync(reportPath, 'utf8'));
+      if (rep && typeof rep === 'object' && !Array.isArray(rep)) {
+        rep.sweep = sweep;
+        writeFileSync(reportPath, JSON.stringify(rep, null, 2) + '\n');
+      }
+    }
+  } catch { /* the manifest already carries it; a bad report is the verifier's own problem */ }
 }
 
 // ------------------------------------------------- disclosure probe -----

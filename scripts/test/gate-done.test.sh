@@ -103,6 +103,19 @@ if printf '%s' "$summary" | grep -qE 'Done gate: [0-9]+ of [0-9]+ sub-gates ran,
 else
   echo "FAIL - the summary opens with how many sub-gates ran (got: $summary)"; fail=$((fail+1))
 fi
+# THE ARITHMETIC IS PINNED AGAINST ITS OWN ROLL-CALL. The regex above matches any three
+# numbers, so a sub-gate added without a gate_ran / gate_skipped call still satisfies it and
+# the count silently stops describing the line beneath it. `intensity` and `bold-bar` are
+# excluded because they are properties of the commission rather than sub-gates.
+passed_line="$(printf '%s\n' "$summary" | grep '^  Passed:')"
+roll_call="$(printf '%s' "$passed_line" | grep -oE '[a-z][a-z-]*=' | grep -vcE '^(intensity|bold-bar)=')"
+headline_total="$(printf '%s\n' "$summary" | sed -n 's/^Done gate: [0-9]* of \([0-9]*\) sub-gates ran.*/\1/p')"
+if [ -n "$headline_total" ] && [ "$roll_call" = "$headline_total" ]; then
+  echo "ok   - and the count equals the number of gates named in the roll-call ($headline_total)"; pass=$((pass+1))
+else
+  echo "FAIL - the count says ${headline_total:-?} and the roll-call names $roll_call: $summary"; fail=$((fail+1))
+fi
+
 if printf '%s' "$summary" | grep -qE 'explore=skipped([^(]|$)'; then
   echo "ok   - gate-explore's skip is mapped, not read as a pass"; pass=$((pass+1))
 else
@@ -227,10 +240,11 @@ else
   echo "FAIL - gate-shipready's skip carries its own reason (got: $sr_summary)"; fail=$((fail+1))
 fi
 
-# --- THE SEO SKIP REASON IS THE FINDING, NOT THE HEADER --------------------------------
-# gate-seo opens a cannot-check report with "N thing(s) could NOT be checked. These are unknown,
-# not clean." and names the actual unknown two lines later. Taking the first line verbatim put
-# the header in the summary and dropped the one part that says what was not checked.
+# --- A GATE THAT READ THE SITE IS REPORTED AS PARTIAL, NOT AS A SKIP -------------------
+# gate-seo exits 2 when anything could not be checked, and the caller could only read that as
+# "did not run". On this fixture it read one route, found it clean, and could not judge the
+# answer-engine surfaces, so `seo=skipped` filed a gate that had read the site as one that had
+# not. That is the normal state of every Palate site until the client publishes a post.
 SEOB="$TMP/seo-blocked"; mkdir -p "$SEOB/src/pages" "$SEOB/dist"
 cp "$DEEP" "$SEOB/build-manifest.json"
 make_shots "$SEOB" 0
@@ -254,15 +268,20 @@ Allow: /
 Sitemap: https://x.test/sitemap-index.xml
 ROBOTS
 seo_summary="$(bash "$GATE" "$SEOB/build-manifest.json" 2>/dev/null)"
-if printf '%s' "$seo_summary" | grep -qF 'answer-engine surfaces'; then
-  echo "ok   - the SEO skip names what could not be checked"; pass=$((pass+1))
+if printf '%s' "$seo_summary" | grep -qE 'seo=partial \([0-9]+ route\(s\) checked, [0-9]+ unknown\)'; then
+  echo "ok   - a gate that read the site and could not judge one thing reports partial, with both numbers"; pass=$((pass+1))
 else
-  echo "FAIL - the SEO skip names what could not be checked (got: $seo_summary)"; fail=$((fail+1))
+  echo "FAIL - a gate that read the site reports partial with both numbers (got: $seo_summary)"; fail=$((fail+1))
+fi
+if printf '%s' "$seo_summary" | grep -qF 'seo=skipped'; then
+  echo "FAIL - and it is not filed as a skip (got: $seo_summary)"; fail=$((fail+1))
+else
+  echo "ok   - and it is not filed as a skip"; pass=$((pass+1))
 fi
 if printf '%s' "$seo_summary" | grep -qF 'thing(s) could NOT be checked'; then
-  echo "FAIL - and not gate-seo's header (got: $seo_summary)"; fail=$((fail+1))
+  echo "FAIL - and gate-seo's header does not reach the summary (got: $seo_summary)"; fail=$((fail+1))
 else
-  echo "ok   - and not gate-seo's header"; pass=$((pass+1))
+  echo "ok   - and gate-seo's header does not reach the summary"; pass=$((pass+1))
 fi
 
 # --- AN ADVISORY BEFORE THE REASON IS NOT THE REASON ------------------------------------
@@ -418,6 +437,102 @@ cp "$UOK/build-manifest.json" "$USOLO/build-manifest.json"; cp "$UOK/verify-repo
 make_shots "$USOLO" 0
 mk_variant_html "$USOLO/.palate-shots" v1 "$DUP"
 check "a single rendered variant -> pass (nothing to compare)" 0 "$USOLO/build-manifest.json"
+
+# --- HOW MUCH OF THE SITE THE LAST SWEEP COVERED IS IN THE SUMMARY --------------------
+# A pass from a verify run that rendered one route of twelve was indistinguishable from a pass
+# from one that rendered all twelve, because nothing wrote the coverage down and this gate had
+# no way to ask. `public/` sits outside the per-route digest, so an asset swap moves no route's
+# hash and the full sweep is the mitigation; until the record existed nothing could say whether
+# one had happened. A partial sweep does NOT fail here, deliberately: the incremental path is
+# the point, and the fix is legibility.
+#
+# $PASS's shots manifest predates the field, which is the third case: unrecorded, said out loud.
+if printf '%s' "$summary" | grep -qF 'last sweep unrecorded'; then
+  echo "ok   - a shots manifest with no sweep record says so rather than implying a full one"; pass=$((pass+1))
+else
+  echo "FAIL - a shots manifest with no sweep record says so (got: $summary)"; fail=$((fail+1))
+fi
+
+SWPART="$TMP/sweep-partial"; mkdir -p "$SWPART"
+cp "$DEEP" "$SWPART/build-manifest.json"; make_shots "$SWPART" 0
+cp "$PASS/verify-report.json" "$SWPART/verify-report.json"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.sweep = { full: false, requested_full: false, narrowed: null, selected: 12, rendered: 3, skipped: 9, over_cap: 0, at: "2026-09-09T00:00:00.000Z" };
+fs.writeFileSync(process.argv[1], JSON.stringify(m, null, 2));
+' "$SWPART/.palate-shots/manifest.json"
+part_summary="$(bash "$GATE" "$SWPART/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$part_summary" | grep -qF 'last sweep PARTIAL, 3 of 12 route(s) rendered, 9 unchanged and skipped'; then
+  echo "ok   - a partial sweep is named with both numbers"; pass=$((pass+1))
+else
+  echo "FAIL - a partial sweep is named with both numbers (got: $part_summary)"; fail=$((fail+1))
+fi
+# AND IT STILL PASSES. Making a partial sweep fail would delete the incremental path.
+check "a partial sweep is legible, not a failure" 0 "$SWPART/build-manifest.json"
+
+SWFULL="$TMP/sweep-full"; mkdir -p "$SWFULL"
+cp "$DEEP" "$SWFULL/build-manifest.json"; make_shots "$SWFULL" 0
+cp "$PASS/verify-report.json" "$SWFULL/verify-report.json"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.sweep = { full: true, requested_full: true, narrowed: null, selected: 12, rendered: 12, skipped: 0, over_cap: 0, at: "2026-09-09T00:00:00.000Z" };
+fs.writeFileSync(process.argv[1], JSON.stringify(m, null, 2));
+' "$SWFULL/.palate-shots/manifest.json"
+full_summary="$(bash "$GATE" "$SWFULL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$full_summary" | grep -qF 'last sweep full, 12 route(s)'; then
+  echo "ok   - a full sweep is named as one"; pass=$((pass+1))
+else
+  echo "FAIL - a full sweep is named as one (got: $full_summary)"; fail=$((fail+1))
+fi
+
+# A NARROWED RUN IS NOT A FULL SWEEP EVEN WITH --full, and the summary says which narrowing.
+SWNARROW="$TMP/sweep-narrowed"; mkdir -p "$SWNARROW"
+cp "$DEEP" "$SWNARROW/build-manifest.json"; make_shots "$SWNARROW" 0
+cp "$PASS/verify-report.json" "$SWNARROW/verify-report.json"
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.sweep = { full: false, requested_full: true, narrowed: "changed", selected: 3, rendered: 3, skipped: 0, over_cap: 0, at: "2026-09-09T00:00:00.000Z" };
+fs.writeFileSync(process.argv[1], JSON.stringify(m, null, 2));
+' "$SWNARROW/.palate-shots/manifest.json"
+nar_summary="$(bash "$GATE" "$SWNARROW/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$nar_summary" | grep -qF 'last sweep PARTIAL, 3 of 3 route(s) rendered, narrowed by --changed'; then
+  echo "ok   - a narrowed run is partial and says which narrowing"; pass=$((pass+1))
+else
+  echo "FAIL - a narrowed run is partial and says which narrowing (got: $nar_summary)"; fail=$((fail+1))
+fi
+
+# THE REPORT IS THE FALLBACK, NOT THE AUTHORITY. verify-report.json is written by the verifier
+# AGENT, so its copy is narration; the shots manifest is the tool's. Read second, and read.
+SWREP="$TMP/sweep-report-only"; mkdir -p "$SWREP"
+cp "$DEEP" "$SWREP/build-manifest.json"; make_shots "$SWREP" 0
+node -e '
+const fs = require("node:fs");
+const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+r.sweep = { full: true, requested_full: true, narrowed: null, selected: 7, rendered: 7, skipped: 0, over_cap: 0, at: "2026-09-09T00:00:00.000Z" };
+fs.writeFileSync(process.argv[2], JSON.stringify(r, null, 2));
+' "$PASS/verify-report.json" "$SWREP/verify-report.json"
+rep_summary="$(bash "$GATE" "$SWREP/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$rep_summary" | grep -qF 'last sweep full, 7 route(s)'; then
+  echo "ok   - with no record in the shots manifest, the report is read"; pass=$((pass+1))
+else
+  echo "FAIL - with no record in the shots manifest, the report is read (got: $rep_summary)"; fail=$((fail+1))
+fi
+# The manifest WINS when both carry one, because only one of them is written by a tool.
+node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.sweep = { full: false, requested_full: false, narrowed: null, selected: 7, rendered: 2, skipped: 5, over_cap: 0, at: "2026-09-09T00:00:00.000Z" };
+fs.writeFileSync(process.argv[1], JSON.stringify(m, null, 2));
+' "$SWREP/.palate-shots/manifest.json"
+both_summary="$(bash "$GATE" "$SWREP/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$both_summary" | grep -qF 'last sweep PARTIAL, 2 of 7'; then
+  echo "ok   - and the tool-written manifest outranks the agent-written report"; pass=$((pass+1))
+else
+  echo "FAIL - and the tool-written manifest outranks the agent-written report (got: $both_summary)"; fail=$((fail+1))
+fi
 
 echo "---"
 echo "passed=$pass failed=$fail"

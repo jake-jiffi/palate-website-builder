@@ -66,7 +66,12 @@ JSON
 export default {
   theme: {
     extend: {
-      colors: { brand: { bg: "#f7f5ee", text: "#1c1b19", accent: "#2f5d50", muted: "#6d6b65", inverse: "#ffffff" } },
+      // `border` IS NOT OPTIONAL HERE. ContactForm.astro ships `border-brand-border` on three
+      // inputs, so a stub without it built a fixture carrying three Critical phantom utilities
+      // and the Stop hook blocked on every suite that uses this helper. A real brand package
+      // defines it; the stub has to as well, or the fixture is dirty for a reason no client
+      // build has.
+      colors: { brand: { bg: "#f7f5ee", text: "#1c1b19", accent: "#2f5d50", muted: "#6d6b65", inverse: "#ffffff", border: "#d8d4c6" } },
       fontFamily: { display: ["Georgia", "serif"], body: ["Helvetica", "Arial", "sans-serif"] },
       borderRadius: { brand: "4px" },
     },
@@ -80,6 +85,7 @@ JS
   --brand-muted: #6d6b65;
   --brand-accent: #2f5d50;
   --brand-inverse: #ffffff;
+  --brand-border: #d8d4c6;
   --brand-bg-inverse: #1c1b19;
   --brand-font-display: Georgia, "Times New Roman", serif;
   --brand-font-body: Helvetica, Arial, sans-serif;

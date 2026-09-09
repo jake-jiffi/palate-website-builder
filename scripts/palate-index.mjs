@@ -114,6 +114,17 @@ const withoutComments = (src) =>
  */
 export const EXPLORE_ROUTE = (h) => h === '/explore' || /^\/(v|lp)\d+$/.test(h) || /^\/boards\//.test(h);
 
+/**
+ * Routes that exist to be SERVED ON A MISS. They are nobody's claim about the business and
+ * nothing is meant to link to them, so a stale number on a 404 page is not the site
+ * disagreeing with itself and an unlinked 404 is not a page somebody forgot to link.
+ *
+ * Exported because gate-seo and gate-facts each kept their own copy of this set, and the
+ * orphan report here had none, so `/404` was reported as an orphan on every build the
+ * scaffold has ever produced.
+ */
+export const NEVER_INDEXED = new Set(['/404', '/500']);
+
 export const OUT_CANDIDATES = ['.vercel/output/static', 'dist/client', 'dist', 'build'];
 export const findOutputRoot = (projectDir) =>
   OUT_CANDIDATES.map((c) => join(projectDir, c)).find(existsSync) || null;
@@ -480,7 +491,8 @@ export function buildIndex(projectDir) {
   // rather than about the site. That is precisely the report the empty graph used to produce.
   const linked = new Set(routes.flatMap((r) => r.links));
   const orphans = linksParsed === 0 ? [] : routes
-    .filter((r) => r.kind === 'static' && r.path !== '/' && !linked.has(r.path) && !EXPLORE_ROUTE(r.path))
+    .filter((r) => r.kind === 'static' && r.path !== '/' && !linked.has(r.path)
+      && !EXPLORE_ROUTE(r.path) && !NEVER_INDEXED.has(r.path))
     .map((r) => r.path);
 
   // Dead internal links: an href to a path no route serves. Dynamic routes are

@@ -399,6 +399,22 @@ the shared layout drops every record and the run says
 `public/` assets and environment values, so an unchanged source can still render differently.
 An incremental run is how you converge; the full sweep is what you certify.
 
+**AND THE RUN NOW WRITES DOWN WHICH ONE IT WAS.** Every run records its own coverage into
+`.palate-shots/manifest.json` as `sweep` (whether it covered the whole site, how many routes it
+selected, rendered and skipped, and whether `--changed`, `--routes` or `--max-routes` narrowed
+it), and `gate-done.sh` prints it: `last sweep full, 12 route(s)` or `last sweep PARTIAL, 3 of
+12 route(s) rendered, 9 unchanged and skipped`. A partial sweep does NOT fail; that is the
+incremental path working. It is written down because `public/` assets sit outside the per-route
+hash, so a hero photograph can be replaced and no route's hash moves: the full sweep is the
+mitigation, and until this existed nothing could tell whether it had happened. **The record is
+written by the tool. Do not write a `sweep` block into `verify-report.json` yourself** - the
+gate prefers the manifest's copy precisely because that one is not narration.
+
+**DO NOT REPORT THE INCREMENTAL SKIP AS BROKEN EARLY IN A BUILD.** A route earns a record only
+when it rendered and nothing at or above High was filed against it, so the skip engages only on
+a site that is already clean. On a real build the speed-up arrives near the end and not before;
+seeing every route render again on iteration two is the loop working, not the cache failing.
+
 ## Your report (return this, nothing else)
 ```
 VERDICT: pass | fail
