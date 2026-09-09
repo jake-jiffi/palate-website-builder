@@ -106,11 +106,65 @@ Nothing in this plugin runs Lighthouse. The doctrine used to say "Lighthouse CI,
 ## Post-deploy smoke checks
 - workers.dev returns 200
 - robots.txt, sitemap, llms.txt return 200
-- the contact form, BY HAND, once. Nothing posts it automatically yet; see the section below.
+- a test POST to /api/contact, run by `verify-form-roundtrip.sh` from both host verifiers
 
 ## The form round-trip test
 
-**Not implemented. Implemented by E5**, which submits the form against the preview and the
-deployed URL. Nothing today fills or posts the contact form, so a broken endpoint, a wrong
-Turnstile key or a bad Resend token ships silently. Until then, submit the form by hand once
-after a deploy and watch for the mail.
+The gate fills the contact form with valid values, presses send, and reads what the endpoint
+answered. Reading the markup cannot tell a working form from one whose submit handler never
+bound, whose endpoint returns 500, or whose Turnstile key is wrong: all three render
+identically. Pressing the button separates them.
+
+**The smoke header is what makes it safe to run.** The request carries `x-palate-smoke: 1`,
+and `src/pages/api/contact.ts` answers it by validating the body and returning
+`{ ok: true, smoke: true }` having sent nothing. A 2xx carrying that flag is the only pass.
+A 2xx WITHOUT it is a failure, not a pass: it means the header was ignored, the submission
+took the real path, and against a deployed site that is a fake enquiry in the client's inbox
+and, with a CMS wired, a document in their content.
+
+**In production the header does nothing** unless `x-palate-smoke-secret` matches
+`PALATE_SMOKE_SECRET`, and an unset or blank secret refuses every request rather than
+matching every request. That guard is not aimed at an attacker. It is aimed at a proxy or a
+browser extension adding a header to a real visitor's submission on a deployment where nobody
+set the variable, which would make the enquiry evaporate. A refused smoke request therefore
+goes through the real path rather than being rejected, because whoever sent it may be a
+customer who never chose the header.
+
+Where it runs:
+
+- **Against the preview**, inside `verify-rendered.mjs`. Any route carrying a contact form is
+  found during the desktop pass and submitted once afterwards, in its own browser context so
+  the audit pass never carries the header. A form is a contact form when it declares
+  `action="/api/contact"` OR carries a name, an email and a message field: the shipped
+  `ContactForm.astro` has no action at all and posts with `fetch`, so the attribute alone
+  would never match the template this was written for. Where the form posts is then measured
+  rather than assumed, and a form posting to a third party is reported as UNMEASURED with the
+  destination named, never as clean.
+- **Against the deployed URL**, by `scripts/verify-form-roundtrip.sh <url>`, which
+  `verify-vercel.sh` and `verify-cloudflare.sh` both call after their 200 check. It exits 0
+  on a proven round trip, 1 on a failure, and **2 with a printed reason** when the deployment
+  serves no `/api/contact`, because a brochure site has not failed by having no form. Set
+  `PALATE_SMOKE_SECRET` in the environment it runs in when the target is production.
+- **The endpoint's own contract** is exercised as code by
+  `scripts/test/contact-smoke.test.mjs`, against BOTH copies of the handler. `add-sanity.sh`
+  copies `templates/cms-sanity/src/pages/api/contact.ts` over the base file, so the two carry
+  a marked, byte-identical smoke block and the suite compares it.
+
+**The mobile nav and any dialog are worked in the same pass.** The gate finds a closed
+disclosure, clicks it, asserts the element it controls became visible, presses Escape and
+asserts it closed. Navs are probed at 390 and dialogs at both 390 and 1440, because a nav at
+desktop is normally already open. An overlay that cannot be dismissed from the keyboard leaves
+a keyboard visitor tabbing through the whole sheet to get out, and looks perfect in a
+screenshot; a native `<dialog>` gets Escape for free unless the `cancel` event is prevented,
+which is one invisible line. The finding is deduplicated on the control's label, because one
+nav or one dialog is normally one shared component.
+
+A trigger is discoverable through `aria-controls`, `aria-haspopup="dialog"`, `commandfor` or
+`data-dialog-target`. A `<dialog>` whose opener is bound in a module with none of those cannot
+be found from the DOM and is not probed: wire the trigger to the dialog with one of them and
+it is covered.
+
+**Editing the endpoint re-renders the pages.** `src/pages/api/contact.ts` is in no page's
+import closure, so `src/pages/api` is part of the global digest the unchanged-route skip
+folds in. Without that, every page would read as unchanged on exactly the run where the
+endpoint is what moved, and the round trip would be skipped on the change it exists to catch.

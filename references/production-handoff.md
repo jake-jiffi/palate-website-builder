@@ -57,8 +57,11 @@ does not hand a failing command back to the user.
   `@sanity/astro` bakes these in at build, so CI must set them before
   `astro build` runs. The preview deployment sets the flag to `true`.
 - **Cloudflare Worker secrets** (`wrangler secret put`): the Sanity write token
-  (the `/api/contact` handler), and the forms keys (`RESEND_API_KEY`,
-  `TURNSTILE_SECRET`) - read at runtime via `locals.runtime.env`.
+  (the `/api/contact` handler), the forms keys (`RESEND_API_KEY`,
+  `TURNSTILE_SECRET`), and `PALATE_SMOKE_SECRET` on production only, without which
+  the post-deploy form round trip cannot run against the live site and
+  `verify-cloudflare.sh` reports it as a failure - all read at runtime via
+  `locals.runtime.env`.
 - **GitHub repo secrets**: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
   plus the build-time vars above - so CI can build and deploy.
 - A token is never written into the skill, the template, or a committed file.

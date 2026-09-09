@@ -39,16 +39,64 @@ absent "connective-tissue.md does not promise a Lighthouse baseline" \
 present "testing.md says what performance IS measured" \
   "references/testing.md" "vitals.mjs"
 
-# ============ 2. THE FORM ROUND-TRIP, promised as the most important post-deploy check ====
-# Nothing submits the form. The section says so plainly until E5 lands the real test.
-absent "testing.md does not call an unrun test the most important post-deploy check" \
-  "references/testing.md" "The most important post-deploy check: submit the contact form"
-present "testing.md names the form round-trip as not yet implemented" \
+# ============ 2. THE FORM ROUND-TRIP, which is now real and has to stay described =========
+# It was promised for months and nothing ran it. E3 deleted the promise; E5 built the test, so
+# the pairs flip: the placeholder must be gone, and every load-bearing part of the contract has
+# to be findable in the doc AND present in the code it describes.
+absent "testing.md no longer carries the E5 placeholder" \
   "references/testing.md" "Implemented by E5"
-# ...and the smoke-check list two lines above must not promise the same test as done. The
-# file argued with itself about the exact claim this guard exists to remove.
-absent "the smoke-check list does not promise the POST either" \
+absent "testing.md no longer says the round trip is not implemented" \
+  "references/testing.md" "**Not implemented."
+present "the smoke-check list promises the POST, now that something makes it" \
   "references/testing.md" "a test POST to /api/contact"
+present "testing.md names the smoke header" \
+  "references/testing.md" "x-palate-smoke: 1"
+present "testing.md names the production secret" \
+  "references/testing.md" "PALATE_SMOKE_SECRET"
+present "testing.md says a 2xx without the flag is a failure" \
+  "references/testing.md" "A 2xx WITHOUT it is a failure, not a pass"
+present "testing.md says a deployment with no endpoint skips with exit 2" \
+  "references/testing.md" "2 with a printed reason"
+present "testing.md says the attribute alone would never match the template" \
+  'references/testing.md' 'has no action at all and posts with `fetch`'
+present "testing.md says the endpoint is in the global digest" \
+  'references/testing.md' 'src/pages/api` is part of the global digest'
+# ...and the code that makes each of those true.
+for f in templates/astro-project/src/pages/api/contact.ts templates/cms-sanity/src/pages/api/contact.ts; do
+  present "$f honours the smoke header" "$f" 'SMOKE_HEADER = "x-palate-smoke"'
+  present "$f gates the header on production" "$f" 'PUBLIC_SITE_ENV !== "production"'
+  present "$f fails closed with no secret" "$f" "if (!secret) return false;"
+done
+# THE SECRET HAS TO BE SETTABLE. A production guard whose value nobody is told to set is a
+# feature that cannot be used, and the failure it produces reads as a broken endpoint.
+present "the template env example carries the smoke secret" \
+  "templates/astro-project/.env.example" "PALATE_SMOKE_SECRET"
+present "the Vercel env table carries the smoke secret" \
+  "references/hosting-vercel.md" "PALATE_SMOKE_SECRET"
+present "the Cloudflare worker config carries the smoke secret" \
+  "templates/host-cloudflare/wrangler.toml" "PALATE_SMOKE_SECRET"
+present "the production handover carries the smoke secret" \
+  "references/production-handoff.md" "PALATE_SMOKE_SECRET"
+present "the deployed round trip exists" \
+  "scripts/verify-form-roundtrip.sh" "x-palate-smoke: 1"
+present "the deployed round trip skips with exit 2" \
+  "scripts/verify-form-roundtrip.sh" "exit 2"
+# THE INVOCATION, not the filename. Both scripts name the round trip in their header comment,
+# so a guard on the bare filename stayed green with the call cut out of both of them, proven by
+# mutation. What the call actually does is executed in verify-form-roundtrip.test.sh.
+for f in scripts/verify-vercel.sh scripts/verify-cloudflare.sh; do
+  present "$f runs the form round trip" "$f" 'verify-form-roundtrip.sh" "$URL"'
+done
+present "the verifier submits the form against the preview" \
+  "scripts/reference-capture/verify-rendered.mjs" "form round trip"
+present "the verifier works the mobile nav" \
+  "scripts/reference-capture/verify-rendered.mjs" "mobile-nav-escape-dismiss"
+present "the verifier works a dialog too, which the spec asks for alongside the nav" \
+  "scripts/reference-capture/verify-rendered.mjs" "commandfor="
+present "testing.md says which trigger shapes are discoverable" \
+  "references/testing.md" "data-dialog-target"
+present "the contact endpoint is a global input, so an edit re-renders the pages" \
+  "scripts/reference-capture/verify-rendered.mjs" "'src/pages/api'"
 
 # ============ 3. THE AXE SUBSET is a subset, and says which rules =========================
 present "audit-dimensions.md says the automated pass is a subset" \

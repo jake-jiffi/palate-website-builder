@@ -158,6 +158,7 @@ to both the build step AND the runtime serverless functions, so there is no
 | `PUBLIC_SANITY_VISUAL_EDITING_ENABLED` | `false` | **`true`** | `false` |
 | `SANITY_API_WRITE_TOKEN` (used by `/api/contact` + seed scripts) | yes | yes | optional |
 | `RESEND_API_KEY`, `TURNSTILE_SECRET` | yes | yes | optional |
+| `PALATE_SMOKE_SECRET` (the post-deploy form round trip) | yes | no | no |
 
 `scripts/provision-vercel.sh` pushes all of these via `vercel env add`,
 idempotently (it removes any existing value first).
