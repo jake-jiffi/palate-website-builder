@@ -53,7 +53,17 @@ function project() {
   writeFileSync(join(dir, "src/lib/variants.ts"), REGISTRY);
   writeFileSync(join(dir, "build-manifest.json"), JSON.stringify({
     schema: 3, project: dir, mcp_calls: [],
-    explore: { ran: true, shown_at: SHOWN, boards: [{ id: "b1", rung: 1, donor: "aesop" }] },
+    explore: {
+      ran: true,
+      shown_at: SHOWN,
+      // What boards-render recorded when the set went out. It is the only record of the ladder
+      // that survives Compose clearing the registry.
+      boards: [
+        { id: "b1", rung: 1, donor: "aesop" }, { id: "b2", rung: 2, donor: "leoleo" },
+        { id: "b3", rung: 3, donor: "utsubo" }, { id: "b4", rung: 4, donor: "spline" },
+        { id: "b5", rung: 5, donor: "oddcommon" },
+      ],
+    },
   }, null, 2));
   return dir;
 }
@@ -160,6 +170,47 @@ test("the motion proof is a command, not a JSON edit", async () => {
   // The done gate reads exactly this to decide whether there is a composed home to measure, so
   // a model that cannot write it leaves the fidelity gate skipped on every real build.
   assert.match(r.stdout, /motion proof/i);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("the proof still records after Compose has cleared the registry", async () => {
+  const dir = project();
+  await run([dir, "--hero", "b3"]);
+  // Compose clears src/lib/variants.ts in the same step that records the proof, and the flow is
+  // built around that order slipping: a client who changes their mind gets an edited home, a
+  // re-verify and a SECOND --proof. Refusing it with a message about picks is how the fidelity
+  // gate ends up skipped on exactly the builds someone cared enough to iterate on.
+  writeFileSync(join(dir, "src/lib/variants.ts"), "export const variants = [];\n");
+  const r = await run([dir, "--proof", "https://palate-fixture.vercel.app/second/"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(manifestOf(dir).explore.proof.url, "https://palate-fixture.vercel.app/second/");
+
+  // And with the file gone entirely, which is the archive-first order.
+  rmSync(join(dir, "src/lib/variants.ts"));
+  const gone = await run([dir, "--proof", "https://palate-fixture.vercel.app/third/", "--second-pass"]);
+  assert.equal(gone.status, 0, gone.stderr);
+  assert.equal(manifestOf(dir).explore.proof.url, "https://palate-fixture.vercel.app/third/");
+  assert.equal(manifestOf(dir).explore.second_passes, 1);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a pick after the registry is gone is judged against what boards-render recorded", async () => {
+  const dir = project();
+  rmSync(join(dir, "src/lib/variants.ts"));
+
+  const bad = await run([dir, "--hero", "b9"]);
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /b9/);
+  assert.match(bad.stderr, /b1, b2, b3, b4, b5/, "the refusal does not name the boards the manifest recorded");
+  assert.match(bad.stderr, /build-manifest/, "the refusal does not say where the list came from");
+
+  // A real one still works, and takes its rung from the same record.
+  const ok = await run([dir, "--hero", "b4"]);
+  assert.equal(ok.status, 0, ok.stderr);
+  const pick = manifestOf(dir).explore.picks[0];
+  assert.equal(pick.variant_id, "b4");
+  assert.equal(pick.rung, 4);
+  assert.equal(pick.position, 0.8, "the ladder size came from somewhere other than the recorded set");
   rmSync(dir, { recursive: true, force: true });
 });
 

@@ -53,13 +53,6 @@ const refuse = (reason) => { process.stderr.write(`palate-pick: ${reason}\n`); p
 const badArgs = (reason) => { process.stderr.write(`palate-pick: ${reason}\n`); process.exit(2); };
 
 const dir = resolve(positional[0] || ".");
-const registryPath = join(dir, "src/lib/variants.ts");
-if (!existsSync(registryPath)) badArgs(`no ${join("src/lib/variants.ts")} under ${dir}. Not an Explore build; nothing recorded.`);
-
-const boards = parseRegistry(readFileSync(registryPath, "utf8"));
-if (!boards.length) refuse("no boards are registered in src/lib/variants.ts, so there is nothing to pick.");
-const ids = boards.map((b) => b.id).join(", ");
-const N = boards.length;
 
 const manifestPath = join(dir, "build-manifest.json");
 let manifest = {};
@@ -70,7 +63,36 @@ if (existsSync(manifestPath)) {
 const explore = manifest.explore && typeof manifest.explore === "object" ? manifest.explore : {};
 const existing = Array.isArray(explore.picks) ? explore.picks.slice() : [];
 
+/**
+ * THE LADDER OUTLIVES THE REGISTRY, and it has to, because Compose clears the registry in the
+ * same step that records the proof.
+ *
+ * This file used to refuse before it read a single flag when `src/lib/variants.ts` was missing
+ * or empty. In the stated order that works. The flow is built around the order slipping: the
+ * motion proof exists so a client can change their mind on ONE page, and a client who does gets
+ * an edited home, a re-verify and a SECOND `--proof`, which then refused with a message about
+ * picks. Same for a Compose resumed in a later session, or one that archives first. The
+ * doctrine has just told the model never to hand-edit the manifest, so the only way out was to
+ * skip, and the done summary read `fidelity=skipped` on exactly the builds somebody cared
+ * enough about to iterate on.
+ *
+ * So: only a flag that names a BOARD needs the ladder, and when the registry is gone the ladder
+ * is read from `explore.boards`, which boards-render recorded when the set went out.
+ */
+const registryPath = join(dir, "src/lib/variants.ts");
+const registryBoards = existsSync(registryPath) ? parseRegistry(readFileSync(registryPath, "utf8")) : [];
+const recordedBoards = (Array.isArray(explore.boards) ? explore.boards : [])
+  .filter((b) => b && b.id)
+  .map((b) => ({ id: b.id, ambition: Number(b.rung) }));
+const fromRegistry = registryBoards.length > 0;
+const boards = fromRegistry ? registryBoards : recordedBoards;
+const boardsSource = fromRegistry ? "src/lib/variants.ts" : "build-manifest.json (explore.boards, recorded by boards-render)";
+const ids = boards.map((b) => b.id).join(", ");
+const N = boards.length;
+
 // --------------------------------------------------------------------------- the picks
+// ONLY THESE READ THE LADDER. Everything else on this command line writes a manifest field and
+// has no opinion about which boards exist.
 const wanted = [];
 for (const surface of ["hero", "section"]) {
   const id = opt(`--${surface}`);
@@ -85,8 +107,14 @@ for (const surface of ["hero", "section"]) {
  * and it is refused HERE rather than recorded and discovered later by the gate that reads it.
  */
 function resolvePick(surface, id) {
+  if (!boards.length) {
+    refuse(
+      `no boards are registered in src/lib/variants.ts and build-manifest.json records none either, ` +
+      "so there is nothing to pick. Run boards-render.mjs before recording a pick against a set nothing has seen.",
+    );
+  }
   const b = boards.find((x) => x.id === id);
-  if (!b) refuse(`${id} is not a registered board. Registered: ${ids}.`);
+  if (!b) refuse(`${id} is not a registered board. Registered in ${boardsSource}: ${ids}.`);
   const rung = Number(b.ambition);
   if (!Number.isFinite(rung) || rung < 1 || rung > N) {
     refuse(`${id} carries rung ${b.ambition}, which is outside 1 to ${N}. The ladder is broken; fix src/lib/variants.ts before recording a pick against it.`);
