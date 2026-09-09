@@ -53,8 +53,8 @@
  */
 import { readFileSync, statSync } from "node:fs";
 import { relative } from "node:path";
-import { fileURLToPath } from "node:url";
 import { pluginRootRefusal } from "../hooks/project-dir.mjs";
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 import { findOutputRoot, builtPages, OUT_CANDIDATES, EXPLORE_ROUTE } from "./palate-index.mjs";
 
 // Mirrors gate-seo.mjs. These routes exist to be served on a miss and are nobody's claim about
@@ -617,4 +617,4 @@ function main() {
   process.exit(0);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (invokedDirectly(import.meta.url)) main();
