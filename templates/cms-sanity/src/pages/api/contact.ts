@@ -9,11 +9,78 @@ import { createClient } from "@sanity/client";
 
 export const prerender = false;
 
+/**
+ * THE SMOKE REQUEST.
+ *
+ * A post-deploy check that never posts the form is not a check, and a post-deploy check that
+ * DOES post the form drops a fake enquiry in the client's inbox every deploy, and on this copy a fake document
+ * in their CMS as well. So one header
+ * separates the two: `x-palate-smoke: 1` makes this handler validate the body and answer
+ * `{ ok: true, smoke: true }` having written and sent nothing. `verify-rendered.mjs` uses it against the
+ * preview, `verify-vercel.sh` and `verify-cloudflare.sh` against the deployed URL.
+ *
+ * IN PRODUCTION THE HEADER DOES NOTHING unless `x-palate-smoke-secret` matches
+ * `PALATE_SMOKE_SECRET`, and an unset or blank secret refuses every request rather than
+ * matching every request. The failure that guards against is not an attacker: it is a proxy,
+ * a scanner or a browser extension adding a header to a real visitor's submission, on a
+ * deployment where nobody set the variable, and the enquiry quietly evaporating.
+ *
+ * A REFUSED SMOKE REQUEST IS AN ORDINARY ENQUIRY, not a 403. Whoever sent it may be a
+ * customer who never chose the header, so it goes through the real path.
+ */
+// ---- SMOKE CONTRACT BEGIN ----
+// Byte-identical in templates/astro-project and templates/cms-sanity, because add-sanity.sh
+// copies one over the other and a smoke request must mean the same thing after it does.
+// scripts/test/contact-smoke.test.mjs runs one suite against both files and compares this block.
+const SMOKE_HEADER = "x-palate-smoke";
+const SMOKE_SECRET_HEADER = "x-palate-smoke-secret";
+
+function smokeAllowed(request: Request, env: any) {
+  if (request.headers.get(SMOKE_HEADER) !== "1") return false;
+  // WRITTEN AS THIS EXACT EXPRESSION so the Vite `define` in astro.config.mjs substitutes it
+  // at build time. Read through the `env` alias it is never substituted, so it would be
+  // undefined on Vercel and the production guard would never engage.
+  if (import.meta.env.PUBLIC_SITE_ENV !== "production") return true;
+  // NOT trimmed. What is configured is what must be sent, and a trim here would quietly
+  // accept a secret different from the one in the dashboard.
+  const secret = typeof env?.PALATE_SMOKE_SECRET === "string" ? env.PALATE_SMOKE_SECRET : "";
+  if (!secret) return false; // fail closed: no secret configured means no smoke path
+  return constantTimeEqual(request.headers.get(SMOKE_SECRET_HEADER) ?? "", secret);
+}
+
+// No node:crypto and no Buffer: this file runs on Workers as well as on Vercel's node runtime
+// and timingSafeEqual exists in neither shape on both. Constant in the characters compared;
+// the length is not hidden and does not need to be.
+function constantTimeEqual(a: string, b: string) {
+  let diff = a.length ^ b.length;
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
+/** The same three rules ContactForm.astro applies in the browser, restated where they bind. */
+function validate(d: { name?: unknown; email?: unknown; message?: unknown }) {
+  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  if (!s(d.name)) return "please enter your name";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s(d.email))) return "please enter a valid email address";
+  if (!s(d.message)) return "please enter a message";
+  return "";
+}
+// ---- SMOKE CONTRACT END ----
+
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env ?? import.meta.env;
   try {
     const data = await request.json();
-    const { name, email, message, turnstileToken } = data;
+    const { name, email, message, turnstileToken } = (data ?? {}) as Record<string, unknown>;
+
+    // Validation runs BEFORE both paths on purpose. A validator only the smoke request meets
+    // is a validator nothing in production ever runs, so the round-trip test would be proving
+    // a code path no visitor reaches. It also means a malformed body costs no Turnstile call.
+    const invalid = validate({ name, email, message });
+    if (invalid) return json({ error: invalid }, 400);
+
+    if (smokeAllowed(request, env)) return json({ ok: true, smoke: true }, 200);
 
     // 1. Verify Turnstile
     const verify = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
