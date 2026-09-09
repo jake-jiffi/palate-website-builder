@@ -263,8 +263,11 @@ const seedBoard = (dir, file, body) => writeFileSync(join(dir, ".palate/explore/
 
 test("a text edit and a new note on the canvas become feedback Compose must honour", async () => {
   const dir = project();
-  const seedBody = '<div style="padding:40px"><h1 style="font-size:64px;color:#111111">Quiet confidence</h1>' +
-    '<p style="font-size:18px">We look after the whole thing.</p></div>';
+  // The keys boards-render stamps. The editor preserves attributes, so they are what a change
+  // is matched on: without them a deletion reads as an edit to every element after it.
+  const seedBody = '<div data-palate-k="k1" style="padding:40px">' +
+    '<h1 data-palate-k="k2" style="font-size:64px;color:#111111">Quiet confidence</h1>' +
+    '<p data-palate-k="k3" style="font-size:18px">We look after the whole thing.</p></div>';
   seedBoard(dir, "B3.dc.html", seedBody);
   writeFileSync(join(dir, ".palate/explore/seed/canvas.json"), JSON.stringify({
     artboards: [{ file: "B3.dc.html", x: 0, y: 0, w: 1440, h: 2000, title: "Rung 3 of 5: The Loud Room" }],
@@ -312,9 +315,69 @@ test("a text edit and a new note on the canvas become feedback Compose must hono
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a deleted element is one removed entry, not hundreds of shifted ones", async () => {
+  const dir = project();
+  // The seed shape boards-render writes: a stable key on every element, which the canvas editor
+  // preserves because it edits text and inline styles, not attributes.
+  const rows = [1, 2, 3, 4, 5, 6, 7, 8].map((n) =>
+    `<p data-palate-k="k${n}" style="font-size:${14 + n}px">Paragraph number ${n}.</p>`).join("");
+  seedBoard(dir, "B3.dc.html", `<div data-palate-k="k0" style="padding:40px">${rows}</div>`);
+  writeFileSync(join(dir, ".palate/explore/seed/canvas.json"), JSON.stringify({ artboards: [], annotations: [], launch: { view: "canvas" } }));
+
+  const extract = join(dir, "extract");
+  mkdirSync(extract, { recursive: true });
+  // The commonest edit a canvas allows after retyping: the client deletes one band.
+  writeFileSync(join(extract, "B3.dc.html"),
+    readFileSync(join(dir, ".palate/explore/seed/B3.dc.html"), "utf8")
+      .replace('<p data-palate-k="k4" style="font-size:18px">Paragraph number 4.</p>', ""));
+  writeFileSync(join(extract, "canvas.json"), JSON.stringify({ artboards: [], annotations: [], launch: { view: "canvas" } }));
+
+  const r = await run([dir, "--canvas", extract]);
+  assert.equal(r.status, 0, r.stderr);
+  const fb = JSON.parse(readFileSync(join(dir, ".palate/explore/feedback.json"), "utf8"));
+
+  const removed = fb.filter((f) => f.kind === "removed");
+  assert.equal(removed.length, 1, `expected exactly one removed entry, got ${JSON.stringify(fb)}`);
+  assert.equal(removed[0].path, "k4");
+  assert.match(removed[0].before, /Paragraph number 4/);
+  assert.equal(removed[0].after, null);
+
+  // AND NOTHING SHIFTED. An ordinal diff reported every paragraph after the deletion as a text
+  // edit and every style after it as a style edit, and told Compose to honour all of them.
+  assert.equal(fb.filter((f) => f.kind === "text").length, 0, `positional text edits leaked in: ${JSON.stringify(fb)}`);
+  assert.equal(fb.filter((f) => f.kind === "style").length, 0, `positional style edits leaked in: ${JSON.stringify(fb)}`);
+  assert.equal(fb.length, 1);
+
+  // The success line must not tell Compose to honour a board it could not align, and this one
+  // it COULD align, so it is named as read cleanly.
+  assert.match(r.stdout, /read cleanly/i);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a board whose keys cannot be aligned is sent to a person, never honoured", async () => {
+  const dir = project();
+  // An artboard from before the keys existed: the diff can only compare by position, and a
+  // position-aligned diff after any structural edit is noise dressed as instructions.
+  seedBoard(dir, "B3.dc.html", '<div style="padding:40px"><p style="font-size:15px">One.</p><p style="font-size:16px">Two.</p></div>');
+  writeFileSync(join(dir, ".palate/explore/seed/canvas.json"), JSON.stringify({ artboards: [], annotations: [], launch: { view: "canvas" } }));
+  const extract = join(dir, "extract");
+  mkdirSync(extract, { recursive: true });
+  writeFileSync(join(extract, "B3.dc.html"),
+    '<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>x-dc{display:block}</style></helmet>' +
+    '<div style="padding:40px"><p style="font-size:15px">One, changed.</p></div></x-dc></body></html>');
+  writeFileSync(join(extract, "canvas.json"), JSON.stringify({ artboards: [], annotations: [], launch: { view: "canvas" } }));
+
+  const r = await run([dir, "--hero", "b3", "--canvas", extract]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /b3.*by hand/is, "the run does not send the unalignable board to a person");
+  assert.ok(!/honour/i.test(r.stdout.split("by hand")[0].split("\n").pop() || ""),
+    "it told Compose to honour a board it could not align");
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("an unchanged canvas records nothing rather than an empty claim", async () => {
   const dir = project();
-  seedBoard(dir, "B3.dc.html", '<div><h1 style="font-size:64px">Quiet confidence</h1></div>');
+  seedBoard(dir, "B3.dc.html", '<div data-palate-k="k1"><h1 data-palate-k="k2" style="font-size:64px">Quiet confidence</h1></div>');
   writeFileSync(join(dir, ".palate/explore/seed/canvas.json"), JSON.stringify({ artboards: [], annotations: [], launch: { view: "canvas" } }));
   const extract = join(dir, "extract");
   mkdirSync(extract, { recursive: true });

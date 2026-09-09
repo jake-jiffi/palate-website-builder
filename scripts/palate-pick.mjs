@@ -212,16 +212,20 @@ if (flag("--second-pass")) {
 
 // ------------------------------------------------------------------- the canvas read-back
 let feedbackCount = null;
+let feedbackClean = [];
+let feedbackUnaligned = [];
 const canvasDir = opt("--canvas");
 if (canvasDir) {
   const ex = resolve(dir, canvasDir);
   if (!existsSync(ex)) refuse(`--canvas ${canvasDir} does not exist (${ex}). An extract that cannot be read is not a client who changed nothing.`);
   const seedDir = join(dir, ".palate/explore/seed");
   if (!existsSync(seedDir)) refuse(`there is no seed at ${seedDir} to diff against. Run boards-render.mjs before reading a canvas back.`);
-  const feedback = diffCanvas(seedDir, ex, boards);
+  const read = diffCanvas(seedDir, ex, boards);
   mkdirSync(join(dir, ".palate/explore"), { recursive: true });
-  writeFileSync(join(dir, ".palate/explore/feedback.json"), JSON.stringify(feedback, null, 2) + "\n");
-  feedbackCount = feedback.length;
+  writeFileSync(join(dir, ".palate/explore/feedback.json"), JSON.stringify(read.entries, null, 2) + "\n");
+  feedbackCount = read.entries.length;
+  feedbackClean = read.clean;
+  feedbackUnaligned = read.unaligned;
 }
 
 // ------------------------------------------------------------------------------- record
@@ -261,9 +265,20 @@ if (patch.explore.proof) {
 }
 if (patch.explore.second_passes !== undefined) process.stdout.write(`palate-pick: second pass ${patch.explore.second_passes}.\n`);
 if (feedbackCount !== null) {
-  process.stdout.write(feedbackCount
-    ? `palate-pick: ${feedbackCount} change(s) read back from the canvas into .palate/explore/feedback.json. Compose must honour the text edits and the notes on the picked surfaces.\n`
-    : "palate-pick: no change was made on the canvas; feedback.json is empty.\n");
+  if (!feedbackCount) {
+    process.stdout.write("palate-pick: no change was made on the canvas; feedback.json is empty.\n");
+  } else {
+    process.stdout.write(`palate-pick: ${feedbackCount} change(s) read back from the canvas into .palate/explore/feedback.json.\n`);
+    // THE INSTRUCTION IS SCOPED TO THE BOARDS IT IS TRUE OF. It used to be printed over every
+    // board including one the diff had just warned it could not align, so the last line the
+    // operator read was "Compose must honour" over a file full of guesses.
+    if (feedbackClean.length) {
+      process.stdout.write(`  Read cleanly: ${feedbackClean.join(", ")}. Compose must honour the text edits and the notes on the picked surfaces.\n`);
+    }
+    for (const u of feedbackUnaligned) {
+      process.stdout.write(`  Read ${u.board} by hand before Compose: ${u.why}, so nothing recorded for it is a reliable edit.\n`);
+    }
+  }
 }
 process.exit(0);
 
@@ -280,6 +295,8 @@ process.exit(0);
  */
 export function diffCanvas(seedDir, extractDir, boards) {
   const out = [];
+  const clean = [];
+  const unaligned = [];
   const byRung = new Map(boards.map((b) => [Number(b.ambition), b.id]));
 
   for (const b of boards) {
@@ -290,25 +307,63 @@ export function diffCanvas(seedDir, extractDir, boards) {
     const before = scanArtboard(readFileSync(a, "utf8"));
     const after = scanArtboard(readFileSync(z, "utf8"));
 
-    if (before.texts.length !== after.texts.length || before.styles.length !== after.styles.length) {
-      process.stderr.write(
-        `palate-pick: ${file} came back with a different shape (${before.texts.length} to ${after.texts.length} text runs, ` +
-        `${before.styles.length} to ${after.styles.length} styled elements). Only the common prefix was compared; ` +
-        "read the artboard by hand before Compose.\n",
-      );
+    /**
+     * ALIGN ON THE KEY, and say so when it cannot be done.
+     *
+     * boards-render stamps `data-palate-k` on every element, and the editor preserves
+     * attributes, so a deletion is a key that is gone rather than every element after it
+     * appearing to have changed. A seed written before the keys existed, or an extract whose
+     * keys were duplicated by a copy-paste, cannot be aligned: those boards produce NO
+     * positional guesses at all, because a wrong edit Compose is told to honour is worse than
+     * no edit, and the caller sends them to a person.
+     */
+    const dupes = (list) => {
+      const seen = new Set();
+      for (const x of list) { if (seen.has(x.key)) return true; seen.add(x.key); }
+      return false;
+    };
+    const keyed = before.keyed && after.keyed && !dupes(before.styles) && !dupes(after.styles);
+    if (!keyed) {
+      unaligned.push({ board: b.id, why: before.keyed && after.keyed ? "duplicated element keys" : "no element keys in the seed or the extract" });
+      out.push({
+        board: b.id,
+        kind: "unaligned",
+        path: file,
+        before: null,
+        after: before.keyed && after.keyed
+          ? "the extract carries duplicated element keys, so nothing in it can be matched to the board"
+          : "the artboard carries no element keys, so a change cannot be told from a shift",
+      });
+      continue;
     }
-    const t = Math.min(before.texts.length, after.texts.length);
-    for (let i = 0; i < t; i++) {
-      if (before.texts[i].text !== after.texts[i].text) {
-        out.push({ board: b.id, kind: "text", path: before.texts[i].path, before: before.texts[i].text, after: after.texts[i].text });
-      }
+
+    const textBefore = new Map(before.texts.map((t) => [t.key, t.text]));
+    const textAfter = new Map(after.texts.map((t) => [t.key, t.text]));
+    for (const [key, text] of textBefore) {
+      if (!textAfter.has(key)) continue;   // removals are reported once, below
+      if (textAfter.get(key) !== text) out.push({ board: b.id, kind: "text", path: key, before: text, after: textAfter.get(key) });
     }
-    const s = Math.min(before.styles.length, after.styles.length);
-    for (let i = 0; i < s; i++) {
-      if (before.styles[i].style !== after.styles[i].style) {
-        out.push({ board: b.id, kind: "style", path: before.styles[i].path, before: before.styles[i].style, after: after.styles[i].style });
-      }
+
+    const styleBefore = new Map(before.styles.map((t) => [t.key, t.style]));
+    const styleAfter = new Map(after.styles.map((t) => [t.key, t.style]));
+    for (const [key, style] of styleBefore) {
+      if (!styleAfter.has(key)) continue;
+      if (styleAfter.get(key) !== style) out.push({ board: b.id, kind: "style", path: key, before: style, after: styleAfter.get(key) });
     }
+
+    // ONE ENTRY PER ELEMENT, whichever way it went. A deleted band is a decision the client
+    // made and Compose has to honour it; hundreds of shifted pairs are noise dressed as one.
+    const keysBefore = new Set([...styleBefore.keys(), ...textBefore.keys()]);
+    const keysAfter = new Set([...styleAfter.keys(), ...textAfter.keys()]);
+    for (const key of keysBefore) {
+      if (keysAfter.has(key)) continue;
+      out.push({ board: b.id, kind: "removed", path: key, before: textBefore.get(key) ?? styleBefore.get(key) ?? null, after: null });
+    }
+    for (const key of keysAfter) {
+      if (keysBefore.has(key)) continue;
+      out.push({ board: b.id, kind: "added", path: key, before: null, after: textAfter.get(key) ?? styleAfter.get(key) ?? null });
+    }
+    clean.push(b.id);
   }
 
   // The annotations, which are where a client writes a sentence rather than dragging a value.
@@ -322,7 +377,7 @@ export function diffCanvas(seedDir, extractDir, boards) {
       out.push({ board: boardForAnnotation(n, backCanvas, byRung), kind: "note", path: n.id, before, after: n.text });
     }
   }
-  return out;
+  return { entries: out, clean, unaligned };
 }
 
 function readJson(p) { try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; } }
@@ -360,13 +415,16 @@ export function scanArtboard(html) {
   const texts = [];
   const styles = [];
   const counts = new Map();
+  let keyed = false;
   let last = null;
-  const re = /<\/?([a-zA-Z][\w-]*)\b([^>]*)>|([^<]+)/g;
+  // ATTRIBUTE-AWARE, so a `>` inside a quoted value does not end the tag: the serialiser does
+  // not escape one, and a single `aria-label="Next >"` shifted every path after it.
+  const re = /<\/?([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>|([^<]+)/g;
   let m;
   while ((m = re.exec(src))) {
     if (m[3] !== undefined) {
       const text = m[3].replace(/\s+/g, " ").trim();
-      if (text && last) texts.push({ path: last, text });
+      if (text && last) texts.push({ path: last.path, key: last.key, text });
       continue;
     }
     const tag = m[1].toLowerCase();
@@ -374,10 +432,15 @@ export function scanArtboard(html) {
     if (tag === "script" || tag === "style") { last = null; continue; }
     const n = (counts.get(tag) || 0);
     counts.set(tag, n + 1);
+    const attrs = m[2] || "";
+    const km = /\bdata-palate-k\s*=\s*"([^"]*)"/i.exec(attrs);
+    if (km) keyed = true;
+    // The ordinal is the fallback identity and the legible half of a key: `k12 (p[3])` tells a
+    // reader where to look, where `k12` alone tells them nothing.
     const path = `${tag}[${n}]`;
-    last = path;
-    const st = /\bstyle\s*=\s*"([^"]*)"/i.exec(m[2] || "");
-    if (st) styles.push({ path, style: st[1] });
+    last = { path, key: km ? km[1] : path };
+    const st = /\bstyle\s*=\s*"([^"]*)"/i.exec(attrs);
+    if (st) styles.push({ path, key: last.key, style: st[1] });
   }
-  return { texts, styles };
+  return { texts, styles, keyed };
 }

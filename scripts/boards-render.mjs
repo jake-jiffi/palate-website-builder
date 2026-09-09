@@ -247,9 +247,20 @@ const escapeHtml = (s) => String(s)
 export async function inlineComputedStyles(page, propertyList) {
   return page.evaluate((props) => {
     let touched = 0;
+    let key = 0;
     for (const el of document.body.querySelectorAll("*")) {
       const tag = el.tagName.toLowerCase();
       if (tag === "script" || tag === "style" || tag === "link" || tag === "template") continue;
+      /**
+       * A STABLE KEY, so the read-back can tell a deletion from a shift.
+       *
+       * The canvas editor edits text and inline styles; it does not rewrite attributes. Without
+       * a key the diff could only align by position, and deleting one paragraph reported every
+       * element after it as an edit: measured on a real board, one deletion produced 167
+       * "changes", and the run then told Compose to honour all of them. With a key a deletion
+       * is one entry that says so.
+       */
+      if (!el.hasAttribute("data-palate-k")) el.setAttribute("data-palate-k", `k${++key}`);
       const cs = getComputedStyle(el);
       const own = el.getAttribute("style") || "";
       const add = [];
@@ -649,23 +660,34 @@ async function main() {
       for (const { url, required } of sources) {
         if (imageMap[url] || droppedUrls.some((d) => d.url === url)) continue;
         let buf = null;
-        try {
-          const r = await ctx.request.get(url);
-          if (!r.ok()) throw new Error(`HTTP ${r.status()}`);
-          buf = Buffer.from(await r.body());
-        } catch (e) {
-          if (required) failSeed(`board ${b.id}: could not read the image ${url} (${e.message}). Nothing written.`);
-          droppedUrls.push({ url, why: e.message });
-          continue;
+        let hint = "";
+        const inline = decodeDataUri(url);
+        if (inline) {
+          // AN INLINE DATA URI IS AN IMAGE, and it is right here. Handing one to Playwright's
+          // request context threw "Request path contains unescaped characters" and aborted the
+          // whole seed, so a board carrying a single inline icon had no canvas at all, with a
+          // message that read as a broken image rather than an unsupported source.
+          buf = inline.buffer;
+          hint = inline.ext;
+        } else {
+          try {
+            const r = await ctx.request.get(url);
+            if (!r.ok()) throw new Error(`HTTP ${r.status()}`);
+            buf = Buffer.from(await r.body());
+          } catch (e) {
+            if (required) failSeed(`board ${b.id}: could not read the image ${url} (${e.message}). Nothing written.`);
+            droppedUrls.push({ url, why: e.message });
+            continue;
+          }
         }
         let out = buf;
         let ext = ".jpg";
-        if (/\.svg(\?|$)/i.test(url) || buf.slice(0, 200).toString("utf8").includes("<svg")) {
+        if (hint === ".svg" || /\.svg(\?|$)/i.test(url) || buf.slice(0, 200).toString("utf8").includes("<svg")) {
           // An SVG is already small and lossless; re-encoding it as a photograph would be worse
           // in every way. It travels as-is or it is too big, and too big is a failure.
           ext = ".svg";
           if (out.length > MAX_IMAGE_BYTES) {
-            failSeed(`board ${b.id}: ${url} is an SVG of ${Math.round(out.length / 1024)} KB and cannot be downsampled under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB. Nothing written.`);
+            failSeed(`board ${b.id}: ${short(url)} is an SVG of ${Math.round(out.length / 1024)} KB and cannot be downsampled under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB. Nothing written.`);
           }
         } else {
           let fit = null;
@@ -675,12 +697,12 @@ async function main() {
             // NOT AN IMAGE AT ALL. A url() can name a stylesheet, a page or a font we did not
             // recognise, and sharp refusing to decode it says the harvest reached too far, not
             // that the board is broken.
-            if (required) failSeed(`board ${b.id}: ${url} could not be re-encoded (${e.message}). Nothing written.`);
+            if (required) failSeed(`board ${b.id}: ${short(url)} could not be re-encoded (${e.message}). Nothing written.`);
             droppedUrls.push({ url, why: "not a decodable image" });
             continue;
           }
           if (!fit.ok) {
-            failSeed(`board ${b.id}: ${url} will not come under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB (smallest was ${Math.round(fit.buffer.length / 1024)} KB at ${fit.width}px wide, quality ${fit.quality}). Replace it with a smaller or less detailed source. Nothing written.`);
+            failSeed(`board ${b.id}: ${short(url)} will not come under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB (smallest was ${Math.round(fit.buffer.length / 1024)} KB at ${fit.width}px wide, quality ${fit.quality}). Replace it with a smaller or less detailed source. Nothing written.`);
           }
           out = fit.buffer;
         }
@@ -689,7 +711,7 @@ async function main() {
         imageMap[url] = name;
       }
       for (const d of droppedUrls) {
-        lines.push(`  ${b.id}: dropped ${d.url} (${d.why}); the rule that named it now reads none`);
+        lines.push(`  ${b.id}: dropped ${short(d.url)} (${d.why}); the rule that named it now reads none`);
       }
       // SAY WHEN THE SCROLL DID NOT GET THERE. A page whose own script fights the scroll leaves
       // its reveals unfired, and a board flattened in that state looks like a design decision.
@@ -722,7 +744,17 @@ async function main() {
         break;
       }
 
-      // --- flatten: bare image filenames, no scripts, computed styles inline -------------
+      // --- flatten: computed styles inline, THEN bare filenames and no scripts -----------
+      //
+      // THE ORDER IS THE WHOLE THING. This used to strip `link` and only then read computed
+      // styles, which removed the build's bundled stylesheet (Tailwind, globals.css and the
+      // brand tokens it imports) and wrote the BROWSER'S defaults onto every element it had
+      // styled: Times at 32px, no padding, an empty --brand-accent. The helmet still carried
+      // the real rules and the inline values overrode them, so the shipped example arrived
+      // unstyled on the one surface the client picks from. Flatten while the page is still
+      // dressed; strip afterwards, when nothing else will read a computed value.
+      await inlineComputedStyles(page, PROPERTY_LIST);
+
       const droppedAbs = new Set(droppedUrls.map((d) => d.url));
       await page.evaluate(({ map, dropped }) => {
         for (const img of document.images) {
@@ -757,7 +789,6 @@ async function main() {
         // client points at a section by name, and the seed README says so.
         for (const el of document.querySelectorAll(".ev-switcher, source, script, link, noscript, template")) el.remove();
       }, { map: imageMap, dropped: [...droppedAbs] });
-      await inlineComputedStyles(page, PROPERTY_LIST);
       const bodyHtml = await page.evaluate(() => document.body.innerHTML);
 
       const file = `B${b.ambition}.dc.html`;
@@ -841,6 +872,38 @@ export async function fitUnder(buf, sharp, limit = MAX_IMAGE_BYTES) {
     if (!smallest || out.length < smallest.buffer.length) smallest = { ok: false, buffer: out, ...step };
   }
   return smallest;
+}
+
+/**
+ * Decode a `data:` image URL, base64 or percent-encoded, and name its extension from its type.
+ *
+ * Both forms are ordinary: Google's own icons ship as base64 and an inline SVG usually arrives
+ * as `data:image/svg+xml;utf8,<svg ...>`. Returns null for anything that is not a data URL, so
+ * the caller's fetch path is untouched.
+ */
+export function decodeDataUri(url) {
+  const m = /^data:([^;,]*)((?:;[^,]*)*),([\s\S]*)$/i.exec(String(url || ""));
+  if (!m) return null;
+  const mime = (m[1] || "").toLowerCase();
+  const isBase64 = /;base64/i.test(m[2] || "");
+  let buffer;
+  try {
+    buffer = isBase64 ? Buffer.from(m[3], "base64") : Buffer.from(decodeURIComponent(m[3]), "utf8");
+  } catch {
+    // A payload we cannot decode is not an image; let the caller drop or refuse it as usual.
+    return null;
+  }
+  const EXT = {
+    "image/svg+xml": ".svg", "image/png": ".png", "image/jpeg": ".jpg", "image/jpg": ".jpg",
+    "image/webp": ".webp", "image/gif": ".gif", "image/avif": ".avif",
+  };
+  return { buffer, ext: EXT[mime] || "" };
+}
+
+/** A data URL in a message is a wall of characters; the reader needs the shape, not the payload. */
+function short(url) {
+  const u = String(url || "");
+  return u.startsWith("data:") ? `${u.slice(0, 40)}... (${u.length} chars, inline)` : u;
 }
 
 /**

@@ -109,6 +109,13 @@ const variant = variants.find((v) => v.id === ${JSON.stringify(b.id)});
       <h1 class="font-display text-brand-text text-5xl">${b.name}</h1>
       <p class="text-brand-muted mt-6 max-w-xl">${b.what}</p>
       <img src="/_fixture/photo.png" alt="A fixture photograph" width="640" height="400" />
+      {/* An inline icon, the commonest shape a data URI takes. document.images includes it, and
+          Playwright's request context cannot fetch one, so it aborted the whole seed with a
+          message about a broken image. */}
+      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%232f5d50'/></svg>" alt="An inline icon" width="16" height="16" data-inline-icon />
+      {/* Base64, with a prolog long enough that the root element is past the first 200 bytes:
+          sniffing the payload cannot see it is an SVG, so only the declared media type can. */}
+      <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+PCEtLSBFeHBvcnRlZCBieSBhIGRyYXdpbmcgdG9vbCB0aGF0IHdyaXRlcyBhIGxvbmcgcHJvbG9nIGJlZm9yZSB0aGUgcm9vdCBlbGVtZW50LiBUaGlzIGlzIG9yZGluYXJ5LCBhbmQgaXQgaXMgd2hhdCBwdXRzIHRoZSByb290IGVsZW1lbnQgcGFzdCBhbnl0aGluZyBhIHBheWxvYWQgc25pZmYgcmVhZHMsIHdoaWNoIGlzIHdoeSB0aGUgZGVjbGFyZWQgbWVkaWEgdHlwZSBpcyB0aGUgb25seSB0aGluZyB0aGF0IGNhbiBuYW1lIHRoZSBleHRlbnNpb24uIC0tPjxzdmcgeG1sbnM9J2h0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnJyB2aWV3Qm94PScwIDAgMTYgMTYnPjxyZWN0IHdpZHRoPScxNicgaGVpZ2h0PScxNicgZmlsbD0nIzFjMWIxOScvPjwvc3ZnPg==" alt="A second inline icon" width="16" height="16" data-inline-b64 />
       {/* A band the page never scrolls to, held at opacity 0 until a reveal fires. */}
       {/* url(#id): an SVG filter reference. It resolves to the page's own URL, so harvesting it
           as an image fetches HTML and refuses the whole seed. Grain is the canonical technique
@@ -123,6 +130,7 @@ const variant = variants.find((v) => v.id === ${JSON.stringify(b.id)});
       {/* And one that 404s, from a rule that may belong to another page entirely. */}
       <div class="fixture-missing" style="width:80px;height:80px"></div>
       <div class="fixture-notimage" style="width:80px;height:80px"></div>
+      <p class="fixture-classy" data-classy>Styled only by the linked stylesheet.</p>
       <div style="height:1400px"></div>
       <p data-reveal class="reveal-band" style="opacity:0">The band a scroll reveal brings in.</p>
     </section>
@@ -193,6 +201,9 @@ before(async () => {
     // Fetches perfectly and is not an image. sharp refusing to decode it says the harvest
     // reached too far, not that the board is broken.
     '.fixture-notimage { background-image: url("/_fixture/notes.txt"); }',
+    // Values no browser default and no inline style could produce, so an inline computed value
+    // matching them proves the sheet was present when the flatten ran.
+    '.fixture-classy { font-size: 27px; background-color: rgb(11, 22, 33); padding: 13px; }',
     "",
   ].join("\n"));
   ready = true;
@@ -320,9 +331,52 @@ test("two boards render to two artboards the canvas can open", async (t) => {
     }
     assert.ok(!/\bsrcset=/.test(a), `${f} keeps a srcset, which overrides the bare filename with a URL the canvas cannot fetch`);
 
+    // R2. AN INLINE DATA URI IS AN IMAGE, not an unfetchable URL. One of them aborted the whole
+    // seed, so a board carrying a single inline icon had no canvas at all.
+    const icon = /<img\b[^>]*\bdata-inline-icon\b[^>]*>/.exec(a);
+    assert.ok(icon, `${f} lost the inline icon`);
+    const iconSrc = /\bsrc="([^"]*)"/.exec(icon[0]);
+    assert.ok(iconSrc && !/[/:]/.test(iconSrc[1]), `${f} kept the icon as a data URI or a path: ${iconSrc && iconSrc[1].slice(0, 40)}`);
+    assert.match(iconSrc[1], /\.svg$/, "an SVG data URI was written with the wrong extension");
+    assert.ok(existsSync(join(seed, iconSrc[1])), `${f} references ${iconSrc[1]}, which is not in the seed directory`);
+
+    // The extension comes from the DECLARED media type, not from sniffing the payload: a long
+    // prolog puts the root element past anything a sniff reads, and a vector written as a
+    // photograph is a photograph from then on.
+    const icon2 = /<img\b[^>]*\bdata-inline-b64\b[^>]*>/.exec(a);
+    assert.ok(icon2, `${f} lost the base64 inline icon`);
+    const icon2Src = /\bsrc="([^"]*)"/.exec(icon2[0]);
+    assert.match(icon2Src[1], /\.svg$/, "a base64 SVG whose prolog hides its root element was written as a raster");
+    assert.ok(existsSync(join(seed, icon2Src[1])));
+
     // The flattening actually happened: the panel has something to edit.
     assert.ok(/style="[^"]*font-size:/.test(a), `${f} has no inline font-size, so the property panel edits nothing`);
     assert.ok(/style="[^"]*color:/.test(a), `${f} has no inline colour`);
+
+    // R1. THE FLATTEN HAPPENS WHILE THE STYLESHEETS ARE STILL THERE.
+    //
+    // The strip used to remove <link> and only then read computed styles, so every element
+    // styled by the build's bundle (Tailwind utilities, globals.css, the brand tokens it
+    // imports) had the BROWSER'S defaults written onto it: Times at 32px, no padding, an empty
+    // --brand-accent. The artboard's own helmet still carried the real rules, and the inline
+    // values overrode them. The shipped b1 example arrived unstyled on the one surface the
+    // client picks from, and nine green tests never saw it because every fixture hero was
+    // styled with inline attributes.
+    const classy = /<p\b[^>]*\bdata-classy\b[^>]*>/.exec(a);
+    assert.ok(classy, `${f} lost the class-styled paragraph`);
+    assert.match(classy[0], /font-size:\s*27px/,
+      `${f} flattened a class-styled element to the browser default instead of the stylesheet's value`);
+    assert.match(classy[0], /background-color:\s*rgb\(11,\s*22,\s*33\)/,
+      `${f} flattened a class-styled background to the browser default`);
+    assert.match(classy[0], /padding:\s*13px/, `${f} flattened away a class-set padding`);
+
+    // R3. EVERY ELEMENT CARRIES A STABLE KEY, which is what lets the read-back tell a deletion
+    // from a shift. Without it the diff can only align by position, and deleting one paragraph
+    // on the canvas reported every element after it as an edit: 167 of them on a real board,
+    // with the run then telling Compose to honour all of them.
+    const keys = [...a.matchAll(/data-palate-k="([^"]*)"/g)].map((m) => m[1]);
+    assert.ok(keys.length > 10, `${f} carries ${keys.length} element keys, so the read-back can only align by position`);
+    assert.equal(new Set(keys).size, keys.length, `${f} repeats an element key, which makes two elements the same element`);
 
     // I3. A CSS BACKGROUND IMAGE IS AN IMAGE. A hero photograph is usually set as one, and
     // `rule.cssText` serialises its URL absolute, so it survived as a link to the local build
