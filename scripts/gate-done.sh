@@ -191,6 +191,44 @@ if [ -f "$SHOTS_MANIFEST" ]; then
 fi
 [ "${console_errors:-0}" -eq 0 ] || fail "Visual loop has $console_errors console error(s) on the rendered page (see $SHOTS_ERRORS). A thrown build cannot pass; fix the runtime error and re-render."
 
+# --- HOW MUCH OF THE SITE THE LAST SWEEP ACTUALLY COVERED ----------------------
+# A pass from a run that rendered one route of twelve used to be indistinguishable from a
+# pass from one that rendered all twelve, because nothing wrote the coverage down. It is
+# NOT a failure: the incremental skip is the whole point of the fix loop, and blocking on a
+# partial sweep would delete the optimisation. It is a LEGIBILITY problem, so the summary
+# line says which it was instead of implying the larger one.
+#
+# The shots manifest is the authority (verify-rendered.mjs writes it, and screenshot-build.mjs
+# carries it forward rather than clobbering it); verify-report.json is the fallback, and it is
+# second because the verifier AGENT writes that file and this gate reads artefacts, not
+# narration. Absent from both, the answer is "unrecorded", which is the honest one for a run
+# that predates the field.
+sweep_note="last sweep unrecorded"
+sweep_json=""
+if [ -f "$SHOTS_MANIFEST" ]; then
+  sweep_json=$(jq -c 'if (.sweep | type) == "object" then .sweep else empty end' "$SHOTS_MANIFEST" 2>/dev/null || echo "")
+fi
+if [ -z "$sweep_json" ] && [ -f "$REPORT" ]; then
+  sweep_json=$(jq -c 'if (.sweep | type) == "object" then .sweep else empty end' "$REPORT" 2>/dev/null || echo "")
+fi
+if [ -n "$sweep_json" ]; then
+  sw_full=$(printf '%s' "$sweep_json" | jq -r '(.full // false)' 2>/dev/null || echo false)
+  sw_sel=$(printf '%s' "$sweep_json" | jq -r '(.selected // 0)' 2>/dev/null || echo 0)
+  sw_rend=$(printf '%s' "$sweep_json" | jq -r '(.rendered // 0)' 2>/dev/null || echo 0)
+  sw_skip=$(printf '%s' "$sweep_json" | jq -r '(.skipped // 0)' 2>/dev/null || echo 0)
+  sw_narrow=$(printf '%s' "$sweep_json" | jq -r '(.narrowed // "")' 2>/dev/null || echo "")
+  [ "$sw_narrow" = "null" ] && sw_narrow=""
+  sw_cap=$(printf '%s' "$sweep_json" | jq -r '(.over_cap // 0)' 2>/dev/null || echo 0)
+  if [ "$sw_full" = "true" ]; then
+    sweep_note="last sweep full, ${sw_rend} route(s)"
+  else
+    sweep_note="last sweep PARTIAL, ${sw_rend} of ${sw_sel} route(s) rendered"
+    [ "${sw_skip:-0}" -gt 0 ] && sweep_note="$sweep_note, ${sw_skip} unchanged and skipped"
+    [ -n "$sw_narrow" ] && sweep_note="$sweep_note, narrowed by --${sw_narrow}"
+    [ "${sw_cap:-0}" -gt 0 ] && sweep_note="$sweep_note, ${sw_cap} over --max-routes"
+  fi
+fi
+
 # --- EVIDENCE 1b: the COMPOSITION FLOOR (references/composition-and-attention.md) ---
 # A stranded focal (the page's most important element in the dead bottom-left fallow),
 # or a section whose visual weight is piled away from its focal, is a High composition
@@ -659,5 +697,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $fidelity_note, $uniq_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
+  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $fidelity_note, $uniq_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
 exit 0

@@ -400,12 +400,18 @@ async function main() {
 // or unreadable one carries an empty record: losing it costs a slow run, never a wrong one.
 // `globalInputs` travels with `routes` because without it the next run cannot tell a shared
 // change from a first run, and would drop every record with no reason printed.
+//
+// `sweep` travels with them for the same reason one layer up: verify-rendered.mjs records how
+// much of the site its last run covered, gate-done reports it, and a capture run that dropped
+// it would take the summary from "last sweep partial, 3 of 12" back to saying nothing. This
+// script does not sweep routes, so it never WRITES a sweep; it only refuses to delete one.
 function carriedIncremental(outDir) {
   try {
     const m = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
     return {
       routes: (m && typeof m.routes === 'object' && m.routes && !Array.isArray(m.routes)) ? m.routes : {},
       ...(typeof m?.globalInputs === 'string' ? { globalInputs: m.globalInputs } : {}),
+      ...(m?.sweep && typeof m.sweep === 'object' && !Array.isArray(m.sweep) ? { sweep: m.sweep } : {}),
     };
   } catch { return { routes: {} }; }
 }
