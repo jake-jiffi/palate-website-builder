@@ -31,11 +31,15 @@
  *
  * ===================== WHAT IT REFUSES TO CLAIM ===========================
  *
- * The appearance head is a 356MB opt-in download, so the cosine similarity runs only under
- * PALATE_TASTE=1, which is taste-local's own consent gate. Absent it, the similarity is
- * reported UNMEASURED and the gate rests on the measured facts, and it SAYS so. A gate that
- * quietly drops half its evidence and still prints "pass" is the failure this file exists in
- * the middle of.
+ * The appearance similarity is always ATTEMPTED, and whatever comes back is said out loud.
+ * `embedHero()` owns the decision about whether it can run: it returns `applicable: false` with
+ * a reason when the model is absent, unauthorised or the still is unusable, and that reason is
+ * printed as UNMEASURED with the verdict resting on the measured facts alone. Gating the call
+ * on PALATE_TASTE was tried and it was wrong: that variable is taste-local's consent gate for
+ * the one-off download and it stops firing once the model is cached, so an operator who had
+ * already installed the head got UNMEASURED for ever from a check that could have run. A gate
+ * that quietly drops half its evidence and still prints "pass" is the failure this file exists
+ * in the middle of.
  *
  * Usage: node scripts/gate-fidelity.mjs <projectDir> [--serve <url>] [--port 8791]
  * Exit:  0 clean, 1 the direction drifted (every mismatch named), 2 cannot check (with the
@@ -452,22 +456,19 @@ try {
     notes.push("the picked board registers no inner section, so only the hero was compared.");
   }
 
-  // --- 6. the appearance similarity, when it is authorised -----------------------------
+  // --- 6. the appearance similarity, always attempted -----------------------------------
   let similarity = null;
-  if (process.env.PALATE_TASTE !== "1") {
-    notes.push(
-      "appearance similarity UNMEASURED: the head is a one-off 356MB download and is opt-in " +
-      "(PALATE_TASTE=1, or scripts/reference-capture/setup.sh --with-taste). The verdict above rests on the measured facts alone.",
-    );
-  } else {
+  try {
+    const { embedHero, disposeTaste } = await import("./reference-capture/taste-local.mjs");
     try {
-      const { embedHero } = await import("./reference-capture/taste-local.mjs");
       const boardHero = join(shotsRoot, heroPick.variant_id, "hero.png");
       const a = await embedHero(boardHero);
       const b = await embedHero(heroShot);
       if (!a.applicable || !b.applicable) {
-        notes.push(`appearance similarity UNMEASURED: ${(a.applicable ? b : a).reason} (${(a.applicable ? b : a).detail || "no detail"}). The verdict rests on the measured facts alone.`);
+        const bad = a.applicable ? b : a;
+        notes.push(`appearance similarity UNMEASURED: ${bad.reason} (${bad.detail || "no detail"}). The verdict rests on the measured facts alone.`);
       } else {
+        // Both vectors are l2-normalised by embedHero, so the dot product IS the cosine.
         similarity = a.embedding.reduce((s, x, i) => s + x * b.embedding[i], 0);
         if (similarity < SIMILARITY_FLOOR) {
           add(
@@ -478,10 +479,16 @@ try {
           notes.push(`appearance similarity ${similarity.toFixed(3)}.`);
         }
       }
-    } catch (e) {
-      notes.push(`appearance similarity UNMEASURED: the head could not run (${String(e && e.message ? e.message : e).slice(0, 160)}). The verdict rests on the measured facts alone.`);
+    } finally {
+      // NOT HOUSEKEEPING. Without it the ONNX runtime tears itself down during exit and aborts
+      // AFTER every line has been written, turning a clean exit 0 into 134, which every caller
+      // of this gate would read as a failed comparison.
+      await disposeTaste().catch(() => {});
     }
+  } catch (e) {
+    notes.push(`appearance similarity UNMEASURED: the head could not run (${String(e && e.message ? e.message : e).slice(0, 160)}). The verdict rests on the measured facts alone.`);
   }
+
 
   // ------------------------------------------------------------------------ the verdict
   if (findings.length) {
@@ -501,4 +508,15 @@ try {
   if (boardServer) boardServer.close();
   if (homeServer) homeServer.close();
 }
-process.exit(exitCode);
+
+/**
+ * NEVER process.exit() ONCE THE APPEARANCE HEAD HAS BEEN RESIDENT.
+ *
+ * `process.exit()` races the ONNX runtime's native teardown, which aborts with
+ * "mutex lock failed: Invalid argument" AFTER every line of output has been written and turns
+ * a clean 0 into 134. Every caller of this gate reads a non-zero exit as a failed comparison,
+ * so a passing build would have been reported as drifted. grade-local.mjs carries the same rule
+ * for the same reason. Set the code and let the process unwind: the browser and both servers
+ * are closed above, so nothing holds the loop open.
+ */
+process.exitCode = exitCode;

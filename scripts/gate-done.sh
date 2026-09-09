@@ -532,10 +532,17 @@ if [ -n "$explore_skip_reason" ]; then gate_skipped explore "$explore_skip_reaso
 # different accent, the same accent at a different type scale, the picked section quietly
 # dropped because it was awkward to compose. Invisible side by side, obvious when measured.
 #
-# It only has an opinion once there is a pick AND a composed home page, so it is silent on every
-# build that never ran Explore and on every Explore build before Compose. Same discriminator as
-# the SEO and Explore branches: exit 2 with `gate-fidelity: skipped (` on the first stderr line
-# is a skip, any other exit 2 or an exit 1 is a block.
+# IT WAITS FOR COMPOSE'S OWN RECORD, NEVER FOR THE FILE. The trigger was "picks exist and
+# src/pages/index.astro exists", and the SCAFFOLD SHIPS src/pages/index.astro, so the second
+# test was true from the moment the site was created. Between /pick and Compose, a Stop-hook run
+# read the template's home page, found no data-palate-section on it, and failed with "the built
+# home names no sections"; under PALATE_GATE_STRICT that blocks the stop at the one moment a
+# false block costs the most. Compose writes explore.proof before any inner page is built
+# (spec 3.6), so that stamp is the honest signal that there is a composed home to compare, and
+# making the gate wait for it is what makes the stamp load-bearing rather than decorative.
+#
+# Same discriminator as the SEO and Explore branches: exit 2 with `gate-fidelity: skipped (` on
+# the first stderr line is a skip, any other exit 2 or an exit 1 is a block.
 FIDELITY_GATE="$HERE/gate-fidelity.mjs"
 fidelity_note="fidelity=skipped"
 fidelity_skip="gate-fidelity.mjs not present"
@@ -545,10 +552,11 @@ if [ -f "$FIDELITY_GATE" ] && [ "${PALATE_GATE_FIDELITY:-1}" = "1" ]; then
   # has not run" on a build nobody has picked from sends the reader to the wrong step.
   fidelity_skip="no picks recorded"
   npicks=$(jq -r '((.explore.picks // []) | length)' "$MANIFEST" 2>/dev/null || echo 0)
+  proof=$(jq -r '(.explore.proof.verified_at // .explore.proof.url // empty)' "$MANIFEST" 2>/dev/null || echo "")
   if [ "${npicks:-0}" -lt 1 ]; then
     fidelity_skip="no picks recorded"
-  elif [ ! -f "$PROJ/src/pages/index.astro" ]; then
-    fidelity_skip="Compose has not written src/pages/index.astro yet"
+  elif [ -z "$proof" ]; then
+    fidelity_skip="Compose has not recorded the motion proof for src/pages/index.astro yet"
   else
     if fid_err="$(node "$FIDELITY_GATE" "$PROJ" 2>&1)"; then fid_rc=0; else fid_rc=$?; fi
     fid_first="${fid_err%%$'\n'*}"

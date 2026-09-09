@@ -194,8 +194,20 @@ test("an honest build passes, and says what it could not measure", async (t) => 
   const r = await run([SITE, "--port", String(PORT)]);
   assert.equal(r.status, 0, `an honest build should pass:\n${r.stdout}\n${r.stderr}`);
   assert.match(r.stdout, /b1-hero/, "the gate does not say which section it matched");
-  // The appearance head is opt-in and its absence must be reported, never assumed clean.
-  assert.match(r.stdout + r.stderr, /unmeasured/i, "the gate did not say the similarity was unmeasured");
+
+  // THE APPEARANCE HEAD IS TRIED, AND WHATEVER HAPPENS IS SAID.
+  //
+  // It used to be skipped unless PALATE_TASTE=1 was exported, which is not the head's own
+  // consent gate: taste-local asks for consent only when the model is NOT CACHED and says so
+  // ("once the model is cached the gate is moot"). So an operator who had already run
+  // setup.sh --with-taste still got UNMEASURED, on every run, from a check that could have run.
+  // The gate now calls it and reports either a number or the head's own reason for refusing.
+  const sim = /appearance similarity ([^\n]*)/.exec(`${r.stdout}\n${r.stderr}`);
+  assert.ok(sim, "the gate says nothing at all about the appearance similarity");
+  assert.ok(!/PALATE_TASTE|opt-in/.test(sim[1]),
+    `the similarity is gated on an environment variable rather than on whether the head can load: ${sim[1]}`);
+  assert.ok(/^[0-9]/.test(sim[1]) || /UNMEASURED/.test(sim[1]),
+    `the similarity is neither a number nor a stated refusal: ${sim[1]}`);
 });
 
 test("an accent moved past deltaE 6 fails, naming both hexes", async (t) => {
