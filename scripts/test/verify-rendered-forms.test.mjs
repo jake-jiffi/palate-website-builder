@@ -266,6 +266,10 @@ async function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endp
           ignores: [200, { ok: true }],
           // Validation is broken, or the mail provider is refusing.
           broken: [500, { error: 'submission failed' }],
+          // What the real endpoint answers once the smoke header has been REFUSED: the real
+          // path runs and Turnstile turns down a token the probe never had. This is what an
+          // unbaked build looks like from the outside, and it looks like nothing else.
+          refuses: [400, { error: 'verification failed' }],
           // The route is not being served: a build missing it, or a plain static file server
           // standing in for `npm run preview`, which runs the adapter.
           absent: [404, { error: 'not found' }],
@@ -341,6 +345,24 @@ test('an endpoint that errors is a failure carrying the status', async (t) => {
   t.after(() => fx.stop());
   const r = await gate(fx);
   assert.match(r.out, /\[High\].*form round trip.*answered 500/, `the status was not reported\n${r.out.slice(-1200)}`);
+  assert.ok(!/was set at BUILD time/.test(r.out),
+    'a server error was blamed on the build environment, which is only the story for a refusal');
+});
+
+test('a refusal names the build environment rather than sending the reader to debug Turnstile', async (t) => {
+  // R1 SURVIVED ON A SECOND PATH. Baking PUBLIC_SITE_ENV into both serve-preview modes fixes
+  // the run that builds its own dist/; the built mode REUSES an existing dist/, so a directory
+  // left behind by a bare `npm run build` is still served unbaked and still refuses. The block
+  // is then honest, since that build really would refuse, but the message pointed nowhere and
+  // the reader's next move was to debug Turnstile.
+  const fx = await makeFixture({ form: 'posts', endpoint: 'refuses' });
+  t.after(() => fx.stop());
+  const r = await gate(fx);
+  assert.match(r.out, /\[High\].*form round trip.*answered 400/, `the status was not reported\n${r.out.slice(-1200)}`);
+  assert.match(r.out, /PUBLIC_SITE_ENV was set at BUILD time/,
+    `a refusal did not name the build environment\n${r.out.slice(-1500)}`);
+  assert.match(r.out, /reuses an existing dist/,
+    `the message did not name the reuse that keeps an unbaked build in play\n${r.out.slice(-1500)}`);
 });
 
 test('a 404 from the endpoint says the route is not served, not that it refused', async (t) => {

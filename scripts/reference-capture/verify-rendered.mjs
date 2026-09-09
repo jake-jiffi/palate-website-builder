@@ -1668,8 +1668,19 @@ if (!rendering.length) {
         'served at that path. Either the route is missing from the build, or this preview is a plain static server ' +
         'and not `npm run preview`, which runs the adapter and serves the endpoint. Nothing about the form is proven either way.');
     } else if (status < 200 || status >= 300) {
+      // A 400 or 403 is what the endpoint's OWN validation answers once the smoke header has
+      // been refused, and on a local preview the commonest cause by a distance is a build that
+      // never had PUBLIC_SITE_ENV set: an unknown environment requires the secret, so the
+      // header is ignored and the real path runs. `serve-preview.sh` bakes it in both modes,
+      // but its built mode REUSES an existing dist/, so a dist left behind by a bare
+      // `npm run build` is served unbaked and refuses. Without naming that, this message sends
+      // the reader off to debug Turnstile on a form with nothing wrong with it.
+      const refused = status === 400 || status === 403;
       add('High', route, 'desktop', 'form round trip: /api/contact answered ' + status +
-        (body && body.error ? ' (' + body.error + ')' : '') + '. The form reaches the endpoint and the endpoint refuses it.');
+        (body && body.error ? ' (' + body.error + ')' : '') + '. The form reaches the endpoint and the endpoint refuses it.' +
+        (refused ? ' On a local preview, check PUBLIC_SITE_ENV was set at BUILD time first: an unbaked build requires ' +
+          'PALATE_SMOKE_SECRET, so the smoke header is ignored and the real validation runs. serve-preview.sh sets it, ' +
+          'a bare `npm run build` does not, and serve-preview.sh reuses an existing dist/ rather than rebuilding it.' : ''));
     } else if (!body || body.smoke !== true) {
       add('High', route, 'desktop', 'form round trip: /api/contact answered ' + status + ' without `smoke: true`, so the ' +
         'smoke header was ignored and the submission took the real path. Against a deployed site that is a fake enquiry ' +

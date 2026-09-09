@@ -198,6 +198,13 @@ Where it runs:
   Cloudflare overlay's `npm run deploy` builds as production before deploying, and so do
   `provision-cloudflare.sh`'s bootstrap build, `deploy.yml` and `revalidate.yml`.
   **Never a bare `wrangler deploy`:** it does not build, so it ships whatever `dist/` holds.
+  **One local path is still not covered and the finding says so:** `serve-preview.sh --built`
+  REUSES an existing `dist/` rather than rebuilding it, so a directory left behind by a bare
+  `npm run build` is served unbaked and refuses. The round trip's own finding names
+  `PUBLIC_SITE_ENV` and that reuse first, because the symptom is a 400 reading
+  "verification failed" and the reader's next move otherwise is to go and debug Turnstile.
+  The fix is `rm -rf dist` and re-run, since re-running `serve-preview.sh` on its own will
+  reuse the same directory, or build it yourself with `PUBLIC_SITE_ENV=preview npm run build`.
 - **The endpoint's own contract** is exercised as code by
   `scripts/test/contact-smoke.test.mjs`, against BOTH copies of the handler. `add-sanity.sh`
   copies `templates/cms-sanity/src/pages/api/contact.ts` over the base file, so the two carry

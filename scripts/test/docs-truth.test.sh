@@ -134,6 +134,12 @@ present "serve-preview bakes the environment in its DEFAULT mode, not only in --
   "scripts/serve-preview.sh" "PUBLIC_SITE_ENV=preview npm run dev"
 present "testing.md says both serve-preview modes bake it" \
   "references/testing.md" "sets \`preview\` in BOTH modes"
+# ...and it names the one local path that is still not covered, because the finding names it too
+# and a doc that stopped short would read as though baking both modes closed the whole class.
+present "testing.md says the built mode reuses an existing dist" \
+  "references/testing.md" "REUSES an existing \`dist/\`"
+present "the refusal finding names the build environment before Turnstile" \
+  "scripts/reference-capture/verify-rendered.mjs" "PUBLIC_SITE_ENV was set at BUILD time first"
 absent "cache-invalidation.md no longer lists serve-preview as leaving it unbaked" \
   "references/cache-invalidation.md" "\`serve-preview.sh\`, \`phantom-utility-check.mjs\`"
 for f in templates/astro-project/package.json templates/host-cloudflare/package.json; do
