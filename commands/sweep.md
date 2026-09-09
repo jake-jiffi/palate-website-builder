@@ -161,17 +161,26 @@ never quoted back at the owner. So is anything inside a code block. Structured d
 read either: `businessJsonLd()` builds it from the record, so it cannot disagree with the
 record, and section 5 owns that question.
 
-A label carrying more than three values is a LIST, not a claim: a rating on every product
-card, a phone number per branch. Those are named on the same line and set aside rather than
-reported. If a label you expected to see is in that clause, that is the reason, and a genuine
-clash can hide under one, so look:
+A label carrying more than three values is a LIST, not a claim: a rating on every product card,
+say. Phone numbers are ALWAYS a list, whatever the count, because a business can legitimately
+have a landline, a mobile, a fax and a depot and every one of them is right. Those labels are
+named on the same line and set aside rather than reported. If a label you expected to see is in
+that clause, that is the reason, and a genuine clash can hide under one, so look:
 
 ```bash
 node "$PALATE/scripts/gate-facts.mjs" "$SITE" --all
 ```
 
 That prints the set-aside labels with every value and the pages carrying each. Read it whenever
-the clean line names one, and put anything real under REVIEW with the rest.
+the clean line names one, and put anything real under REVIEW with the rest. The phone list is
+worth reading every sweep: an old number left behind on one page is a real fault and this is the
+only place it now shows, beside section 9's question about whether the number is still current.
+
+Two other things it will not tell you. Trading hours are read only where the page says they are
+the trading hours, so a timetable, an inspection schedule or a market stall is passed over, and
+so is an hours line that carries no opening word at all. And Explore scaffolding (`/explore`,
+`/boards/*`, `/vN`) is not inspected: the rungs differ in their copy on purpose and are deleted
+before hand-over.
 
 ## 7. Orphans and dead internal links
 

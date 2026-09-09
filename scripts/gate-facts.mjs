@@ -34,9 +34,13 @@
  *                                        phone. Two conventions are not two opinions.
  *   ONE VALUE IS SILENT.                 A label carrying the same value on 3,400 pages says
  *                                        nothing, and a label appearing once says nothing.
- *   MANY VALUES IS A LIST.                A rating on every product card, a phone number per
- *                                        branch. Named and set aside, never reported as a
- *                                        contradiction and never silently dropped.
+ *   MANY VALUES IS A LIST.                A rating on every product card. Named and set aside,
+ *                                        never reported as a contradiction and never silently
+ *                                        dropped.
+ *   A PHONE IS ALWAYS A LIST.             A business can have a landline, a mobile, a fax and a
+ *                                        depot, and every one of them is correct. Measured as
+ *                                        the largest single cause of a 46 per cent false-alarm
+ *                                        rate, so phone is listed and never reported.
  *
  * Usage:  node gate-facts.mjs [project-dir] [--all]
  *          --all also prints the labels set aside as lists, with their values and pages.
@@ -51,11 +55,22 @@ import { readFileSync, statSync } from "node:fs";
 import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { pluginRootRefusal } from "../hooks/project-dir.mjs";
-import { findOutputRoot, builtPages, OUT_CANDIDATES } from "./palate-index.mjs";
+import { findOutputRoot, builtPages, OUT_CANDIDATES, EXPLORE_ROUTE } from "./palate-index.mjs";
 
 // Mirrors gate-seo.mjs. These routes exist to be served on a miss and are nobody's claim about
 // the business, so a stale number on a 404 page is not the site disagreeing with itself.
 const NEVER_INDEXED = new Set(["/404", "/500"]);
+
+/**
+ * Not a page of the site: `/explore`, the direction boards, the older variants.
+ *
+ * Rungs differ in their copy ON PURPOSE, so reading a board's number as a claim about the
+ * business reports the range as a contradiction during the one stage whose job is to show a
+ * range. `palate-index.mjs` already states this rule and already excludes these routes from the
+ * orphan and dead-link reports; the predicate is imported rather than copied so the two cannot
+ * drift, and `gate-shipready` deletes the routes before hand-over anyway.
+ */
+const notASitePage = (route) => NEVER_INDEXED.has(route) || EXPLORE_ROUTE(route);
 
 // A page that is only ever machine output. 2MB is gate-shipready's ceiling and the same
 // reasoning applies: past that it is a data dump, not a page somebody wrote a claim onto.
@@ -263,8 +278,12 @@ const P_OUT_OF_5 = /(?<![\d.,\/])(\d+(?:\.\d+)?)\s*(?:\/\s*5(?!\s*[\/\d])|\bout\
 // terminator now ends the window. `reviews?` is gone from the leading set for the same reason:
 // a review count in front of a proportion is the commonest way the two collide, and it licenses
 // nothing on its own.
-const RATING_WORD_BEFORE = /\b(?:rated|rating|rate|scored?)[^\w.!?;]{0,4}$/i;
-const RATING_WORD_AFTER = /^[^\w.!?;]{0,3}(?:stars?|★|rating)\b/i;
+// THE CHARACTER CLASS IS THE GUARD AND THE DISTANCE WAS NEVER DOING ANYTHING. Widening either
+// count from four to twelve passed the whole suite, because any intervening WORD already breaks
+// the match and only punctuation can sit in the gap. A number that cannot fail is worse than no
+// number, so the counts are gone and the class carries it alone.
+const RATING_WORD_BEFORE = /\b(?:rated|rating|rate|scored?)[^\w.!?;]*$/i;
+const RATING_WORD_AFTER = /^[^\w.!?;]*(?:stars?|★|rating)\b/i;
 const P_RATING_OF = /\brating\b\s*(?:of|is|:)?\s*(?<![\d.,])(\d+(?:\.\d+)?)/gi;
 // THE QUALIFIER IS PART OF THE LABEL, and it was not until a clean fixture proved it had to
 // be. "25 years in the trade, 20 years in business under this name" is one ordinary sentence
@@ -282,6 +301,19 @@ const P_ABN = /\bABN\b\s*(?:no\.?|number)?\s*:?\s*((?:\d[\s-]?){10}\d)/gi;
 // one run, and `01.05.2024` still reaches the date guard below.
 const P_PHONE_TEXT = /[+(]?\d(?:[\d\s()+-]|\.(?=\d)){6,}\d/g;
 const P_TEL_HREF = /href\s*=\s*["']tel:([^"']+)["']/gi;
+// A TIME RANGE AFTER A DAY NAME IS NOT AUTOMATICALLY WHEN THE BUSINESS IS OPEN. A class
+// timetable, an inspection schedule, a market stall, a service, a committee meeting and an
+// event all state one, and none of them is the trading hours. Measured as the second largest
+// cause of a 46 per cent false-alarm rate: a gym and an estate agent were both told their
+// opening hours contradicted themselves. So the page has to SAY these are the trading hours.
+//
+// THE LICENCE CARRIES DOWN A LIST, because a real hours block is a heading and then a line per
+// day, and the seventh line is nowhere near the heading. A match is licensed when a trading
+// word sits within `LICENCE_WINDOW` before it, or when it follows an already licensed match
+// within `LICENCE_CHAIN`, which is how a block of day lines reads as one thing.
+const P_TRADING_WORD = /\b(?:open|opens|opening|hours|trading|closed|closes)\b/i;
+const LICENCE_WINDOW = 90;
+const LICENCE_CHAIN = 40;
 const DAYS = "mon|monday|tues|tue|tuesday|weds|wed|wednesday|thurs|thur|thu|thursday|fri|friday|sat|saturday|sun|sunday|weekdays|weekday|weekends|weekend";
 const P_HOURS = new RegExp(
   `\\b(${DAYS})\\b(?:\\s*(?:-|to|through|thru)\\s*\\b(${DAYS})\\b)?\\s*[:,]?\\s*` +
@@ -351,12 +383,32 @@ export function extractFacts(html) {
   }
 
   for (const m of text.matchAll(P_PHONE_TEXT)) {
-    const raw = m[0];
-    const d = digitsOf(raw);
+    let raw = m[0];
+    let d = digitsOf(raw);
     if (d.length < 8 || d.length > 15) continue;
     // A phone is written the way a phone is written: an international prefix, a bracketed area
     // code, a leading trunk zero, or one of the AU service prefixes. Anything else in this
     // shape is a year range, a price or an order number.
+    // A UNIT OR DEPOT NUMBER BEFORE A BRACKETED PHONE IS NOT PART OF IT. "Depot 0 (02) 9876
+    // 5432" read as one run, the stray zero was absorbed, and the normaliser then stripped it as
+    // an international access code, so the same number read two ways depending on what sat
+    // beside it. A short run of digits in front of an opening bracket is the thing before the
+    // number, not the start of it, and the number begins at the bracket.
+    //
+    // NEVER ON AN INTERNATIONAL FORM: `+61 (0)412 345 678` brackets its own trunk digit, and
+    // cutting there would throw the country code away and leave a number nobody can ring. That
+    // is what "digits only" in the prefix test buys, and it is the whole guard: a run beginning
+    // `+` carries the plus in its prefix and can never match. An explicit second check for the
+    // plus was written first and removed, because no input could reach it.
+    const bracket = raw.indexOf("(", 1);
+    if (bracket > 0 && /^\d{1,6}\D{0,3}$/.test(raw.slice(0, bracket))) {
+      raw = raw.slice(bracket);
+      d = digitsOf(raw);
+    }
+    if (d.length < 8 || d.length > 15) continue;
+    // An AU service number is ten digits. Eight digits behind a 1300 is a reference, not a line
+    // anyone can ring, and an invoice number is the commonest place to find one.
+    if (/^1[38]00/.test(d) && d.length < 10 && !/^[+(]/.test(raw.trim())) continue;
     if (!(/^[+(]/.test(raw.trim()) || d.startsWith("0") || /^1[38]00/.test(d))) continue;
     if (looksLikeDate(raw)) continue;
     // Nobody punctuates a number this short with full stops, and plenty of pages punctuate a
@@ -365,7 +417,12 @@ export function extractFacts(html) {
     push("phone", normalisePhone(raw), text, m.index, raw.length);
   }
 
+  let licensedTo = -1;
   for (const m of text.matchAll(P_HOURS)) {
+    const licensed = (licensedTo >= 0 && m.index - licensedTo <= LICENCE_CHAIN)
+      || P_TRADING_WORD.test(text.slice(Math.max(0, m.index - LICENCE_WINDOW), m.index));
+    if (!licensed) continue;
+    licensedTo = m.index + m[0].length;
     const from = DAY_KEY[m[1].toLowerCase()];
     const to = m[2] ? DAY_KEY[m[2].toLowerCase()] : null;
     const open = normaliseTime(m[3]);
@@ -433,6 +490,25 @@ const PAGES_NAMED = 3;
  * defect this gate's own summary line was fixed for.
  */
 const MAX_VALUES_REPORTED = 3;
+
+/**
+ * Labels a business can legitimately hold several of. Never a disagreement, always a list.
+ *
+ * THE RATE IS WHAT DECIDED THIS. An independent critic wrote thirteen clean small-business
+ * builds and this gate fired on six of them, against a kill condition of one in ten, and the
+ * largest single cause was a second phone number: an after-hours mobile, a fax, two depots.
+ *
+ * The threshold was not the problem, the label was. Every other label here is single-valued by
+ * nature: a business has one review count, one rating, one ABN, one age, and one set of trading
+ * hours per day, so two values means somebody typed one of them twice. It can have any number of
+ * phone numbers, so two values means nothing at all. Raising `MAX_VALUES_REPORTED` would only
+ * have moved the same wrong answer to three numbers.
+ *
+ * WHAT IT COSTS, stated rather than hidden: an old number left behind on one page after a change
+ * is a real fault and this will no longer report it. It is still printed under `--all`, which is
+ * where /sweep already asks whether every published number is current.
+ */
+const SET_VALUED = new Set(["phone"]);
 const namePages = (pages) =>
   pages.length <= PAGES_NAMED
     ? pages.join(", ")
@@ -464,7 +540,7 @@ function main() {
   let values = 0;
   let unreadable = 0;
   for (const { file, route } of builtPages(outRoot)) {
-    if (NEVER_INDEXED.has(route)) continue;
+    if (notASitePage(route)) continue;
     let html;
     try {
       if (statSync(file).size > MAX_PAGE_BYTES) continue;
@@ -490,8 +566,9 @@ function main() {
   }
 
   const all = disagreements(byPage);
-  const found = all.filter((d) => d.values.length <= MAX_VALUES_REPORTED);
-  const setAside = all.filter((d) => d.values.length > MAX_VALUES_REPORTED);
+  const isList = (d) => SET_VALUED.has(d.label) || d.values.length > MAX_VALUES_REPORTED;
+  const found = all.filter((d) => !isList(d));
+  const setAside = all.filter(isList);
   const asideClause = setAside.length
     ? ` ${setAside.length} label(s) set aside as a list rather than a claim: ` +
       `${setAside.map((d) => `${d.label} (${d.values.length} values)`).join(", ")}.` +
@@ -500,10 +577,13 @@ function main() {
   const printValues = (d) => {
     for (const v of d.values) console.error(`      ${v.value}  on ${namePages(v.pages)}  "${v.context}"`);
   };
+  const asideWhy = (d) => SET_VALUED.has(d.label)
+    ? "a business can legitimately have more than one"
+    : "a list rather than a claim";
   const printSetAside = () => {
     if (!showAll || !setAside.length) return;
     for (const d of setAside) {
-      console.error(`  [${d.label}] ${d.values.length} values, set aside as a list rather than a claim:`);
+      console.error(`  [${d.label}] ${d.values.length} values, set aside: ${asideWhy(d)}:`);
       printValues(d);
     }
   };

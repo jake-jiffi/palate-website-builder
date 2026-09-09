@@ -28,6 +28,11 @@ What is deliberately planted, and which false positive each one is the regressio
 | `/blog` | a listing of `<div>` cards each carrying a `<time datetime>` | a dated card in a hand-built wrapper |
 | `/services` | the whole body inside `<div id="app">` with a copyright `<time>` in its footer | a page silenced wholesale by the dated-block rule |
 | `/` | `Rated by 42 reviews. 4 out of 5 customers recommend us` | a rating word in the previous sentence licensing a proportion |
+| `/`, `/about` | a landline, an after-hours mobile and a fax in one footer | a second contact number read as a contradiction |
+| `/` | a contact table with a bay number in the cell before the line | a stray digit absorbed into the number beside it |
+| `/services` | delivery and site-measure times after a day name | a time range that is not the trading hours |
+| `/policies` | `INV 1300 4471` | a reference read as a service number |
+| `/explore`, `/boards/b1` | rung copy naming a different review count and a different line | Explore scaffolding read as a claim about the business |
 
 The real facts, consistent everywhere they appear: 42 reviews, 4.9 stars, `(02) 9876 5432`,
 ABN 12345678901, Mon-Fri 09:00 to 17:00, Sat 09:00 to 13:00.
