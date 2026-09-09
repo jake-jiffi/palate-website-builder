@@ -631,3 +631,22 @@ test('a template whose only entry is a draft is not rendered, and the run says w
   const m = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
   assert.deepEqual(Object.keys(m.routes), ['/blog'], 'a route that was never rendered earned a record');
 });
+
+test('a run that measures no hygiene says so, rather than printing nothing', async (t) => {
+  // The loop the doctrine prescribes is `--changed <files> --no-vitals`, and on a blast radius
+  // that excludes `/` neither the design checks nor the vitals are computed, so the whole
+  // hygiene block was skipped and three of the loop's own runs printed no hygiene line and no
+  // trend line at all. Silence reads as a run with nothing to report, not as one that measured
+  // nothing.
+  const fx = makeFixture(3, (i) => (i <= 1 ? 'Alpha' : 'Beta'));
+  const server = await serve(fx.html);
+  const out = join(fx.root, '.palate-shots');
+  const common = ['--url', `http://127.0.0.1:${server.address().port}`, '--index', fx.index,
+    '--no-vitals', '--out', out];
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  const r = await runGate([...common, '--changed', 'src/components/Alpha.astro']);
+  assert.match(r.out, /blast radius of 1 of 3 route\(s\)/, `the fixture did not narrow\n${r.out.slice(-900)}`);
+  assert.match(r.out, /build hygiene was NOT measured/);
+  assert.match(r.out, /the home route was not rendered this run/);
+});

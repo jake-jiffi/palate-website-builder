@@ -285,9 +285,28 @@ export function compare(current, previous) {
         added.length ? 'newly scored: ' + added.join(', ') : '',
       ].filter(Boolean).join('; ')}), so part of this move is the denominator, not the page`
     : null;
+  // A DIFFERENT ROUTE SET GETS NO VERDICT, and this is the correction to the previous version
+  // of this function rather than a new rule bolted on.
+  //
+  // Comparing across coverage was right; putting an improved / regressed VERDICT on it was not.
+  // The design checks are computed on the home route alone, so a blast radius that excludes `/`
+  // drops four of them and the denominator falls from 54 of the rubric's weight to 14. Measured:
+  // adding one utility class to a component printed "REGRESSED: 95 -> 90 ... revert it before
+  // trying something else", and creating a file nothing imports printed "IMPROVING: 90 -> 95 ...
+  // keep going in the same direction". Both are the denominator. The self-correction loop is
+  // capped at two or three iterations, so a spurious "revert it" spends one undoing a correct
+  // fix, which is worse than the NO COMPARISON this replaced: that was useless and never wrong.
+  //
+  // So the numbers are still reported, the difference is still named, and no direction is
+  // asserted. A CHANGED SCORED SET INSIDE THE SAME ROUTE SET still reports its verdict with the
+  // denominator caveat: that is the axe-fix case the basis was rewritten for, where the agent
+  // did exactly what it was told and must be told it worked.
+  if (coverageNote) {
+    return { verdict: 'coverage', delta: null, current: current.overall, previous, denominatorNote, coverageNote };
+  }
   const delta = current.overall - previous.overall;
   const verdict = Math.abs(delta) <= NOISE_BAND ? 'unchanged' : delta > 0 ? 'improved' : 'regressed';
-  return { verdict, delta, previous, denominatorNote, coverageNote };
+  return { verdict, delta, current: current.overall, previous, denominatorNote, coverageNote };
 }
 
 /**
@@ -345,6 +364,8 @@ export function trendLine(cmp, iterations) {
       return 'FIRST MEASUREMENT: there is no previous run to compare against, so there is no trend yet. The next run will report whether your changes moved it.';
     case 'incomparable':
       return `NO COMPARISON: the previous run measured a different configuration (${cmp.previous.basis}), so the two numbers are not the same quantity. Re-run with the same flags and routes to get a trend.`;
+    case 'coverage':
+      return `NOT COMPARABLE: this run scored ${cmp.current} and the run being compared scored ${cmp.previous.overall}, but the two swept different routes, so the difference between them is COVERAGE and not the page. There is NO verdict here: do not read it as better or worse, and do not revert anything on it.${against}${coverage}${caveat} For a trend you can act on, re-run with --full or over the same routes.`;
     case 'improved':
       return `IMPROVING: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, UP ${cmp.delta}${it}. Keep going in the same direction.${against}${caveat}${coverage}`;
     case 'regressed':

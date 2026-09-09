@@ -120,8 +120,12 @@ present "testing.md says a real error on that route still fires" \
   "references/testing.md" "is still a High"
 present "testing.md says the trend reads inside the loop" \
   "references/testing.md" "The hygiene trend reads inside the loop"
-present "the verifier agent is told to read the trend on every run" \
-  "agents/palate-verifier.md" "Read the trend line on every one of these runs"
+present "the verifier agent is told what the trend is a trend OF" \
+  "agents/palate-verifier.md" "Read the trend line, and read what it is a trend OF"
+present "the verifier agent is told not to act on a coverage difference" \
+  "agents/palate-verifier.md" "Do not revert anything on this line"
+present "testing.md says a verdict needs the same routes" \
+  "references/testing.md" "It states a verdict only when the two runs swept the same routes"
 present "testing.md names what the hash does NOT cover" \
   "references/testing.md" "so an unchanged source can still render differently"
 

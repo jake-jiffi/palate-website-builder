@@ -1703,6 +1703,20 @@ if (projected) {
   for (const n of notes) console.error('verify-rendered: ' + n);
   hygieneLoop = { basis, trend: cmp.verdict, delta: cmp.delta, previous: cmp.previous?.overall ?? null,
     iteration: stall.iterations, stalled: stall.stalled, blockers: stall.blockers, rerun: RERUN, notes };
+} else {
+  // A RUN WITH NO SCORE SAYS SO. The design checks and the vitals are both measured on the home
+  // route, so `--changed --no-vitals` over a blast radius that excludes `/` computes neither and
+  // the whole block above is skipped: three of the loop's own runs printed no hygiene line and
+  // no trend line at all, while the doctrine told the agent to read the trend on every one of
+  // them. A plain run at least said the home route was skipped; these said nothing, which reads
+  // as a run with nothing to report rather than a run that measured nothing.
+  const why = rendering.includes('/')
+    ? 'the home route rendered but yielded no design or vitals measurement'
+    : 'the home route was not rendered this run, and both the design checks and the vitals are measured on it';
+  console.error(
+    `verify-rendered: build hygiene was NOT measured (${why}), so there is no score and no trend ` +
+    'for this run. The sweep before hand-over (--full, vitals on) measures it.',
+  );
 }
 
 if (outDir) {

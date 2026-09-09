@@ -88,10 +88,12 @@ Nothing in this plugin runs Lighthouse. The doctrine used to say "Lighthouse CI,
   the record lives in `.palate-shots/manifest.json` as `{ sourcesHash, renderedHash,
   passed_at }` per route. Measured on a thirty-route fixture: 25s against a 187s sweep. Run
   the lanes cheap first, ux-lint before rendered, rendered before vitals.
-  **The hygiene trend reads inside the loop**, not only on a full sweep: a run that swept a
-  different set of routes is compared and its coverage disclosed, and the line names the run it
-  compared against. Only a configuration change (vitals on or off, axe missing) refuses a
-  comparison, because that is a different quantity rather than a different sample.
+  **The hygiene trend reads inside the loop**, not only on a full sweep: the line names the run
+  it compared against. It states a verdict only when the two runs swept the same routes. When
+  they did not it prints both scores and NO verdict, because the design checks are measured on
+  the home route alone and a blast radius that excludes it moves the number by five points on a
+  change that did nothing. A run that rendered no home route says build hygiene was not
+  measured rather than printing nothing.
 - **What the hash covers.** A route's own source, its whole import closure, the content
   entries it renders (the collection its `getCollection` call names, so editing a post
   re-renders the post and its listing), and the SHARED inputs no closure has to name: the Astro config, `package.json` and the lockfile, everything
