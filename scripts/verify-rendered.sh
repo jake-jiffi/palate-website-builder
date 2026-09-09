@@ -22,13 +22,16 @@
 # Usage:
 #   scripts/verify-rendered.sh <base-url> [--routes /,/contact,/blog] [--out <dir>]
 #            [--changed <file,...>]  render only the routes those files can reach; a file the
-#                                    index does not know falls wide and says which one
+#                                    index does not know falls wide and says which one. It
+#                                    rebuilds .palate/index.json first, since the blast radius
+#                                    and the route hashes are both read from it.
 #            [--full]                render every route, ignoring the unchanged-route records
 #                                    in .palate-shots/manifest.json. The sweep before
 #                                    hand-over runs this: the records cover a route's own
-#                                    imports plus the shared inputs (config, lockfile,
-#                                    src/styles, src/layouts and the CSS they import), and
-#                                    remote content and public/ assets stay outside them.
+#                                    imports, the content entries it renders, and the shared
+#                                    inputs (config, lockfile, src/styles, src/layouts and the
+#                                    CSS they import). Remote content and public/ assets stay
+#                                    outside them.
 #
 # Exit codes:
 #   0  clean        1  findings at or above High        2  bad args

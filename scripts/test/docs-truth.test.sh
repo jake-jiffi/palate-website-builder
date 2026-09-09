@@ -82,6 +82,12 @@ for f in README.md references/testing.md; do
 done
 present "the verifier agent re-runs the blast radius after a fix" \
   "agents/palate-verifier.md" "--changed <the files you edited>"
+present "the verifier agent rebuilds the index under --changed" \
+  "agents/palate-verifier.md" "rebuilds \`.palate/index.json\` first"
+present "testing.md says --changed rebuilds the index" \
+  "references/testing.md" "rebuilds \`.palate/index.json\` first"
+present "testing.md says the content a route renders is in the hash" \
+  "references/testing.md" "the collection its \`getCollection\` call names"
 present "the verifier agent runs the cheap lane first" \
   "agents/palate-verifier.md" "ux-lint before rendered, rendered before vitals"
 present "the verifier agent certifies on one full sweep" \

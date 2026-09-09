@@ -45,6 +45,23 @@ const filler = (n) => Array.from({ length: n }, (_, i) =>
   'accessibility pass something real to read on this route.</p></section>').join('');
 
 /**
+ * A brand package reached through an EXPORTS MAP, the way the real one is published: the files
+ * live at `tokens/tokens.css` and `fonts/fonts.css` and the short names are mapped. A resolver
+ * that joins `node_modules/<spec>` finds neither, which is how both files sat outside the
+ * global digest on every real build while the docs promised the opposite.
+ */
+function addBrandPackage(root) {
+  const pkg = join(root, 'node_modules', '@x', 'brand');
+  mkdirSync(join(pkg, 'tokens'), { recursive: true });
+  writeFileSync(join(pkg, 'package.json'), JSON.stringify({
+    name: '@x/brand', version: '1.0.0', type: 'module',
+    exports: { './tokens.css': './tokens/tokens.css' },
+  }, null, 2));
+  writeFileSync(join(pkg, 'tokens', 'tokens.css'), ':root { --brand: #e2553d; }\n');
+  return join(pkg, 'tokens', 'tokens.css');
+}
+
+/**
  * A generated fixture: `count` static routes, each importing one of two shared components,
  * plus the index the gate reads to decide what to render.
  *
@@ -63,8 +80,11 @@ function makeFixture(count, sharedFor) {
   // stylesheet it imports, and the config. Editing any of them changes what every route
   // renders, which is what the global digest exists to notice.
   writeFileSync(join(root, 'src', 'styles', 'globals.css'), ':root { --ink: #1a1a1a; }\n');
-  writeFileSync(join(root, 'src', 'layouts', 'BaseLayout.astro'), '---\nimport "../styles/globals.css";\n---\n<slot />\n');
+  writeFileSync(join(root, 'src', 'layouts', 'BaseLayout.astro'),
+    '---\nimport "@x/brand/tokens.css";\nimport "../styles/globals.css";\n---\n<slot />\n');
   writeFileSync(join(root, 'astro.config.mjs'), 'export default { output: "static" };\n');
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', private: true }, null, 2));
+  addBrandPackage(root);
   const routes = [];
   const html = new Map();
   html.set('/', page('Home', filler(2)));
@@ -91,7 +111,10 @@ function makeFixture(count, sharedFor) {
 
 function serve(html) {
   const server = createServer((req, res) => {
-    const path = (req.url || '/').split('?')[0].replace(/\/$/, '') || '/';
+    // DECODED: a dynamic route is fetched as `/blog/%5Bslug%5D`, so a literal-path fixture
+    // never matches without this.
+    let path = (req.url || '/').split('?')[0].replace(/\/$/, '') || '/';
+    try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
     const body = html.get(path);
     if (!body) { res.writeHead(404, { 'content-type': 'text/html' }); res.end(page('Not found', '<p>No such page.</p>')); return; }
     res.writeHead(200, { 'content-type': 'text/html' });
@@ -110,10 +133,10 @@ function serve(html) {
  * back with a High finding on all three routes. A harness that starves its own server
  * measures the harness.
  */
-function runGate(argv) {
+function runGate(argv, env = {}) {
   const started = Date.now();
   return new Promise((done) => {
-    const p = spawn('node', [VR, ...argv], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const p = spawn('node', [VR, ...argv], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env } });
     let out = '';
     p.stdout.on('data', (d) => { out += d; });
     p.stderr.on('data', (d) => { out += d; });
@@ -245,4 +268,176 @@ test('a change to a shared input re-renders every route and says why', async (t)
   assert.ok(!/global inputs changed/.test(third.out), 'the shared inputs were reported as changed twice');
   assert.match(third.out, /across 1 rendered route\(s\) \(29 unchanged, skipped\)/);
   assert.match(third.out, /\/p02 unchanged, skipped/);
+});
+
+test('the brand package reached through an exports map is inside the digest', async (t) => {
+  // The resolver used to join node_modules/<spec> and require the file to exist. The brand
+  // package publishes tokens/tokens.css and maps the short name, so the joined path is never
+  // on disk and the file dropped out with nothing printed, on every real build.
+  const fx = makeFixture(3, () => 'Alpha');
+  const server = await serve(fx.html);
+  const out = join(fx.root, '.palate-shots');
+  const common = ['--url', `http://127.0.0.1:${server.address().port}`, '--index', fx.index,
+    '--no-vitals', '--out', out];
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  await runGate(common);
+  const m1 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.equal(Object.keys(m1.routes).length, 3);
+
+  writeFileSync(join(fx.root, 'node_modules', '@x', 'brand', 'tokens', 'tokens.css'),
+    ':root { --brand: #0b4a6f; }\n');
+  const second = await runGate(common);
+  assert.match(second.out, /global inputs changed, all routes re-rendered/,
+    `an exports-mapped brand token edit did not invalidate the records\n${second.out.slice(-900)}`);
+  assert.ok(!/unchanged, skipped/.test(second.out), 'a route was skipped after the brand tokens changed');
+});
+
+test('a layout CSS import that cannot be resolved is named, never dropped in silence', async (t) => {
+  const fx = makeFixture(1, () => 'Alpha');
+  writeFileSync(join(fx.root, 'src', 'layouts', 'BaseLayout.astro'),
+    '---\nimport "@nope/missing-brand/tokens.css";\n---\n<slot />\n');
+  const server = await serve(fx.html);
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  const r = await runGate(['--url', `http://127.0.0.1:${server.address().port}`,
+    '--index', fx.index, '--no-vitals']);
+  assert.match(r.out, /layout CSS import\(s\) could not be resolved and are NOT in the global digest/);
+  assert.match(r.out, /@nope\/missing-brand\/tokens\.css \(in src\/layouts\/BaseLayout\.astro\)/);
+});
+
+// A blog: one entry, the [slug] route that renders it and the listing that links it. The
+// closure follows imports and a page does not import its markdown, so this is the shape where
+// blastRadius selected the right routes and the skip then threw them away.
+function makeBlogFixture() {
+  const root = mkdtempSync(join(tmpdir(), 'palate-incremental-blog-'));
+  for (const d of ['src/pages/blog', 'src/content/blog', 'src/styles', 'src/layouts', '.palate']) {
+    mkdirSync(join(root, d), { recursive: true });
+  }
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'blog-fixture', private: true }, null, 2));
+  writeFileSync(join(root, 'src', 'styles', 'globals.css'), ':root { --ink: #1a1a1a; }\n');
+  writeFileSync(join(root, 'src', 'layouts', 'BaseLayout.astro'), '---\nimport "../styles/globals.css";\n---\n<slot />\n');
+  writeFileSync(join(root, 'src', 'content.config.ts'), 'export const collections = {};\n');
+  writeFileSync(join(root, 'src', 'content', 'blog', 'hello.md'), '---\ntitle: Hello\n---\nFirst post.\n');
+  writeFileSync(join(root, 'src', 'pages', 'blog', '[slug].astro'),
+    '---\nimport { getCollection } from "astro:content";\nconst posts = await getCollection("blog");\n---\n<h1>post</h1>\n');
+  writeFileSync(join(root, 'src', 'pages', 'blog', 'index.astro'),
+    '---\nimport { getCollection } from "astro:content";\nconst posts = await getCollection("blog");\n---\n<h1>blog</h1>\n');
+
+  const routes = [
+    { path: '/blog', source: 'src/pages/blog/index.astro', kind: 'static', dependsOn: [], links: [] },
+    { path: '/blog/[slug]', source: 'src/pages/blog/[slug].astro', kind: 'dynamic', dependsOn: [], links: [] },
+  ];
+  const entries = [{ id: 'hello', collection: 'blog', file: 'src/content/blog/hello.md', draft: false }];
+  writeFileSync(join(root, '.palate', 'index.json'), JSON.stringify({
+    root, routes, entries, counts: { routes: 2, entries: 1, drafts: 0 },
+    links: { parsed: 0, files: 0, orphans: [], dead: [], stale: 0 },
+  }, null, 2));
+
+  const html = new Map();
+  html.set('/', page('Home', filler(2)));
+  html.set('/blog', page('Blog', filler(2)));
+  html.set('/blog/[slug]', page('Hello', filler(2)));
+  return { root, html, index: join(root, '.palate', 'index.json') };
+}
+
+test('editing a post is not skipped as unchanged', async (t) => {
+  const fx = makeBlogFixture();
+  const server = await serve(fx.html);
+  const out = join(fx.root, '.palate-shots');
+  const common = ['--url', `http://127.0.0.1:${server.address().port}`, '--index', fx.index,
+    '--no-vitals', '--out', out];
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  const first = await runGate(common);
+  const m1 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.deepEqual(Object.keys(m1.routes).sort(), ['/blog', '/blog/[slug]'],
+    `the blog fixture recorded ${Object.keys(m1.routes)}\n${first.out.slice(-900)}`);
+
+  writeFileSync(join(fx.root, 'src', 'content', 'blog', 'hello.md'), '---\ntitle: Hello\n---\nEdited post.\n');
+  const second = await runGate([...common, '--changed', 'src/content/blog/hello.md']);
+  assert.ok(!/unchanged, skipped/.test(second.out),
+    `a route named by the blast radius was skipped anyway\n${second.out.slice(-900)}`);
+  assert.match(second.out, /rebuilt .*index\.json first/, '--changed did not rebuild the index');
+  const m2 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.notEqual(m2.routes['/blog/[slug]'].sourcesHash, m1.routes['/blog/[slug]'].sourcesHash);
+  assert.notEqual(m2.routes['/blog'].sourcesHash, m1.routes['/blog'].sourcesHash);
+});
+
+test('--changed rebuilds the index, so a newly imported file still reaches its page', async (t) => {
+  // Two fixes in a row is what it takes. Add an import to a page (the page renders, its own
+  // source changed), then edit the newly imported file: with a stale index that file is not in
+  // the index at all, so the run falls WIDE instead of narrowing to the page that imports it.
+  const fx = makeFixture(3, () => 'Alpha');
+  const server = await serve(fx.html);
+  const out = join(fx.root, '.palate-shots');
+  const common = ['--url', `http://127.0.0.1:${server.address().port}`, '--index', fx.index,
+    '--no-vitals', '--out', out];
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  await runGate(common);
+  writeFileSync(join(fx.root, 'src', 'components', 'Gamma.astro'), '<div class="gamma">Gamma</div>\n');
+  writeFileSync(join(fx.root, 'src', 'pages', 'p01.astro'),
+    '---\nimport Gamma from "../components/Gamma.astro";\n---\n<Gamma />\n<h1>Page 01</h1>\n');
+  await runGate([...common, '--changed', 'src/pages/p01.astro']);
+
+  writeFileSync(join(fx.root, 'src', 'components', 'Gamma.astro'), '<div class="gamma">Gamma, edited</div>\n');
+  const third = await runGate([...common, '--changed', 'src/components/Gamma.astro']);
+  assert.ok(!/is not in the index, falling wide/.test(third.out),
+    `the index was stale, so a real component read as unknown\n${third.out.slice(-900)}`);
+  assert.match(third.out, /blast radius of 1 of 3 route\(s\)/);
+});
+
+test('a probe failure drops the record of a route that was skipped', async (t) => {
+  // The no-JS, focus, hover-nav, vitals and design probes all file against `/` and run whatever
+  // the route selection is. A skipped home route with a failing probe used to keep its passing
+  // record and be skipped again, so the run exited 1 for ever with nothing re-rendered.
+  const root = mkdtempSync(join(tmpdir(), 'palate-incremental-probe-'));
+  for (const d of ['src/pages', 'src/styles', 'src/layouts', '.palate']) mkdirSync(join(root, d), { recursive: true });
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'probe-fixture', private: true }, null, 2));
+  writeFileSync(join(root, 'src', 'styles', 'globals.css'), ':root { --ink: #1a1a1a; }\n');
+  writeFileSync(join(root, 'src', 'layouts', 'BaseLayout.astro'), '---\nimport "../styles/globals.css";\n---\n<slot />\n');
+  writeFileSync(join(root, 'src', 'pages', 'index.astro'), '<h1>Home</h1>\n');
+  writeFileSync(join(root, 'src', 'pages', 'p01.astro'), '<h1>Page 01</h1>\n');
+  writeFileSync(join(root, '.palate', 'index.json'), JSON.stringify({
+    root,
+    routes: [
+      { path: '/', source: 'src/pages/index.astro', kind: 'static', dependsOn: [], links: [] },
+      { path: '/p01', source: 'src/pages/p01.astro', kind: 'static', dependsOn: [], links: [] },
+    ],
+    entries: [], counts: { routes: 2, entries: 0, drafts: 0 },
+    links: { parsed: 0, files: 0, orphans: [], dead: [], stale: 0 },
+  }, null, 2));
+
+  // The served HTML is what the probes read, and the source files are what the hash reads, so
+  // the fixture can move the render without moving the hash. That is the real case: something
+  // outside the hash changed what the page does.
+  const html = new Map();
+  html.set('/', page('Home', filler(2)));
+  html.set('/p01', page('Page 01', filler(2)));
+  const server = await serve(html);
+  const out = join(root, '.palate-shots');
+  const common = ['--url', `http://127.0.0.1:${server.address().port}`,
+    '--index', join(root, '.palate', 'index.json'), '--no-vitals', '--out', out];
+  t.after(() => { server.close(); rmSync(root, { recursive: true, force: true }); });
+
+  // The hygiene floor files its own High against `/` on a fixture this bare, which would mean
+  // the home route never earns a record and the test proves nothing. Turned off so the focus
+  // probe is the only thing that can fail this route.
+  const noFloor = { PALATE_MIN_HYGIENE: '0' };
+  const first = await runGate(common, noFloor);
+  const m1 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.deepEqual(Object.keys(m1.routes).sort(), ['/', '/p01'],
+    `the probe fixture recorded ${Object.keys(m1.routes)}\n${first.out.slice(-900)}`);
+
+  // Four focusable controls with focus styling deliberately removed: the keyboard traversal
+  // check files a High against `/`.
+  html.set('/', page('Home', `<style>a:focus-visible{outline:none}</style>
+    <p><a href="#a">one</a> <a href="#b">two</a> <a href="#c">three</a> <a href="#d">four</a></p>${filler(2)}`));
+  const second = await runGate(common, noFloor);
+  assert.match(second.out, /\/ unchanged, skipped/, 'the home route was not skipped, so this proves nothing');
+  assert.equal(second.status, 1, `the probe did not fail the run\n${second.out.slice(-900)}`);
+  const m2 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.equal(m2.routes['/'], undefined, 'a route with a High finding kept its passing record');
+  assert.ok(m2.routes['/p01'], 'an unrelated route lost its record');
 });

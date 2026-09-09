@@ -76,9 +76,11 @@ routes those files can reach. A file the index has never heard of falls wide, re
 everything and says which file did it. A route whose sources have not changed since it last
 passed is skipped and named. On a thirty-route fixture that is 25s against 187s.
 
-The hash covers a route's own source, its import closure, and the shared inputs no closure has
-to name: the config, `package.json` and the lockfile, `src/styles`, `src/layouts` and the CSS
-those layouts import. Edit your brand tokens and every record goes, with the reason printed.
+The hash covers a route's own source, its import closure, the content entries it renders, and
+the shared inputs no closure has to name: the config, `package.json` and the lockfile,
+`src/styles`, `src/layouts` and the CSS those layouts import. Edit your brand tokens and every
+record goes, with the reason printed. `--changed` rebuilds `.palate/index.json` first, because
+that is where both the blast radius and the hashes come from.
 
 **The run before hand-over is `--full`**, which ignores those records. Remote content,
 `public/` assets and environment values stay outside the hash, so an unchanged source can

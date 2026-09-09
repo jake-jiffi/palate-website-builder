@@ -47,6 +47,8 @@ import { resolveDynamic } from '../palate-shopify.mjs';
 // change affect" is how a narrowed gate ends up narrower than the change.
 import { blastRadius } from '../palate-index.mjs';
 import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { execFileSync } from 'child_process';
 import { measurePage, scoreDesignFacts, DESIGN_MEASURE_VERSION, DESIGN_MEASURE_SHA } from './design-measure.mjs';
 import { measureVitals, scoreVitals, VITALS_SHA } from './vitals.mjs';
 import { score as scoreRubric } from './rubric.mjs';
@@ -107,6 +109,25 @@ function routesFromIndex(indexPath) {
       endpoints: all.filter((r) => r.kind === 'endpoint').length,
     };
   } catch { return null; }
+}
+
+/**
+ * Rebuild the content index in place. NEVER FATAL: a build with no src/pages, a missing script
+ * or a parse failure leaves whatever index is already there and says what happened, because a
+ * stale index is worse than none only when nobody is told.
+ */
+function rebuildIndex(projectRoot, indexPath) {
+  const script = fileURLToPath(new URL('../palate-index.mjs', import.meta.url));
+  try {
+    execFileSync(process.execPath, [script, projectRoot, '--out', resolve(indexPath)], { stdio: 'pipe' });
+    console.error(`verify-rendered: --changed rebuilt ${indexPath} first, so the blast radius and the route hashes read current source.`);
+  } catch (e) {
+    console.error(
+      `verify-rendered: could not rebuild ${indexPath} (${(e?.message ?? e).toString().split('\n')[0]}). ` +
+      'The blast radius and the route hashes are read from the index ALREADY on disk, which may be stale. ' +
+      'Run palate-index.mjs yourself, or use --full.',
+    );
+  }
 }
 
 /**
@@ -179,20 +200,45 @@ function walkFiles(dir, out = []) {
   return out;
 }
 
-// The CSS a layout imports, resolved to real files. A bare specifier is looked up under
-// node_modules, which is where `@palate-projects/<slug>-brand/tokens.css` lives.
+/**
+ * The CSS a layout imports, resolved to real files.
+ *
+ * NODE'S RESOLVER, NOT A PATH JOIN, and the difference was a whole silent hole. A bare
+ * specifier used to become `node_modules/<spec>` and was kept only if that path existed. The
+ * brand package publishes `tokens/tokens.css` and `fonts/fonts.css` and exposes the short
+ * names through an `exports` map, so `@palate-projects/<slug>-brand/tokens.css` is never on
+ * disk: both files dropped out of the digest on every real build while the docs promised that
+ * editing the brand tokens re-renders the site. `createRequire().resolve()` honours `exports`
+ * for any subpath, `.css` included.
+ *
+ * AND AN IMPORT THAT CANNOT BE RESOLVED IS NAMED. That is the whole lesson of the defect: the
+ * exclusion was correct-looking code doing nothing, with nothing printed.
+ */
 function importedCss(root, layoutFiles) {
   const out = new Set();
+  const unresolved = [];
+  const req = createRequire(resolve(root, 'package.json'));
   for (const f of layoutFiles) {
     let src;
     try { src = readFileSync(f, 'utf8'); } catch { continue; }
     for (const m of src.matchAll(/import\s+["']([^"']+\.css)["']/g)) {
       const spec = m[1];
-      const cand = spec.startsWith('.') ? resolve(dirname(f), spec)
-        : spec.startsWith('@/') ? resolve(root, 'src', spec.slice(2))
-          : resolve(root, 'node_modules', spec);
-      if (existsSync(cand)) out.add(cand);
+      let cand = null;
+      if (spec.startsWith('.')) cand = resolve(dirname(f), spec);
+      else if (spec.startsWith('@/')) cand = resolve(root, 'src', spec.slice(2));
+      else {
+        try { cand = req.resolve(spec); }
+        catch { const p = resolve(root, 'node_modules', spec); cand = existsSync(p) ? p : null; }
+      }
+      if (cand && existsSync(cand)) out.add(cand);
+      else unresolved.push(`${spec} (in ${relative(root, f)})`);
     }
+  }
+  if (unresolved.length) {
+    console.error(
+      `verify-rendered: ${unresolved.length} layout CSS import(s) could not be resolved and are NOT in the ` +
+      `global digest, so editing them will not invalidate any record: ${unresolved.join(', ')}.`,
+    );
   }
   return [...out];
 }
@@ -215,19 +261,71 @@ function globalInputsHash(root) {
 }
 
 /**
- * The identity of a route's SOURCE: the global inputs above, plus its own file and its whole
- * import closure, which the index has already computed. Two runs over the same bytes get the
- * same hash, so "has this route changed since it last passed" is answered by a comparison
- * rather than by a clock. An unreadable file hashes as its own marker, so DELETING an import
- * changes the hash.
+ * THE CONTENT A ROUTE RENDERS, which its import closure never names.
+ *
+ * `closure()` follows imports, and a page does not import the markdown it renders: it asks
+ * for it by collection name. So blastRadius mapped `src/content/blog/x.md` to the post's
+ * route and its listing exactly as its own comment promises, and then the skip compared a
+ * hash that had never read the post, found it unchanged, and printed "unchanged, skipped"
+ * for the very routes the operator had just named. Exit 0, nothing rendered, on any build
+ * with a blog.
+ *
+ * The collection is read the way gate-seo reads it, from a literal getCollection call, and
+ * across the closure rather than the route file alone, because a listing is often rendered by
+ * a component. A route that reaches `content.config.ts` without naming a collection folds in
+ * EVERY entry: that is the third case blastRadius selects, and over-reading there costs a
+ * render while under-reading costs the whole point of the gate.
+ *
+ * Digests are memoised per collection, so a 200-post blog is read once and not once per route.
  */
-function sourcesHashFor(route, root, globalHash) {
+const COLLECTION_CALL = /\bget(?:Collection|Entry|EntryBySlug)\s*\(\s*["'`]([\w-]+)["'`]/g;
+const collectionDigests = new Map();
+
+function collectionsFor(route, root) {
+  const names = new Set();
+  let reachesConfig = false;
+  for (const f of [route.source, ...(route.dependsOn || [])].filter(Boolean)) {
+    if (/content\.config\.(ts|js|mjs)$/.test(f)) reachesConfig = true;
+    let src;
+    try { src = readFileSync(resolve(root, f), 'utf8'); } catch { continue; }
+    for (const m of src.matchAll(COLLECTION_CALL)) names.add(m[1]);
+  }
+  if (!names.size && reachesConfig) names.add('*'); // every entry: see above
+  return [...names].sort();
+}
+
+function collectionDigest(root, entries, name) {
+  if (!collectionDigests.has(name)) {
+    const h = createHash('sha256');
+    const mine = entries.filter((e) => name === '*' || e.collection === name);
+    for (const e of mine.sort((a, b) => a.file.localeCompare(b.file))) {
+      let body;
+      try { body = readFileSync(resolve(root, e.file)); } catch { body = Buffer.from('<unreadable>'); }
+      h.update(e.file); h.update('\0'); h.update(body); h.update('\0');
+    }
+    collectionDigests.set(name, h.digest('hex'));
+  }
+  return collectionDigests.get(name);
+}
+
+/**
+ * The identity of a route's SOURCE: the global inputs above, its own file, its whole import
+ * closure (which the index has already computed) and the content entries it renders. Two runs
+ * over the same bytes get the same hash, so "has this route changed since it last passed" is
+ * answered by a comparison rather than by a clock. An unreadable file hashes as its own
+ * marker, so DELETING an import changes the hash.
+ */
+function sourcesHashFor(route, root, globalHash, entries = []) {
   const h = createHash('sha256');
   h.update('global'); h.update('\0'); h.update(globalHash); h.update('\0');
   for (const f of [route.source, ...(route.dependsOn || [])].filter(Boolean).sort()) {
     let body;
     try { body = readFileSync(resolve(root, f)); } catch { body = Buffer.from('<unreadable>'); }
     h.update(f); h.update('\0'); h.update(body); h.update('\0');
+  }
+  for (const name of collectionsFor(route, root)) {
+    h.update('collection:' + name); h.update('\0');
+    h.update(collectionDigest(root, entries, name)); h.update('\0');
   }
   return h.digest('hex');
 }
@@ -256,6 +354,8 @@ let routes;
 // cannot be hashed, so it is never skipped and never recorded.
 const routeOf = new Map();
 let projectRoot = '.';
+// The index's content entries, for the collection digest a dynamic route's hash folds in.
+let indexEntries = [];
 if (args.routes) {
   routes = String(args.routes).split(',').map((r) => r.trim()).filter(Boolean);
   if (changed) console.error('verify-rendered: --routes names the routes explicitly, so --changed is ignored on this run.');
@@ -263,6 +363,13 @@ if (args.routes) {
   const indexPath = args.index && args.index !== 'true' ? args.index : '.palate/index.json';
   // The index lives at <project>/.palate/index.json and its paths are relative to <project>.
   projectRoot = resolve(dirname(indexPath), '..');
+  // --changed READS THE INDEX TWICE OVER, for the blast radius and for every route's import
+  // closure, so a stale index narrows to the wrong routes AND leaves their records valid. The
+  // failure needs two fixes to land: add an import to a page (the page renders, its own source
+  // changed), then edit the newly imported file, and the page is neither selected nor
+  // invalidated because dependsOn predates the import. palate-index.mjs is a static parse
+  // costing well under a second, so it is rebuilt rather than trusted.
+  if (changed) rebuildIndex(projectRoot, indexPath);
   const found = routesFromIndex(indexPath);
   if (found) {
     const picked = changed ? narrowToChanged(found.index, found.picked, changed) : found.picked;
@@ -273,6 +380,7 @@ if (args.routes) {
     }
     routes = res.paths.slice(0, MAX_ROUTES);
     routes.forEach((p, i) => routeOf.set(p, picked[i]));
+    indexEntries = Array.isArray(found.index.entries) ? found.index.entries : [];
     const dropped = picked.length - routes.length;
     const over = dropped > 0 ? ` — ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : '';
     // A narrowed run gets its own sentence. The index-wide tallies below describe the whole
@@ -336,7 +444,7 @@ const skipped = [];
 for (const p of routes) {
   const r = routeOf.get(p);
   if (!r) continue; // no index record behind this route, so it cannot be hashed and always renders
-  const sh = sourcesHashFor(r, projectRoot, globalInputs.hash);
+  const sh = sourcesHashFor(r, projectRoot, globalInputs.hash, indexEntries);
   sourcesHashes.set(p, sh);
   const prior = priorRoutes[p];
   if (!FULL && prior && prior.sourcesHash === sh && prior.passed_at) skipped.push(p);
@@ -1511,7 +1619,11 @@ if (outDir) {
   // MERGED into the shots manifest, never written over it: screenshot-build.mjs owns status,
   // shots and the console-error count in the same file, and this gate owns `routes`.
   try {
-    const highRoutes = new Set(findings.filter((f) => (RANK[f.sev] || 0) >= RANK.High).map((f) => f.route));
+    // THE CLIENT-NAV PROBE FILES AGAINST "<path> (via client-nav)", not against the path, so a
+    // naive set never matched the route it was about.
+    const highRoutes = new Set(findings
+      .filter((f) => (RANK[f.sev] || 0) >= RANK.High)
+      .map((f) => String(f.route).replace(/ \(via client-nav\)$/, '')));
     let m = {};
     try { m = JSON.parse(readFileSync(shotsManifest, 'utf8')); } catch { m = {}; }
     if (!m || typeof m !== 'object' || Array.isArray(m)) m = {};
@@ -1524,6 +1636,11 @@ if (outDir) {
       if (!sh || text === undefined || highRoutes.has(p)) { delete out[p]; continue; }
       out[p] = { sourcesHash: sh, renderedHash: textHash(text), passed_at: new Date().toISOString() };
     }
+    // A SKIPPED ROUTE IS NOT EXEMPT. The no-JS, focus, hover-nav, vitals and design probes all
+    // file against `/` and run whatever the selection is, so a skipped home route with a failing
+    // probe used to keep its passing record and be skipped again next run. The doc says a record
+    // is dropped the moment a route fails; this is what makes that true rather than nearly true.
+    for (const p of highRoutes) delete out[p];
     m.routes = out;
     m.globalInputs = globalInputs.hash;
     writeFileSync(shotsManifest, JSON.stringify(m, null, 2) + '\n');

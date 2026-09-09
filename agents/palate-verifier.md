@@ -362,7 +362,10 @@ because one file had changed. After a fix:
 2. `bash scripts/verify-rendered.sh $SERVE_URL --changed <the files you edited> --no-vitals
    --out .palate-shots`. `--changed` renders only the routes those files can reach, and a
    file the index has never heard of falls wide and names itself rather than narrowing on a
-   guess. A route whose sources have not changed since it last passed is skipped and named
+   guess. **`--changed` rebuilds `.palate/index.json` first**, because both the blast radius
+   and every route's hash are read from it: a fix that adds an import leaves the old closure
+   on disk, and the next fix to that imported file would neither select the page nor
+   invalidate its record. A route whose sources have not changed since it last passed is skipped and named
    "unchanged, skipped". Measured on a thirty-route fixture: 25s against 187s.
 3. `--no-vitals` for every iteration in the loop. The vitals pass runs under slow-4G with 4x
    CPU throttling on its own throttled context, and it measures the HOME route, which your
@@ -371,8 +374,9 @@ because one file had changed. After a fix:
 **THE LAST RUN BEFORE HAND-OVER IS ONE FULL SWEEP:**
 `bash scripts/verify-rendered.sh $SERVE_URL --full --out .palate-shots`, with vitals on.
 `--full` ignores every unchanged-route record. The record is keyed on a route's own source,
-its import closure AND the shared inputs (the config, `package.json`, the lockfile,
-`src/styles`, `src/layouts` and the CSS those layouts import), so editing the brand tokens or
+its import closure, the content entries it renders (the collection its `getCollection` call
+names) AND the shared inputs (the config, `package.json`, the lockfile, `src/styles`,
+`src/layouts` and the CSS those layouts import), so editing the brand tokens or
 the shared layout drops every record and the run says
 `global inputs changed, all routes re-rendered`. What stays outside the hash is remote content,
 `public/` assets and environment values, so an unchanged source can still render differently.

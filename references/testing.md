@@ -72,13 +72,16 @@ Nothing in this plugin runs Lighthouse. The doctrine used to say "Lighthouse CI,
   name the ones that matter. A 3,400-page site is measured on 14 pages unless you say
   otherwise, and the summary prints exactly that.
 - **Re-running after a fix.** `--changed <file,...>` renders only the routes those files can
-  reach, and a file the index has never heard of falls wide and says which one. A route whose
+  reach, and a file the index has never heard of falls wide and says which one.
+  `--changed` rebuilds `.palate/index.json` first, since both the blast radius and every
+  route's hash are read from it and a stale closure narrows to the wrong routes. A route whose
   sources have not changed since it last passed is skipped and printed "unchanged, skipped";
   the record lives in `.palate-shots/manifest.json` as `{ sourcesHash, renderedHash,
   passed_at }` per route. Measured on a thirty-route fixture: 25s against a 187s sweep. Run
   the lanes cheap first, ux-lint before rendered, rendered before vitals.
-- **What the hash covers.** A route's own source, its whole import closure, and the SHARED
-  inputs no closure has to name: the Astro config, `package.json` and the lockfile, everything
+- **What the hash covers.** A route's own source, its whole import closure, the content
+  entries it renders (the collection its `getCollection` call names, so editing a post
+  re-renders the post and its listing), and the SHARED inputs no closure has to name: the Astro config, `package.json` and the lockfile, everything
   under `src/styles` and `src/layouts`, and the CSS those layouts import, which is how the
   brand package's `tokens.css` and `fonts.css` are reached. Change one of those and every
   record goes, with the run printing `global inputs changed, all routes re-rendered`.
