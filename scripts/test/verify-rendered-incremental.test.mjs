@@ -309,7 +309,7 @@ test('a layout CSS import that cannot be resolved is named, never dropped in sil
 // A blog: one entry, the [slug] route that renders it and the listing that links it. The
 // closure follows imports and a page does not import its markdown, so this is the shape where
 // blastRadius selected the right routes and the skip then threw them away.
-function makeBlogFixture() {
+function makeBlogFixture({ draft = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'palate-incremental-blog-'));
   for (const d of ['src/pages/blog', 'src/content/blog', 'src/styles', 'src/layouts', '.palate']) {
     mkdirSync(join(root, d), { recursive: true });
@@ -328,7 +328,7 @@ function makeBlogFixture() {
     { path: '/blog', source: 'src/pages/blog/index.astro', kind: 'static', dependsOn: [], links: [] },
     { path: '/blog/[slug]', source: 'src/pages/blog/[slug].astro', kind: 'dynamic', dependsOn: [], links: [] },
   ];
-  const entries = [{ id: 'hello', collection: 'blog', file: 'src/content/blog/hello.md', draft: false }];
+  const entries = [{ id: 'hello', collection: 'blog', file: 'src/content/blog/hello.md', draft }];
   writeFileSync(join(root, '.palate', 'index.json'), JSON.stringify({
     root, routes, entries, counts: { routes: 2, entries: 1, drafts: 0 },
     links: { parsed: 0, files: 0, orphans: [], dead: [], stale: 0 },
@@ -353,8 +353,9 @@ test('editing a post is not skipped as unchanged', async (t) => {
   const first = await runGate(common);
   const m1 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
   // The template is rendered as a REAL post, from the index's entries, so the record is of a
-  // page that exists rather than of the site's 404.
-  assert.deepEqual(Object.keys(m1.routes).sort(), ['/blog', '/blog/hello'],
+  // page that exists rather than of the site's 404. The KEY is the template, which does not
+  // move when the collection gains an earlier-sorting post.
+  assert.deepEqual(Object.keys(m1.routes).sort(), ['/blog', '/blog/[slug]'],
     `the blog fixture recorded ${Object.keys(m1.routes)}\n${first.out.slice(-900)}`);
 
   writeFileSync(join(fx.root, 'src', 'content', 'blog', 'hello.md'), '---\ntitle: Hello\n---\nEdited post.\n');
@@ -365,7 +366,7 @@ test('editing a post is not skipped as unchanged', async (t) => {
   assert.match(second.out, /rendered as a real page from the index entries: \/blog\/\[slug\] -> \/blog\/hello/,
     'the post\'s own page was never fetched');
   const m2 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
-  assert.notEqual(m2.routes['/blog/hello'].sourcesHash, m1.routes['/blog/hello'].sourcesHash);
+  assert.notEqual(m2.routes['/blog/[slug]'].sourcesHash, m1.routes['/blog/[slug]'].sourcesHash);
   assert.notEqual(m2.routes['/blog'].sourcesHash, m1.routes['/blog'].sourcesHash);
 });
 
@@ -512,4 +513,121 @@ test('--routes leaves the records it cannot hash alone', async (t) => {
   await runGate(['--url', url, '--routes', '/p01', '--no-vitals', '--out', out]);
   const m2 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
   assert.deepEqual(m2.routes, m1.routes, 'a --routes run threw away records it could not hash');
+});
+
+// A site with a real 404 route, answering 404 the way a dev server and a static host both do.
+function make404Fixture(extraBody = '') {
+  const root = mkdtempSync(join(tmpdir(), 'palate-incremental-404-'));
+  for (const d of ['src/pages', 'src/styles', 'src/layouts', '.palate']) mkdirSync(join(root, d), { recursive: true });
+  writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'nf-fixture', private: true }, null, 2));
+  writeFileSync(join(root, 'src', 'styles', 'globals.css'), ':root { --ink: #1a1a1a; }\n');
+  writeFileSync(join(root, 'src', 'layouts', 'BaseLayout.astro'), '---\nimport "../styles/globals.css";\n---\n<slot />\n');
+  writeFileSync(join(root, 'src', 'pages', 'index.astro'), '<h1>Home</h1>\n');
+  writeFileSync(join(root, 'src', 'pages', '404.astro'), '<h1>Not found</h1>\n');
+  writeFileSync(join(root, '.palate', 'index.json'), JSON.stringify({
+    root,
+    routes: [
+      { path: '/', source: 'src/pages/index.astro', kind: 'static', dependsOn: [], links: [] },
+      { path: '/404', source: 'src/pages/404.astro', kind: 'static', dependsOn: [], links: [] },
+    ],
+    entries: [], counts: { routes: 2, entries: 0, drafts: 0 },
+    links: { parsed: 0, files: 0, orphans: [], dead: [], stale: 0 },
+  }, null, 2));
+
+  const html = new Map();
+  html.set('/', page('Home', filler(2)));
+  // The 404 route answers 404 and the server says so, which is what makes the browser log the
+  // document's own load as a console error.
+  const notFound = { status: 404, body: page('Not found', `<p>No such page.</p>${extraBody}${filler(1)}`) };
+  return { root, html, notFound, index: join(root, '.palate', 'index.json') };
+}
+
+function serveWith404(html, notFound) {
+  const server = createServer((req, res) => {
+    let path = (req.url || '/').split('?')[0].replace(/\/$/, '') || '/';
+    try { path = decodeURIComponent(path); } catch { /* keep the raw path */ }
+    const body = html.get(path);
+    if (body) { res.writeHead(200, { 'content-type': 'text/html' }); res.end(body); return; }
+    res.writeHead(notFound.status, { 'content-type': 'text/html' });
+    res.end(notFound.body);
+  });
+  return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(server)));
+}
+
+test('the 404 route answering 404 is not a finding, and a real error on it still is', async (t) => {
+  // Every plain run and every certify sweep on the shipped template exited 1 on this: the
+  // dev server answers /404 with 404, the browser logs the document's own load as a console
+  // error, and the console rule filed a High at all three viewports. The operator cannot fix
+  // it, so the sweep's exit code could not tell a clean site from a broken one.
+  const clean = make404Fixture();
+  const s1 = await serveWith404(clean.html, clean.notFound);
+  t.after(() => { s1.close(); rmSync(clean.root, { recursive: true, force: true }); });
+  const ok = await runGate(['--url', `http://127.0.0.1:${s1.address().port}`, '--index', clean.index,
+    '--no-vitals'], { PALATE_MIN_HYGIENE: '0' });
+  assert.ok(!/\/404 @\w+ +\[High\]/.test(ok.out),
+    `the 404 route's own status was filed as a finding\n${ok.out.slice(-1200)}`);
+  assert.equal(ok.status, 0, `a clean site with a 404 route did not pass\n${ok.out.slice(-1200)}`);
+
+  // The other direction, which is the half that makes the exemption safe: a script error and a
+  // missing subresource on the SAME page are still Highs.
+  const noisy = make404Fixture('<script>console.error("a real script error")</script><img alt="x" src="/missing.png">');
+  const s2 = await serveWith404(noisy.html, noisy.notFound);
+  t.after(() => { s2.close(); rmSync(noisy.root, { recursive: true, force: true }); });
+  const bad = await runGate(['--url', `http://127.0.0.1:${s2.address().port}`, '--index', noisy.index,
+    '--no-vitals'], { PALATE_MIN_HYGIENE: '0' });
+  assert.match(bad.out, /\/404 @\w+ +\[High\] +console error: a real script error/,
+    `a real script error on /404 was swallowed\n${bad.out.slice(-1200)}`);
+  assert.match(bad.out, /missing\.png/, 'a subresource that 404s on /404 was swallowed');
+  assert.equal(bad.status, 1);
+});
+
+test('a dynamic template keeps one record key when an earlier-sorting post arrives', async (t) => {
+  const fx = makeBlogFixture();
+  const server = await serve(fx.html);
+  const out = join(fx.root, '.palate-shots');
+  const common = ['--url', `http://127.0.0.1:${server.address().port}`, '--index', fx.index,
+    '--no-vitals', '--out', out];
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  await runGate(common);
+  const m1 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.ok(m1.routes['/blog/[slug]'], `the record was filed under ${Object.keys(m1.routes)}`);
+
+  // A post that sorts before the old representative. The template is still one route with one
+  // record; keying on the rendered page would orphan the old key and render for nothing.
+  writeFileSync(join(fx.root, 'src', 'content', 'blog', 'aardvark.md'), '---\ntitle: Aardvark\n---\nEarlier.\n');
+  const entries = [
+    { id: 'aardvark', collection: 'blog', file: 'src/content/blog/aardvark.md', draft: false },
+    { id: 'hello', collection: 'blog', file: 'src/content/blog/hello.md', draft: false },
+  ];
+  const idx = JSON.parse(readFileSync(fx.index, 'utf8'));
+  writeFileSync(fx.index, JSON.stringify({ ...idx, entries }, null, 2));
+  fx.html.set('/blog/aardvark', page('Aardvark', filler(2)));
+
+  const second = await runGate(common);
+  const m2 = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.deepEqual(Object.keys(m2.routes).sort(), Object.keys(m1.routes).sort(),
+    `the record key moved with the representative\n${second.out.slice(-900)}`);
+  assert.notEqual(m2.routes['/blog/[slug]'].sourcesHash, m1.routes['/blog/[slug]'].sourcesHash,
+    'a new post must still invalidate the template');
+});
+
+test('a template whose only entry is a draft is not rendered, and the run says why', async (t) => {
+  // Found by sweeping the shipped template rather than by reading code. Its one post ships as
+  // a draft, so nothing is built for it, and substituting it swapped a literal path that 404s
+  // for an invented path that 404s: three Highs at three viewports on a page that does not
+  // exist. A template with no published entry has no page.
+  const fx = makeBlogFixture({ draft: true });
+  fx.html.delete('/blog/hello');
+  const server = await serve(fx.html);
+  const out = join(fx.root, '.palate-shots');
+  t.after(() => { server.close(); rmSync(fx.root, { recursive: true, force: true }); });
+
+  const r = await runGate(['--url', `http://127.0.0.1:${server.address().port}`, '--index', fx.index,
+    '--no-vitals', '--out', out], { PALATE_MIN_HYGIENE: '0' });
+  assert.match(r.out, /NOT rendered, because no published entry exists.*\/blog\/\[slug\]/);
+  assert.ok(!/\/blog\/hello/.test(r.out), 'a draft entry was rendered as a page');
+  assert.equal(r.status, 0, `the draft template was fetched and failed\n${r.out.slice(-1200)}`);
+  const m = JSON.parse(readFileSync(join(out, 'manifest.json'), 'utf8'));
+  assert.deepEqual(Object.keys(m.routes), ['/blog'], 'a route that was never rendered earned a record');
 });

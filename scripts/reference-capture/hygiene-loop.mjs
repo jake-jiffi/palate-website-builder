@@ -139,15 +139,22 @@ const round3 = (n) => Math.round(n * 1000) / 1000;
  * is worse than no trend.
  *
  * So the basis is the configuration the caller controls: vitals on or off (14 of the 100
- * weight, so the number is genuinely a different quantity across it), axe available or not,
- * and the route set axe swept. Check-set changes WITHIN a basis still shift the denominator a
- * little; those are reported as a caveat on the delta rather than as a refusal to compare.
+ * weight, so the number is genuinely a different quantity across it) and axe available or not.
+ * Check-set changes WITHIN a basis still shift the denominator a little; those are reported as
+ * a caveat on the delta rather than as a refusal to compare.
+ *
+ * THE ROUTE SET IS NO LONGER PART OF IT, and that was the second version of the same mistake.
+ * Once the rendered gate learned to render only a blast radius, every incremental run swept a
+ * different route set, so every incremental run reported NO COMPARISON: the fix, re-run, read
+ * the trend rhythm this loop exists for was available on a full sweep and nowhere else, which
+ * is precisely when nobody needs it. A different route set changes the COVERAGE, not the
+ * quantity (the score is the home route's design and vitals plus axe binaries), so it is
+ * disclosed on the comparison instead of refusing one. See `compare`.
  */
 export function basisOf(ctx = {}) {
   return [
     'vitals:' + (ctx.vitals === false ? 'off' : 'on'),
     'axe:' + (ctx.axe === false ? 'off' : 'on'),
-    'routes:' + [...(ctx.routes ?? [])].sort().join('+'),
   ].join(' ');
 }
 
@@ -249,11 +256,24 @@ export function comparableTail(entries, basis) {
  * basis: an axe check that fired last time and not this time, or a check that went
  * inapplicable. Part of the move is then the denominator rather than the page, and the
  * message says so instead of taking full credit.
+ *
+ * `coverageNote` is set when the two runs swept a different set of ROUTES. That is now the
+ * normal case, because an incremental run renders a blast radius, and it is disclosed rather
+ * than refused: the axe binaries had fewer pages to fire on, so the score is comparable and
+ * the coverage is not.
  */
 export function compare(current, previous) {
-  if (!previous) return { verdict: 'first', delta: null, previous: null, denominatorNote: null };
+  if (!previous) return { verdict: 'first', delta: null, previous: null, denominatorNote: null, coverageNote: null };
   if (previous.basis !== current.basis) {
-    return { verdict: 'incomparable', delta: null, previous, denominatorNote: null };
+    return { verdict: 'incomparable', delta: null, previous, denominatorNote: null, coverageNote: null };
+  }
+  const nowRoutes = [...(current.routes ?? [])].sort();
+  const thenRoutes = [...(previous.routes ?? [])].sort();
+  let coverageNote = null;
+  if (nowRoutes.join('+') !== thenRoutes.join('+')) {
+    coverageNote = nowRoutes.every((r) => thenRoutes.includes(r))
+      ? `this run swept ${nowRoutes.length} of the ${thenRoutes.length} route(s) the comparison run did, so the accessibility checks had fewer pages to fire on: the score is comparable, the coverage is not`
+      : `this run swept a different route set (${nowRoutes.length} route(s) against ${thenRoutes.length}), so the accessibility checks saw different pages`;
   }
   const now = Object.keys(current.checks ?? {});
   const then = Object.keys(previous.checks ?? {});
@@ -267,7 +287,7 @@ export function compare(current, previous) {
     : null;
   const delta = current.overall - previous.overall;
   const verdict = Math.abs(delta) <= NOISE_BAND ? 'unchanged' : delta > 0 ? 'improved' : 'regressed';
-  return { verdict, delta, previous, denominatorNote };
+  return { verdict, delta, previous, denominatorNote, coverageNote };
 }
 
 /**
@@ -314,17 +334,23 @@ const signed = (n) => (n > 0 ? '+' + n : String(n));
 export function trendLine(cmp, iterations) {
   const it = ` (iteration ${iterations} of this loop)`;
   const caveat = cmp.denominatorNote ? ` NOTE: ${cmp.denominatorNote}.` : '';
+  // WHICH RUN. "up 14" against an unnamed previous run is unreadable once the loop compares
+  // across route sets: the reader has to know what they are being compared with.
+  const against = cmp.previous?.at
+    ? ` Compared against the run at ${cmp.previous.at} (${(cmp.previous.routes ?? []).length} route(s) swept).`
+    : '';
+  const coverage = cmp.coverageNote ? ` NOTE: ${cmp.coverageNote}.` : '';
   switch (cmp.verdict) {
     case 'first':
       return 'FIRST MEASUREMENT: there is no previous run to compare against, so there is no trend yet. The next run will report whether your changes moved it.';
     case 'incomparable':
       return `NO COMPARISON: the previous run measured a different configuration (${cmp.previous.basis}), so the two numbers are not the same quantity. Re-run with the same flags and routes to get a trend.`;
     case 'improved':
-      return `IMPROVING: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, UP ${cmp.delta}${it}. Keep going in the same direction.${caveat}`;
+      return `IMPROVING: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, UP ${cmp.delta}${it}. Keep going in the same direction.${against}${caveat}${coverage}`;
     case 'regressed':
-      return `REGRESSED: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, DOWN ${Math.abs(cmp.delta)}${it}. The last change made it WORSE - revert it before trying something else.${caveat}`;
+      return `REGRESSED: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, DOWN ${Math.abs(cmp.delta)}${it}. The last change made it WORSE - revert it before trying something else.${against}${caveat}${coverage}`;
     default:
-      return `UNCHANGED: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, a move of ${signed(cmp.delta)}${it}. Run-to-run spread on an unchanged page is about ${NOISE_BAND} points, so this is noise, not progress: what you changed did not move the score.${caveat}`;
+      return `UNCHANGED: ${cmp.previous.overall} -> ${cmp.previous.overall + cmp.delta}, a move of ${signed(cmp.delta)}${it}. Run-to-run spread on an unchanged page is about ${NOISE_BAND} points, so this is noise, not progress: what you changed did not move the score.${against}${caveat}${coverage}`;
   }
 }
 

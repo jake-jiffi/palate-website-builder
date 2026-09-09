@@ -114,6 +114,14 @@ present "testing.md names the per-route record" \
   "references/testing.md" "sourcesHash, renderedHash,"
 present "testing.md names the shared inputs the hash covers" \
   "references/testing.md" "global inputs changed, all routes re-rendered"
+present "testing.md says a 404 route is not failed for answering 404" \
+  "references/testing.md" "is not failed for returning it"
+present "testing.md says a real error on that route still fires" \
+  "references/testing.md" "is still a High"
+present "testing.md says the trend reads inside the loop" \
+  "references/testing.md" "The hygiene trend reads inside the loop"
+present "the verifier agent is told to read the trend on every run" \
+  "agents/palate-verifier.md" "Read the trend line on every one of these runs"
 present "testing.md names what the hash does NOT cover" \
   "references/testing.md" "so an unchanged source can still render differently"
 

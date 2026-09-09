@@ -372,7 +372,12 @@ because one file had changed. After a fix:
    **2, skipped rather than passed**, because nothing was established. Measured on a
    thirty-route fixture, 25s against 187s; on a small site the fixed 15s of home-route probes
    dominates, so read the saving as a ratio of your own sweep rather than as that number.
-3. `--no-vitals` for every iteration in the loop. The vitals pass runs under slow-4G with 4x
+3. **Read the trend line on every one of these runs.** It compares against the last recorded
+   run for this project even when that run swept more routes, names which run it compared
+   against, and says when the coverage differed. Fix, re-run, read the trend is the rhythm;
+   it used to say NO COMPARISON on every incremental run and was therefore unavailable exactly
+   when it was wanted.
+4. `--no-vitals` for every iteration in the loop. The vitals pass runs under slow-4G with 4x
    CPU throttling on its own throttled context, and it measures the HOME route, which your
    fix to a service page did not touch.
 

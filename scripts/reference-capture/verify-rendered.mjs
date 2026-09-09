@@ -204,15 +204,25 @@ function toProjectRelative(root, f) {
  * the same question a catalogue answers for a store. Only a single trailing `[param]` is
  * substituted, and only when the route names one collection: anything less certain keeps the
  * literal path rather than inventing a URL.
+ *
+ * PUBLISHED ONLY, and the first version had a draft fallback that a sweep of the shipped
+ * template caught immediately. The scaffold's one post ships as a draft, so nothing is built
+ * for it, and substituting it swapped a literal path that 404s for an invented path that
+ * 404s: three Highs on a route that does not exist. A template with no published entry has no
+ * page, and the caller drops it and says so.
  */
-function resolveFromEntries(route, entries, root) {
+function publishedPageFor(route, entries, root, fromBlast) {
   if (route.kind !== 'dynamic' || !/\/\[[^\]]+\]$/.test(route.path)) return null;
   const names = collectionsFor(route, root).filter((n) => n !== '*');
+  const live = entries.filter((e) => e.draft !== true && (names.length !== 1 || e.collection === names[0]));
+  if (fromBlast) {
+    // The blast radius names the page for a CHANGED entry. A changed draft still has no page.
+    const id = fromBlast.split('/').filter(Boolean).pop();
+    return live.some((e) => e.id === id) ? fromBlast : null;
+  }
   if (names.length !== 1) return null;
-  const entry = entries.find((e) => e.collection === names[0] && e.draft !== true)
-    || entries.find((e) => e.collection === names[0]);
-  if (!entry) return null;
-  return route.path.replace(/\[[^\]]+\]$/, entry.id);
+  const entry = live.find((e) => e.collection === names[0]);
+  return entry ? route.path.replace(/\[[^\]]+\]$/, entry.id) : null;
 }
 
 /**
@@ -408,6 +418,17 @@ let projectRoot = '.';
 let indexEntries = [];
 // Set by a wide fall: the records cannot be trusted for a change that could not be placed.
 let setAside = false;
+/**
+ * THE KEY A ROUTE'S RECORD IS FILED UNDER, which is not always the path that was fetched.
+ *
+ * A dynamic template is rendered as a real page, and which page that is moves: with no
+ * --changed the representative is the first entry of the collection in index order, so adding
+ * a post that sorts earlier renamed the key from /blog/winter-pipes to /blog/<new>, orphaned
+ * the old record and rendered the page again for nothing. The TEMPLATE is what the record is
+ * about, and the template path does not move.
+ */
+const recordKeyOf = new Map();
+const keyOf = (p) => recordKeyOf.get(p) ?? p;
 if (args.routes) {
   routes = String(args.routes).split(',').map((r) => r.trim()).filter(Boolean);
   if (changed) console.error('verify-rendered: --routes names the routes explicitly, so --changed is ignored on this run.');
@@ -444,19 +465,29 @@ if (args.routes) {
     // the catalogue names one for a store. Either beats fetching `/blog/[slug]` and recording
     // the 404 it returns as a pass.
     const substituted = [];
-    const resolvedPaths = res.paths.map((p, i) => {
-      if (!p.includes('[')) return p;
-      const page = narrowed.concrete.get(p) || resolveFromEntries(picked[i], indexEntries, projectRoot);
-      if (!page) return p;
+    const unrenderable = [];
+    const pairs = [];
+    res.paths.forEach((p, i) => {
+      if (!p.includes('[')) { pairs.push([p, picked[i]]); return; }
+      const page = publishedPageFor(picked[i], indexEntries, projectRoot, narrowed.concrete.get(p));
+      if (!page) { unrenderable.push(p); return; }
       substituted.push(`${p} -> ${page}`);
-      return page;
+      recordKeyOf.set(page, p); // the record is about the template, not about today's post
+      pairs.push([page, picked[i]]);
     });
     if (substituted.length) {
       console.error(`verify-rendered: ${substituted.length} dynamic template(s) rendered as a real page from the index entries: ${substituted.join(', ')}`);
     }
-    routes = resolvedPaths.slice(0, MAX_ROUTES);
-    routes.forEach((p, i) => routeOf.set(p, picked[i]));
-    const dropped = picked.length - routes.length;
+    if (unrenderable.length) {
+      console.error(
+        `verify-rendered: ${unrenderable.length} dynamic template(s) NOT rendered, because no published entry ` +
+        `exists to render them as a real page: ${unrenderable.join(', ')}. Fetching the literal path returns the ` +
+        'site\'s 404 and would be reported as a build fault. Publish an entry, or pass --routes to name a page.',
+      );
+    }
+    routes = pairs.slice(0, MAX_ROUTES).map(([path]) => path);
+    routes.forEach((p, i) => routeOf.set(p, pairs[i][1]));
+    const dropped = pairs.length - routes.length;
     const over = dropped > 0 ? `, ${dropped} NOT rendered, over --max-routes ${MAX_ROUTES}` : '';
     // A narrowed run gets its own sentence. The index-wide tallies below describe the whole
     // site, and printed against a blast-radius count they read as a contradiction.
@@ -521,7 +552,7 @@ for (const p of routes) {
   if (!r) continue; // no index record behind this route, so it cannot be hashed and always renders
   const sh = sourcesHashFor(r, projectRoot, globalInputs.hash, indexEntries);
   sourcesHashes.set(p, sh);
-  const prior = priorRoutes[p];
+  const prior = priorRoutes[keyOf(p)];
   if (!FULL && !setAside && prior && prior.sourcesHash === sh && prior.passed_at) skipped.push(p);
 }
 for (const p of skipped) console.error(`verify-rendered: ${p} unchanged, skipped`);
@@ -555,6 +586,30 @@ const VIEWPORTS = {
 // Console / request noise that is not the build's fault (third-party, favicon).
 const IGNORE = [/turnstile/i, /challenges\.cloudflare/i, /humblytics/i, /plausible/i, /google-analytics/i, /googletagmanager/i, /favicon/i];
 const ignored = (s) => IGNORE.some((re) => re.test(s || ''));
+
+/**
+ * ROUTES WHOSE OWN HTTP STATUS IS NOT 200 BY DESIGN, and the one console error that follows.
+ *
+ * A 404 page answers 404. That is the whole point of it, and the browser logs the document's
+ * own load as a console error, which the console rule filed as a High at all three viewports.
+ * On the shipped template every plain run and every certify sweep therefore exited 1 on a
+ * finding no operator can fix, which makes the sweep's exit code useless: the one number the
+ * hand-over rests on could not distinguish a clean site from a broken one.
+ *
+ * SCOPED AS NARROWLY AS IT CAN BE. It is dropped only when all four hold: the route is one
+ * whose status is expected to be non-200, the navigation actually returned THAT status, the
+ * error is a console entry whose location is the navigation URL itself (a subresource that
+ * 404s on the same page has its own URL and still fires), and its text is the resource-load
+ * failure carrying that status. A real script error on /404 has the same location and
+ * different text, so it is still a High. Verified both directions in the suite.
+ */
+const EXPECTED_STATUS = new Map([['/404', 404], ['/500', 500]]);
+function expectedStatusNoise(route, status, e) {
+  const want = EXPECTED_STATUS.get(route);
+  if (!want || status !== want) return false;
+  if (!e || e.kind !== 'console' || e.loc !== base + route) return false;
+  return /failed to load resource/i.test(e.raw || '') && new RegExp(`status of ${want}\\b`).test(e.raw || '');
+}
 
 const findings = [];
 const add = (sev, route, vp, msg) => findings.push({ sev, route, vp, msg });
@@ -711,6 +766,9 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
   const context = await browser.newContext({ viewport: vp });
   for (const route of rendering) {
     const page = await context.newPage();
+    // Kept as { text, loc, kind } rather than a formatted string, because whether the
+    // document's own load error is a finding depends on the status the navigation returned,
+    // and that is not known until goto resolves. See expectedStatusNoise below.
     const errors = [];
     const webglChunkError = { hit: false };
     page.on('console', (m) => {
@@ -719,12 +777,12 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       // so check both before deciding it is the build's fault.
       const loc = (m.location && m.location().url) || '';
       if (ignored(m.text()) || ignored(loc)) return;
-      errors.push('console error: ' + m.text());
+      errors.push({ kind: 'console', loc, text: 'console error: ' + m.text(), raw: m.text() });
     });
-    page.on('pageerror', (e) => errors.push('page error: ' + (e && e.message ? e.message : e)));
+    page.on('pageerror', (e) => errors.push({ kind: 'page', loc: '', text: 'page error: ' + (e && e.message ? e.message : e) }));
     page.on('requestfailed', (r) => {
       if (ignored(r.url())) return;
-      errors.push('request failed: ' + r.url());
+      errors.push({ kind: 'request', loc: r.url(), text: 'request failed: ' + r.url() });
       if (/three|webgl|r3f|fiber|drei/i.test(r.url())) webglChunkError.hit = true;
     });
 
@@ -1128,7 +1186,10 @@ for (const [vpName, vp] of Object.entries(VIEWPORTS)) {
       }
     }
 
-    for (const e of errors) add('High', route, vpName, e);
+    for (const e of errors) {
+      if (expectedStatusNoise(route, status, e)) continue;
+      add('High', route, vpName, e.text);
+    }
 
     // Focus ring: one real keyboard Tab should land on an element with a visible
     // outline (globals.css ships :focus-visible). Desktop only, heuristic -> Medium.
@@ -1711,14 +1772,14 @@ if (outDir) {
       // so a /post between two build-loop passes emptied the loop's memory. A route that FAILED
       // is a different case and is dropped below, whether it rendered or was skipped.
       if (!sh || text === undefined) continue;
-      if (highRoutes.has(p)) { delete out[p]; continue; }
-      out[p] = { sourcesHash: sh, renderedHash: textHash(text), passed_at: new Date().toISOString() };
+      if (highRoutes.has(p)) { delete out[keyOf(p)]; continue; }
+      out[keyOf(p)] = { sourcesHash: sh, renderedHash: textHash(text), passed_at: new Date().toISOString() };
     }
     // A SKIPPED ROUTE IS NOT EXEMPT. The no-JS, focus, hover-nav, vitals and design probes all
     // file against `/` and run whatever the selection is, so a skipped home route with a failing
     // probe used to keep its passing record and be skipped again next run. The doc says a record
     // is dropped the moment a route fails; this is what makes that true rather than nearly true.
-    for (const p of highRoutes) delete out[p];
+    for (const p of highRoutes) delete out[keyOf(p)];
     m.routes = out;
     m.globalInputs = globalInputs.hash;
     writeFileSync(shotsManifest, JSON.stringify(m, null, 2) + '\n');
