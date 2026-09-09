@@ -45,13 +45,14 @@
  * Exit: 0 wrote the seed, 2 could not (with the reason and the board named).
  */
 import {
-  existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, copyFileSync, realpathSync,
+  existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, statSync, copyFileSync,
 } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { createServer } from "node:http";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { invokedDirectly } from "./lib/invoked-directly.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENGINE = join(HERE, "reference-capture");
@@ -1131,21 +1132,14 @@ function recordShown(projectDir, boards) {
  * ONLY AS A CLI. The helpers above are imported by the test suite and by gate-fidelity, and a
  * module that runs its own main() on import turns `import { PROPERTY_LIST }` into a build.
  *
- * BOTH SIDES ARE REAL PATHS, and that is the whole of the fix. This compared
- * `resolve(process.argv[1])`, which does not follow symlinks, against `import.meta.url`, which
- * Node's loader has already resolved. On macOS `/tmp` is a symlink to `/private/tmp`, which is
- * where every `mktemp -d` lands, so through any such path the two strings differed, `main()`
- * never ran, and the script printed nothing and exited 0. An operator reads that as a render
- * that wrote no seed. Found by a real seed run from `/tmp`, twice, before anyone checked the
- * exit path: the exists-but-never-fires class with the worst possible reporting, success.
- *
- * `realpathSync` throws on a path that is not there, which is not a reason to skip main(): a
- * missing argv[1] is already handled and anything else is better spent failing loudly.
+ * The entry-point test lives in `lib/invoked-directly.mjs` and is shared with every other CLI
+ * in the plugin. It was this file that proved it has to compare REAL paths: through `/tmp`,
+ * which macOS symlinks to `/private/tmp`, the guard was false, `main()` never ran, and the
+ * script printed nothing and exited 0. That copy is gone rather than kept beside the shared
+ * one, because two implementations of "am I the entry point" is how the tree ended up with
+ * three wrong ones.
  */
-const realOrSelf = (p) => { try { return realpathSync(p); } catch { return p; } };
-const invokedDirectly = process.argv[1]
-  && realOrSelf(resolve(process.argv[1])) === realOrSelf(fileURLToPath(import.meta.url));
-if (invokedDirectly) {
+if (invokedDirectly(import.meta.url)) {
   main().catch((e) => {
     process.stderr.write(`boards-render: ${e && e.stack ? e.stack : e}\n`);
     process.exit(2);
