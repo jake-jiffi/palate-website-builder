@@ -114,6 +114,26 @@ present "the round trip skips instead of posting in that case" \
 for f in scripts/provision-vercel.sh scripts/provision-cloudflare.sh; do
   present "$f provisions the smoke secret" "$f" "ensure_smoke_secret"
 done
+# THE BUILD THAT BAKES THE GUARD. Empty is safe for indexing and unsafe for the smoke header,
+# and the comment that only said the first half is what let the bootstrap deploy ship with it off.
+present "the Cloudflare bootstrap deploy builds as production" \
+  "scripts/provision-cloudflare.sh" "PUBLIC_SITE_ENV=production npm run build"
+present "the Cloudflare config says an empty value disables the smoke guard too" \
+  "templates/host-cloudflare/astro.config.mjs" "EMPTY IS NOT SAFE IN EVERY DIRECTION"
+present "testing.md says the production build must set it, and why" \
+  'references/testing.md' 'every production build must set `PUBLIC_SITE_ENV=production`'
+# The narrowing fixes, each pinned where a reader would look for them.
+present "testing.md says a cross-origin POST is aborted" \
+  "references/testing.md" "aborted at the wire"
+present "the verifier aborts it" \
+  "scripts/reference-capture/verify-rendered.mjs" "await route.abort('blockedbyclient')"
+present "testing.md says the secret is attached per origin" \
+  "references/testing.md" "attached per origin, not per page"
+present "testing.md says the verifiers fail on any other exit code" \
+  "references/testing.md" "Both verifiers fail on any other"
+for f in scripts/verify-vercel.sh scripts/verify-cloudflare.sh; do
+  present "$f fails on an exit code it cannot read as a verdict" "$f" "without reaching a verdict"
+done
 present "the contact endpoint is a global input, so an edit re-renders the pages" \
   "scripts/reference-capture/verify-rendered.mjs" "'src/pages/api'"
 

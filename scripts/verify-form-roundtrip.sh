@@ -36,12 +36,27 @@ done
 # which is where provision-vercel.sh and provision-cloudflare.sh write the value they generate
 # and which .gitignore already covers. Reading the file is what makes the ordinary path need no
 # manual step at all. One key, by name; the file is not sourced.
+# XTRACE OFF FROM HERE TO THE CONFIG FILE. Moving the header off the curl argv keeps it out of
+# `ps`, and does nothing about `bash -x`, which prints every assignment WITH its value and would
+# have printed the secret twice over: once on the quote-stripping expansions and once on the
+# printf that writes the file. Restored to whatever it was, so a caller tracing this script
+# still sees everything except the value.
+__xt="$-"; set +x
 SECRET="${PALATE_SMOKE_SECRET:-}"
 if [ -z "$SECRET" ] && [ -f .env ]; then
-  SECRET="$(sed -n 's/^[[:space:]]*PALATE_SMOKE_SECRET[[:space:]]*=[[:space:]]*//p' .env | head -1)"
+  # THE LAST ASSIGNMENT WINS, because that is what sourcing the file does, and the provisioning
+  # scripts source it. .env.example ships a blank `PALATE_SMOKE_SECRET=` line, so an operator
+  # who copies the example and then provisions ends up with a blank line followed by a real
+  # one: `head -1` read the blank, called the secret unset, and skipped forever on production
+  # telling them to set a variable that was already set. `export ` is tolerated because a
+  # hand-written .env often carries it and the skip would otherwise name a line they can see.
+  SECRET="$(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}PALATE_SMOKE_SECRET[[:space:]]*=[[:space:]]*//p' .env | tail -1)"
   SECRET="${SECRET%\"}"; SECRET="${SECRET#\"}"
   SECRET="${SECRET%\'}"; SECRET="${SECRET#\'}"
 fi
+# Blank or whitespace-only is UNSET. The endpoint fails closed on it either way, so sending it
+# would only turn a clear skip into a confusing 400.
+case "$SECRET" in *[![:space:]]*) ;; *) SECRET="" ;; esac
 
 # IS THIS PRODUCTION? Any signal saying yes is taken as yes, because the two errors are not
 # equal: over-reading costs a printed skip that names its own reason, and under-reading costs
@@ -69,6 +84,7 @@ places:
 provision-vercel.sh and provision-cloudflare.sh generate it and do both on a fresh build; this
 skip is what a deployment provisioned before they did looks like.
 EOF
+  case "$__xt" in *x*) set -x ;; esac
   exit 2
 fi
 
@@ -76,14 +92,21 @@ BODY='{"name":"Palate verify","email":"verify@example.com","message":"Automated 
 args=(-s -S --max-time 20 -X POST
   -H "content-type: application/json"
   -H "x-palate-smoke: 1")
-if [ -n "$SECRET" ]; then
-  args+=(-H "x-palate-smoke-secret: ${SECRET}")
-else
-  echo "verify-form-roundtrip: PALATE_SMOKE_SECRET is not set. Correct for a preview, where the header works on its own." >&2
-fi
 
 tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
+cfg="$(mktemp)"
+chmod 600 "$cfg"
+trap 'rm -f "$tmp" "$cfg"' EXIT
+if [ -n "$SECRET" ]; then
+  # THROUGH A CONFIG FILE, not the command line. An -H on the argv is visible in `ps` to every
+  # local user for the life of the request.
+  printf 'header = "x-palate-smoke-secret: %s"\n' "$SECRET" > "$cfg"
+  args+=(--config "$cfg")
+  case "$__xt" in *x*) set -x ;; esac
+else
+  case "$__xt" in *x*) set -x ;; esac
+  echo "verify-form-roundtrip: PALATE_SMOKE_SECRET is not set. Correct for a preview, where the header works on its own." >&2
+fi
 # `|| echo "000"` would CONCATENATE with the 000 curl's own -w already wrote on a failed
 # connection, producing "000000", which matches no branch below and lands in the wildcard. The
 # unreachable-host branch would have existed and never once fired.

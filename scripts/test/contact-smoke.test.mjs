@@ -74,6 +74,11 @@ async function load(name, relSrc, extra = []) {
     // in production. Shimming the same expression is therefore also the guard that it does.
     ["the endpoint no longer reads import.meta.env.PUBLIC_SITE_ENV as a literal expression",
       /import\.meta\.env\.PUBLIC_SITE_ENV/g, "globalThis.__SITE_ENV"],
+    // The BARE `import.meta.env`, which is the Vercel shape: `locals.runtime` is a Cloudflare
+    // thing and is absent there, so the secret and the API keys are read from this object
+    // instead. Shimmed after the specific one above, so only the alias is left to match.
+    ["the endpoint no longer falls back to import.meta.env",
+      /import\.meta\.env/g, "globalThis.__IMPORT_META_ENV"],
     ...extra,
   ];
   for (const [why, find, repl] of subs) {
@@ -135,7 +140,7 @@ const SMOKE = { "x-palate-smoke": "1" };
  * handlers prefer; on Vercel the same object is `import.meta.env`. Either way it is where the
  * runtime secrets live.
  */
-async function post(POST, { body = VALID, headers = {}, siteEnv = "", env = {}, turnstile = true } = {}) {
+async function post(POST, { body = VALID, headers = {}, siteEnv = "", env = {}, turnstile = true, host = "cloudflare" } = {}) {
   globalThis.__SITE_ENV = siteEnv || undefined;
   globalThis.__CALLS = [];
   const realFetch = globalThis.fetch;
@@ -152,13 +157,19 @@ async function post(POST, { body = VALID, headers = {}, siteEnv = "", env = {}, 
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body),
     });
+    const runtimeEnv = {
+      RESEND_API_KEY: "re_test", TURNSTILE_SECRET: "ts_test",
+      SANITY_PROJECT_ID: "p", SANITY_DATASET: "production", SANITY_API_WRITE_TOKEN: "sk_test",
+      ...env,
+    };
+    // TWO HOSTS, TWO SHAPES. Cloudflare puts the runtime env on `locals.runtime.env`; Vercel has
+    // no `locals.runtime` at all and the same values arrive as `import.meta.env`. The handler
+    // takes the first that exists, and until this parameter existed every case here supplied the
+    // Cloudflare shape, so the Vercel branch was never once executed.
+    globalThis.__IMPORT_META_ENV = host === "vercel" ? runtimeEnv : undefined;
     const res = await POST({
       request,
-      locals: { runtime: { env: {
-        RESEND_API_KEY: "re_test", TURNSTILE_SECRET: "ts_test",
-        SANITY_PROJECT_ID: "p", SANITY_DATASET: "production", SANITY_API_WRITE_TOKEN: "sk_test",
-        ...env,
-      } } },
+      locals: host === "vercel" ? {} : { runtime: { env: runtimeEnv } },
     });
     let parsed = null;
     try { parsed = JSON.parse(await res.text()); } catch { /* a non-JSON body is itself a finding */ }
@@ -261,6 +272,30 @@ for (const ep of ENDPOINTS) {
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.deepEqual(r.body, { ok: true, smoke: true });
     assert.deepEqual(r.calls, [], "the authorised smoke path reached " + r.calls.join(", "));
+  });
+
+  T("the Vercel shape reads the same secret from import.meta.env", async () => {
+    // No locals.runtime, which is every Vercel deployment. The production guard has to engage
+    // off the same value, and the same wrong secret has to be refused.
+    const good = await call({
+      host: "vercel",
+      headers: { ...SMOKE, "x-palate-smoke-secret": "s3cret" },
+      siteEnv: "production",
+      env: { PALATE_SMOKE_SECRET: "s3cret" },
+    });
+    assert.deepEqual(good.body, { ok: true, smoke: true }, `the Vercel branch refused a valid secret: ${JSON.stringify(good.body)}`);
+    assert.deepEqual(good.calls, [], "the Vercel branch reached " + good.calls.join(", "));
+
+    const bad = await call({
+      host: "vercel",
+      headers: { ...SMOKE, "x-palate-smoke-secret": "wrong" },
+      siteEnv: "production",
+      env: { PALATE_SMOKE_SECRET: "s3cret" },
+    });
+    assert.notEqual(bad.body?.smoke, true, "the Vercel branch accepted a wrong secret");
+
+    const none = await call({ host: "vercel", headers: SMOKE, siteEnv: "production" });
+    assert.notEqual(none.body?.smoke, true, "the Vercel branch opened with no secret configured");
   });
 
   T("a refused smoke request is the visitor's enquiry, so it goes through rather than 403", async () => {

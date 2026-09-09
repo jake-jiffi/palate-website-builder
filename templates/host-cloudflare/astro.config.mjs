@@ -27,9 +27,18 @@ const env = loadEnv(process.env.NODE_ENV ?? "production", process.cwd(), "");
 // in CI this one arrives as a process env var with no .env at all, which is why it is defined
 // rather than left to be picked up.
 //
-// Empty when nothing sets it. BaseLayout then treats the build as a preview and noindexes it,
-// which is the safe direction: a preview that gets indexed puts a client's content on a domain
-// they do not own, and gate-seo's live pass catches a production origin that noindexed itself.
+// Empty when nothing sets it. For INDEXING that is the safe direction: BaseLayout treats the
+// build as a preview and noindexes it, and a preview that gets indexed puts a client's content
+// on a domain they do not own, so gate-seo's live pass catches a production origin that
+// noindexed itself.
+//
+// EMPTY IS NOT SAFE IN EVERY DIRECTION, and this is the one to know about. `smokeAllowed` in
+// src/pages/api/contact.ts gates the `x-palate-smoke` header on this same value: empty means
+// not-production, so the header is honoured with no secret and any request carrying it has its
+// enquiry validated and DISCARDED. On a live site that is lost enquiries. Every path that
+// produces a production build therefore sets it: deploy.yml, revalidate.yml, and the bootstrap
+// `npm run build` in scripts/provision-cloudflare.sh, which is the one that used to be missed
+// because it runs locally rather than in CI.
 const siteEnv = env.PUBLIC_SITE_ENV || "";
 
 // Server-rendered (SSR) on Cloudflare Workers. SSR is the default even with no

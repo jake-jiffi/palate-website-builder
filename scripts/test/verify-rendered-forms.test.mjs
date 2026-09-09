@@ -74,7 +74,10 @@ function contactPage(behaviour) {
     posts: `await fetch("/api/contact", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: f.name.value, email: f.email.value, message: f.message.value }) });`,
     silent: `/* the handler that never sends: bound, prevents the default, and does nothing */`,
-    elsewhere: `await fetch("https://forms.example.invalid/submit", { method: "POST", body: "x" }).catch(() => {});`,
+    // A REAL, REACHABLE third party. It used to be a host that does not resolve, which meant the
+    // test passed whether or not the submission was blocked: the assertion that matters is that
+    // nothing was DELIVERED, and only a listening server can show that.
+    elsewhere: `await fetch("__THIRD__/submit", { method: "POST", body: "x" }).catch(() => {});`,
   }[behaviour];
   return shell('Contact', `${FILLER}
     <form id="contact-form" novalidate>
@@ -116,8 +119,9 @@ function dialogMarkup(mode) {
     </script>`;
 }
 
-function homePage(nav, dialog = 'none') {
-  if (nav === 'none') return shell('Home', FILLER + dialogMarkup(dialog));
+function homePage(nav, dialog = 'none', thirdParty = '') {
+  const pixel = thirdParty ? `<img src="${thirdParty}/pixel.png" alt="" width="1" height="1">` : '';
+  if (nav === 'none') return shell('Home', FILLER + pixel + dialogMarkup(dialog));
   const escape = nav === 'traps'
     ? '/* no Escape handler: the trap */'
     : `document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });`;
@@ -127,7 +131,7 @@ function homePage(nav, dialog = 'none') {
          const isOpen = b.getAttribute("aria-expanded") === "true";
          if (isOpen) close(); else { b.setAttribute("aria-expanded", "true"); p.hidden = false; }
        });`;
-  return shell('Home', `${FILLER}${dialogMarkup(dialog)}
+  return shell('Home', `${FILLER}${pixel}${dialogMarkup(dialog)}
     <button id="navbtn" aria-controls="navpanel" aria-expanded="false">Menu</button>
     <div id="navpanel" hidden><a href="/contact">Contact</a></div>
     <script>
@@ -145,7 +149,7 @@ function homePage(nav, dialog = 'none') {
  * `endpoint` decides what /api/contact answers, which is how a broken deployment is
  * reproduced without breaking the handler under test.
  */
-function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endpoint = 'smoke' } = {}) {
+async function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endpoint = 'smoke', thirdParty = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'palate-forms-'));
   for (const d of ['src/pages', 'src/pages/api', 'src/styles', 'src/layouts', '.palate']) {
     mkdirSync(join(root, d), { recursive: true });
@@ -166,6 +170,27 @@ function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endpoint =
     root, routes, entries: [], counts: { routes: routes.length, entries: 0, drafts: 0 },
     links: { parsed: 0, files: 0, orphans: [], dead: [], stale: 0 },
   }, null, 2));
+
+  // THE THIRD PARTY. A separate origin on its own ephemeral port, recording every request it
+  // receives with its headers, so two things become assertable rather than assumed: that no
+  // cross-origin POST is delivered, and that the smoke SECRET never leaves for a host that has
+  // no business holding it.
+  const thirdSeen = [];
+  let thirdUrl = '';
+  let thirdServer = null;
+  if (thirdParty) {
+    thirdServer = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (d) => { raw += d; });
+      req.on('end', () => {
+        thirdSeen.push({ method: req.method, url: req.url, headers: req.headers, body: raw });
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        res.end('ok');
+      });
+    });
+    await new Promise((ok) => thirdServer.listen(0, '127.0.0.1', ok));
+    thirdUrl = `http://127.0.0.1:${thirdServer.address().port}`;
+  }
 
   const posts = [];
   const server = createServer((req, res) => {
@@ -192,16 +217,18 @@ function makeFixture({ form = 'posts', nav = 'none', dialog = 'none', endpoint =
       });
       return;
     }
-    const body = path === '/' ? homePage(nav, dialog) : path === '/contact' ? contactPage(form) : null;
+    const body = path === '/' ? homePage(nav, dialog, thirdUrl)
+      : path === '/contact' ? contactPage(form).replace(/__THIRD__/g, thirdUrl || 'https://forms.example.invalid')
+      : null;
     if (!body) { res.writeHead(404, { 'content-type': 'text/html' }); res.end(shell('Not found', '<p>No such page.</p>')); return; }
     res.writeHead(200, { 'content-type': 'text/html' });
     res.end(body);
   });
   return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok({
-    root, server, posts, index: join(root, '.palate', 'index.json'),
+    root, server, posts, thirdSeen, thirdUrl, index: join(root, '.palate', 'index.json'),
     url: `http://127.0.0.1:${server.address().port}`,
     out: join(root, '.palate-shots'),
-    stop() { server.close(); rmSync(root, { recursive: true, force: true }); },
+    stop() { server.close(); if (thirdServer) thirdServer.close(); rmSync(root, { recursive: true, force: true }); },
   })));
 }
 
@@ -214,7 +241,7 @@ function runGate(argv, env = {}) {
     p.on('close', (status) => done({ out, status }));
   });
 }
-const gate = (fx, extra = []) => runGate(['--url', fx.url, '--index', fx.index, '--no-vitals', ...extra]);
+const gate = (fx, extra = [], env = {}) => runGate(['--url', fx.url, '--index', fx.index, '--no-vitals', ...extra], env);
 
 test('a working form is submitted once, with the smoke header, and passes', async (t) => {
   const fx = await makeFixture({ form: 'posts' });
@@ -268,13 +295,42 @@ test('a form whose submit never reaches the endpoint is a failure', async (t) =>
   assert.match(r.out, /\[High\].*form round trip.*no request/i, `a dead submit passed\n${r.out.slice(-1200)}`);
 });
 
-test('a form posting to a third party is reported as unmeasured, not as a pass or a failure', async (t) => {
-  const fx = await makeFixture({ form: 'elsewhere' });
+test('a form posting to a third party is reported as unmeasured, and DELIVERS NOTHING', async (t) => {
+  // The submission used to go out for real before the Medium was filed, so a site wired to
+  // Formspree, HubSpot or a client CRM collected one fake enquiry per verify run. The third
+  // party here is a REAL listening server: the old fixture used a host that does not resolve,
+  // which is why "nothing was delivered" could not be told from "nothing was reachable".
+  const fx = await makeFixture({ form: 'elsewhere', thirdParty: true });
   t.after(() => fx.stop());
   const r = await gate(fx);
-  assert.match(r.out, /forms\.example\.invalid/, `the destination was not named\n${r.out.slice(-1200)}`);
+  assert.match(r.out, new RegExp(fx.thirdUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    `the destination was not named\n${r.out.slice(-1400)}`);
   assert.match(r.out, /\[Medium\].*form round trip/, 'a form posting elsewhere was not reported as unmeasured');
   assert.ok(!/\[High\].*form round trip/.test(r.out), 'a third-party form was failed rather than reported');
+  const delivered = fx.thirdSeen.filter((q) => q.method === 'POST');
+  assert.equal(delivered.length, 0,
+    `${delivered.length} submission(s) were DELIVERED to the third party: ${JSON.stringify(delivered[0] || {}).slice(0, 200)}`);
+});
+
+test('the smoke secret never leaves for a third-party host', async (t) => {
+  // setExtraHTTPHeaders is per PAGE, not per origin, so a secret set there rides every
+  // subresource: fonts, analytics, Turnstile, any CDN. It is a production credential and those
+  // hosts never needed it. The page pulls a cross-origin image, and the third party records
+  // what it was sent.
+  const fx = await makeFixture({ form: 'posts', thirdParty: true });
+  t.after(() => fx.stop());
+  const r = await gate(fx, [], { PALATE_SMOKE_SECRET: 'do-not-leak-me' });
+
+  assert.ok(fx.thirdSeen.length > 0, 'the cross-origin subresource was never requested, so nothing was measured');
+  const leaked = fx.thirdSeen.filter((q) => q.headers['x-palate-smoke-secret']);
+  assert.equal(leaked.length, 0,
+    `the secret went to the third party on ${leaked.length} request(s): ${leaked.map((q) => q.url).join(', ')}`);
+  // ...and it still reached the endpoint that needs it, so the fix is a narrowing rather than
+  // a removal.
+  assert.equal(fx.posts.length, 1, `the form was posted ${fx.posts.length} times`);
+  assert.equal(fx.posts[0].headers['x-palate-smoke-secret'], 'do-not-leak-me',
+    'the secret did not reach our own endpoint');
+  assert.match(r.out, /form round trip: \/contact answered 200 with smoke: true/, `the round trip did not pass\n${r.out.slice(-1200)}`);
 });
 
 test('a site with no contact form says it inspected none rather than going quiet', async (t) => {

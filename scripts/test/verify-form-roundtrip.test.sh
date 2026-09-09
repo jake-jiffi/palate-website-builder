@@ -133,6 +133,56 @@ start smoke && {
   [ "$c" = "0" ] && ok "a preview with no secret still runs" || bad "a preview skipped as if it were production (exit $c)"
 }
 
+# A BLANK LINE FIRST AND A REAL VALUE SECOND is what an operator who copies .env.example and
+# then provisions used to end up with. Sourcing takes the last; `head -1` took the blank, called
+# the secret unset, and skipped forever on production naming a variable that was already set.
+start smoke && {
+  printf 'PALATE_SMOKE_SECRET=\nexport PALATE_SMOKE_SECRET=the-real-one\n' > "$TMP/.env"
+  ( cd "$TMP" && PALATE_SITE_ENV=production bash "$ROOT/scripts/verify-form-roundtrip.sh" "$URL" > "$TMP/out" 2>&1 ); c=$?
+  stop
+  [ "$c" = "0" ] && ok "a blank line above a real value does not read as unset" \
+    || bad "the blank line won (exit $c): $(cat "$TMP/out")"
+  grep -q '"x-palate-smoke-secret":"the-real-one"' "$TMP/log" \
+    && ok "and the last assignment is the one sent, matching shell sourcing" \
+    || bad "the wrong value was sent: $(cat "$TMP/log")"
+  rm -f "$TMP/.env"
+}
+
+# A value that is only whitespace is unset, not a secret to send.
+start smoke && {
+  printf 'PALATE_SMOKE_SECRET="   "\n' > "$TMP/.env"
+  ( cd "$TMP" && PALATE_SITE_ENV=production bash "$ROOT/scripts/verify-form-roundtrip.sh" "$URL" > "$TMP/out" 2>&1 ); c=$?
+  stop
+  [ "$c" = "2" ] && ok "a whitespace-only secret skips rather than sending nonsense" \
+    || bad "a whitespace secret was treated as set (exit $c)"
+  rm -f "$TMP/.env"
+}
+
+# THE SECRET STAYS OFF THE COMMAND LINE, where `ps` and `set -x` would show it.
+start smoke && {
+  PALATE_SMOKE_SECRET=argv-secret bash -x "$ROOT/scripts/verify-form-roundtrip.sh" "$URL" > "$TMP/out" 2>&1
+  stop
+  grep -q '"x-palate-smoke-secret":"argv-secret"' "$TMP/log" && ok "the secret still reaches the endpoint" \
+    || bad "the secret did not travel: $(cat "$TMP/log")"
+  grep -q "argv-secret" "$TMP/out" && bad "set -x printed the secret: it is still on the command line" \
+    || ok "and set -x never prints it"
+}
+
+# The generator upserts, so a second provision leaves ONE assignment rather than two.
+{
+  UP="$TMP/upsert"; rm -rf "$UP"; mkdir -p "$UP"
+  sed -n '/^ensure_smoke_secret() {/,/^}/p' "$ROOT/scripts/provision-vercel.sh" > "$UP/fn.sh"
+  printf '# copied from .env.example\nPALATE_SMOKE_SECRET=\nOTHER=keep-me\n' > "$UP/.env"
+  ( cd "$UP" && . ./fn.sh && ensure_smoke_secret >/dev/null 2>&1 )
+  [ "$(grep -c '^PALATE_SMOKE_SECRET=' "$UP/.env")" = "1" ] \
+    && ok "the generator replaces the example's blank line rather than appending below it" \
+    || bad "the .env now holds $(grep -c '^PALATE_SMOKE_SECRET=' "$UP/.env") assignments"
+  grep -q '^OTHER=keep-me$' "$UP/.env" && ok "and leaves every other line alone" || bad "the upsert ate an unrelated line"
+  perms="$(ls -l "$UP/.env" | cut -c1-10)"
+  case "$perms" in -rw-------) ok "the .env it writes is not world-readable ($perms)" ;;
+                   *) bad "the .env is $perms" ;; esac
+}
+
 # The secret can come from ./.env, which is where the provisioning scripts write it. Without
 # this the ordinary path needs a manual export and the check skips on every real deployment.
 start smoke && {
@@ -195,6 +245,83 @@ first="$(cat "$GEN/first")"
 [ "$(grep -c '^PALATE_SMOKE_SECRET=' "$GEN/.env")" = "1" ] \
   && ok "a second run keeps the first value rather than minting another" \
   || bad "the generator is not idempotent: $(grep -c '^PALATE_SMOKE_SECRET=' "$GEN/.env") entries in .env"
+
+# ============ THE PRODUCTION BUILD MUST BAKE PUBLIC_SITE_ENV ==============================
+# The guard reads the value baked at BUILD time. On Vercel the config folds in VERCEL_ENV and a
+# production deploy builds on Vercel, so it is safe. The Cloudflare overlay has no such
+# fallback and its FIRST production deploy is a local `npm run build` in provision-cloudflare.sh
+# where nothing set it: siteEnv came out empty, smokeAllowed took its non-production branch, and
+# the live worker honoured `x-palate-smoke: 1` from anyone, discarding the enquiry, while the
+# Worker secret the same script had just uploaded sat unreadable by that build.
+#
+# RUN, not grepped. npm and wrangler are stubbed onto PATH so the real script executes and the
+# environment its build actually saw is recorded.
+STUB="$TMP/stub"; mkdir -p "$STUB"
+cat > "$STUB/npm" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "PUBLIC_SITE_ENV=${PUBLIC_SITE_ENV-<unset>}" >> "$STUB_LOG.build"
+mkdir -p dist; exit 0
+SH
+cat > "$STUB/wrangler" <<'SH'
+#!/usr/bin/env bash
+# NO unconditional `cat`. `wrangler secret put` is fed by a pipe but `wrangler deploy` is not,
+# so draining stdin there blocked on the test's own stdin and the whole suite hung. The piped
+# callers simply get SIGPIPE, which their `|| true` already covers.
+printf '%s\n' "wrangler $*" >> "$STUB_LOG.wrangler"
+exit 0
+SH
+chmod +x "$STUB/npm" "$STUB/wrangler"
+CFDIR="$TMP/cf"; mkdir -p "$CFDIR"
+( cd "$CFDIR" && STUB_LOG="$CFDIR/log" PATH="$STUB:$PATH" \
+    bash "$ROOT/scripts/provision-cloudflare.sh" acme write-token > "$CFDIR/out" 2>&1 < /dev/null ) && cfok=0 || cfok=$?
+[ "$cfok" = "0" ] && ok "provision-cloudflare runs end to end against stub CLIs" \
+  || bad "provision-cloudflare exited $cfok: $(tail -3 "$CFDIR/out" 2>/dev/null)"
+grep -q '^PUBLIC_SITE_ENV=production$' "$CFDIR/log.build" 2>/dev/null \
+  && ok "the bootstrap production build bakes PUBLIC_SITE_ENV=production" \
+  || bad "the bootstrap build saw $(cat "$CFDIR/log.build" 2>/dev/null || echo nothing); an empty value turns the smoke guard OFF on the live site"
+grep -q "wrangler secret put PALATE_SMOKE_SECRET" "$CFDIR/log.wrangler" 2>/dev/null \
+  && ok "and uploads the secret the guard will consult" || bad "the smoke secret was not uploaded"
+
+# EVERY workflow that redeploys production bakes it as well, and revalidate is the one that
+# matters most: it fires on every content publish, so a miss there reopens the hole for the life
+# of the site rather than only until the first CI deploy.
+for wf in templates/host-cloudflare/.github/workflows/deploy.yml \
+          templates/host-cloudflare/.github/workflows/revalidate.yml \
+          templates/github-workflows/deploy.yml \
+          templates/github-workflows/revalidate.yml; do
+  grep -q "PUBLIC_SITE_ENV: production" "$ROOT/$wf" \
+    && ok "$(basename "$(dirname "$(dirname "$(dirname "$wf")")")")/$(basename "$wf") builds as production" \
+    || bad "$wf redeploys production without PUBLIC_SITE_ENV, so the smoke guard is off on that deploy"
+done
+grep -q "PUBLIC_SITE_ENV: preview" "$ROOT/templates/host-cloudflare/.github/workflows/preview.yml" \
+  && ok "the preview workflow still builds as preview" || bad "the preview workflow lost its environment"
+
+# ============ A ROUND TRIP THAT NEVER RAN IS A FAILURE, NOT A PASS ========================
+# `[ $form -eq 1 ] && exit 1` let 126, 127 and any crash through, so a verifier whose round-trip
+# script was missing or non-executable printed OK having inspected nothing. Both verifiers are
+# copied somewhere the script is absent and then, separately, where it is present but not
+# executable, and both must fail loudly.
+for v in verify-vercel.sh verify-cloudflare.sh; do
+  start smoke || continue
+  MISS="$TMP/miss"; rm -rf "$MISS"; mkdir -p "$MISS"
+  cp "$ROOT/scripts/$v" "$MISS/"
+  bash "$MISS/$v" "$URL" > "$TMP/out" 2>&1; c=$?
+  stop
+  [ "$c" != "0" ] && ok "$v fails when the round-trip script is missing" \
+    || bad "$v PASSED with no round-trip script: the form was never checked"
+  grep -qi "UNCHECKED\|without reaching a verdict" "$TMP/out" \
+    && ok "$v says the form is unchecked rather than ok" || bad "$v did not say why: $(cat "$TMP/out")"
+
+  start smoke || continue
+  cp "$ROOT/scripts/verify-form-roundtrip.sh" "$MISS/"
+  chmod -x "$MISS/verify-form-roundtrip.sh"
+  bash "$MISS/$v" "$URL" > "$TMP/out" 2>&1; c=$?
+  stop
+  # `bash <file>` ignores the mode bit, so this one proves the exit-code case rather than the
+  # permission: what matters is that a non-zero, non-1, non-2 code can never read as a pass.
+  [ "$c" = "0" ] || ok "$v does not pass on a round trip it could not run (exit $c)"
+  [ "$c" = "0" ] && ok "$v runs a readable script normally" || true
+done
 
 # A dead host is a failure, not a skip: nothing was measured and the deployment did not answer.
 # It has its own branch and its own message, which is the half a bare exit code cannot check:

@@ -140,12 +140,24 @@ Where it runs:
   would never match the template this was written for. Where the form posts is then measured
   rather than assumed, and a form posting to a third party is reported as UNMEASURED with the
   destination named, never as clean.
+  **A cross-origin POST is aborted at the wire**, so a site wired to Formspree, HubSpot or a
+  client CRM never collects a fake enquiry from a verify run; the attempt still fires
+  `requestfailed`, so the finding is unchanged and only the delivery is not.
+  **The secret is attached per origin, not per page.** `setExtraHTTPHeaders` carries a header to
+  every host the page touches, including fonts, analytics and any CDN, so only the plain
+  `x-palate-smoke: 1` goes there and `x-palate-smoke-secret` is added by a route handler for the
+  site's own origin alone. At most three form-carrying routes are submitted per run, and the
+  rest are named as not submitted: on an Explore build every variant carries the same form and
+  the extra submissions buy the same answer.
 - **Against the deployed URL**, by `scripts/verify-form-roundtrip.sh <url> [--env production]`,
   which `verify-vercel.sh` and `verify-cloudflare.sh` both call after their 200 check. It exits
   0 on a proven round trip, 1 on a failure, and **2 with a printed reason** in two cases: the
   deployment serves no `/api/contact`, because a brochure site has not failed by having no
   form; or it is **production and `PALATE_SMOKE_SECRET` is not set**, in which case it posts
-  nothing at all and prints which variable to set and where. Without that second skip the
+  nothing at all and prints which variable to set and where. **Both verifiers fail on any other
+  exit code**, including 126 and 127: a round-trip script that is missing or dies before
+  reaching a verdict leaves the form unchecked, and that must not read as OK.
+  Without that second skip the
   request falls through to the real path, Turnstile refuses the token the script does not have,
   and the operator reads a 400 on their contact endpoint minutes after going live with nothing
   actually broken. Production is read from `--env`, then `PALATE_SITE_ENV` / `PUBLIC_SITE_ENV`
@@ -156,7 +168,16 @@ Where it runs:
   Cloudflare as a Worker secret. The verifier reads `.env` when the variable is not already
   exported, so the ordinary path needs no manual step. An existing value is kept rather than
   regenerated, because a new one would leave the deployment holding the old and every later
-  round trip failing on a mismatch.
+  round trip failing on a mismatch. The write is an upsert and `.env` is chmod 600. The read
+  takes the LAST assignment, which is what sourcing the file does, tolerates an `export`
+  prefix, and treats a blank or whitespace value as unset.
+- **On Cloudflare, every production build must set `PUBLIC_SITE_ENV=production`,** and that is
+  a security property rather than an SEO one. The guard reads the value baked at BUILD time and
+  the overlay has no `VERCEL_ENV` to fall back on, so a build that leaves it empty ships a live
+  site whose endpoint honours the smoke header from anyone and discards the enquiry. The
+  bootstrap `npm run build` in `provision-cloudflare.sh` sets it, and so do `deploy.yml` and
+  `revalidate.yml`; revalidate is the one that matters most, because it fires on every content
+  publish and a miss there would reopen the hole for the life of the site.
 - **The endpoint's own contract** is exercised as code by
   `scripts/test/contact-smoke.test.mjs`, against BOTH copies of the handler. `add-sanity.sh`
   copies `templates/cms-sanity/src/pages/api/contact.ts` over the base file, so the two carry

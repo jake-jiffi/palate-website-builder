@@ -1341,12 +1341,39 @@ if (!rendering.length) {
 } else {
   const context = await browser.newContext({ viewport: VIEWPORTS.desktop });
   const page = await context.newPage();
-  const smokeHeaders = { 'x-palate-smoke': '1' };
-  // Only when set. An empty value sent as a header is not the same as no header, and the
-  // endpoint fails closed on a blank secret either way.
-  if (process.env.PALATE_SMOKE_SECRET) smokeHeaders['x-palate-smoke-secret'] = process.env.PALATE_SMOKE_SECRET;
-  else console.error('verify-rendered: form round trip: PALATE_SMOKE_SECRET is not set, which is right for a preview and will make a PRODUCTION deployment take the real path.');
-  await page.setExtraHTTPHeaders(smokeHeaders);
+  await page.setExtraHTTPHeaders({ 'x-palate-smoke': '1' });
+  const smokeSecret = process.env.PALATE_SMOKE_SECRET || '';
+  if (!smokeSecret) console.error('verify-rendered: form round trip: PALATE_SMOKE_SECRET is not set, which is right for a preview and will make a PRODUCTION deployment take the real path.');
+  const siteOrigin = new URL(base).origin;
+
+  /**
+   * TWO THINGS THIS ROUTE HANDLER STOPS, and neither is visible without it.
+   *
+   * THE SECRET WOULD TRAVEL TO EVERY HOST THE PAGE TOUCHES. setExtraHTTPHeaders is per PAGE,
+   * not per origin, so a header set there rides Google Fonts, the analytics beacon, Turnstile
+   * and any CDN the client's site uses. `x-palate-smoke: 1` is a flag and harmless there; the
+   * SECRET is a production credential and has no business leaving in cleartext to hosts that
+   * never needed it. It is attached here instead, same-origin only.
+   *
+   * AND A CROSS-ORIGIN POST WOULD BE DELIVERED FOR REAL. A form wired to Formspree, HubSpot or
+   * a client CRM is not our endpoint and the smoke header means nothing to it, so filling and
+   * submitting one puts a fake enquiry in the client's actual inbox, once per verify run. The
+   * POST is aborted at the wire. The attempt still fires `requestfailed`, so the probe still
+   * sees where the form went and still files the Medium naming the destination: the report
+   * does not change, only the delivery.
+   */
+  await context.route('**/*', async (route) => {
+    const req = route.request();
+    let origin = '';
+    try { origin = new URL(req.url()).origin; } catch { /* an opaque URL is not our origin */ }
+    if (origin !== siteOrigin) {
+      if (req.method() === 'POST') { await route.abort('blockedbyclient'); return; }
+      await route.continue();
+      return;
+    }
+    if (!smokeSecret) { await route.continue(); return; }
+    await route.continue({ headers: { ...req.headers(), 'x-palate-smoke-secret': smokeSecret } });
+  });
 
   // Every POST the page makes, in order, ANSWERED OR NOT. A predicate on waitForResponse
   // would race an analytics beacon and lose on any site that has one, and a POST to a host
@@ -1356,7 +1383,21 @@ if (!rendering.length) {
   page.on('response', (r) => { if (r.request().method() === 'POST') posts.push({ url: r.url(), resp: r }); });
   page.on('requestfailed', (r) => { if (r.method() === 'POST') posts.push({ url: r.url(), resp: null }); });
 
-  for (const route of formRoutes) {
+  // CAPPED, like the disclosure probe's candidates. An Explore build carries a contact section
+  // in every variant, so an uncapped probe submits once per rung: the same form, the same
+  // endpoint, the same answer, at a page load and up to eight seconds of polling each. Three is
+  // enough to catch a route where the form differs; the rest are named as not submitted, never
+  // silently dropped.
+  const FORM_ROUTE_CAP = 3;
+  const probing = formRoutes.slice(0, FORM_ROUTE_CAP);
+  if (formRoutes.length > probing.length) {
+    console.error(
+      `verify-rendered: form round trip: ${formRoutes.length} route(s) carry a contact form; submitting the first ` +
+      `${probing.length} (${probing.join(', ')}) and NOT ${formRoutes.slice(probing.length).join(', ')}. ` +
+      'They post to the same endpoint, so the extra submissions buy the same answer.',
+    );
+  }
+  for (const route of probing) {
     posts = [];
     try {
       await page.goto(base + route, { waitUntil: 'load', timeout: 20000 });
