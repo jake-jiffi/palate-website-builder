@@ -463,6 +463,66 @@ if [ -f "$CA_GATE" ]; then
 fi
 if [ -n "$ca_skip" ]; then gate_skipped customer-auth "$ca_skip"; else gate_ran; fi
 
+# FACT CONSISTENCY: does the site contradict itself?
+#
+# An engineer's 3,400-page build said "42 reviews" in some places and "41 reviews" in others,
+# and nothing noticed. The single-source rule this repo already has is about PROVENANCE (one
+# record, every surface reads it) and is silent on CONSISTENCY, because a number typed into two
+# hand-written pages was never in the record to begin with.
+#
+# ADVISORY, AND THAT IS THE WHOLE POINT: it NEVER calls fail(). Two numbers can legitimately
+# differ (a second location, a per-branch figure) and blocking a build on a judgement a gate
+# cannot make is how a useful check gets switched off. Every non-zero exit, expected or not, is
+# folded in as a skip with its reason, so an unexpected crash costs the count and never a build.
+FACTS_GATE="$HERE/gate-facts.mjs"
+facts_note="facts=skipped"
+facts_skip="gate-facts.mjs not present"
+# A COUNT WITH NO ROUTE TO THE DETAIL IS A FINDING NOBODY CAN ACT ON, which is the shape this
+# whole epic is closing. "facts=2 disagreement(s)" tells an operator something is wrong and not
+# what, and only somebody who already knows this script exists can find out. So the summary
+# carries the command, the way the MCP rung above carries `claude mcp add`. Empty unless there
+# is something to look at, and it leads with a newline so it lands as its own INDENTED line:
+# the Stop hook forwards a matched headline's indented continuation lines, so it travels with
+# the summary rather than being dropped.
+facts_detail=""
+if [ -f "$FACTS_GATE" ]; then
+  if facts_err="$(node "$FACTS_GATE" "$PROJ" 2>&1)"; then facts_rc=0; else facts_rc=$?; fi
+  facts_first="${facts_err%%$'\n'*}"
+  facts_first="${facts_first#gate-facts: }"
+  case "$facts_rc" in
+    0) case "$facts_first" in
+         clean*) facts_note="facts=clean"; facts_skip="" ;;
+         [0-9]*disagreement*)
+           facts_note="facts=${facts_first%% *} disagreement(s)"; facts_skip=""
+           facts_detail=$'\n'"  Facts: ${facts_first%% *} label(s) carry two values across pages. Advisory, nothing is blocked. See both values and a page carrying each: node \"$FACTS_GATE\" \"$PROJ\"" ;;
+         # Exit 0 with a line this shell does not recognise is the gate having changed its
+         # wording, not the site being clean. Say so rather than printing a bill of health.
+         *) facts_skip="gate-facts printed an unrecognised result" ;;
+       esac
+       # A LABEL SET ASIDE AS A LIST IS NOT NOTHING, and "facts=clean" over one reads as a bill
+       # of health. The gate suppresses a label carrying more than three values (a rating per
+       # product card, a phone per branch) because reporting those is the false alarm that gets
+       # a check switched off, and a genuine clash can hide underneath one. So the count travels
+       # with the command that prints the values, on its own indented line like the one above.
+       facts_aside=""
+       [ -z "$facts_skip" ] && facts_aside="$(printf '%s' "$facts_first" | sed -n 's/.*[^0-9]\([0-9][0-9]*\) label(s) set aside.*/\1/p' | head -1)"
+       if [ -n "${facts_aside:-}" ]; then
+         facts_detail="$facts_detail"$'\n'"  Facts: ${facts_aside} label(s) set aside as a list rather than a claim (a rating per card, a phone per branch). See their values: node \"$FACTS_GATE\" \"$PROJ\" --all"
+       fi ;;
+    2) case "$facts_first" in
+         "skipped ("*)
+           facts_skip="${facts_first#skipped (}"
+           facts_skip="${facts_skip%%)*}" ;;
+         *) facts_skip="$facts_first" ;;
+       esac ;;
+    *) facts_skip="gate-facts exited $facts_rc" ;;
+  esac
+  facts_skip="${facts_skip//$PROJ\//}"
+  facts_skip="${facts_skip//$PROJ/.}"
+  if [ "${#facts_skip}" -gt 100 ]; then facts_skip="${facts_skip:0:99}…"; fi
+fi
+if [ -n "$facts_skip" ]; then gate_skipped facts "$facts_skip"; else gate_ran; fi
+
 # UNIQUENESS: the variants must be genuinely different, not ritually varied.
 #
 # THIS GATE HAD NO DETERMINISTIC CALLER, alone in the suite. The verifier agent was told to run
@@ -599,5 +659,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $explore_note, $fidelity_note, $uniq_note, intensity=${intensity:-calm}, $bold_note."
+  Passed: visual=pass (0 console errors, $shot_count shot(s)), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $fidelity_note, $uniq_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
 exit 0

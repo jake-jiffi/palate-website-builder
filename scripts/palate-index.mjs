@@ -86,6 +86,34 @@ const withoutComments = (src) =>
  * the Vercel adapter leaves a bare `dist/` behind on some versions and picking it would walk
  * server bundles looking for HTML.
  */
+/**
+ * EXPLORE SCAFFOLDING IS NOT A PAGE OF THE SITE, in any direction.
+ *
+ * `/explore`, the `/boards/bN` direction boards and the older `/vN` and `/lpN` variants all
+ * exist for one conversation and are archived at Compose. Three reports would otherwise be
+ * wrong about them, and `/publish` reads the first two as not done:
+ *
+ *   NOT A DEAD LINK. A page that still links a board after Compose has archived it is a real
+ *   href to a route that has gone, and the page carrying it is on its way out too. The built
+ *   page knows that; a source read cannot.
+ *
+ *   NOT AN ORPHAN. This is the half the rename exposed and it was measured on the merged
+ *   tree: a scaffold with two boards and no dist reported orphans ["/404", "/blog",
+ *   "/boards/b1", "/boards/b2", "/contact"]. `/explore` and the switcher reach the boards
+ *   through `href={v.href}`, an expression rather than a literal, so a source read cannot see
+ *   the link at all; `/explore` itself escaped only because the switcher happens to carry a
+ *   literal href to it, which is luck rather than a rule. A board is not meant to be linked
+ *   from the site: it is meant to be handed over once and then deleted.
+ *
+ *   NOT A CLAIM ABOUT THE BUSINESS. Rungs differ in their copy on purpose, so `gate-facts`
+ *   read a board's number as the site contradicting itself, during the one stage whose whole
+ *   job is to show a range. It was exported for that caller rather than copied.
+ *
+ * gate-seo excludes the same shapes from its sitemap expectation (`IS_VARIANT`), and
+ * gate-shipready fails a hand-over that still carries `src/pages/boards/`.
+ */
+export const EXPLORE_ROUTE = (h) => h === '/explore' || /^\/(v|lp)\d+$/.test(h) || /^\/boards\//.test(h);
+
 export const OUT_CANDIDATES = ['.vercel/output/static', 'dist/client', 'dist', 'build'];
 export const findOutputRoot = (projectDir) =>
   OUT_CANDIDATES.map((c) => join(projectDir, c)).find(existsSync) || null;
@@ -442,28 +470,6 @@ export function buildIndex(projectDir) {
   const facts = factsFile
     ? { source: factsFile, readBy: routes.filter((r) => r.dependsOn.includes(factsFile)).map((r) => r.path) }
     : null;
-
-  // EXPLORE SCAFFOLDING IS NOT A PAGE OF THE SITE, in either direction.
-  //
-  // `/explore`, the `/boards/bN` direction boards and the older `/vN` and `/lpN` variants all
-  // exist for one conversation and are archived at Compose. Two reports would otherwise be
-  // wrong about them, and `/publish` reads both as not done:
-  //
-  //   NOT A DEAD LINK. A page that still links a board after Compose has archived it is a real
-  //   href to a route that has gone, and the page carrying it is on its way out too. The built
-  //   page knows that; a source read cannot.
-  //
-  //   NOT AN ORPHAN. This is the half the rename exposed and it was measured on the merged
-  //   tree: a scaffold with two boards and no dist reported orphans ["/404", "/blog",
-  //   "/boards/b1", "/boards/b2", "/contact"]. `/explore` and the switcher reach the boards
-  //   through `href={v.href}`, an expression rather than a literal, so a source read cannot see
-  //   the link at all; `/explore` itself escaped only because the switcher happens to carry a
-  //   literal href to it, which is luck rather than a rule. A board is not meant to be linked
-  //   from the site: it is meant to be handed over once and then deleted.
-  //
-  // gate-seo excludes the same shapes from its sitemap expectation (`IS_VARIANT`), and
-  // gate-shipready fails a hand-over that still carries `src/pages/boards/`.
-  const EXPLORE_ROUTE = (h) => h === '/explore' || /^\/(v|lp)\d+$/.test(h) || /^\/boards\//.test(h);
 
   // Orphans: a published page nothing links to. Not an error (a campaign
   // landing page is legitimately unlinked) which is why it is reported, not
