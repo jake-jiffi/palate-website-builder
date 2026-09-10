@@ -126,6 +126,11 @@ const uid = id || `ann-${Math.random().toString(36).slice(2, 8)}`;
         document.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'),
       ).find((el) => !bar.contains(el) && bar.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING && el.getBoundingClientRect().height > 0);
       if (after) after.focus();
+      else {
+        // A bare frame has nothing focusable after the bar; park focus on main rather than body.
+        const main = document.querySelector<HTMLElement>("main");
+        if (main) { main.setAttribute("tabindex", "-1"); main.focus(); }
+      }
       try {
         sessionStorage.setItem(key(bar), "1");
       } catch {
@@ -174,7 +179,14 @@ const uid = id || `ann-${Math.random().toString(36).slice(2, 8)}`;
     overflow: hidden;
   }
   .kit-ann__link {
-    flex: none;
+    /* The link may wrap and never overflows: `flex: none` made a long label the row's overflow at
+       320 and ran it under the close button. The box is at least 24px tall, a real target. */
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
     color: inherit;
     font-weight: var(--kit-weight-medium);
     text-decoration: underline;

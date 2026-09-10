@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-10T13:52:05.857Z",
-  "until": "2026-09-10T13:52:05.847Z",
+  "generated_at": "2026-09-10T15:03:15.435Z",
+  "until": "2026-09-10T15:03:15.421Z",
   "excluded": [
     {
       "from": "2026-09-10T11:59:00.000Z",
@@ -11,6 +11,11 @@
       "from": "2026-09-10T13:22:00.000Z",
       "to": "2026-09-10T13:23:00.000Z",
       "reason": "critic 9 verification reads (six detailed refs_get calls), not the builder's survey"
+    },
+    {
+      "from": "2026-09-10T14:17:00.000Z",
+      "to": "2026-09-10T14:50:00.000Z",
+      "reason": "critic 10 verification reads (six refs_get calls), not the builder's survey"
     }
   ],
   "source": {
@@ -20,7 +25,7 @@
     "library": null
   },
   "calls": 18,
-  "excluded_calls": 17,
+  "excluded_calls": 23,
   "unabsorbed_calls": 0,
   "searches": 11,
   "layers_read": [

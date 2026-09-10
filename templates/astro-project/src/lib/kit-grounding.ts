@@ -434,7 +434,7 @@ export const kitGrounding: Record<string, KitPieceGrounding> = {
   footer: {
     donors: [
       { slug: "anthropic", note: "A slate footer that weighs as much as the hero, with the oversized wordmark bottom-left as the page's exhale." },
-      { slug: "aesop", note: "A charcoal mode-flip, cream text rather than white, a newsletter input at the top and the brand mark oversized at the bottom." },
+      { slug: "aesop", note: "A full-bleed charcoal footer, link columns and the brand mark, the only place pure white appears on text; the newsletter is its own block just before it." },
       { slug: "mercury", note: "An inset white footer that is deliberately NOT mode-flipped, with regulatory disclosures." },
       { slug: "parsley-health", note: "A deep-teal footer with link columns, centres, social, newsletter and the clinical legal links a medical brand requires." },
       { slug: "greenwise-organic-lawn-care", note: "Services, service areas and per-region contact in the footer." },
@@ -443,12 +443,13 @@ export const kitGrounding: Record<string, KitPieceGrounding> = {
       { slug: "swillhouse", note: "Four columns: subscribe form, sitemap, a book-a-table venue selector, social." },
       { slug: "gymshark", note: "Link columns, newsletter, app, region and social." },
       { slug: "habito", note: "The newsletter block above the legal and link rows." },
-      { slug: "warby-parker", note: "Large retail footer: multi-column link groups (shop, service, company, help), an email-capture input, social icons and a legal row; dense but tidy, anchored on white." },
+      { slug: "warby-parker", note: "A large multi-column retail footer with email capture and social on a tidy white anchor." },
     ],
     rules: [
       { text: "Decide the mode-flip deliberately: a dark footer closes a light page; an inset same-ground footer suits a page that already alternates.", slugs: ["anthropic", "aesop", "mercury"] },
       { text: "Carry the practical: contact per location, service areas, and the legal a regulated brand needs.", slugs: ["greenwise-organic-lawn-care", "parsley-health", "mercury"] },
-      { text: "The newsletter and the oversized wordmark are the two devices worth borrowing, and the wordmark goes at the bottom.", slugs: ["aesop", "anthropic", "habito"] },
+      { text: "The oversized wordmark sits at the bottom of the footer as the page's exhale.", slugs: ["anthropic"] },
+      { text: "A newsletter block beside or above the footer's legal and link rows.", slugs: ["aesop", "habito"] },
     ],
     avoid: [
       { text: "A footer that is a link dump rather than organised columns.", slugs: ["aesop"] },

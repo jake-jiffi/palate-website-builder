@@ -265,6 +265,10 @@ const pages = [
     border-radius: var(--kit-radius-sm);
     padding: var(--kit-space-2xs) var(--kit-space-xs);
     line-height: 1;
+    /* A thumb-sized target: 160 of these at 22px passed axe on the spacing exception and failed a thumb. */
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
   }
   .ix__statelink:hover { border-color: var(--kit-text); text-decoration: underline; }
   .ix__state--none {

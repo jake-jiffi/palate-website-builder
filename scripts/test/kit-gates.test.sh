@@ -349,6 +349,12 @@ if grep -q '{chrome && <slot name="footer" />}' "$LAYOUT"; then
 else bad "the layout mutation did not apply (the footer slot line has moved)"; fi
 cp "$TMP/layout.bak" "$LAYOUT"
 
+# ---------- a clause the library never states must not survive in any contract ----------
+# "with one recommended" was removed from three named places and survived in a fourth; the grep is
+# the assertion that a removal is a removal.
+if grep -q "one recommended" "$MANIFEST" "$GROUND"; then bad "'one recommended' is still attributed to the library in kit.ts or kit-grounding.ts"
+else ok "no contract attributes 'one recommended' to a library that never states it"; fi
+
 # ---------- the client-imagery gate ----------
 SITE="$TMP/site"; mkdir -p "$SITE/_assets-archive/photos" "$SITE/dist/client"
 for i in 1 2 3; do printf 'x' > "$SITE/_assets-archive/photos/p$i.jpg"; done

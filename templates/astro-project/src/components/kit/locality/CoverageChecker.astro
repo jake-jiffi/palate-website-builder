@@ -29,6 +29,8 @@ export interface Props {
    * refused. Without it, a typed state is treated as a place the list does not name.
    */
   state?: string;
+  /** The city or region the list sits in ("Sydney"), stripped from what is typed the way `state` is. */
+  city?: string;
   inputLabel?: string;
   placeholder?: string;
   submitLabel?: string;
@@ -63,6 +65,7 @@ const {
   errorLabel = "Ask anyway",
   requiredMessage = "Type a postcode or a suburb first.",
   state = "",
+  city = "",
   tone = "subtle",
   id,
   class: className,
@@ -101,6 +104,7 @@ const resultId = `${uid}-result`;
         data-kit-coverage
         data-kit-covered={list.join("|")}
         data-kit-state={state.trim()}
+        data-kit-city={city.trim()}
         data-kit-success-text={successText}
         data-kit-error-text={errorText}
       >
@@ -180,28 +184,37 @@ const resultId = `${uid}-result`;
       nt: ["nt", "northern territory"], act: ["act", "australian capital territory"],
     };
     const ALL_STATE_FORMS = Object.values(STATE_FORMS).flat().sort((a, b) => b.length - a.length);
-    const decide = (raw: string, covered: string[], ownState: string): string | null => {
+    /**
+     * THE RULES, IN ORDER. Another state's name anywhere refuses. The business's own state, its
+     * city and the country ("australia", "au") are stripped. A typed four-digit postcode decides:
+     * on the list it answers YES whatever else was typed (the previous version still demanded the
+     * remaining words equal a listed name, so "Bondi Beach 2026" was refused on a postcode the
+     * list carries, which states a falsehood on the client's behalf); off the list it refuses.
+     * With no postcode, what remains must equal a listed name whole, so "Manly Vale" is never
+     * read as "Manly". The answer echoes the listed name where one matched, else what was typed.
+     */
+    const decide = (raw: string, covered: string[], ownState: string, ownCity: string): string | null => {
       let typed = normalise(raw);
       if (!typed) return null;
       const own = STATE_FORMS[normalise(ownState)] || [];
-      // Another state's name anywhere in the value is a refusal, whatever else was typed.
       for (const form of ALL_STATE_FORMS) {
         const re = new RegExp(`(^|\\s)${form}(\\s|$)`);
         if (!re.test(typed)) continue;
         if (!own.includes(form)) return null;
         typed = typed.replace(re, " ").replace(/\s+/g, " ").trim();
       }
-      typed = typed.replace(/\baustralia\b/g, " ").replace(/\s+/g, " ").trim();
-      const postcodes = new Set(covered.filter((c) => /^\d{4}$/.test(c.trim())));
+      for (const drop of ["australia", "au", normalise(ownCity)].filter(Boolean)) {
+        typed = typed.replace(new RegExp(`(^|\\s)${drop}(\\s|$)`, "g"), " ").replace(/\s+/g, " ").trim();
+      }
+      const postcodes = new Set(covered.filter((c) => /^\d{4}$/.test(c.trim())).map((c) => c.trim()));
       const names = covered.filter((c) => !/^\d{4}$/.test(c.trim()));
       const typedCodes = typed.match(/\b\d{4}\b/g) || [];
       for (const code of typedCodes) if (!postcodes.has(code)) return null;
       const place = typed.replace(/\b\d{4}\b/g, " ").replace(/\s+/g, " ").trim();
-      if (place) {
-        const name = names.find((n) => normalise(n) === place);
-        return name ?? null;
-      }
-      return typedCodes.length ? typedCodes[0] : null;
+      const name = place ? names.find((n) => normalise(n) === place) : undefined;
+      if (name) return name;
+      if (typedCodes.length) return place ? raw.trim() : typedCodes[0];
+      return null;
     };
 
     document.addEventListener(
@@ -240,7 +253,7 @@ const resultId = `${uid}-result`;
         input.removeAttribute("aria-invalid");
 
         const covered = (box.dataset.kitCovered || "").split("|").filter(Boolean);
-        const hit = decide(input.value, covered, box.dataset.kitState || "");
+        const hit = decide(input.value, covered, box.dataset.kitState || "", box.dataset.kitCity || "");
         // The list's own casing when it matched, the visitor's words when it did not.
         const shown = hit ?? input.value.trim();
         const fill = (template: string) => template.replace(/\{place\}/g, shown);

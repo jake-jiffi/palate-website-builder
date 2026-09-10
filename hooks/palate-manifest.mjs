@@ -788,10 +788,15 @@ function main() {
 
     const slugs = new Set();
     collectFromMcpResult(result, slugs);
+    // What the library actually ANSWERED WITH, kept apart from what was asked for: a batched read
+    // under a shared token budget can return fewer references than it was asked for, and a slug
+    // that was requested and never came back was not read. The survey snapshot reads `returned`
+    // where it exists and falls back to `slugs` on older entries.
+    const returned = [...slugs];
     if (typeof input.slug === "string") slugs.add(input.slug);
     if (Array.isArray(input.slugs)) for (const s of input.slugs) if (typeof s === "string") slugs.add(s);
     const slugList = [...slugs];
-    const entry = { tool, args: input, slugs: slugList, evidence, ts: new Date().toISOString() };
+    const entry = { tool, args: input, slugs: slugList, returned, evidence, ts: new Date().toISOString() };
     m.mcp_calls.push(entry);
     // The journal is written FIRST-class, beside the manifest, on the same call. If the manifest
     // write below fails, or the file is later blanked, moved or symlinked away, this line is

@@ -53,7 +53,10 @@ export function deriveSurvey(manifest, excluded = [], until = "") {
     if (c.evidence !== "ok") continue;
     if (!DEEP.has(c.tool)) { searches += 1; continue; }
     const layers = Array.isArray(c.args?.layer) ? c.args.layer : Array.isArray(c.args?.sections) ? c.args.sections : ["concept", "astro_recipe"];
-    for (const slug of c.slugs || []) {
+    // A slug counts as read only when the library answered with it; older entries carry no
+    // `returned` and fall back to what was requested.
+    const got = Array.isArray(c.returned) ? c.returned : c.slugs || [];
+    for (const slug of got) {
       const entry = read.get(slug) || { slug, layers: new Set(), reads: 0 };
       layers.forEach((l) => entry.layers.add(l));
       entry.reads += 1;
