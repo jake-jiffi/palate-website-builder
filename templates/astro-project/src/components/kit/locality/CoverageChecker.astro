@@ -235,22 +235,23 @@ const resultId = `${uid}-result`;
         if (postcodes.size && codesTyped.some((c) => !postcodes.has(c))) return null;
         return name;
       }
-      // 3: another state as the last word.
+      // 3: A LISTED POSTCODE IS GROUND TRUTH, and this runs BEFORE the state-word refusal below so
+      // a covered postcode is never overruled by a state word typed beside it ("2026 Victoria",
+      // "2030 Tasmania"). A four-digit postcode names the area unambiguously, so if it is on the
+      // list the area is covered whatever else was typed, and the suburb name is only ever used to
+      // echo (step 1), never to refuse. The piece carries no postcode-to-suburb table and must not
+      // pretend to: it answers on the postcode it can verify and echoes the postcode itself rather
+      // than the visitor's words, so the answer is never a falsehood about a named place. A typed
+      // postcode NOT on the list is a contradiction and refuses.
+      if (codesTyped.length) return codesTyped.every((c) => postcodes.has(c)) ? codesTyped[0] : null;
+      // 4: no postcode and no listed name. Another state as the last word refuses ("Manly,
+      // Queensland"); anything else is a place the list does not name.
       const placeOnly = dropWord(dropWord(words, "australia"), "au");
       for (const form of ALL_STATE_FORMS) {
         if (own.includes(form)) continue;
         if (new RegExp(`(^|\\s)${form}$`).test(placeOnly)) return null;
       }
-      // 4: A LISTED POSTCODE IS GROUND TRUTH. A four-digit postcode names the area unambiguously,
-      // so if it is on the list the area is covered whatever suburb was typed beside it, and the
-      // suburb name is only ever used to echo (step 1), never to refuse. The previous version
-      // demanded the extra words share a whole word with a listed NAME, which refused "Tamarama
-      // 2026" and "Dover Heights 2030" (their real, covered postcodes) and echoed the wrong suburb
-      // for "Bondi Junction 2026". The piece carries no postcode-to-suburb table and must not
-      // pretend to: it answers on the postcode it can verify, and echoes the postcode itself rather
-      // than the visitor's words, so the answer is never a falsehood about a named place.
-      if (!codesTyped.length || codesTyped.some((c) => !postcodes.has(c))) return null;
-      return codesTyped[0];
+      return null;
     };
 
     document.addEventListener(
@@ -290,6 +291,30 @@ const resultId = `${uid}-result`;
 
         const covered = (box.dataset.kitCovered || "").split("|").filter(Boolean);
         const hit = decide(input.value, covered, box.dataset.kitState || "", box.dataset.kitCity || "");
+
+        // A WHOLE CITY IS TOO BROAD TO ANSWER, so ask for a suburb or postcode rather than refuse
+        // it: a suburb-level list cannot say yes or no to "Sydney", and "we do not work in Sydney"
+        // is misleading for a business that works across it. Triggers only when nothing matched and
+        // the typed value IS the business's own city (with or without its state or the country).
+        const cityNorm = normalise(box.dataset.kitCity || "");
+        if (!hit && cityNorm) {
+          const ownForms = STATE_FORMS[normalise(box.dataset.kitState || "")] || [];
+          let cityProbe = normalise(input.value);
+          for (const w of [...ownForms, "australia", "au"]) cityProbe = cityProbe.replace(new RegExp(`(^|\\s)${w}(\\s|$)`, "g"), " ").replace(/\s+/g, " ").trim();
+          if (cityProbe === cityNorm) {
+            if (error) {
+              error.textContent = `We cover parts of ${box.dataset.kitCity}. Which suburb or postcode?`;
+              error.hidden = false;
+            }
+            input.setAttribute("aria-invalid", "true");
+            input.focus();
+            if (yes) yes.hidden = true;
+            if (no) no.hidden = true;
+            box.dataset.kitCoverageState = "refine";
+            return;
+          }
+        }
+
         // The list's own casing when it matched, the visitor's words when it did not.
         const shown = hit ?? input.value.trim();
         const fill = (template: string) => template.replace(/\{place\}/g, shown);
