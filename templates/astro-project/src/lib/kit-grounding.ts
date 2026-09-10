@@ -112,7 +112,7 @@ export const kitGrounding: Record<string, KitPieceGrounding> = {
     donors: [
       { slug: "warby-parker", note: "A tight trust strip directly under the hero: free shipping, free returns, vision benefits accepted, first-order offer." },
       { slug: "attentive", note: "Customer logo strip placed directly under the hero so trust lands before any feature claim." },
-      { slug: "pilot-accounting", note: "Client-logo strip in the first fold; the note says to swap unrecognisable enterprise logos for local client names or accreditations." },
+      { slug: "pilot-accounting", note: "Client-logo social-proof strip of recognisable startup logos in the first fold." },
       { slug: "mercury", note: "'Loved by 300K+ of the most ambitious entrepreneurs' as a count-plus-character claim; explicitly not a logo wall in this category." },
       { slug: "dropbox", note: "A slim 246px social-proof band ('over 700 million registered users') as the breath between hero and features." },
       { slug: "loom", note: "'Millions of people across 400,000 companies' counted claim with a logo strip, right under the hero." },

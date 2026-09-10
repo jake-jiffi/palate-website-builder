@@ -232,17 +232,19 @@ const resultId = `${uid}-result`;
       const noState = own.reduce((v, w) => dropWord(v, w), words);
       const stripped = ["australia", "au", normalise(ownCity)].filter(Boolean).reduce((v, w) => dropWord(v, w), noState);
       const name = byName(words) || byName(noState) || byName(stripped);
-      if (name) {
-        if (postcodes.size && codesTyped.some((c) => !postcodes.has(c))) return null;
-        return name;
-      }
-      // 3: A LISTED POSTCODE IS GROUND TRUTH. A four-digit postcode names the area unambiguously,
-      // so if ANY typed postcode is on the list the area is covered, even beside an unlisted one
-      // ("2026 2000") or a state word ("2026 Victoria"); the echo is a whole-matched name where one
-      // exists, else the listed postcode, never the visitor's raw words. The piece carries no
-      // postcode-to-suburb table and answers only on what it can verify.
+      // 2: A LISTED POSTCODE IS GROUND TRUTH, and this is checked FIRST, before the name
+      // contradiction below, so a covered postcode is never overruled by an unlisted one typed
+      // beside it: "Bondi 2026 2000" is covered on 2026 (echoing Bondi), not refused on 2000. If
+      // any typed postcode is on the list the area is covered, whatever else was typed; the echo is
+      // a whole-matched name where one exists, else the listed postcode, never the visitor's words.
       const listedCode = codesTyped.find((c) => postcodes.has(c));
       if (listedCode) return name || listedCode;
+      // 3: a listed NAME with no listed postcode. A name matched and no typed postcode is on the
+      // list. It contradicts ONLY when the list carries postcodes at all (so a typed one could have
+      // been listed but is not, "Chatswood 2000") -> refuse; a names-only list has no postcode to
+      // be contradicted by, so it ignores a typed postcode and the name covers ("Marrickville 2204"
+      // on a names-only list).
+      if (name) return (postcodes.size && codesTyped.length) ? null : name;
       // 4: a postcode was typed and none are on the list -> we do not cover that postcode. With no
       // postcode at all the caller decides whether to refuse (an unlisted name) or ask for a
       // postcode (a name it cannot confirm, or the whole city); decide() returns null either way.
@@ -337,9 +339,9 @@ const resultId = `${uid}-result`;
           return;
         }
 
-        // The list's own casing when a name matched, the postcode when it did not; never the raw
-        // words. A NO echoes the postcode the visitor gave that the list does not carry.
-        const shown = hit ?? (codes.find((c) => true) || input.value.trim());
+        // The list's own casing when a name matched, else the postcode the list does NOT carry that
+        // made this a no (never a covered postcode, and never the visitor's raw words).
+        const shown = hit ?? (codes.find((c) => !covered.includes(c)) || codes[0] || input.value.trim());
         const fill = (template: string) => template.replace(/\{place\}/g, shown);
 
         if (hit) {
