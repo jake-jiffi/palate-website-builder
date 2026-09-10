@@ -121,6 +121,7 @@
 
   /* The reading measure. A piece that sets its own width instead of this is a bug. */
   --kit-measure: 62ch;
+  --kit-measure-wide: 78ch; /* a closing band's copy caps here so a wide dark section is not one-sided void */
 
   /* ---- 3. LAYOUT: page widths, grids, spacing, section padding ---------------------------- */
   --kit-page-max:   var(--brand-page-max, 1180px);
@@ -309,6 +310,12 @@
    hover. Three did; the rest inherited nothing, and a footer phone number, a source citation and
    an alternating-benefit action all measured byte-identical computed style at rest and on hover. */
 .kit-link:hover { text-decoration-thickness: var(--kit-underline-hover); }
+/* A LINK THAT STANDS ALONE IS A TARGET, NOT A WORD. A link inside a sentence takes the line box
+   it sits in, and WCAG 2.5.8 exempts it; a phone number in a footer, "See every location", a card
+   title in a grid and a fallback download link are standalone targets, and they measured 18 to
+   20px at 390 in sixteen frames while the one link a critic had named was raised to 24px.
+   `kit-link--target` gives a standalone link the 24px box without touching links in prose. */
+.kit-link--target { display: inline-flex; align-items: center; min-block-size: 1.5rem; }
 .kit-section--inverse .kit-link { color: var(--kit-accent-lift); }
 .kit-section--inverse .kit-muted { color: color-mix(in srgb, var(--kit-text-inverse) 72%, transparent); }
 

@@ -21,15 +21,17 @@
 export interface Props {
   heading?: string;
   lede?: string;
-  /** Postcodes and suburb names, in any case. A typed postcode must be on the list; a typed name
-   *  must be the whole place, so "Manly Vale" is never read as "Manly". */
+  /** Postcodes and suburb names, in any case, in one flat list. A typed name must be the whole
+   *  place, so "Manly Vale" is never read as "Manly"; a typed postcode must be on the list when
+   *  the list carries postcodes at all, and a names-only list answers on the name alone. */
   covered?: string[];
   /**
    * The state the list is in ("NSW"), so "Marrickville NSW" is accepted and "Manly, Queensland" is
    * refused. Without it, a typed state is treated as a place the list does not name.
    */
   state?: string;
-  /** The city or region the list sits in ("Sydney"), stripped from what is typed the way `state` is. */
+  /** The city or region the list sits in ("Sydney"), stripped from what is typed the way `state` is;
+   *  a listed name that contains it ("North Sydney") still matches whole. */
   city?: string;
   inputLabel?: string;
   placeholder?: string;
@@ -185,36 +187,62 @@ const resultId = `${uid}-result`;
     };
     const ALL_STATE_FORMS = Object.values(STATE_FORMS).flat().sort((a, b) => b.length - a.length);
     /**
-     * THE RULES, IN ORDER. Another state's name anywhere refuses. The business's own state, its
-     * city and the country ("australia", "au") are stripped. A typed four-digit postcode decides:
-     * on the list it answers YES whatever else was typed (the previous version still demanded the
-     * remaining words equal a listed name, so "Bondi Beach 2026" was refused on a postcode the
-     * list carries, which states a falsehood on the client's behalf); off the list it refuses.
-     * With no postcode, what remains must equal a listed name whole, so "Manly Vale" is never
-     * read as "Manly". The answer echoes the listed name where one matched, else what was typed.
+     * THE RULES, IN ORDER, AND THE ORDER IS THE FIX. Three rounds found this one function fixed
+     * into its own opposite: loosened until "Manly Vale" read as Manly, tightened until "Bondi
+     * Beach 2026" was refused on a postcode the list carries, then loosened until "Chatswood 2026"
+     * and "2026 total gibberish here" were both covered, while "North Sydney" (city Sydney),
+     * "Victoria Point" (state QLD) and "Marrickville 2204" on a names-only list were refused,
+     * because the business's own qualifiers were stripped out of place NAMES before any match.
+     *
+     *  1. The typed words, postcode aside, are matched WHOLE against the listed names first, so a
+     *     name that contains the city or a state is found before anything is stripped. The same
+     *     is then tried with the business's own state, its city and the country removed, which is
+     *     how "Marrickville NSW" and "Coogee, Sydney" are read.
+     *  2. A listed name decides yes, unless a typed postcode is one the list does not carry while
+     *     the list carries postcodes at all ("Chatswood 2000" against a list that says 2067). A
+     *     names-only list has no postcode to be contradicted by.
+     *  3. With no listed name, another state as the LAST word refuses ("Manly, Queensland"). A
+     *     state's name inside a longer place name is part of the name and never triggers this.
+     *  4. Then a typed postcode decides: off the list it refuses; on the list it answers yes when
+     *     nothing else was typed, or when the words share a whole word with a listed name ("Bondi
+     *     Beach" for Bondi, echoed as Bondi). Any other words name a place the list does not
+     *     ("Chatswood 2026", "2026 total gibberish here"), and refuse.
+     * Nothing is answered yes on a partial match, and the answer echoes the list's own name.
      */
     const decide = (raw: string, covered: string[], ownState: string, ownCity: string): string | null => {
-      let typed = normalise(raw);
+      const typed = normalise(raw);
       if (!typed) return null;
-      const own = STATE_FORMS[normalise(ownState)] || [];
-      for (const form of ALL_STATE_FORMS) {
-        const re = new RegExp(`(^|\\s)${form}(\\s|$)`);
-        if (!re.test(typed)) continue;
-        if (!own.includes(form)) return null;
-        typed = typed.replace(re, " ").replace(/\s+/g, " ").trim();
-      }
-      for (const drop of ["australia", "au", normalise(ownCity)].filter(Boolean)) {
-        typed = typed.replace(new RegExp(`(^|\\s)${drop}(\\s|$)`, "g"), " ").replace(/\s+/g, " ").trim();
-      }
-      const postcodes = new Set(covered.filter((c) => /^\d{4}$/.test(c.trim())).map((c) => c.trim()));
+      const collapse = (value: string) => value.replace(/\s+/g, " ").trim();
+      const dropWord = (value: string, word: string) =>
+        collapse(value.replace(new RegExp(`(^|\\s)${word}(\\s|$)`, "g"), " "));
       const names = covered.filter((c) => !/^\d{4}$/.test(c.trim()));
-      const typedCodes = typed.match(/\b\d{4}\b/g) || [];
-      for (const code of typedCodes) if (!postcodes.has(code)) return null;
-      const place = typed.replace(/\b\d{4}\b/g, " ").replace(/\s+/g, " ").trim();
-      const name = place ? names.find((n) => normalise(n) === place) : undefined;
-      if (name) return name;
-      if (typedCodes.length) return place ? raw.trim() : typedCodes[0];
-      return null;
+      const postcodes = new Set(covered.filter((c) => /^\d{4}$/.test(c.trim())).map((c) => c.trim()));
+      const codesTyped = typed.match(/\b\d{4}\b/g) || [];
+      const words = collapse(typed.replace(/\b\d{4}\b/g, " "));
+      const own = STATE_FORMS[normalise(ownState)] || [];
+      const byName = (place: string) => (place ? names.find((n) => normalise(n) === place) : undefined);
+      // Progressive forms, most-literal first, so a listed name that CONTAINS the city or a state
+      // ("North Sydney", "Port Victoria") matches before that qualifier is ever removed. Only when
+      // the raw words and the state-stripped words both miss is the city and country removed, which
+      // is what reads "Coogee, Sydney" as Coogee.
+      const noState = own.reduce((v, w) => dropWord(v, w), words);
+      const stripped = ["australia", "au", normalise(ownCity)].filter(Boolean).reduce((v, w) => dropWord(v, w), noState);
+      const name = byName(words) || byName(noState) || byName(stripped);
+      if (name) {
+        if (postcodes.size && codesTyped.some((c) => !postcodes.has(c))) return null;
+        return name;
+      }
+      // 3: another state as the last word.
+      const placeOnly = dropWord(dropWord(words, "australia"), "au");
+      for (const form of ALL_STATE_FORMS) {
+        if (own.includes(form)) continue;
+        if (new RegExp(`(^|\\s)${form}$`).test(placeOnly)) return null;
+      }
+      // 4: a listed postcode, alone or beside a form of a listed name.
+      if (!codesTyped.length || codesTyped.some((c) => !postcodes.has(c))) return null;
+      if (!stripped) return codesTyped[0];
+      const tokens = stripped.split(" ");
+      return names.find((n) => normalise(n).split(" ").some((t) => tokens.includes(t))) || null;
     };
 
     document.addEventListener(

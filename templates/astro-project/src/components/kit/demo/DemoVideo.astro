@@ -46,6 +46,10 @@ export interface Props {
   /** Where the fallback link goes when playback fails. Defaults to the video itself. */
   fallbackHref?: string;
   fallbackLabel?: string;
+  /** A phone number the error copy may promise ("or ring us"): rendered as a tel: link beside the
+   *  fallback, so the copy never names a route the overlay does not carry. */
+  fallbackPhone?: string;
+  fallbackPhoneLabel?: string;
   /** A captions track. A product video without one is an accessibility gap, so supply it. */
   captionsSrc?: string;
   captionsLang?: string;
@@ -75,6 +79,8 @@ const {
   duration = "2 min 40 sec",
   fallbackHref,
   fallbackLabel = "Open the video directly",
+  fallbackPhone = "",
+  fallbackPhoneLabel = "",
   captionsSrc,
   captionsLang = "en",
   captionsLabel = "English captions",
@@ -92,6 +98,8 @@ const {
 const uid = id || `dv-${Math.random().toString(36).slice(2, 8)}`;
 const headingId = `${uid}-heading`;
 const fallback = fallbackHref || src;
+const phoneHref = fallbackPhone ? `tel:${fallbackPhone.replace(/[^0-9+]/g, "")}` : "";
+const phoneLabel = fallbackPhoneLabel || (fallbackPhone ? `Ring ${fallbackPhone}` : "");
 /**
  * WITHOUT A FILE THERE IS NOTHING TO PLAY, and offering a play button that cannot play is worse
  * than offering none. The frame is still drawn at the right ratio, so the hole a build has to
@@ -151,6 +159,7 @@ const toneClass =
         <div class="dv-overlay dv-overlay--error" data-dv-error hidden>
           <p class="dv-overlay__text" data-dv-error-text>{errorMessage}</p>
           {fallback && <a class="kit-btn dv-fallback" href={fallback}>{fallbackLabel}</a>}
+          {phoneHref && <a class="kit-btn dv-fallback" href={phoneHref} data-dv-phone>{phoneLabel}</a>}
         </div>
 
         {fallback && (

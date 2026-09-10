@@ -323,6 +323,30 @@ if (!existsSync(groundingPath)) {
     survey = null;
   }
   const read = new Set(((survey && survey.references) || []).map((r) => r && r.slug).filter(Boolean));
+  /**
+   * READ MEANS NOTES CAME BACK. Membership in the survey said the library answered for a slug; it
+   * did not say the answer held anything, and three cited references (caliber, myodetox, dishoom)
+   * answered every layer with an untouched template while donor notes attributed to them were
+   * transcribed from the one-line blurb every record carries. The snapshot now records which
+   * layers carried notes; a citation to a slug with none is a citation to nothing, and a slug read
+   * only by a recorder that kept no content is unknown and has to be re-read, never assumed.
+   */
+  const notesOf = new Map(((survey && survey.references) || []).map((r) => [r && r.slug, Array.isArray(r && r.notes) ? r.notes : null]));
+  /**
+   * NULL notes means the survey was taken by a recorder that kept no per-section content (every
+   * reference read before the content-capture recorder shipped). That is UNKNOWN, not empty: the
+   * gate falls back to membership and lists the unknowns once, so the survey still validates while
+   * the class is caught the next time a content-carrying survey is taken. An EMPTY notes array is
+   * a recorded fact that the read came back a template, and that is refused by name.
+   */
+  const unknownCited = new Set();
+  const citeFault = (slug, what) => {
+    if (!read.has(slug)) return `${what} "${slug}", which the survey never read`;
+    const notes = notesOf.get(slug);
+    if (notes === null) { unknownCited.add(slug); return ""; }
+    if (!notes.length) return `${what} "${slug}", which answered every recorded read with an empty template, so nothing in it can be cited`;
+    return "";
+  };
   if (!read.size) {
     console.error(`gate-kit-complete: could not run: ${relative(dir, surveyPath)} records zero deep reads, so every citation would fail and nothing would be learned. Re-run the survey and the snapshot.`);
     process.exit(2);
@@ -349,6 +373,62 @@ if (!existsSync(groundingPath)) {
     slugs: (m[3].match(/"[a-z0-9-]+"/g) || []).map((x) => x.replace(/"/g, "")),
   }));
 
+/**
+ * A COMPOSED PAGE DECLARES ITS RHYTHM AND EVERY SECTION IT RENDERS. The index says each example
+ * page follows one rhythm "step for step", and one of the three renumbered its rhythm, invented a
+ * step and left a rendered section off its own list; another left a rendered testimonial off. A
+ * declaration nothing parses is prose. The leading comment of each page under pages/kit/*.astro
+ * is read here: RHYTHM: `id`, then lines of the form
+ *   `N. what the step is ... Component, Component`   (a step of the rhythm, in its own numbering)
+ *   `+ why this addition, and which reference ... Component`   (a declared addition)
+ *   `~ the page's chrome ... Component`
+ * Every kit component the page renders has to be on one of those lines, every declared component
+ * has to render, the numbered steps have to be exactly the rhythm's 1..k each once, and the
+ * rendered order of step components has to be non-decreasing.
+ */
+const pagesDir = join(base, "pages/kit");
+const rhythmIds = new Set(rhythms.map((r) => r.id));
+const rhythmSteps = new Map(rhythms.map((r) => [r.id, r.steps.length]));
+for (const file of existsSync(pagesDir) ? readdirSync(pagesDir).filter((f) => /^[a-z]+\.astro$/.test(f) && f !== "index.astro") : []) {
+  const pagePath = join(pagesDir, file);
+  const page = readFileSync(pagePath, "utf8");
+  const rel = relative(dir, pagePath);
+  const head = /^---\s*\n\/\*\*([\s\S]*?)\*\//.exec(page);
+  if (!head) { findings.push(`${rel} does not open with a declaring comment, so its rhythm and its sections are undeclared`); continue; }
+  const rhythmId = /RHYTHM:\s*`([a-z-]+)`/.exec(head[1])?.[1] || "";
+  if (!rhythmIds.has(rhythmId)) { findings.push(`${rel} declares rhythm "${rhythmId || "(none)"}", which kit-grounding.ts does not define`); continue; }
+  const lineRe = /^\s*\*\s+(\d+\.|\+|~)\s+(.*?)\s+\.*\s*([A-Z][A-Za-z]+(?:,\s*[A-Z][A-Za-z]+)*)\s*$/gm;
+  const declared = new Map();
+  const stepNumbers = [];
+  let line;
+  while ((line = lineRe.exec(head[1]))) {
+    const [, mark, why, comps] = line;
+    if (mark !== "~" && why.trim().length < 12) findings.push(`${rel} declares "${comps}" with no reason worth the name`);
+    const step = mark.endsWith(".") ? Number(mark.slice(0, -1)) : mark === "+" ? "addition" : "chrome";
+    if (typeof step === "number") stepNumbers.push(step);
+    for (const c of comps.split(",").map((x) => x.trim())) {
+      if (declared.has(c)) findings.push(`${rel} declares ${c} twice`);
+      declared.set(c, step);
+    }
+  }
+  const k = rhythmSteps.get(rhythmId);
+  const expected = Array.from({ length: k }, (_, i) => i + 1);
+  if (stepNumbers.join(",") !== expected.join(",")) findings.push(`${rel} declares steps ${stepNumbers.join(", ") || "(none)"} for "${rhythmId}", whose own numbering is 1 to ${k}, each once and in order`);
+  const imported = new Set(Array.from(page.matchAll(/^import\s+([A-Z][A-Za-z]+)\s+from\s+"[^"]*components\/kit\/[^"]+"/gm)).map((m) => m[1]));
+  const body = page.slice(page.indexOf("\n---", 4) + 4);
+  const rendered = Array.from(body.matchAll(/<([A-Z][A-Za-z]+)\b/g)).map((m) => m[1]).filter((c) => imported.has(c));
+  for (const c of new Set(rendered)) if (!declared.has(c)) findings.push(`${rel} renders ${c} and does not declare it as a step, an addition or chrome`);
+  for (const c of declared.keys()) if (!rendered.includes(c)) findings.push(`${rel} declares ${c} and never renders it`);
+  let last = 0;
+  for (const c of rendered) {
+    const step = declared.get(c);
+    if (typeof step !== "number") continue;
+    if (step < last) findings.push(`${rel} renders ${c} (step ${step}) after step ${last}, against the rhythm's order`);
+    last = Math.max(last, step);
+  }
+}
+
+
   if (!Object.keys(grounding).length) {
     console.error(`gate-kit-complete: could not run: ${relative(dir, groundingPath)} parsed to zero pieces, so no citation was checked.`);
     process.exit(2);
@@ -364,13 +444,15 @@ if (!existsSync(groundingPath)) {
       findings.push(`piece "${p.id}" cites ${gp.donors.length} donor(s) and needs at least three, or its contract rests on one reading`);
     }
     for (const slug of gp.donors) {
-      if (!read.has(slug)) findings.push(`piece "${p.id}" names "${slug}" as a donor and the survey never read it`);
+      const fault = citeFault(slug, `piece "${p.id}" names as a donor`);
+      if (fault) findings.push(fault);
     }
     for (const kind of ["rules", "avoid"]) {
       for (const r of gp[kind]) {
         if (!r.slugs.length) findings.push(`piece "${p.id}" ${kind === "rules" ? "rule" : "anti-pattern"} "${r.text.slice(0, 50)}" cites nothing, which makes it taste rather than evidence`);
         for (const slug of r.slugs) {
-          if (!read.has(slug)) findings.push(`piece "${p.id}" ${kind === "rules" ? "rule" : "anti-pattern"} "${r.text.slice(0, 50)}" cites "${slug}", which the survey never read`);
+          const fault = citeFault(slug, `piece "${p.id}" ${kind === "rules" ? "rule" : "anti-pattern"} "${r.text.slice(0, 50)}" cites`);
+          if (fault) findings.push(fault);
         }
       }
     }
@@ -390,7 +472,8 @@ if (!existsSync(groundingPath)) {
       }
       for (const slug of v.evidence) {
         cited.add(slug);
-        if (!read.has(slug)) findings.push(`${v.id} cites "${slug}" as evidence and the survey never read it`);
+        const fault = citeFault(slug, `${v.id} cites as evidence`);
+        if (fault) findings.push(fault);
         else if (!recordedForPiece.has(slug)) findings.push(`${v.id} cites "${slug}", which has no recorded note for the "${p.id}" piece in kit-grounding.ts; a slug cannot stand as evidence for a piece its notes were never recorded against`);
       }
     }
@@ -426,7 +509,8 @@ if (!existsSync(groundingPath)) {
       }
     }
     for (const slug of r.slugs) {
-      if (!read.has(slug)) findings.push(`rhythm "${r.id}" cites "${slug}", which the survey never read`);
+      const fault = citeFault(slug, `rhythm "${r.id}" cites`);
+      if (fault) findings.push(fault);
       else if (!donorAnywhere.has(slug)) findings.push(`rhythm "${r.id}" cites "${slug}", which is no piece's donor, so no recorded note stands behind the order it is cited for`);
     }
   }
@@ -440,6 +524,9 @@ if (!existsSync(groundingPath)) {
    * without forging the recorder's own output. Where the manifest is absent (another machine) the
    * gate says so rather than counting it as verified.
    */
+  if (unknownCited.size) {
+    console.log(`gate-kit-complete: ${unknownCited.size} cited reference(s) were surveyed before per-section content was recorded, so the survey cannot yet prove their notes are not empty; a fresh survey will. Re-read: ${[...unknownCited].sort().join(", ")}`);
+  }
   if (typeof survey.seal !== "string" || survey.seal !== sealOf(survey.references)) {
     findings.push(`${relative(dir, surveyPath)} does not carry a seal matching its reference list; regenerate it with kit-survey-snapshot.mjs rather than editing it`);
   }
@@ -462,6 +549,7 @@ if (!existsSync(groundingPath)) {
     console.log(`gate-kit-complete: survey provenance: manifest not present on this machine, so only the seal was checked (${survey.references.length} references).`);
   }
 }
+
 
 /**
  * A PAGE'S OWN HEADER AND FOOTER ARE NOT CHROME, AND THE LAYOUT MUST NOT DROP THEM.

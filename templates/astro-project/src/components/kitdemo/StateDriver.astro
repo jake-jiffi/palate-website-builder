@@ -151,7 +151,30 @@ const { state, openTarget = "" } = Astro.props;
         );
         return;
       }
-      say("Opened by pressing the piece's own control. Press it again to close it.");
+      /**
+       * WHAT CLOSES IT IS HIT-TESTED, NOT ASSUMED. "Press it again to close it" named the control
+       * that opened the piece, and a sheet that covers the viewport covers that control: at the
+       * viewer's own 390 width the sentence pointed at a button nobody could press, on all three
+       * navigation states, for three rounds. The toggle is hit-tested where it sits, and the close
+       * control inside the opened panel is named when the toggle is covered.
+       */
+      const box = target.getBoundingClientRect();
+      const atToggle = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      const toggleReachable = !!atToggle && (atToggle === target || target.contains(atToggle));
+      const panelId = target.getAttribute("aria-controls");
+      const panel = panelId ? document.getElementById(panelId) : null;
+      const label = (el: Element) => (el.getAttribute("aria-label") || el.textContent || "").replace(/\s+/g, " ").trim();
+      const closer = Array.from((panel || scope()).querySelectorAll<HTMLElement>("button, [role=button]")).find(
+        (el) => el !== target && usable(el) && /\b(close|dismiss)\b/i.test(label(el)),
+      );
+      const closeName = closer ? `"${label(closer).slice(0, 24)}"` : "";
+      if (toggleReachable) {
+        say(`Opened by pressing the piece's own control. Press it again${closeName ? `, or ${closeName},` : ""} to close it.`);
+      } else if (closeName) {
+        say(`Opened by pressing the piece's own control, which its panel now covers at ${window.innerWidth}px. Press ${closeName} inside the panel to close it.`);
+      } else {
+        say(`Opened by pressing the piece's own control, which its panel now covers at ${window.innerWidth}px. Use the piece's own close control to close it.`);
+      }
       return;
     }
 

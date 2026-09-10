@@ -82,7 +82,7 @@ const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
                 <p class="kit-body kit-muted kit-lf__meta">
                   {place.hours && <span>{place.hours}</span>}
                   {place.hours && place.phone && <span aria-hidden="true"> · </span>}
-                  {place.phone && <a class="kit-link" href={telHref(place.phone)}>{place.phone}</a>}
+                  {place.phone && <a class="kit-link kit-link--target" href={telHref(place.phone)}>{place.phone}</a>}
                 </p>
               )}
             </div>
@@ -100,7 +100,7 @@ const telHref = (phone: string) => `tel:${phone.replace(/[^0-9+]/g, "")}`;
 
     {items.length > 0 && allHref && (
       <p class="kit-lf__all">
-        <a class="kit-link" href={allHref}>{allLabel}</a>
+        <a class="kit-link kit-link--target" href={allHref}>{allLabel}</a>
       </p>
     )}
   </div>

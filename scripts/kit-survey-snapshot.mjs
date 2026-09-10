@@ -41,6 +41,26 @@ const DEEP = new Set(["mcp__palate__refs_get", "mcp__palate__refs_get_tokens", "
  * itself so the exclusion is visible and the gate re-derives with the same windows; calls newer
  * than the snapshot are counted in `unabsorbed` rather than absorbed.
  */
+/**
+ * WHICH LAYERS CARRIED NOTES. The recorder keeps, per reference and section, the substantive
+ * length of what the library answered with (headings and comments stripped), because a record
+ * can answer on a layer with an untouched template and three of the kit's cited references did.
+ * A layer counts as carrying notes when any of its sections clears the floor; a reference read
+ * only by a recorder that kept no content has no `notes` field at all, which the gate treats as
+ * "re-read it", never as "fine".
+ */
+const LAYER_SECTIONS = {
+  concept: ["overview", "voice"],
+  pages: ["structure"],
+  tokens: ["tokens", "typography", "layout"],
+  signature_moves: ["visualSystem", "motion"],
+  do_dont: ["doDont", "surfaces", "imageryPhilosophy", "motionPhilosophy"],
+  component_prompts: ["componentPrompts", "components"],
+  astro_recipe: ["astroRebuild"],
+  copy_voice: ["copyVoice", "voice"],
+};
+export const NOTE_FLOOR = 40;
+
 export function deriveSurvey(manifest, excluded = [], until = "") {
   const all = Array.isArray(manifest.mcp_calls) ? manifest.mcp_calls : [];
   const inWindow = (ts) => excluded.some((w) => w.from <= ts && ts <= w.to);
@@ -49,6 +69,7 @@ export function deriveSurvey(manifest, excluded = [], until = "") {
   const excludedCount = all.filter((c) => c.ts && inWindow(c.ts)).length;
   const read = new Map();
   let searches = 0;
+  let withoutContent = 0;
   for (const c of calls) {
     if (c.evidence !== "ok") continue;
     if (!DEEP.has(c.tool)) { searches += 1; continue; }
@@ -56,20 +77,31 @@ export function deriveSurvey(manifest, excluded = [], until = "") {
     // A slug counts as read only when the library answered with it; older entries carry no
     // `returned` and fall back to what was requested.
     const got = Array.isArray(c.returned) ? c.returned : c.slugs || [];
+    const content = c.content && typeof c.content === "object" ? c.content : null;
+    if (!content) withoutContent += 1;
     for (const slug of got) {
-      const entry = read.get(slug) || { slug, layers: new Set(), reads: 0 };
+      const entry = read.get(slug) || { slug, layers: new Set(), reads: 0, notes: new Set(), known: false };
       layers.forEach((l) => entry.layers.add(l));
       entry.reads += 1;
+      if (content) {
+        entry.known = true;
+        const per = content[slug] && typeof content[slug] === "object" ? content[slug] : {};
+        for (const l of layers) {
+          const sections = LAYER_SECTIONS[l] || [l];
+          if (sections.some((sec) => Number(per[sec] || 0) >= NOTE_FLOOR)) entry.notes.add(l);
+        }
+      }
       read.set(slug, entry);
     }
   }
   const references = [...read.values()]
-    .map((e) => ({ slug: e.slug, layers: [...e.layers].sort(), reads: e.reads }))
+    .map((e) => ({ slug: e.slug, layers: [...e.layers].sort(), reads: e.reads, ...(e.known ? { notes: [...e.notes].sort() } : {}) }))
     .sort((a, b) => a.slug.localeCompare(b.slug));
   return {
     calls: calls.length,
     excluded_calls: excludedCount,
     unabsorbed_calls: unabsorbed,
+    calls_without_content: withoutContent,
     searches,
     layers_read: [...new Set(references.flatMap((e) => e.layers))].sort(),
     references,
@@ -126,5 +158,9 @@ if (invokedDirectly(import.meta.url)) {
     seal: sealOf(derived.references),
   };
   writeFileSync(outPath, JSON.stringify(snapshot, null, 2) + "\n");
+  const stubs = snapshot.references.filter((r) => Array.isArray(r.notes) && !r.notes.length).map((r) => r.slug);
+  const unknown = snapshot.references.filter((r) => !Array.isArray(r.notes)).map((r) => r.slug);
   console.log(`kit-survey-snapshot: ${snapshot.references.length} reference(s) read through ${snapshot.layers_read.join(", ")} across ${snapshot.calls} recorded call(s), ${snapshot.excluded_calls} excluded by declared window(s); written to ${outPath}`);
+  if (stubs.length) console.log(`kit-survey-snapshot: ${stubs.length} reference(s) answered with an empty template on every layer read and cannot be cited: ${stubs.join(", ")}`);
+  if (unknown.length) console.log(`kit-survey-snapshot: ${unknown.length} reference(s) were read only by a recorder that kept no content, so the survey cannot say whether notes came back; re-read them: ${unknown.join(", ")}`);
 }

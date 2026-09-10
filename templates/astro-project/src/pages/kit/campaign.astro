@@ -3,7 +3,10 @@
  * EXAMPLE PAGE 3 OF 3: A CAMPAIGN LANDING PAGE, BUILT ONLY FROM KIT PIECES.
  *
  * RHYTHM: `paid-landing` (kitRhythms in src/lib/kit-grounding.ts). Every step is stated in the
- * cited notes of attentive, mercury or pilot-accounting, and the page follows them in order:
+ * cited notes of attentive, mercury or pilot-accounting, and the page follows them in the rhythm's
+ * own numbering. Every section this page renders is on this list: a numbered line is a step, a
+ * `+` line is an addition with its reason and its reference, a `~` line is the page's chrome.
+ * gate-kit-complete parses this block and refuses a rendered kit section it does not name.
  *
  *   1. Hero with the promise and its actions over photography (attentive) ..... HeroTextImage
  *   2. Trust beneath, as counted claims with sources (mercury) ................ TrustResults
@@ -11,11 +14,11 @@
  *   4. Feature deep-dives, text plus a proof panel (attentive, pilot) ......... BenefitShowcase, DemoVideo
  *   5. The process as a short step list (mercury) ............................ ProcessDetailed
  *   6. Real results as customer cards (attentive) ............................. CaseResults, TestimonialVideo
- *   7. A brand-voice positioning block (mercury); the piece itself carries no action, which is
- *      anthropic's rule for a statement band ................................. ProblemStatement
+ *   7. A brand-voice positioning block with no action (mercury; anthropic's rule) ProblemStatement
  *   8. Tiers as priced cards (pilot) ......................................... PricingCards
  *   9. The close echoes the hero's own action (attentive, mercury) ............ FormBooking
- *      Footer: mercury's inset footer with the disclosures a regulated service carries ... FooterSimple
+ *   + Mercury's inset footer with the disclosures a regulated service carries  FooterSimple
+ *   ~ The campaign's own navigation, links kept, exploration dropped .......... NavSimple
  *
  * A campaign page is not a home page with fewer sections. It answers one question about one offer
  * and carries paid traffic, so the argument closes on the page: the navigation keeps its links but
@@ -27,6 +30,9 @@
  * photography, credited in public/images/kit/photo/credits.json; no caption names a job. The
  * report page is drawn (public/images/kit/report-page.svg), the way the product page's screens
  * are: the one image a stock library cannot honestly supply is drawn rather than left as a box.
+ * The assessor's cap in insulation-1.jpg carries a legible third-party brand mark, kept as
+ * incidental on a demo page: a real build crops it or uses the client's own photograph, because
+ * the page presents him as the client's assessor.
  *
  * THE TESTIMONIAL POSTER IS A DRAWN SILHOUETTE, not a photograph, against the piece's own `when`
  * ("a real person, a real still"): the person is invented, and a stock face captioned with an
@@ -201,6 +207,7 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
     duration="6 min 20 sec"
     playLabel="Play the walkthrough"
     fallbackLabel="Open the video directly"
+    fallbackPhone="(03) 5550 0219"
     errorMessage="The video could not be loaded. You can open the file directly, or ring us and we will describe what happens on the day."
     slowMessage="The video is taking longer than it should. You can open the file directly instead."
   />

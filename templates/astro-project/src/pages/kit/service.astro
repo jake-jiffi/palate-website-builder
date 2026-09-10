@@ -3,21 +3,23 @@
  * EXAMPLE PAGE 2 OF 3: A SERVICE HOME PAGE, BUILT ONLY FROM KIT PIECES.
  *
  * RHYTHM: `values-and-locality` (kitRhythms in src/lib/kit-grounding.ts), read from the library's
- * own notes on greenwise-organic-lawn-care and block-renovation, and followed step for step:
+ * own notes on greenwise-organic-lawn-care and block-renovation, and followed step for step in the
+ * rhythm's own numbering. Every section this page renders is on this list: a numbered line is a
+ * step, a `+` line is an addition with its reason and its reference, a `~` line is the chrome.
+ * gate-kit-complete parses this block and refuses a rendered kit section it does not name.
  *
- *   1. Values-and-place headline over warm photography, one quote CTA ..... HeroServicePhoto
- *   2. Why-choose reassurance band ....................................... TrustResults
- *   3. Services overview .................................................. BenefitAlternating
- *   4. Service-area cards with per-area contact ........................... ServiceArea
- *   5. Coverage checker: input, then personalise .......................... CoverageChecker
- *   6. A genuine story that makes the values credible ..................... ProblemStory, CaseFeatured
- *   7. Quote form close ................................................... CtaWithProof, FormEnquiry
- *   8. Footer with services and service areas ............................. FooterGrouped
- *
- * The library's own additions sit between those: the numbered process and the quote-based price
- * (re-bath's relief through process), and the FAQ placed BEFORE the final call to action, which is
- * where parsley-health and lava-dental put it. The announcement strip above the bar is the norm on
- * eight of the surveyed flagships and carries the one seasonal notice.
+ *   1. Values-and-place headline over warm photography, one quote CTA (greenwise) ... HeroServicePhoto
+ *   2. Why-choose reassurance band (greenwise) .............................. TrustResults
+ *   3. Services overview (greenwise) ........................................ BenefitAlternating
+ *   4. Service-area cards with per-area contact (greenwise) ................. ServiceArea
+ *   5. Coverage checker: input, then personalise (greenwise) ................ CoverageChecker
+ *   6. A genuine story that makes the values credible (greenwise) ........... ProblemStory, CaseFeatured, TestimonialSingle
+ *   7. Quote form close (greenwise); a confident closing CTA (block) ........ CtaWithProof, FormEnquiry
+ *   8. Footer with services and service areas (greenwise) ................... FooterGrouped
+ *   + The numbered process, relief through process (re-bath) ................ ProcessThreeStep
+ *   + The quote-based price, where a price cannot be listed (re-bath, block)  PricingQuote
+ *   + The FAQ before the final call to action (parsley-health, lava-dental) . FaqVisible
+ *   ~ The announcement strip and the navigation (greenwise, gymshark, crisp)  AnnouncementBar, NavSimple
  *
  * Deliberately shares nothing with /kit/product except the rule that a page alternates its grounds.
  * If the two pages picked the same fourteen components they would prove the kit composes one way,

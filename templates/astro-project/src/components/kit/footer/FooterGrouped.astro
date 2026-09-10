@@ -137,7 +137,7 @@ const groupCols = shownGroups.length >= 2 && shownGroups.length <= 4 ? shownGrou
         {contacts.length > 0 && (
           <ul class="kit-footg__contacts" role="list">
             {contacts.map((route) => (
-              <li><a class="kit-link kit-footg__contact" href={route.href}>{route.label}</a></li>
+              <li><a class="kit-link kit-link--target kit-footg__contact" href={route.href}>{route.label}</a></li>
             ))}
           </ul>
         )}
@@ -184,7 +184,7 @@ const groupCols = shownGroups.length >= 2 && shownGroups.length <= 4 ? shownGrou
             <dt class="kit-footg__term">{detail.term}</dt>
             <dd class="kit-footg__value">
               {detail.href
-                ? <a class="kit-link" href={detail.href}>{detail.value}</a>
+                ? <a class="kit-link kit-link--target" href={detail.href}>{detail.value}</a>
                 : detail.value}
             </dd>
           </div>

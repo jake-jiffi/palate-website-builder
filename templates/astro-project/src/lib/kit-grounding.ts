@@ -148,7 +148,7 @@ export const kitGrounding: Record<string, KitPieceGrounding> = {
       { slug: "avalon-accounting", note: "A 50/50 mission and values split with a photograph, no CTA." },
       { slug: "swillhouse", note: "An About block of two lead paragraphs in a narrow measure with enormous whitespace; the quietest section on the page." },
       { slug: "lanserring", note: "A plain brand statement ('We are Lanserring, providers of...') paired with a photograph, then the founders' story in two acts." },
-      { slug: "dishoom", note: "Story first: the place, heritage and feeling, with menus and booking woven into the narrative." },
+      { slug: "dishoom", note: "The do/don't sells the place, heritage and feeling first, then makes menus and booking effortless (the pages layer is empty; this is grounded in the do/don't)." },
       { slug: "setia-law", note: "About: a kicker, a two-line heading left, body right, then a text link." },
       { slug: "unoit", note: "A centred positioning paragraph on a faint grey panel directly after the concept hero." },
       { slug: "sealed-home", note: "A one-line positioning statement and later a one-line vision statement between feature sections." },
@@ -328,13 +328,13 @@ export const kitGrounding: Record<string, KitPieceGrounding> = {
       { slug: "warby-parker", note: "A price hook in the promo ribbon ('starting at $95')." },
       { slug: "lava-dental", note: "'Price list, invest in your smile': transparent pricing framed as reassurance about cost." },
       { slug: "block-renovation", note: "'See contractors and costs near you' and 'Start planning your renovation for free' as the quote path." },
-      { slug: "caliber", note: "'Online Estimate' and 'Book an Appointment' front and centre as the conversion funnel." },
+      { slug: "caliber", note: "The do/don't puts 'Online Estimate' and 'Book an Appointment' front and centre as the primary navigation actions; the quote path IS the product." },
       { slug: "greenwise-organic-lawn-care", note: "'Request a Quote' in the utility bar and a quote form as the close." },
       { slug: "re-bath", note: "A free design consultation form pinned in the hero as the quote path." },
     ],
     rules: [
       { text: "Surface the price where the purchase is high-trust; cost mystery is a conversion leak and price is part of the reassurance.", slugs: ["parsley-health", "lava-dental", "posthog"] },
-      { text: "Where the price cannot be listed, make the quote path the primary action and say what moves the number.", slugs: ["caliber", "block-renovation", "greenwise-organic-lawn-care", "re-bath"] },
+      { text: "Where the price cannot be listed, make the quote or estimate path the primary action.", slugs: ["caliber", "block-renovation", "greenwise-organic-lawn-care", "re-bath"] },
       { text: "Tiers read as product cards.", slugs: ["pilot-accounting", "parsley-health", "mercury"] },
     ],
     avoid: [
@@ -469,7 +469,7 @@ export const kitGrounding: Record<string, KitPieceGrounding> = {
       { slug: "unoit", note: "A Locations section before the closing booking CTA, each shop with its own page." },
       { slug: "lava-dental", note: "'We are right here': contacts and a map as the close." },
       { slug: "vivvi", note: "Campuses as location pages and social proof by families and locations." },
-      { slug: "myodetox", note: "A book-by-location, assessment-led structure." },
+      { slug: "myodetox", note: "The do/don't leads with the assessment as the headline product, then books by location." },
     ],
     rules: [
       { text: "Make locality concrete: named areas, per-area contact, then a coverage check before the buyer commits.", slugs: ["greenwise-organic-lawn-care", "re-bath", "block-renovation"] },

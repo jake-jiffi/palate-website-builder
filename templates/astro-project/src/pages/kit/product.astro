@@ -3,20 +3,22 @@
  * EXAMPLE PAGE 1 OF 3: A PRODUCT HOME PAGE, BUILT ONLY FROM KIT PIECES.
  *
  * RHYTHM: `repeated-shape` (kitRhythms in src/lib/kit-grounding.ts), read from the library's own
- * notes on linear, dropbox and webflow, and followed step for step:
+ * notes on linear, dropbox and webflow, and followed step for step in the rhythm's OWN numbering.
+ * Every section this page renders is on this list: a numbered line is a step of the rhythm, a
+ * `+` line is an addition with its reason and its reference, a `~` line is the page's chrome.
+ * gate-kit-complete parses this block and refuses a rendered kit section it does not name.
  *
- *   1. Hero with real product proof ....................................... HeroCentredPreview
- *      (trust lands directly beneath it, per attentive / pilot / loom) ..... TrustLogos
- *   2. A run of capability sections with identical anatomy:
- *      heading, subhead, proof ............................................. BenefitAlternating
- *   3. One deeper, data-rich section ...................................... CompareAlternatives
- *   4. Social proof as a counted claim .................................... TrustResults
- *   5. One warm closing block, then the CTA ............................... TestimonialGrid, CtaClosing
- *   6. Dense organised footer ............................................. FooterGrouped
- *
- * The price and the FAQ sit between 4 and 5 because a product with published plans has genuinely
- * more to say, and the library places the FAQ before the final call to action. The announcement
- * strip carries the release notice, which is what attentive, crisp and webflow carry there.
+ *   1. Hero with real product proof (linear, dropbox) ...................... HeroCentredPreview
+ *   2. A slim social-proof band: a logo strip (webflow) ..................... TrustLogos
+ *   3. A run of capability sections with identical anatomy (linear, dropbox)  BenefitAlternating
+ *   4. One deeper, data-rich section (linear, dropbox) ...................... CompareAlternatives
+ *   5. One warm closing block, then the CTA (linear) ........................ TestimonialGrid, CtaClosing
+ *   6. Dense organised footer (linear, dropbox, webflow) .................... FooterGrouped
+ *   + A demo entry point after the capability run (basecamp, crisp) ......... DemoEntryPoint
+ *   + Social proof as a counted claim before the price (dropbox) ............ TrustResults
+ *   + Published plans, because this product has them (posthog, plausible) ... PricingCards
+ *   + The FAQ before the final call to action (parsley-health, lava-dental) . FaqAccordion
+ *   ~ The announcement strip and the navigation (attentive, crisp, webflow) . AnnouncementBar, NavDropdown
  *
  * WHAT IS NOT HERE, ON PURPOSE. The capability run shows the real interface in every section
  * because here the interface IS the proof (linear, dropbox); the note on the rhythm is that a

@@ -85,7 +85,7 @@ const hasBrand = Boolean(businessName || tagline || contacts.length);
           <ul class="kit-foot__contact" role="list">
             {contacts.map((route) => (
               <li>
-                <a class="kit-link kit-foot__contact-link" href={route.href}>{route.label}</a>
+                <a class="kit-link kit-link--target kit-foot__contact-link" href={route.href}>{route.label}</a>
               </li>
             ))}
           </ul>

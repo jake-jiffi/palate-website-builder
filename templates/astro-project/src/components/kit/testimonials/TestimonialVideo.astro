@@ -163,7 +163,7 @@ const playLabel = duration ? `Play ${speaker}, ${duration}` : `Play ${speaker}`;
 
       {playable && (
         <p class="tv__fallback" data-kit-tv-fallback hidden>
-          <a class="kit-link" href={videoUrl} download>Download the video file instead</a>
+          <a class="kit-link kit-link--target" href={videoUrl} download>Download the video file instead</a>
         </p>
       )}
 

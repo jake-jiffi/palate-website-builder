@@ -183,6 +183,11 @@ const toneClass =
   .ui-link {
     color: var(--kit-text);
     text-decoration: none;
+    /* The row is the target (below), and the link's own box clears 24px as well, so a sweep that
+       measures the anchor rather than the row reads the truth. */
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 1.5rem;
   }
 
   /* The sector name on its own is a line of text about twenty pixels tall, which is under the

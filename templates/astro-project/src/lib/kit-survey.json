@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-09-10T15:03:15.435Z",
-  "until": "2026-09-10T15:03:15.421Z",
+  "generated_at": "2026-09-10T16:13:05.978Z",
+  "until": "2026-09-10T16:13:05.969Z",
   "excluded": [
     {
       "from": "2026-09-10T11:59:00.000Z",
       "to": "2026-09-10T12:05:00.000Z",
-      "reason": "critic 8 verification reads (eleven detailed refs_get calls), not the builder's survey"
+      "reason": "critic 8 verification reads (eleven detailed refs_get calls)"
     },
     {
       "from": "2026-09-10T13:22:00.000Z",
@@ -16,6 +16,11 @@
       "from": "2026-09-10T14:17:00.000Z",
       "to": "2026-09-10T14:50:00.000Z",
       "reason": "critic 10 verification reads (six refs_get calls), not the builder's survey"
+    },
+    {
+      "from": "2026-09-10T15:11:00.000Z",
+      "to": "2026-09-10T15:16:00.000Z",
+      "reason": "critic 11 verification reads (three refs_get calls after the snapshot cut-off), not the builder's survey"
     }
   ],
   "source": {
@@ -24,9 +29,10 @@
     "mcp_version": null,
     "library": null
   },
-  "calls": 18,
-  "excluded_calls": 23,
+  "calls": 24,
+  "excluded_calls": 26,
   "unabsorbed_calls": 0,
+  "calls_without_content": 7,
   "searches": 11,
   "layers_read": [
     "component_prompts",
@@ -39,7 +45,10 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "aesop",
@@ -48,7 +57,10 @@
         "do_dont",
         "pages"
       ],
-      "reads": 3
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "anthropic",
@@ -56,7 +68,10 @@
         "do_dont",
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "attentive",
@@ -64,35 +79,50 @@
         "do_dont",
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "avalon-accounting",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "barrys",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "basecamp",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "bellroy",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "block-renovation",
@@ -101,21 +131,33 @@
         "do_dont",
         "pages"
       ],
-      "reads": 3
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "caliber",
       "layers": [
+        "component_prompts",
+        "do_dont",
         "pages"
       ],
-      "reads": 1
+      "reads": 4,
+      "notes": [
+        "component_prompts",
+        "do_dont"
+      ]
     },
     {
       "slug": "crisp",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "dishoom",
@@ -124,64 +166,92 @@
         "do_dont",
         "pages"
       ],
-      "reads": 4
+      "reads": 6,
+      "notes": [
+        "component_prompts",
+        "do_dont"
+      ]
     },
     {
       "slug": "dropbox",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "glossier",
       "layers": [
-        "do_dont"
+        "do_dont",
+        "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "greenwise-organic-lawn-care",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "gymshark",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "habito",
       "layers": [
         "component_prompts",
-        "do_dont"
+        "do_dont",
+        "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "headspace",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": []
     },
     {
       "slug": "lanserring",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "lava-dental",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "linear",
@@ -190,28 +260,40 @@
         "do_dont",
         "pages"
       ],
-      "reads": 3
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "loom",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "lovevery",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "mejuri",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "mercury",
@@ -220,28 +302,41 @@
         "do_dont",
         "pages"
       ],
-      "reads": 3
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "myodetox",
       "layers": [
+        "component_prompts",
+        "do_dont",
         "pages"
       ],
-      "reads": 1
+      "reads": 3,
+      "notes": [
+        "component_prompts",
+        "do_dont"
+      ]
     },
     {
       "slug": "notion",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "one-medical",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": []
     },
     {
       "slug": "parsley-health",
@@ -250,77 +345,110 @@
         "do_dont",
         "pages"
       ],
-      "reads": 4
+      "reads": 5,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "pilot-accounting",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "pitch",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "plausible",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "posthog",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "re-bath",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "sealed-home",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "setia-law",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "swillhouse",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "unoit",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "vivvi",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "warby-parker",
@@ -329,7 +457,10 @@
         "do_dont",
         "pages"
       ],
-      "reads": 4
+      "reads": 5,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "wealthsimple",
@@ -337,15 +468,21 @@
         "do_dont",
         "pages"
       ],
-      "reads": 3
+      "reads": 4,
+      "notes": [
+        "pages"
+      ]
     },
     {
       "slug": "webflow",
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 3,
+      "notes": [
+        "pages"
+      ]
     }
   ],
-  "seal": "315971d8fb4fe9addbbb292281648fb18f53e6fa3927332694c64499279f6e8d"
+  "seal": "6310baad9c88e655efa7a83da29946d37fc838580b3116903087a1daf0f7d55f"
 }

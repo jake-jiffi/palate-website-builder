@@ -336,6 +336,76 @@ if [ "$rc" -eq 2 ]; then ok "gate-kit-complete reports it could not run (exit 2)
 else bad "gate-kit-complete exited $rc with no survey snapshot; a gate never passes having inspected nothing"; fi
 mv "$TMP/survey.moved" "$SURVEY"
 
+# ---------- a citation to a reference whose read carried no notes ----------
+# Three cited references answered every layer with an untouched template, and membership in the
+# survey could not see it: "read" meant the library answered, not that the answer held anything.
+# The snapshot records which layers carried notes; a citation to a slug with none, or to one read
+# only by a recorder that kept no content, is refused by name. Both edits break the seal as well,
+# so the assertion is on the gate's OWN sentence for the fault, not on its exit code.
+back_up "$SURVEY" survey_notes
+cp "$SURVEY" "$TMP/survey.notes.bak"
+node -e '
+const fs = require("fs"); const p = process.argv[1]; const j = JSON.parse(fs.readFileSync(p, "utf8"));
+const r = j.references.find((x) => x.slug === "linear"); r.notes = [];
+j.seal = require("node:crypto").createHash("sha256").update(JSON.stringify(j.references)).digest("hex");
+fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
+' "$SURVEY"
+"$COMPLETE" "$HERE" > "$TMP/g.out" 2>&1 || true
+if grep -q "answered every recorded read with an empty template" "$TMP/g.out"; then ok "gate-kit-complete refuses a citation to a reference whose every read came back as an empty template"
+else bad "gate-kit-complete MISSED a cited reference with no notes on any layer"; fi
+cp "$TMP/survey.notes.bak" "$SURVEY"
+node -e '
+const fs = require("fs"); const p = process.argv[1]; const j = JSON.parse(fs.readFileSync(p, "utf8"));
+for (const r of j.references) delete r.notes;
+j.seal = require("node:crypto").createHash("sha256").update(JSON.stringify(j.references)).digest("hex");
+fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
+' "$SURVEY"
+"$COMPLETE" "$HERE" > "$TMP/g.out" 2>&1 || true
+if grep -q "surveyed before per-section content was recorded" "$TMP/g.out"; then ok "gate-kit-complete falls back to membership and lists the unknowns when the survey kept no content, rather than hard-failing every citation"
+else bad "gate-kit-complete did not warn about an all-unknown survey (it should pass with a notice, not fail)"; fi
+cp "$TMP/survey.notes.bak" "$SURVEY"
+
+# And the snapshot itself derives the note layers from the recorder's content record.
+SURVEY_MOD="$HERE/scripts/kit-survey-snapshot.mjs" node --input-type=module -e '
+import("file://" + process.env.SURVEY_MOD).then(({ deriveSurvey }) => {
+  const stub = { structure: 0 }; const real = { structure: 420, doDont: 90 };
+  const m = { mcp_calls: [
+    { tool: "mcp__palate__refs_get", evidence: "ok", ts: "2026-01-01T00:00:00Z", args: { slugs: ["a", "b"], layer: ["pages", "do_dont"] }, slugs: ["a", "b"], returned: ["a", "b"], content: { a: stub, b: real } },
+    { tool: "mcp__palate__refs_get", evidence: "ok", ts: "2026-01-01T00:00:01Z", args: { slugs: ["c"], layer: ["pages"] }, slugs: ["c"], returned: ["c"] },
+  ] };
+  const d = deriveSurvey(m);
+  const by = Object.fromEntries(d.references.map((r) => [r.slug, r]));
+  const okA = Array.isArray(by.a.notes) && by.a.notes.length === 0;
+  const okB = Array.isArray(by.b.notes) && by.b.notes.join(",") === "do_dont,pages";
+  const okC = !("notes" in by.c) && d.calls_without_content === 1;
+  process.exit(okA && okB && okC ? 0 : 1);
+});
+' && ok "kit-survey-snapshot records which layers carried notes, an empty template as none, and an old recorder as unknown" \
+  || bad "kit-survey-snapshot does not derive note layers from the recorder's content record"
+
+# ---------- a composed page declares its rhythm and every section it renders ----------
+# One page renumbered its rhythm, invented a step and left a rendered section off its own list,
+# and the index still said "step for step". The declaration is parsed now.
+PRODUCT="$HERE/templates/astro-project/src/pages/kit/product.astro"
+back_up "$PRODUCT" product
+cp "$PRODUCT" "$TMP/product.bak"
+python3 - "$PRODUCT" <<'PY2'
+import sys,re; p=sys.argv[1]; s=open(p).read()
+s=re.sub(r"^ \*   \+ A demo entry point.*\n", "", s, count=1, flags=re.M); open(p,"w").write(s)
+PY2
+"$COMPLETE" "$HERE" > "$TMP/g.out" 2>&1 || true
+if grep -q "renders DemoEntryPoint and does not declare it" "$TMP/g.out"; then ok "gate-kit-complete names a rendered section the page's declaration leaves out"
+else bad "gate-kit-complete MISSED a rendered section missing from the page's declaration"; fi
+cp "$TMP/product.bak" "$PRODUCT"
+python3 - "$PRODUCT" <<'PY2'
+import sys; p=sys.argv[1]; s=open(p).read()
+s=s.replace(" *   6. Dense organised footer", " *   7. Dense organised footer", 1); open(p,"w").write(s)
+PY2
+"$COMPLETE" "$HERE" > "$TMP/g.out" 2>&1 || true
+if grep -q "whose own numbering is 1 to 6" "$TMP/g.out"; then ok "gate-kit-complete refuses a page that renumbers its rhythm"
+else bad "gate-kit-complete MISSED a page whose steps are not the rhythm's own numbering"; fi
+cp "$TMP/product.bak" "$PRODUCT"
+
 # ---------- a page's own header and footer survive chrome={false} ----------
 # The layout once gated the header and footer SLOTS on the chrome flag, so the three composed pages
 # shipped with no navigation and no footer while every gate passed. A screenshot found it.
