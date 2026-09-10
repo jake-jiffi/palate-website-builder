@@ -121,7 +121,7 @@ export const kitGrounding: Record<string, KitPieceGrounding> = {
       { slug: "parsley-health", note: "Trust badges under the hero CTA, a measurable-outcome percentage, and an 'As Seen In' press row." },
       { slug: "greenwise-organic-lawn-care", note: "'Why Choose Greenwise?' reassurance band with icon reasons: organic, family and pet safe, established since 2007." },
       { slug: "sealed-home", note: "A named certification ('first Energy Star Home Upgrade Service Provider') as the credibility marker, placed early." },
-      { slug: "avalon-accounting", note: "A partner-badge band ('Xero Platinum partner') with three circular badge icons." },
+      { slug: "avalon-accounting", note: "An endorsement band of three circular partner and award badge icons under a kicker ('Like Two Peas in a Pod'); the Xero Platinum-partner claim is its own 50/50 split above it." },
       { slug: "barrys", note: "'8+ Million Strong' community band before the closing CTA." },
       { slug: "webflow", note: "Customer logo strip in tiny uppercase directly under the hero." },
     ],

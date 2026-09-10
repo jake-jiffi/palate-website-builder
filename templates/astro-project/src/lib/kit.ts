@@ -290,7 +290,7 @@ export const kit: KitPiece[] = [
       { id: "PricingTable", name: "Comparison table",
         when: "Several priced tiers whose differences are their inclusions. The library presents tiers as product cards, so reach for the table only when the inclusions run longer than a card can carry.",
         needs: ["2-5 plans", "6-20 attributes with a value per plan"],
-        states: ["hover", "focus", "long", "empty"], evidence: ["parsley-health", "pilot-accounting", "posthog"] },
+        states: ["hover", "focus", "long", "empty"], evidence: ["parsley-health", "pilot-accounting"] },
       { id: "PricingQuote", name: "Custom quote option",
         when: "Where the price cannot be listed: the quote path as the primary action and a plain account of what moves the number.",
         needs: ["what drives the price", "what the visitor should send", "how long a quote takes", "a call to action"],
