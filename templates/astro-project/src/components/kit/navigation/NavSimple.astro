@@ -215,6 +215,12 @@ const toneClass =
   /* The sheet carries the call to action on small screens, so the bar does not repeat it. */
   .kit-nav__cta { display: none; }
 
+  /* The wordmark is a link home and answered a pointer with nothing at all, while every
+     other link in the same bar changed. Underlined rather than recoloured, because the
+     bar is tone-aware and a colour shift disappears on an inverse ground. */
+  .kit-nav__brand:hover { text-decoration: underline; text-underline-offset: var(--kit-underline-offset);
+    text-decoration-thickness: var(--kit-underline-hover); }
+
   .kit-nav__brand:focus-visible,
   .kit-nav__link:focus-visible,
   .kit-nav__cta:focus-visible {

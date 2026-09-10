@@ -112,12 +112,64 @@ for (const [variation, body] of Object.entries(LONG)) {
   }
 }
 
+/**
+ * A LONG FIXTURE HAS TO ACTUALLY BE LONG, AND SOME WERE SHORTER THAN THE RESTING PAGE.
+ *
+ * The state note promises "roughly two to three times the usual length". Six fixtures fell well
+ * short of it, three left the longest single field the same or shorter, and one cut a six-item
+ * list to three, so the piece was put under LESS strain by the state whose whole job is strain.
+ * The tab highlighted, the note made its claim, and nothing had been stressed.
+ *
+ * Measured against the piece's OWN resting render rather than against a word count, because what
+ * matters is the piece being pushed past what it normally carries. Three ratios, because a fixture
+ * can fail in three different ways: total volume, the longest single field (which is what wraps
+ * and truncates), and the number of items (many items AND long text together is the case a grid
+ * or an accordion actually breaks on).
+ */
+const MIN_TOTAL = 1.8;
+const MIN_FIELD = 1.5;
+
+/** Visible text per element, so a collapsed <details> answer still counts. */
+function textStats(html) {
+  const body = html.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<style[\s\S]*?<\/style>/g, " ");
+  const main = /<main[^>]*>([\s\S]*?)<\/main>/.exec(body)?.[1] ?? body;
+  const fields = [...main.matchAll(/>([^<>]{12,})</g)]
+    .map((m) => m[1].replace(/&#39;/g, "'").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  return {
+    total: fields.reduce((n, f) => n + f.length, 0),
+    longest: fields.reduce((n, f) => Math.max(n, f.length), 0),
+    items: (main.match(/<li\b/g) || []).length + (main.match(/<article\b/g) || []).length,
+  };
+}
+
+let sized = 0;
+for (const variation of Object.keys(LONG)) {
+  const piece = pieceOf[variation];
+  if (!piece) continue;
+  const longFile = join(dist, "kit-frame", piece, variation, "long", "index.html");
+  const restFile = join(dist, "kit-frame", piece, variation, "rest", "index.html");
+  if (!existsSync(longFile) || !existsSync(restFile)) continue;
+  const long = textStats(readFileSync(longFile, "utf8"));
+  const rest = textStats(readFileSync(restFile, "utf8"));
+  sized += 1;
+  if (rest.total > 0 && long.total < rest.total * MIN_TOTAL) {
+    findings.push(`${variation}'s long fixture carries ${(long.total / rest.total).toFixed(2)}x the resting text, under the ${MIN_TOTAL}x the state promises, so the piece is not put under long content at all`);
+  }
+  if (rest.longest > 0 && long.longest < rest.longest * MIN_FIELD) {
+    findings.push(`${variation}'s longest single field is ${(long.longest / rest.longest).toFixed(2)}x the resting longest, under ${MIN_FIELD}x; the longest field is what wraps and truncates, so a long state that does not lengthen one proves nothing`);
+  }
+  if (long.items < rest.items) {
+    findings.push(`${variation}'s long fixture renders ${long.items} item(s) against ${rest.items} at rest, so the state removes strain rather than adding it; many items AND long text is the case a grid or an accordion breaks on`);
+  }
+}
+
 if (findings.length) {
-  console.error(`gate-kit-fixtures: ${findings.length} finding(s) over ${checked} fixture string(s).`);
+  console.error(`gate-kit-fixtures: ${findings.length} finding(s) over ${checked} fixture string(s) and ${sized} sized fixture(s).`);
   for (const f of findings.slice(0, 20)) console.error(`  - ${f}`);
   if (findings.length > 20) console.error(`  ... and ${findings.length - 20} more`);
   process.exit(1);
 }
 
-console.log(`gate-kit-fixtures: clean (${checked} fixture strings across ${Object.keys(LONG).length} long fixtures all reach the page).`);
+console.log(`gate-kit-fixtures: clean (${checked} fixture strings reach the page; ${sized} long fixtures each carry at least ${MIN_TOTAL}x the resting text and ${MIN_FIELD}x its longest field).`);
 process.exit(0);

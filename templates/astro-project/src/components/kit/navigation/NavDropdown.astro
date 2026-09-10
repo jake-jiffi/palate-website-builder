@@ -362,6 +362,12 @@ const toneClass =
 
   .kit-navdd__cta { display: none; }
 
+  /* The wordmark is a link home and answered a pointer with nothing at all, while every
+     other link in the same bar changed. Underlined rather than recoloured, because the
+     bar is tone-aware and a colour shift disappears on an inverse ground. */
+  .kit-navdd__brand:hover { text-decoration: underline; text-underline-offset: var(--kit-underline-offset);
+    text-decoration-thickness: var(--kit-underline-hover); }
+
   .kit-navdd__brand:focus-visible,
   .kit-navdd__trigger:focus-visible,
   .kit-navdd__link:focus-visible,

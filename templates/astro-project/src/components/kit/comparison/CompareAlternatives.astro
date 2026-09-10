@@ -244,8 +244,14 @@ const columnCount = others.length + 1;
     inset-inline-start: 0;
     background: var(--kit-bg);
     border-inline-end: var(--kit-border-width) solid var(--kit-border);
-    min-width: 12ch;
-    max-width: 22ch;
+    /* THE MINIMUM IS THE PADDING PLUS A READABLE MEASURE, NOT A MEASURE.
+       These cells are border-box, so 12ch had to cover 2rem of padding as well as the text, which
+       left about 5ch of column: measured at 390px, "straightforward" and "Maintenance" both broke
+       across two lines inside a table that was already free to scroll sideways. A scroll container
+       exists so a column can keep its width; squeezing the column to avoid using it gives away the
+       only thing it bought. */
+    min-width: 18ch;
+    max-width: 26ch;
     z-index: 1;
   }
 

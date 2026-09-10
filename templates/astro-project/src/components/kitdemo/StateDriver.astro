@@ -93,6 +93,15 @@ const { state, openTarget = "" } = Astro.props;
         return;
       }
       target.click();
+      // Same rule as focus: read the outcome back rather than assuming the press landed. A control
+      // that is present but inert at this width would otherwise be reported as having opened.
+      if (closed(target)) {
+        say(
+          "The piece's own control was pressed and nothing opened, which usually means this piece " +
+            "only opens below the small-screen breakpoint. Try the narrow frame.",
+        );
+        return;
+      }
       say("Opened by pressing the piece's own control. Press it again to close it.");
       return;
     }
@@ -101,14 +110,27 @@ const { state, openTarget = "" } = Astro.props;
 
     if (state === "focus") {
       const target = firstUsable(FOCUSABLE);
-      if (!target) {
-        say("Nothing in this piece takes keyboard focus.");
-        return;
-      }
       // Real focus, moved programmatically. Nothing is styled to imitate a ring. Some browsers
       // paint the VISIBLE ring only when they believe the last input was a keyboard, and no script
       // can forge that belief, so the reader is told to press Tab rather than shown a fake.
-      target.focus({ preventScroll: true });
+      if (target) target.focus({ preventScroll: true });
+
+      /**
+       * CONFIRM, THEN REPORT. The report used to be written whether or not focus moved.
+       *
+       * `firstUsable` falls back to the first MATCH when nothing is visible, and a navigation whose
+       * small-screen toggle is display:none above the breakpoint has exactly one match and it is
+       * hidden. `.focus()` on it does nothing, the guard for "no target" never fired, and the page
+       * asserted that focus had been placed while activeElement was still the body. Reading the
+       * outcome back is the difference between a claim and a fact.
+       */
+      if (!target || document.activeElement !== target) {
+        say(
+          "Focus could not be placed: nothing in this piece takes keyboard focus at this width. " +
+            "A piece whose controls only exist on a small screen has none to give here, so try the narrow frame.",
+        );
+        return;
+      }
       say(
         "Focus is on the first thing in the piece that takes it. If your browser is not painting " +
           "the ring, press Tab once: it only paints one when it believes the last input was a keyboard.",

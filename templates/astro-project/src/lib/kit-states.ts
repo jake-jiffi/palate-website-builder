@@ -47,6 +47,29 @@ export const STATE_KIND: Record<KitDemoState, StateKind> = {
   hover: "unforceable",
 };
 
+/**
+ * ONE ORDER, EVERYWHERE THE STATES ARE LISTED.
+ *
+ * The index printed them in manifest order and the viewer re-sorted them, so 38 of the 45
+ * variations showed a different row on the two pages a reader moves between. The fixed order is
+ * right (a row that reshuffles between pieces is unreadable); having two of them was not.
+ */
+export const STATE_ORDER: KitDemoState[] = [
+  "empty",
+  "long",
+  "open",
+  "loading",
+  "success",
+  "error",
+  "focus",
+  "hover",
+];
+
+/** A variation's declared states, in the one order every surface prints them in. */
+export function orderedStates(states: readonly string[]): KitDemoState[] {
+  return STATE_ORDER.filter((s) => states.includes(s));
+}
+
 /** One line per state, written for whoever opens the page rather than for whoever wrote it. */
 export const STATE_NOTE: Record<KitDemoState, string> = {
   empty:
@@ -167,10 +190,25 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
           { href: "/measure", label: "The measure, and why it comes first" },
           { href: "/lead-times", label: "What a realistic lead time looks like" },
           { href: "/warranty", label: "What the warranty actually covers" },
+          { href: "/payment", label: "Deposits, progress payments and the final invoice" },
+          { href: "/access", label: "What we need from you on installation day" },
+        ],
+      },
+      {
+        label: "Who we usually work for",
+        links: [
+          { href: "/homeowners", label: "Homeowners partway through a renovation" },
+          { href: "/builders", label: "Builders who need one supplier on site" },
+          { href: "/strata", label: "Strata managers and building owners" },
+          { href: "/heritage", label: "Heritage architects and conservators" },
         ],
       },
     ],
-    links: [{ href: "/about", label: "The people you will deal with" }],
+    links: [
+      { href: "/about", label: "The people you will deal with" },
+      { href: "/work", label: "Work we finished recently" },
+      { href: "/reviews", label: "What people said afterwards" },
+    ],
     cta: { label: "Book a measure at your place", href: "/measure" },
   },
   NavMobileSheet: {
@@ -233,6 +271,8 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       { name: "Millbrook Strata and Facilities Management" },
       { name: "Ashcombe Heritage Architects and Conservators" },
       { name: "The Fennimore Group, Residential Division" },
+      { name: "Pentworth and Vale Construction Partners" },
+      { name: "The Calloway Trust (Property and Facilities)" },
     ],
   },
   TrustResults: {
@@ -250,8 +290,17 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       },
       {
         figure: "94%",
-        label: "Of last year's work came from a referral or a returning customer",
-        source: "Measured across the 2025 financial year",
+        label:
+          "Of last year's work came from a referral or a customer who had used us before, which is " +
+          "the only number here we would be embarrassed to see fall",
+        source: "Measured across the 2025 financial year, from the job register rather than from memory",
+      },
+      {
+        figure: "11 days",
+        label:
+          "Median time from the measure to a written, itemised quote landing in somebody's inbox, " +
+          "including the weeks we are flat out",
+        source: "Median across 214 quotes issued in the 2025 financial year",
       },
     ],
   },
@@ -261,16 +310,21 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       "The frame is original to the house and the profile has not been manufactured since 1987, " +
       "which is why every quote before ours was for a full replacement plus making good.",
     before: {
-      label: "What was there when we first came out to measure",
+      label: "What was there on the day we first came out to measure it",
       caption:
-        "Corroded sill, hardware seized solid, and a previous repair that had moved the whole frame " +
-        "about four millimetres out of square without anybody noticing.",
+        "Corroded sill, hardware seized solid, and a previous repair that had pulled the whole frame " +
+        "about four millimetres out of square without anybody noticing, which is enough to stop a " +
+        "sash moving and nowhere near enough to see from the ground. Two of the three firms who had " +
+        "already quoted had measured around the architrave rather than opening it up, so neither of " +
+        "their numbers could have survived install day.",
     },
     after: {
-      label: "The same opening once the repair was finished and adjusted",
+      label: "The same opening once the repair was finished and the hardware adjusted",
       caption:
-        "Original frame kept, sill section cut and replaced on the bench, new hardware in the same " +
-        "footprint so nothing about the room had to change.",
+        "Original frame kept, the corroded sill section cut out and replaced on the bench, and new " +
+        "hardware fitted into the same footprint so nothing about the room had to change. The render " +
+        "was never touched, which on this elevation was most of what the replacement quotes were " +
+        "actually charging for, and the whole thing came in under a third of the cheapest of them.",
     },
   },
   ProblemSideBySide: {
@@ -288,8 +342,29 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         to: "Cut and assembled in our own workshop, by the person who will be adjusting it in front of you",
       },
       {
-        from: "A single price with one line of description, impossible to compare against anyone else's",
-        to: "Profile, glass specification and hardware all named, so two quotes can be read side by side",
+        from:
+          "A single price with one line of description underneath it, which is impossible to compare " +
+          "against anyone else's and very easy to be cheap inside in a way you will not find out " +
+          "about for four years",
+        to:
+          "Profile, glass specification and hardware all named on the page, so two quotes can be read " +
+          "side by side and a substitution is something you can see rather than something you " +
+          "discover later",
+      },
+      {
+        from:
+          "The lead time given as a feeling rather than a figure, so the fortnight where nothing " +
+          "visible happens reads as a job that has quietly stalled",
+        to:
+          "A real number of weeks with the quiet part named in advance, because the long stretch is " +
+          "fabrication on our own bench and nothing about it happens at your house",
+      },
+      {
+        from:
+          "A variation raised after the work has started, when saying no costs more than saying yes",
+        to:
+          "Anything found during the measure is priced before you agree to anything, and anything " +
+          "found later is put to you in writing before it is done",
       },
     ],
   },
@@ -308,6 +383,11 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       "rather than anything happening at the house. The render was never touched, the frames are " +
       "the ones the house was built with, and the total came to a little under a third of the " +
       "cheapest replacement quote they had been given.",
+      "The part worth saying out loud is that none of the three earlier quotes was dishonest. A " +
+      "firm that does not hold cutters for a profile which left production in 1987 genuinely " +
+      "cannot repair that window, so replacement is the only answer they have, and it is a real " +
+      "one. What none of the three did was mention the render, which would have had to be cut " +
+      "back and made good afterwards on every one of those quotes and appeared on none of them.",
     ],
   },
   BenefitCards: {
@@ -357,8 +437,27 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         title: "Fabrication, where a profile nobody still makes stops being a problem",
         body:
           "The cutters we hold cover profiles that left production in the eighties. That is a room " +
-          "full of tooling earning nothing most weeks, and the reason we can quote a repair when " +
-          "the answer everywhere else is a replacement plus making good.",
+          "full of tooling earning nothing most weeks, and it is the entire reason we can quote a " +
+          "repair on an opening where the answer everywhere else is a replacement plus cutting the " +
+          "render back and making it good. Keeping that tooling is a commercial decision that only " +
+          "makes sense across twenty years, which is roughly how long it has been paying for itself.",
+      },
+      {
+        title: "The measure again, a fortnight after it is in",
+        body:
+          "Hardware beds in, and a sash that was perfect on the day sometimes wants a quarter turn " +
+          "once it has been used properly for a couple of weeks. Nobody rings to say so, because it " +
+          "reads as something you did rather than something we did, so we ring instead. It takes ten " +
+          "minutes and it is the difference between a window that is right and one that is nearly right.",
+      },
+      {
+        title: "Installation, which is the shortest part and the one people remember",
+        body:
+          "Most openings are finished inside a day, and the person adjusting the hardware in front " +
+          "of you is the person who cut and assembled it three weeks earlier. That is not " +
+          "sentimentality about craft: it is the reason the adjustment actually happens on the day " +
+          "rather than becoming a callback, because nobody has to be sent for and nobody in the " +
+          "chain can reasonably say the problem belongs to somebody else.",
       },
     ],
   },
@@ -367,8 +466,10 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
     body:
       "Most quotes in this trade are a single figure with a line of description underneath. That " +
       "makes them impossible to compare, and it makes it very easy for the cheapest of three to be " +
-      "cheap in a way you will not find out about for four years. Ours is itemised for exactly that " +
-      "reason, and we are happy for you to take it to whoever else is quoting.",
+      "cheap in a way you will not find out about for four years, because the part that fails first " +
+      "is the part nobody itemises. Ours is itemised for exactly that reason, and we are happy for " +
+      "you to take it to whoever else is quoting: if somebody comes back cheaper on the same " +
+      "specification then they are genuinely cheaper, and that is worth knowing before you decide.",
     // ShowcasePoint is a string or { label, detail }, never { title, body }. The first version of
     // this fixture used the wrong keys and rendered three empty points, which looked like a
     // component fault and was a fixture fault.
@@ -384,6 +485,12 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       {
         label: "Hardware is listed by manufacturer and range",
         detail: "It is the part that fails first and the part nobody itemises, which is not a coincidence.",
+      },
+      {
+        label: "Making good is a line, not an assumption",
+        detail:
+          "If the render has to be cut back the price for putting it right is on the page, rather " +
+          "than arriving as a variation once the wall is already open.",
       },
     ],
     ctaLabel: "Read a sample quote before you ask for yours",
@@ -414,7 +521,15 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         alt: "The third page of a written quote, showing terms and lead time",
         caption:
           "Page three is the lead time and the payment terms, both as real figures rather than as " +
-          "the word shortly.",
+          "the word shortly, with the deposit, the progress payment and what is owing at completion " +
+          "all named so there is nothing to discover at the end.",
+      },
+      {
+        src: "/images/kit/screen-confirm.svg",
+        alt: "The confirmation that arrives once a job is booked into the diary",
+        caption:
+          "Page four is what arrives once you accept: the dates, who will be on site, and the one " +
+          "thing we need you to have done before they get there.",
       },
     ],
   },
@@ -439,8 +554,16 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       {
         title: "Installation by the people who made it",
         body:
-          "Most openings are done inside a day. The person adjusting the hardware is the person who " +
-          "assembled it, which is why the adjustment happens while they are still there.",
+          "Most openings are done inside a day, and the person adjusting the hardware in front of you " +
+          "is the person who cut and assembled it three weeks earlier. That is the reason the " +
+          "adjustment happens on the day rather than becoming a callback: nobody has to be sent for, " +
+          "and nobody in the chain can reasonably say the problem belongs to somebody else.",
+      },
+      {
+        title: "The check a fortnight later, which nobody asks us for",
+        body:
+          "Hardware beds in, and a sash that was perfect on the day sometimes wants a quarter turn " +
+          "after a couple of weeks of real use. We ring rather than wait to be rung.",
       },
     ],
     footnote: "If something is genuinely urgent, say so when you ring and we will tell you honestly whether it can be moved.",
@@ -477,16 +600,28 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       {
         title: "Fabrication, which is the long quiet part",
         body:
-          "Everything is cut to your opening on our own bench. Nothing visible happens at your house " +
-          "during this and that is expected rather than a sign anything has gone wrong.",
+          "Everything is cut to your opening on our own bench, in the order the workshop is already " +
+          "committed to, which is why the figure beside this is a range rather than a date. Nothing " +
+          "visible happens at your house during it and that is expected rather than a sign anything " +
+          "has gone wrong: this is the stretch people ring about, and it is also the stretch that " +
+          "makes install day take an afternoon instead of a fortnight.",
         duration: "Two to three weeks",
       },
       {
         title: "Installation and the adjustment that follows it",
         body:
           "Most openings are finished within a day. The hardware is adjusted while the person who " +
-          "assembled it is still standing there, which is the only reason it gets adjusted properly.",
+          "assembled it is still standing there, which is the only reason it gets adjusted properly " +
+          "rather than written down as something to come back for, and it is also the moment to say " +
+          "if anything about the way it moves is not what you were expecting.",
         duration: "One day per opening, usually",
+      },
+      {
+        title: "The check a fortnight later",
+        body:
+          "Hardware beds in. A sash that was perfect on the day sometimes wants a quarter turn after " +
+          "a couple of weeks of real use, so we ring rather than wait to be rung.",
+        duration: "Ten minutes, usually on the phone",
       },
     ],
   },
@@ -514,9 +649,18 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         name: "Strata managers holding a maintenance budget and forty identical openings",
         need:
           "Repeatable work, priced once, scheduled around residents rather than around us, with a " +
-          "written condition report for every opening before anything is touched.",
+          "written condition report for every opening before anything is touched, because the next " +
+          "manager will inherit that file and should be able to use it.",
         href: "/strata",
         linkLabel: "Strata and multi-unit work",
+      },
+      {
+        name: "Heritage architects who need a repair a council will accept",
+        need:
+          "Documentation as much as joinery: what was found, what was kept, what was replaced and " +
+          "why, in a form that can go into a submission without being rewritten first.",
+        href: "/heritage",
+        linkLabel: "Heritage and conservation work",
       },
     ],
   },
@@ -541,9 +685,24 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       {
         name: "New residential builds where the opening has moved off the plan",
         application:
-          "Measured on site once the frame is up, which is later than most suppliers will accept and " +
-          "is the entire reason install day goes quietly.",
+          "Measured on site once the frame is up, which is later in the programme than most suppliers " +
+          "will accept and is the entire reason install day goes quietly rather than becoming an " +
+          "afternoon of argument about whose drawing was right.",
         href: "/new-builds",
+      },
+      {
+        name: "Schools and community halls working inside a term break",
+        application:
+          "The constraint is the calendar rather than the joinery: everything is measured a term " +
+          "ahead, made while the building is still in use, and fitted in the two weeks nobody is in it.",
+        href: "/education",
+      },
+      {
+        name: "Light industrial and workshop buildings on coastal sites",
+        application:
+          "Corrosion rather than wear is what ends these openings, so the work is usually a sill or " +
+          "a section rather than a unit, and the specification matters more than the price.",
+        href: "/industrial",
       },
     ],
   },
@@ -552,19 +711,52 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
     lede: "Every one of these ends in a real page with real prices on it, not a contact form.",
     tasks: [
       {
-        name: "A window that has stopped opening, or opens and will not stay put",
-        outcome: "Usually a hardware failure rather than a frame failure, and usually fixable in one visit.",
+        name: "A window that has stopped opening, or opens and will not stay where you put it",
+        outcome:
+          "Usually a hardware failure rather than a frame failure, which means one visit and a " +
+          "fraction of what anyone quoting a replacement will have told you.",
         href: "/repairs/hardware",
       },
       {
         name: "Condensation and draughts through frames that are otherwise sound",
-        outcome: "Reglazing or a seal replacement, which is a fraction of what a full replacement costs.",
+        outcome:
+          "Reglazing or a seal replacement, done in place, and worth doing before you spend anything " +
+          "at all on heating the room it is in.",
         href: "/repairs/seals",
       },
       {
         name: "A whole elevation being replaced as part of a renovation",
-        outcome: "Measured on site after the frame is up, made on our bench, fitted by the people who made it.",
+        outcome:
+          "Measured on site after the frame is up rather than off the drawings, made on our own " +
+          "bench, and fitted by the people who made it.",
         href: "/replacements",
+      },
+      {
+        name: "A profile you have been told nobody manufactures any more",
+        outcome:
+          "Often true and usually beside the point, because we hold the cutters and can make the " +
+          "section rather than the whole unit.",
+        href: "/repairs/heritage",
+      },
+      {
+        name: "A security screen or flyscreen that has been forced or has sagged",
+        outcome:
+          "Rehung or remeshed in the existing frame where the frame is sound, which it usually is.",
+        href: "/screens",
+      },
+      {
+        name: "A door that has dropped and now catches on the frame every time",
+        outcome:
+          "Almost always the hinges or the packing rather than the door, and almost always an hour " +
+          "rather than a replacement, whatever the last person to look at it said.",
+        href: "/repairs/doors",
+      },
+      {
+        name: "Ten openings or more across one building, on a maintenance budget",
+        outcome:
+          "A condition report for every opening first, then one price for the programme and a " +
+          "schedule built around residents rather than around us.",
+        href: "/strata",
       },
     ],
   },
@@ -602,10 +794,45 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       {
         quote:
           "I had been told twice that nobody makes that profile any more, which turned out to be " +
-          "true and also completely beside the point, because they cut it themselves.",
+          "true and also completely beside the point, because they cut it themselves rather than " +
+          "ordering it in from anyone.",
         name: "Terrence Okonkwo-Barrett",
         role: "Owner, Federation semi",
         location: "Stanmore",
+      },
+      {
+        quote:
+          "They talked me out of replacing four windows that did not need replacing, which cost them " +
+          "most of the job and is the reason they got the next one without being asked to quote.",
+        name: "Wilhelmina Strachan-Doyle",
+        role: "Homeowner",
+        location: "Haberfield",
+      },
+      {
+        quote:
+          "The written quote named the glass for every panel and why, so when I took it to the two " +
+          "cheaper firms I could finally ask them what they had actually allowed for.",
+        name: "Ignatius Fairweather",
+        role: "Owner-builder",
+        location: "Dulwich Hill",
+      },
+      {
+        quote:
+          "Everything ran to the day they gave us at the start, including the fortnight in the " +
+          "middle where nothing appeared to be happening at the house and they had told us in " +
+          "advance that it would not, which is the only reason we did not spend it ringing them.",
+        name: "Rosalind Ngata-Pemberton",
+        role: "Project manager",
+        location: "Petersham",
+      },
+      {
+        quote:
+          "They were the dearest of the four quotes we had and the only one that had opened the " +
+          "frame up before writing a number down. Two of the other three came back with variations " +
+          "when I asked them what they had allowed for the render, which answered the question.",
+        name: "Ambrose Teodorescu-Hale",
+        role: "Owner, interwar bungalow",
+        location: "Croydon Park",
       },
     ],
   },
@@ -614,16 +841,23 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
     customer: "Millbrook Strata and Facilities Management",
     title: "Forty two openings replaced over nine weeks without a single resident having to take a day off work",
     situation:
-      "The block was built in 1978 and the previous manager had a maintenance file describing " +
+      "The block was built in 1978 and the previous manager had left a maintenance file describing " +
       "openings that no longer matched the building, because at least two elevations had been " +
-      "repaired at some point without anything being recorded.",
+      "repaired at some point without anything being written down. Three of the four quotes the " +
+      "committee held were priced off that file, which meant three of them were priced off a " +
+      "building that had not existed for some years, and nobody had noticed because nobody had " +
+      "gone and looked.",
     action:
-      "Every opening was measured and condition-reported before anything was ordered, then " +
-      "scheduled in runs of four so that no resident lost access to more than one room at a time, " +
-      "and every run was confirmed with the resident by phone the week before.",
+      "Every opening was measured and condition-reported before anything was ordered, which took a " +
+      "fortnight and was the only reason the rest of it ran. The work was then scheduled in runs of " +
+      "four so that no resident lost access to more than one room at a time, every run was " +
+      "confirmed with the resident by phone the week before, and the two openings that turned out " +
+      "to need more than the report allowed were put to the committee in writing before they were " +
+      "touched.",
     outcome:
-      "Nine weeks end to end against an eleven week estimate, no variations, and a written record " +
-      "for every opening that the next manager will actually be able to use.",
+      "Nine weeks end to end against an eleven week estimate, no variations raised after the quote " +
+      "was accepted, and a written record for every opening that the next manager will actually be " +
+      "able to use rather than another file describing a building that has moved on.",
     outcomeFigures: [
       { value: "42", label: "Openings replaced and condition-reported individually" },
       { value: "9 weeks", label: "End to end, against an eleven week estimate" },
@@ -653,6 +887,12 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         label: "Variations raised after the quote was accepted, across the whole of that job",
         customer: "Millbrook Strata and Facilities Management",
         note: "Which is a consequence of measuring first, not of good luck",
+      },
+      {
+        figure: "3 days",
+        label: "From the first phone call to a temporary make-safe on a shopfront that had been forced overnight",
+        customer: "Pentworth and Vale Construction Partners",
+        note: "The permanent repair took another fortnight, which is the honest figure",
       },
     ],
     sourceNote:
@@ -686,9 +926,19 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         customer: "Harrowgate Building Company",
         outcome:
           "Measured on site after the frame went up rather than off the drawings, which is why " +
-          "install day took one afternoon instead of a fortnight of arguing.",
+          "install day took one afternoon instead of a fortnight of arguing about whose drawing " +
+          "was right while a client watched.",
         href: "/work/harrowgate-new-build",
         tag: "New build",
+      },
+      {
+        title: "A shopfront forced overnight, made safe in three days and repaired in a fortnight",
+        customer: "Pentworth and Vale Construction Partners",
+        outcome:
+          "The make-safe is the number people remember and the fortnight is the honest one, because " +
+          "the replacement section had to be cut to an opening that had been damaged out of square.",
+        href: "/work/pentworth-shopfront",
+        tag: "Commercial",
       },
     ],
   },
@@ -704,9 +954,11 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         cadence: "per opening",
         description: "For one window or door that has stopped working, where the frame itself is sound.",
         features: [
-          "Attendance, diagnosis and a written report on what is actually wrong",
-          "Hardware replacement from stock where the range is still made",
-          "A firm price before anything is ordered, not an hourly rate",
+          "Attendance, diagnosis and a written report on what is actually wrong with it",
+          "Hardware replacement from stock where the range is still manufactured",
+          "A firm price before anything is ordered, rather than an hourly rate",
+          "The honest answer when a repair is not worth doing, before you spend anything",
+          "Seven-year warranty on our own work, hardware to its manufacturer's own terms",
         ],
         ctaLabel: "Book a repair visit",
         ctaHref: "/repairs",
@@ -716,10 +968,12 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         price: "Quoted per job",
         description: "The usual arrangement: a measure at your place, an itemised quote, then fabrication and installation.",
         features: [
-          "Site measure with the existing frame opened up, at no charge",
-          "Itemised written quote naming the profile, the glass and the hardware",
+          "Site measure with the existing frame opened up, at no charge and no obligation",
+          "Itemised written quote naming the profile, the glass specification and the hardware",
           "Fabrication on our own bench and installation by the people who made it",
-          "Adjustment on the day, while the person who assembled it is still there",
+          "Adjustment on the day, while the person who assembled it is still standing there",
+          "A check a fortnight later, because hardware beds in and nobody rings to say so",
+          "Seven-year warranty on our own work, hardware to its manufacturer's own terms",
         ],
         ctaLabel: "Book a measure at your place",
         ctaHref: "/measure",
@@ -732,8 +986,11 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         description: "Ten openings or more, usually for a strata manager or a building owner holding a maintenance budget.",
         features: [
           "A written condition report for every opening before anything is ordered",
-          "Runs scheduled around residents rather than around us",
+          "Runs scheduled around residents rather than around our own convenience",
           "One price for the programme, with variations agreed in writing or not at all",
+          "Every resident confirmed by phone the week before their own run",
+          "A file the next building manager can actually use, rather than another one to correct",
+          "Seven-year warranty on our own work, hardware to its manufacturer's own terms",
         ],
         ctaLabel: "Talk to us about a programme",
         ctaHref: "/strata",
@@ -789,21 +1046,40 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       {
         title: "The glass specification, which is set by where the panel sits",
         detail:
-          "A panel within 500mm of a floor is toughened because the standard says so. That is not a " +
-          "preference and it is not negotiable, so it belongs in the quote rather than in a conversation.",
+          "A panel within 500mm of a floor is toughened because the standard says so, and a panel in " +
+          "a bathroom or beside a door is decided the same way. None of that is a preference and none " +
+          "of it is negotiable, so it belongs in the quote as a line with a price rather than in a " +
+          "conversation on the day, which is where it turns into a variation.",
+      },
+      {
+        title: "Access, which nobody thinks of and everybody pays for",
+        detail:
+          "A first-floor opening over a garden bed is a different job from the same opening over a " +
+          "driveway, and on a block of units it decides whether the work happens from inside.",
+      },
+      {
+        title: "How many openings, because the second one is always cheaper than the first",
+        detail:
+          "Most of the cost of coming out is coming out. Six openings on one elevation are not six " +
+          "times one opening, and a quote that prices them as though they were is a quote nobody " +
+          "has actually thought about.",
       },
     ],
     send: [
-      "A photograph of each opening from inside, taken square on rather than at an angle",
-      "The rough width and height, measured anywhere, just so we know what scale we are talking about",
-      "Anything you already know about previous repairs, even if it is only that there were some",
+      "A photograph of each opening from inside, taken square on rather than at an angle, because a photograph taken from the side hides exactly the thing we are looking for",
+      "The rough width and height, measured anywhere with anything, just so we know what scale we are talking about before somebody drives out",
+      "Anything you already know about previous repairs, even if it is only that there were some and nobody wrote down what was done",
+      "The suburb, so we can tell you honestly whether we are the right people to be quoting it at all",
     ],
     turnaround: "Two to three working days from the measure",
     ctaLabel: "Book a measure at your place",
     ctaHref: "/measure",
     secondaryLabel: "Or send photos first and we will tell you whether it is worth a visit",
     secondaryHref: "/photos",
-    note: "A measure costs nothing whether or not you go ahead, and it is the only way anybody can give you a real number.",
+    note:
+      "A measure costs nothing whether or not you go ahead, and it is the only way anybody can give " +
+      "you a real number rather than the opening they are hoping you have. If somebody has quoted " +
+      "you without opening the frame, the number you have is a guess wearing a letterhead.",
   },
   CompareAlternatives: {
     heading: "Us against the two things most people are actually choosing between",
@@ -841,17 +1117,34 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       },
       {
         name: "Lead time from order to installation",
-        yours: "Three to five weeks, most of it fabrication",
+        yours:
+          "Three to five weeks, most of it fabrication on our own bench, and the figure we give at " +
+          "the start is the one we are measured against rather than a hope",
         others: [
-          "Often faster on stock sizes, sometimes considerably",
-          "Immediate, if the size you need is on a shelf",
+          "Often faster on stock sizes, sometimes considerably, because the unit already exists",
+          "Immediate, if the size you need happens to be on a shelf near you",
         ],
+      },
+      {
+        name: "What you are left holding if something goes wrong in year four",
+        yours:
+          "The people who made it are still here, still hold the cutters for your profile, and can " +
+          "make the one section that failed rather than the whole unit again",
+        others: [
+          "A national warranty process, which is real and works, and replaces rather than repairs",
+          "Whatever the manufacturer offers on a unit you fitted yourself, which is usually less",
+        ],
+        source: "Read from the warranty documents of all three, March 2026",
       },
     ],
     fairnessNote:
-      "Written by us in March 2026 and checked against three written quotes on one job. A national " +
-      "supplier will usually beat us on price and lead time for a square, standard-size opening, and " +
-      "if that is what you have, that is the honest answer.",
+      "Written by us in March 2026 and checked against three written quotes on one real job, which " +
+      "is the only reason any of the figures above are in it. A national supplier will usually beat " +
+      "us on price and on lead time for a square, standard-size opening, and if that is what you " +
+      "have then that is the honest answer and you should take it. Doing it yourself will beat both " +
+      "of us on price by a wide margin if nothing goes wrong, and the whole question is what happens " +
+      "if something does. We are the expensive option on an easy opening and the cheap one on a hard " +
+      "opening, and the measure is what tells you which of those you are holding.",
   },
   CompareBeforeAfter: {
     heading: "What changes about the job itself once somebody has actually measured the opening",
@@ -870,6 +1163,14 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       {
         before: "The render has to be cut back and made good, which was not in anybody's number",
         after: "Either the frame is kept, or the making good is in the quote as its own line",
+      },
+      {
+        before: "The glass specification is decided on the day by whoever is holding the panel",
+        after: "It is decided by where the panel sits, written into the quote, and priced there",
+      },
+      {
+        before: "The lead time is a feeling, so the quiet fortnight reads as a job that has stalled",
+        after: "It is a number of weeks, with the quiet part named in advance and explained",
       },
     ],
     note:
@@ -906,6 +1207,14 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
           "except one run, because a bench repair to a sound frame is a fraction of a replacement " +
           "plus the render being cut back and made good afterwards.",
       },
+      {
+        question: "Do you take deposits, and what happens if the job stops partway through?",
+        answer:
+          "A deposit covers the material we have to buy before anything can be cut, and it is on the " +
+          "quote as a figure rather than a percentage. If a job stops partway through for a reason " +
+          "on either side, you are invoiced for what has actually been made and fitted and nothing " +
+          "else, and anything already cut to your opening is yours whether or not we install it.",
+      },
     ],
   },
   FaqAccordion: {
@@ -932,7 +1241,25 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
         question: "Do you charge for the measure, and am I committed to anything once it is done?",
         answer:
           "It costs nothing and it commits you to nothing. You get the written quote from it either " +
-          "way, and a fair number of people use ours to check the two they already had.",
+          "way, and a fair number of people use ours to check the two they already had, which we " +
+          "would rather they did than have them accept a number nobody could compare.",
+      },
+      {
+        question: "Can you work around us if the house is occupied the whole time?",
+        answer:
+          "Yes, and most of our work is in occupied houses. An opening is out for a matter of hours " +
+          "rather than days, because the unit is finished before anybody arrives, and where an " +
+          "elevation has to come out in stages we do it in runs so that no room is unusable overnight.",
+      },
+      {
+        question: "What does the warranty actually cover, and for how long?",
+        answer:
+          "Our own work, which is the fabrication and the installation, for seven years. Hardware " +
+          "carries whatever its manufacturer offers and that is named in the quote rather than " +
+          "described, because hardware is the part that fails first and a warranty that covers " +
+          "everything except the thing most likely to go is not really a warranty. Glass is covered " +
+          "for breakage caused by the way it was installed and not for breakage caused by anything " +
+          "else, which is the honest boundary and the one every insurer will ask about.",
       },
     ],
   },
@@ -956,8 +1283,10 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
   CtaWithProof: {
     headline: "Twenty three years, fourteen hundred installations, and most of last year's work came from somebody's recommendation",
     body:
-      "None of which means we are right for your job. It means that if we say a repair will hold, " +
-      "there is a long enough record behind it for you to check.",
+      "None of which means we are right for your job, and on a straightforward square opening in a " +
+      "standard size a national supplier will very likely beat us on both price and lead time. What " +
+      "it means is that if we tell you a repair will hold, there is a long enough record behind that " +
+      "claim for you to go and check it rather than take our word for it.",
     primary: { label: "Book a measure at your place", href: "/measure" },
     secondary: { label: "Read what people said afterwards", href: "/reviews" },
     quote: {
@@ -973,35 +1302,46 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
     ],
   },
   FormContact: {
-    title: "Tell us roughly what you have got, and we will tell you honestly whether it is worth a visit",
+    title:
+      "Tell us roughly what you have got and we will tell you honestly whether it is worth somebody " +
+      "driving out to look at it",
     intro:
       "You do not need measurements or a specification. What is useful is where the property is, " +
       "roughly how many openings there are, and anything you already know about repairs somebody " +
       "has done to them before, because that is the commonest reason an opening is not square.",
     aside: {
-      heading: "If you would rather just ring, which most people do",
+      heading: "If you would rather just ring, which most people do and we would prefer",
       lines: [
-        "The workshop line is answered between seven and four on weekdays, by somebody who has actually seen the jobs",
-        "Outside those hours it goes to a message that gets read the next morning, not to an overseas answering service",
+        "The workshop line is answered between seven and four on weekdays by somebody who has actually stood in front of the jobs, so you get an answer rather than a promise that somebody will call you back about it",
+        "Outside those hours it goes to a message that is read the next morning by the same person, not to an answering service in another country reading from a script about your enquiry being important",
+        "If it is genuinely urgent, a shopfront forced overnight or a ground-floor opening that will not close, say so in the first sentence and it is dealt with the same day",
       ],
     },
-    submitLabel: "Send this to the workshop",
+    submitLabel: "Send this straight through to the workshop",
     privacyNote:
-      "What you send here goes to the workshop email and nowhere else. It is not added to a mailing " +
-      "list, and we do not pass it on to anybody who supplies us.",
+      "What you send here goes to the workshop email address and nowhere else. It is not added to a " +
+      "mailing list, it is not passed to anybody who supplies us, and nobody will ring you about " +
+      "anything other than the opening you have just described. If you would rather not leave an " +
+      "address at all, the phone number at the bottom of the page reaches the same people.",
   },
   FormEnquiry: {
-    title: "An enquiry with enough detail that the first thing we send back is useful rather than a request for more information",
+    title:
+      "An enquiry with enough detail that the first thing we send back is an actual answer rather " +
+      "than a request for the details that were left out",
     intro:
-      "The more of this you fill in, the more likely the reply is an actual answer. If you would " +
-      "rather leave most of it blank and talk it through instead, that is completely fine and the " +
-      "phone number is at the bottom of every page.",
+      "The more of this you fill in, the more likely the first thing we send back is an actual " +
+      "answer rather than a request for the details you left out, which is the exchange that turns " +
+      "a two-day reply into a two-week one. If you would rather leave most of it blank and talk it " +
+      "through instead, that is completely fine and the workshop number is at the bottom of every " +
+      "page: nothing here is required except an address we can reply to.",
     services: [
-      "Repair to a window or door that has stopped working properly",
-      "Replacing one or two openings as part of a renovation",
-      "A whole elevation, or a whole house",
-      "Programme work across a building with ten openings or more",
-      "Something else, or I genuinely do not know yet",
+      "Repair to a window or a door that has stopped working the way it should",
+      "Replacing one or two openings as part of a renovation already under way",
+      "A whole elevation, or a whole house, on a programme with a date attached",
+      "Programme work across a building with ten openings or more, on a maintenance budget",
+      "A heritage repair somebody else has already declined to quote",
+      "Security screens or flyscreens, new or rehung in an existing frame",
+      "Something else, or I genuinely do not know yet and would rather describe it",
     ],
     submitLabel: "Send this enquiry to the workshop",
     privacyNote:
@@ -1046,6 +1386,16 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
           { label: "The measure, and why it comes first", href: "/measure" },
           { label: "What a realistic lead time looks like", href: "/lead-times" },
           { label: "What the warranty actually covers", href: "/warranty" },
+          { label: "Deposits, progress payments and the final invoice", href: "/payment" },
+        ],
+      },
+      {
+        heading: "Who we usually work for",
+        links: [
+          { label: "Homeowners partway through a renovation", href: "/homeowners" },
+          { label: "Builders who need one supplier on site", href: "/builders" },
+          { label: "Strata managers and building owners", href: "/strata" },
+          { label: "Heritage architects and conservators", href: "/heritage" },
         ],
       },
     ],

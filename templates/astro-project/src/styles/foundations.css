@@ -79,6 +79,12 @@
   --kit-focus-ring:    var(--kit-accent-ink);
   --kit-focus-width:   2px;
   --kit-focus-offset:  2px;
+  /* The underline, which is how a text-only control answers a pointer. A colour shift cannot do
+     that job here: on a brand that publishes no dark-ground accent, --kit-accent-lift falls back
+     to the inverse text colour, so a hover that moves the colour toward the text is no change at
+     all on an inverse band. Thickness and offset move on every ground. */
+  --kit-underline-offset: 3px;
+  --kit-underline-hover:  2px;
 
   /* ---- 2. TYPOGRAPHY: headings, body, labels, links --------------------------------------- */
   /* TWO NAMING CONVENTIONS EXIST IN THE WILD AND BOTH MUST RESOLVE. The generated brand package
@@ -274,7 +280,20 @@
 .kit-muted { color: var(--kit-text-muted); }
 .kit-label { font-size: var(--kit-text-xs); letter-spacing: var(--kit-tracking-label);
   text-transform: uppercase; color: var(--kit-text-muted); margin: 0; }
-.kit-link { color: var(--kit-accent-ink); text-underline-offset: 3px; }
+/* THE UNDERLINE IS THE KIT'S, NOT THE BROWSER'S. `.kit-link` set a colour and an offset and left
+   the line itself to the user agent, and the template's Tailwind preflight resets `a` to
+   `text-decoration: inherit`, so every kit link rendered with NO underline at all: measured
+   `text-decoration-line: none` on the footer contact, the ratings source citation and the rest.
+   That leaves colour as the only thing separating a link from the text around it, and the colour
+   measured 1.85:1 against that text, well under the 3:1 a colour-only link would need. Two
+   independent faults with one cause, and neither is visible to a reader who can see the colour. */
+.kit-link { color: var(--kit-accent-ink); text-decoration: underline;
+  text-underline-offset: var(--kit-underline-offset); }
+/* EVERY LINK IN THE KIT ANSWERS A POINTER. It did not: `.kit-link` set a colour and an offset and
+   stopped, so a link was inert under the mouse unless the piece around it happened to add its own
+   hover. Three did; the rest inherited nothing, and a footer phone number, a source citation and
+   an alternating-benefit action all measured byte-identical computed style at rest and on hover. */
+.kit-link:hover { text-decoration-thickness: var(--kit-underline-hover); }
 .kit-section--inverse .kit-link { color: var(--kit-accent-lift); }
 .kit-section--inverse .kit-muted { color: color-mix(in srgb, var(--kit-text-inverse) 72%, transparent); }
 
@@ -303,6 +322,11 @@
 .kit-btn--secondary { background: transparent; color: var(--kit-text); border-color: var(--kit-border-strong); }
 .kit-btn--secondary:hover { background: var(--kit-bg-subtle); }
 .kit-btn--quiet { background: transparent; color: var(--kit-accent-ink); padding-inline: 0; min-height: var(--kit-target); }
+/* Primary and secondary both move their background on hover and quiet was simply missed, so the
+   kit's third button, the one a tertiary action uses, was the only one that did nothing. It has no
+   background to move, so it underlines: the same answer .kit-link gives, from the same tokens. */
+.kit-btn--quiet:hover { text-decoration: underline; text-underline-offset: var(--kit-underline-offset);
+  text-decoration-thickness: var(--kit-underline-hover); }
 .kit-section--inverse .kit-btn--secondary { color: var(--kit-text-inverse); border-color: color-mix(in srgb, var(--kit-text-inverse) 45%, transparent); }
 .kit-section--inverse .kit-btn--quiet { color: var(--kit-accent-lift); }
 .kit-btn[disabled], .kit-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }

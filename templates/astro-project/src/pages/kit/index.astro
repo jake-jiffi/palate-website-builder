@@ -14,6 +14,7 @@
  */
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { kit, KIT_VARIATION_COUNT } from "../../lib/kit";
+import { orderedStates } from "../../lib/kit-states";
 ---
 <BaseLayout
   title="Website kit"
@@ -28,7 +29,9 @@ import { kit, KIT_VARIATION_COUNT } from "../../lib/kit";
         width, with real content of any length, in every state it can be in. Open a variation to
         see it at rest, at three widths, and in each state listed under it: the content states are
         rendered from a fixture and the runtime states are driven through the piece's own controls,
-        so nothing on these pages is a picture of a state rather than the state itself.
+        so nothing on these pages is a picture of a state rather than the state itself. The one
+        exception is <code>hover</code>, which no script can force because the browser grants it to
+        a real pointer only, so those pages render at rest and say so rather than faking it.
       </p>
       <p class="kit-body kit-muted ix__note">
         Every piece also takes <code>tone</code>, which puts it on the default, subtle or inverse
@@ -58,7 +61,7 @@ import { kit, KIT_VARIATION_COUNT } from "../../lib/kit";
                   <p class="kit-body kit-muted ix__when">{v.when}</p>
                   <p class="ix__needs"><span class="kit-label">Needs</span> {v.needs.join(", ")}</p>
                   <ul class="ix__states">
-                    {v.states.map((s) => (
+                    {orderedStates(v.states).map((s) => (
                       <li class="ix__state">
                         <a class="ix__statelink" href={`/kit/${piece.id}/${v.id}/${s}`} aria-label={`${s}, ${v.name}`}>{s}</a>
                       </li>

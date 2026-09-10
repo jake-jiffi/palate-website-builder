@@ -117,13 +117,7 @@ const drive = !isRest && STATE_KIND[state as KitDemoState] === "driven";
     };
     window.addEventListener("load", measure);
     window.addEventListener("resize", measure);
-    window.addEventListener("message", (event) => {
-      if (event.origin !== window.location.origin) return;
-      if ((event.data as { kitFrameMeasure?: boolean })?.kitFrameMeasure) {
-        last = -1; // The width changed, so the last answer is stale rather than merely old.
-        window.requestAnimationFrame(measure);
-      }
-    });
+
     // A driven state changes the height after the driver runs, and an accordion changes it when
     // the reader presses something, so watch rather than measure once.
     if ("ResizeObserver" in window) new ResizeObserver(measure).observe(document.documentElement);

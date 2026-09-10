@@ -125,6 +125,16 @@ const toneClass =
     )}
   </div>
 
+  {/*
+    KNOWN, MEASURED, AND NOT WORTH FAKING A FIX FOR. This dialog holds exactly one focusable
+    element, and tabbing through it reads Close, then a stop where activeElement is the body, then
+    Close again: one press in three lands on nothing visible. That is the browser's own handling of
+    a modal whose focus cycle has a single member, not something the markup here decides.
+    `tabindex="-1"` on the dialog was tried and measured: the cycle is unchanged, so it was removed
+    rather than left in place with a comment claiming it did something. Adding a decorative second
+    stop to fill the cycle would be worse than the thing it hides. Focus never leaves the dialog,
+    Escape closes it, and focus returns to the thumbnail that opened it, all verified.
+  */}
   <dialog class="ds-dialog" data-ds-dialog aria-labelledby={captionId}>
     <div class="ds-dialog__inner" data-ds-frame>
       <div class="ds-dialog__bar">

@@ -19,7 +19,7 @@
  * piece rather than left to infer it from a picture.
  */
 import { kit, type KitVariation, type KitPiece } from "../../lib/kit";
-import { STATE_KIND, STATE_NOTE, NARROW_BY_DEFAULT, MOBILE_ONLY, type KitDemoState } from "../../lib/kit-states";
+import { STATE_KIND, STATE_NOTE, NARROW_BY_DEFAULT, MOBILE_ONLY, orderedStates, type KitDemoState } from "../../lib/kit-states";
 
 interface Props {
   piece: KitPiece;
@@ -42,10 +42,9 @@ const frameSrc = `/kit-frame/${piece.id}/${variation.id}/${state}`;
 const startNarrow =
   MOBILE_ONLY.has(variation.id) || (!isRest && NARROW_BY_DEFAULT.has(variation.id) && state === "open");
 
-// Every state this variation declares, plus rest, in a stable order so the tabs do not reshuffle
-// between two pieces and make the row unreadable.
-const ORDER: KitDemoState[] = ["empty", "long", "open", "loading", "success", "error", "focus", "hover"];
-const states = ORDER.filter((s) => variation.states.includes(s as never));
+// Every state this variation declares, plus rest, in the one order the whole kit prints them in,
+// so the row does not reshuffle between two pieces or between this page and the index.
+const states = orderedStates(variation.states);
 
 const pieceIndex = kit.findIndex((p) => p.id === piece.id);
 ---
@@ -125,15 +124,25 @@ const pieceIndex = kit.findIndex((p) => p.id === piece.id);
   </div>
 
   <div class="dvw__stage">
-    <iframe
-      class="dvw__frame"
-      data-viewer-frame
-      src={frameSrc}
-      title={`${variation.name}, ${isRest ? "at rest" : state}`}
-      loading="eager"
-      style={startNarrow ? "width: 390px" : undefined}
-    ></iframe>
+    <div class="dvw__scaler" data-viewer-scaler>
+      <iframe
+        class="dvw__frame"
+        data-viewer-frame
+        src={frameSrc}
+        title={`${variation.name}, ${isRest ? "at rest" : state}`}
+        loading="eager"
+        style={startNarrow ? "width: 390px" : undefined}
+      ></iframe>
+    </div>
   </div>
+  <p class="dvw__fit" data-viewer-fit role="status" aria-live="polite"></p>
+  {MOBILE_ONLY.has(variation.id) && (
+    <p class="dvw__only">
+      This piece is the small-screen half of a navigation and has no desktop presence at all: above
+      the breakpoint its own stylesheet hides it, so a wide frame is correctly an empty bar rather
+      than a broken render.
+    </p>
+  )}
 
   <p class="dvw__escape">
     <a class="kit-link" href={frameSrc}>Open this render on its own</a>, with no chrome around it,
@@ -142,7 +151,7 @@ const pieceIndex = kit.findIndex((p) => p.id === piece.id);
 </div>
 
 <style>
-  .dvw { display: grid; gap: var(--kit-space-md); }
+  .dvw { display: grid; gap: var(--kit-space-md); min-width: 0; }
   .dvw__bar,
   .dvw__meta,
   .dvw__controls,
@@ -205,46 +214,131 @@ const pieceIndex = kit.findIndex((p) => p.id === piece.id);
     padding: var(--kit-space-md) var(--kit-space-md) var(--kit-space-xl);
     display: flex;
     justify-content: center;
+    /**
+     * THE STAGE MUST NOT GROW TO ITS CONTENT, or the measurement it is asked for is the answer it
+     * already gave. A 1024px frame inside a 390px window widened the stage to 1056, the scale
+     * maths then read the stage as wide enough, nothing was scaled, and the page scrolled sideways
+     * on a phone. A grid item is `min-width: auto` by default, which is what let it happen.
+     */
+    min-width: 0;
+    overflow: hidden;
+  }
+  /**
+   * THE SCALER IS WHAT MAKES A WIDTH BUTTON TELL THE TRUTH.
+   *
+   * `max-width: 100%` on the frame meant the browser clamped a requested 1024 to whatever the
+   * stage could give, so on a phone all four buttons delivered the same 356px viewport while the
+   * one you pressed reported itself as applied. The piece is now laid out at the FULL requested
+   * width and the whole frame is scaled down to fit, so `contentWindow.innerWidth` really is the
+   * width on the button and a reviewer on a laptop can still see 1024.
+   */
+  .dvw__scaler {
+    transform-origin: top center;
+    /* Nothing here paints; the frame does. Sizing lives on the element being scaled. */
+    line-height: 0;
   }
   .dvw__frame {
     width: 100%;
-    max-width: 100%;
     min-height: 60vh;
-    border: var(--kit-border-width) solid var(--kit-border);
     background: var(--kit-bg);
     display: block;
+    /* NO BORDER. A 1px border plus border-box made "Phone, 390" deliver a 388px viewport and left
+       the content box two pixels shorter than the document it was sized to hold. The edge belongs
+       to the stage, which is not the thing being measured. */
+    border: 0;
   }
+  .dvw__stage > .dvw__scaler { outline: var(--kit-border-width) solid var(--kit-border); }
+  .dvw__fit,
+  .dvw__only {
+    max-width: var(--kit-page-max);
+    margin: var(--kit-space-xs) auto 0;
+    padding-inline: var(--kit-page-pad);
+    width: 100%;
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text-muted);
+  }
+  .dvw__fit:empty { display: none; }
   .dvw__escape { font-size: var(--kit-text-sm); color: var(--kit-text-muted); max-width: var(--kit-measure); padding-bottom: var(--kit-space-2xl); }
 </style>
 
 <script>
   (() => {
     const root = document.querySelector<HTMLElement>(".dvw");
+    const scaler = document.querySelector<HTMLElement>("[data-viewer-scaler]");
     const frame = document.querySelector<HTMLIFrameElement>("[data-viewer-frame]");
     const status = document.querySelector<HTMLElement>("[data-viewer-status]");
-    if (!root || !frame) return;
+    const fit = document.querySelector<HTMLElement>("[data-viewer-fit]");
+    if (!root || !frame || !scaler) return;
 
-    const setWidth = (value: string) => {
-      frame.style.width = value === "full" ? "100%" : `${value}px`;
+    let requested: string = frame.style.width === "390px" ? "390" : "full";
+    let frameHeight = 0;
+
+    /**
+     * Lay the piece out at the width that was ASKED FOR, then scale the whole frame to fit the
+     * stage. Every button therefore delivers the width printed on it, whatever the window is
+     * doing, which is the only way `aria-pressed` can be honest.
+     */
+    const apply = () => {
+      const stage = scaler.parentElement?.clientWidth || 0;
+      const target = requested === "full" ? stage : Number(requested);
+      frame.style.width = `${target}px`;
+      const scale = target > stage && stage > 0 ? stage / target : 1;
+      scaler.style.transform = scale === 1 ? "" : `scale(${scale})`;
+      // The scaled frame occupies less room than it measures, so the wrapper is told the height it
+      // will actually take. Without this the page keeps a gap the size of the part scaled away.
+      scaler.style.height = frameHeight ? `${Math.ceil(frameHeight * scale)}px` : "";
+      scaler.style.width = `${target}px`;
+      scaler.style.marginInline = "auto";
+
       root.querySelectorAll<HTMLButtonElement>(".dvw__width").forEach((button) => {
-        button.setAttribute("aria-pressed", button.dataset.width === value ? "true" : "false");
+        button.setAttribute("aria-pressed", button.dataset.width === requested ? "true" : "false");
       });
-      // A width change re-lays the document inside the frame, so the height it reported a moment
-      // ago is now wrong. Ask again rather than leaving a gap or a scrollbar.
-      frame.contentWindow?.postMessage({ kitFrameMeasure: true }, window.location.origin);
+
+      if (fit) {
+        fit.textContent =
+          scale === 1
+            ? ""
+            : `The piece is laid out at ${target}px and shown at ${Math.round(scale * 100)}% so it fits this window. What you are looking at is the ${target}px layout.`;
+      }
+    };
+
+    /**
+     * A WIDTH CHANGE RELOADS THE FRAME, AND THAT IS THE FIX RATHER THAN THE COST.
+     *
+     * The driver runs once, when the frame loads. Resizing without reloading let the piece's own
+     * resize handling close what had been opened while the live region went on announcing that it
+     * was open: a state browser telling the reader the opposite of what is on screen, which is the
+     * exact failure this whole surface exists to avoid. Reloading re-drives the state at the new
+     * width, and the status is cleared until the driver reports again.
+     */
+    const setWidth = (value: string) => {
+      const changed = value !== requested;
+      requested = value;
+      apply();
+      if (!changed) return;
+      if (status) {
+        status.textContent = "";
+      }
+      frameHeight = 0;
+      // eslint-disable-next-line no-self-assign
+      frame.src = frame.src;
     };
 
     root.querySelectorAll<HTMLButtonElement>(".dvw__width").forEach((button) => {
       button.addEventListener("click", () => setWidth(button.dataset.width || "full"));
     });
 
+    window.addEventListener("resize", apply);
+    apply();
 
     window.addEventListener("message", (event) => {
       if (event.origin !== window.location.origin) return;
       const data = event.data as { kitFrameHeight?: number; kitDriver?: boolean; message?: string };
       if (typeof data?.kitFrameHeight === "number") {
-        frame.style.height = `${Math.max(240, Math.ceil(data.kitFrameHeight))}px`;
+        frameHeight = Math.max(240, Math.ceil(data.kitFrameHeight));
+        frame.style.height = `${frameHeight}px`;
         frame.style.minHeight = "0";
+        apply();
       }
       if (data?.kitDriver && status) {
         status.textContent = `What was driven: ${data.message ?? ""}`;

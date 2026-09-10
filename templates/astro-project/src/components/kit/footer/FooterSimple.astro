@@ -217,12 +217,11 @@ const hasBrand = Boolean(businessName || tagline || contacts.length);
   }
   /* .kit-link on an inverse section resolves to --kit-accent-lift, which falls back to
      the accent a brand picked for a LIGHT ground. Measured at 1.06:1 on the default
-     tokens, which is an invisible phone number in a footer. Underlined inverse text
-     is legible whether or not the brand defined a lift. */
-  .kit-section--inverse .kit-foot__contact-link {
-    color: var(--kit-text-inverse);
-    text-decoration: underline;
-    text-underline-offset: var(--kit-space-2xs);
-  }
+     tokens, which is an invisible phone number in a footer, so the colour is forced to
+     the inverse ink here. The UNDERLINE that used to sit in this rule has gone back to
+     foundations, which now carries it for every .kit-link: written as a shorthand it
+     reset text-decoration-thickness to auto, and being later in source order it beat the
+     kit's own hover, so this footer's phone number was the last link with no hover at all. */
+  .kit-section--inverse .kit-foot__contact-link { color: var(--kit-text-inverse); }
   .kit-section--inverse a:focus-visible { outline-color: var(--kit-text-inverse); }
 </style>
