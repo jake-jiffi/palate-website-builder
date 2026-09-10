@@ -235,22 +235,16 @@ const resultId = `${uid}-result`;
         if (postcodes.size && codesTyped.some((c) => !postcodes.has(c))) return null;
         return name;
       }
-      // 3: A LISTED POSTCODE IS GROUND TRUTH, and this runs BEFORE the state-word refusal below so
-      // a covered postcode is never overruled by a state word typed beside it ("2026 Victoria",
-      // "2030 Tasmania"). A four-digit postcode names the area unambiguously, so if it is on the
-      // list the area is covered whatever else was typed, and the suburb name is only ever used to
-      // echo (step 1), never to refuse. The piece carries no postcode-to-suburb table and must not
-      // pretend to: it answers on the postcode it can verify and echoes the postcode itself rather
-      // than the visitor's words, so the answer is never a falsehood about a named place. A typed
-      // postcode NOT on the list is a contradiction and refuses.
-      if (codesTyped.length) return codesTyped.every((c) => postcodes.has(c)) ? codesTyped[0] : null;
-      // 4: no postcode and no listed name. Another state as the last word refuses ("Manly,
-      // Queensland"); anything else is a place the list does not name.
-      const placeOnly = dropWord(dropWord(words, "australia"), "au");
-      for (const form of ALL_STATE_FORMS) {
-        if (own.includes(form)) continue;
-        if (new RegExp(`(^|\\s)${form}$`).test(placeOnly)) return null;
-      }
+      // 3: A LISTED POSTCODE IS GROUND TRUTH. A four-digit postcode names the area unambiguously,
+      // so if ANY typed postcode is on the list the area is covered, even beside an unlisted one
+      // ("2026 2000") or a state word ("2026 Victoria"); the echo is a whole-matched name where one
+      // exists, else the listed postcode, never the visitor's raw words. The piece carries no
+      // postcode-to-suburb table and answers only on what it can verify.
+      const listedCode = codesTyped.find((c) => postcodes.has(c));
+      if (listedCode) return name || listedCode;
+      // 4: a postcode was typed and none are on the list -> we do not cover that postcode. With no
+      // postcode at all the caller decides whether to refuse (an unlisted name) or ask for a
+      // postcode (a name it cannot confirm, or the whole city); decide() returns null either way.
       return null;
     };
 
@@ -315,8 +309,29 @@ const resultId = `${uid}-result`;
           }
         }
 
-        // The list's own casing when it matched, the visitor's words when it did not.
-        const shown = hit ?? input.value.trim();
+        // A NAME THE LIST DOES NOT CARRY IS NOT A NO, IT IS AN ASK-FOR-THE-POSTCODE. The piece
+        // holds no postcode-to-suburb table, so it cannot tell a covered suburb it happens not to
+        // list ("Bondi Beach", when the area is covered by postcode) from one it does not serve.
+        // Refusing the first states a falsehood and loses a real lead. So a NO answer is only ever
+        // given when a postcode was typed and is not on the list (which the piece CAN verify); a
+        // bare name it cannot match is sent to the certain path, its own postcode.
+        const codes = (input.value.match(/\b\d{4}\b/g) || []);
+        if (!hit && codes.length === 0) {
+          if (error) {
+            error.textContent = `We cannot confirm ${input.value.trim()} by name. Pop your postcode in and we will tell you for certain.`;
+            error.hidden = false;
+          }
+          input.setAttribute("aria-invalid", "true");
+          input.focus();
+          if (yes) yes.hidden = true;
+          if (no) no.hidden = true;
+          box.dataset.kitCoverageState = "refine";
+          return;
+        }
+
+        // The list's own casing when a name matched, the postcode when it did not; never the raw
+        // words. A NO echoes the postcode the visitor gave that the list does not carry.
+        const shown = hit ?? (codes.find((c) => true) || input.value.trim());
         const fill = (template: string) => template.replace(/\{place\}/g, shown);
 
         if (hit) {

@@ -265,9 +265,9 @@ export const kit: KitPiece[] = [
     where: "After proof of capability, often linking to full pages.",
     variations: [
       { id: "CaseFeatured", name: "Featured customer story",
-        when: "One story given the whole stage, on a dark flip where the page is light.",
+        when: "One story given the whole stage, on a dark flip where the page is light (anthropic's headline project); the maker-site's selected work pushed to a project page (lanserring).",
         needs: ["customer", "the situation", "what was done", "the outcome", "an image", "a link"],
-        states: ["hover", "focus", "long"], evidence: ["anthropic", "setia-law", "lanserring"] },
+        states: ["hover", "focus", "long"], evidence: ["anthropic", "lanserring"] },
       { id: "CaseResults", name: "Results summary",
         when: "Figures from the customer's own records, named and consenting, and only where the numbers genuinely flex.",
         needs: ["3-6 results each with a figure, a label and the customer"],

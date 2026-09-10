@@ -376,8 +376,12 @@ const { state, openTarget = "" } = Astro.props;
       const input = box.querySelector<HTMLInputElement>("[data-kit-coverage-input]");
       if (!form || !input) return false;
       const covered = (box.dataset.kitCovered || "").split("|").filter(Boolean);
-      // A named place reads better in the answer than a postcode, so prefer one when the list has any.
-      const place = kind === "success" ? covered.find((c) => /[a-z]/i.test(c)) || covered[0] || "" : "Nowhere in particular";
+      // SUCCESS types a covered place (a name reads better than a postcode). ERROR types a postcode
+      // the list does NOT carry: a NO answer is only ever given to a postcode the piece can verify
+      // is uncovered, because a suburb name it does not list is sent to the postcode path, not
+      // refused (a covered suburb it happens not to list must not be told "we do not work there").
+      const notCovered = ["3000", "4000", "6000", "7000", "0800", "9999"].find((c) => !covered.includes(c)) || "3000";
+      const place = kind === "success" ? covered.find((c) => /[a-z]/i.test(c)) || covered[0] || "" : notCovered;
       input.value = place;
       const before = rendered();
       form.requestSubmit();
