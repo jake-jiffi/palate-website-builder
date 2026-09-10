@@ -21,9 +21,12 @@
 export interface Props {
   heading?: string;
   lede?: string;
-  /** Postcodes and suburb names, in any case, in one flat list. A typed name must be the whole
-   *  place, so "Manly Vale" is never read as "Manly"; a typed postcode must be on the list when
-   *  the list carries postcodes at all, and a names-only list answers on the name alone. */
+  /** Postcodes and suburb names, in any case, in one flat list. A four-digit postcode is ground
+   *  truth: a typed postcode on the list answers yes whatever suburb was typed beside it, because
+   *  the piece carries no postcode-to-suburb table and answers on what it can verify. A typed NAME
+   *  must be the whole place, so "Manly Vale" is never read as "Manly"; a name with a postcode the
+   *  list does not carry is refused as a contradiction; a names-only list answers on the name alone
+   *  and ignores a typed postcode. */
   covered?: string[];
   /**
    * The state the list is in ("NSW"), so "Marrickville NSW" is accepted and "Manly, Queensland" is
@@ -238,11 +241,16 @@ const resultId = `${uid}-result`;
         if (own.includes(form)) continue;
         if (new RegExp(`(^|\\s)${form}$`).test(placeOnly)) return null;
       }
-      // 4: a listed postcode, alone or beside a form of a listed name.
+      // 4: A LISTED POSTCODE IS GROUND TRUTH. A four-digit postcode names the area unambiguously,
+      // so if it is on the list the area is covered whatever suburb was typed beside it, and the
+      // suburb name is only ever used to echo (step 1), never to refuse. The previous version
+      // demanded the extra words share a whole word with a listed NAME, which refused "Tamarama
+      // 2026" and "Dover Heights 2030" (their real, covered postcodes) and echoed the wrong suburb
+      // for "Bondi Junction 2026". The piece carries no postcode-to-suburb table and must not
+      // pretend to: it answers on the postcode it can verify, and echoes the postcode itself rather
+      // than the visitor's words, so the answer is never a falsehood about a named place.
       if (!codesTyped.length || codesTyped.some((c) => !postcodes.has(c))) return null;
-      if (!stripped) return codesTyped[0];
-      const tokens = stripped.split(" ");
-      return names.find((n) => normalise(n).split(" ").some((t) => tokens.includes(t))) || null;
+      return codesTyped[0];
     };
 
     document.addEventListener(
