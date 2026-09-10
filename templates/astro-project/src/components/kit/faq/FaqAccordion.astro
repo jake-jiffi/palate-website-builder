@@ -181,7 +181,6 @@ const structuredData = JSON.stringify({
   .kit-faq-a__q-text {
     /* Questions are long by nature here; they wrap and stay inside the measure. */
     max-width: var(--kit-measure);
-    overflow-wrap: break-word;
   }
 
   .kit-faq-a__chev {
@@ -199,7 +198,7 @@ const structuredData = JSON.stringify({
     padding-right: var(--kit-space-2xl);
     color: var(--kit-text-muted);
   }
-  .kit-faq-a__a p { max-width: var(--kit-measure); overflow-wrap: break-word; text-wrap: pretty; }
+  .kit-faq-a__a p { max-width: var(--kit-measure); text-wrap: pretty; }
   .kit-section--inverse .kit-faq-a__a {
     color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);
   }

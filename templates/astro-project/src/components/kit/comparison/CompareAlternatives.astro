@@ -141,7 +141,7 @@ const columnCount = others.length + 1;
     </div>
   ) : (
     <div class="kit-container kit-container--wide ca">
-      <section class="ca__scroll" aria-label={caption} tabindex="0" data-columns={columnCount}>
+      <section class="ca__scroll" aria-label={caption} tabindex="0" data-kit-scroll-region data-columns={columnCount}>
         <table class="ca__table" aria-describedby={noteId}>
           <caption class="ca__caption">{caption}</caption>
           <thead>
@@ -185,10 +185,12 @@ const columnCount = others.length + 1;
   </div>
 </section>
 
-<style>
-  /* A long unbroken token breaks rather than widening every column past its intended minimum. */
-  .ca { overflow-wrap: anywhere; }
+<script>
+  import { initKitScrollRegions } from "../scroll-region";
+  initKitScrollRegions();
+</script>
 
+<style>
   /* ONLY THE TABLE GETS THE EXTRA ROOM. The heading, the lede and the fairness note sit in the
      ordinary container, so on a composed page this section's heading lines up with every other
      section's heading rather than starting further out and reading as a different page. */

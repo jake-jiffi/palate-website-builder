@@ -134,8 +134,8 @@ const hasProof = Boolean(quote) || shownFigures.length > 0;
   }
 
   .kit-ctap__ask { display: grid; justify-items: start; gap: var(--kit-space-lg); }
-  .kit-ctap__headline { max-width: 20ch; overflow-wrap: break-word; }
-  .kit-ctap__body { text-wrap: pretty; overflow-wrap: break-word; }
+  .kit-ctap__headline { max-width: 20ch; }
+  .kit-ctap__body { text-wrap: pretty; }
 
   .kit-ctap__actions {
     display: flex;
@@ -173,7 +173,7 @@ const hasProof = Boolean(quote) || shownFigures.length > 0;
   .kit-section--inverse .kit-ctap__quote-text {
     border-left-color: color-mix(in srgb, var(--kit-text-inverse) 55%, transparent);
   }
-  .kit-ctap__quote-text p { overflow-wrap: break-word; text-wrap: pretty; }
+  .kit-ctap__quote-text p { text-wrap: pretty; }
   .kit-ctap__cite {
     display: flex;
     flex-wrap: wrap;
@@ -203,7 +203,6 @@ const hasProof = Boolean(quote) || shownFigures.length > 0;
     font-size: var(--kit-text-2xl);
     line-height: var(--kit-leading-tight);
     letter-spacing: var(--kit-tracking-tight);
-    overflow-wrap: break-word;
   }
   .kit-ctap__figure-label {
     display: grid;

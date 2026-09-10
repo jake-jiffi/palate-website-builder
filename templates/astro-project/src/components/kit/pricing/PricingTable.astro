@@ -136,6 +136,7 @@ const hasCtas = cols.some((p) => p.ctaLabel && p.ctaHref);
         id={scrollId}
         aria-label={caption}
         tabindex="0"
+        data-kit-scroll-region
       >
         <table class="pt__table">
           <caption class="pt__caption">{caption}</caption>
@@ -220,11 +221,12 @@ const hasCtas = cols.some((p) => p.ctaLabel && p.ctaHref);
   )}
 </section>
 
-<style>
-  /* Long unbroken tokens (a URL, a part number, a long compound) break rather than widening every
-     column past what the cell minimums intended. */
-  .pt { overflow-wrap: anywhere; }
+<script>
+  import { initKitScrollRegions } from "../scroll-region";
+  initKitScrollRegions();
+</script>
 
+<style>
   /* ONLY THE TABLE GETS THE EXTRA ROOM. The heading, the lede and the footnote sit in the ordinary
      container, so on a composed page this section's heading lines up with every other section's
      heading instead of starting 130px further out and reading as a different page. */

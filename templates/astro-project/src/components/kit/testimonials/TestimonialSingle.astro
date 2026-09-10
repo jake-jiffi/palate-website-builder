@@ -129,11 +129,7 @@ const hasQuote = Boolean(quote && quote.trim());
 </section>
 
 <style>
-  /* A long unbroken token (a URL, a product code, a long compound word) breaks rather than
-     pushing the layout sideways. `anywhere` rather than `break-word`, because only `anywhere`
-     also lowers the min-content width, which is what a grid column sizes from. */
   .ts {
-    overflow-wrap: anywhere;
     margin: 0;
     display: grid;
     gap: var(--kit-space-xl);

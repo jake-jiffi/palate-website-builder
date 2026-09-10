@@ -186,81 +186,96 @@ const playLabel = duration ? `Play ${speaker}, ${duration}` : `Play ${speaker}`;
 <script>
   /* Delegated and guarded, because Astro's ClientRouter swaps the document on navigation: a
      listener bound to the element would be thrown away, and a second copy of this script would
-     otherwise bind twice and play the video twice on one click. Plain DOM, no dependency. */
-  (function () {
-    var FLAG = "__kitTestimonialVideo";
-    if (window[FLAG]) return;
-    window[FLAG] = true;
+     otherwise bind twice and play the video twice on one click. Plain DOM, no dependency.
 
-    function frameOf(node) {
-      return node && node.closest ? node.closest("[data-kit-tv]") : null;
-    }
-    function partOf(frame, selector) {
-      var wrap = frame.parentElement;
-      return wrap ? wrap.querySelector(selector) : null;
-    }
-    function setStatus(frame, text) {
-      var status = partOf(frame, "[data-kit-tv-status]");
+     Typed against the real DOM interfaces rather than left implicit. That is not tidiness: the
+     handlers below run on events from the WHOLE document, so `event.target` is genuinely any
+     node on the page, and the narrowing that keeps this correct (an Element before `closest`,
+     an HTMLVideoElement before `play`) is the same narrowing the checker asks for. */
+  interface KitTestimonialVideoWindow extends Window {
+    __kitTestimonialVideoBound?: boolean;
+  }
+
+  (() => {
+    const scope = window as KitTestimonialVideoWindow;
+    if (scope.__kitTestimonialVideoBound) return;
+    scope.__kitTestimonialVideoBound = true;
+
+    /** The ratio box around one video. Reached from anything inside it, or from the video itself. */
+    const frameOf = (node: EventTarget | null): HTMLElement | null => {
+      if (!(node instanceof Element)) return null;
+      const frame = node.closest("[data-kit-tv]");
+      return frame instanceof HTMLElement ? frame : null;
+    };
+
+    /** The status line and the fallback link are SIBLINGS of the frame, not children of it. */
+    const partOf = (frame: HTMLElement, selector: string): HTMLElement | null => {
+      const wrap = frame.parentElement;
+      const found = wrap ? wrap.querySelector(selector) : null;
+      return found instanceof HTMLElement ? found : null;
+    };
+
+    const setStatus = (frame: HTMLElement, text: string): void => {
+      const status = partOf(frame, "[data-kit-tv-status]");
       if (status) status.textContent = text;
-    }
-    function setLoading(frame, on) {
-      var spinner = frame.querySelector("[data-kit-tv-loading]");
-      if (spinner) spinner.hidden = !on;
+    };
+
+    const setLoading = (frame: HTMLElement, on: boolean): void => {
+      const spinner = frame.querySelector("[data-kit-tv-loading]");
+      if (spinner instanceof HTMLElement) spinner.hidden = !on;
       frame.toggleAttribute("data-loading", on);
-    }
-    function fail(frame) {
+    };
+
+    const fail = (frame: HTMLElement): void => {
       setLoading(frame, false);
       frame.setAttribute("data-error", "");
-      var button = frame.querySelector("[data-kit-tv-play]");
-      if (button) button.hidden = false;
+      const button = frame.querySelector("[data-kit-tv-play]");
+      if (button instanceof HTMLElement) button.hidden = false;
       setStatus(frame, "The video could not be played. You can download the file instead.");
-      var fallback = partOf(frame, "[data-kit-tv-fallback]");
+      const fallback = partOf(frame, "[data-kit-tv-fallback]");
       if (fallback) fallback.hidden = false;
-    }
+    };
 
-    document.addEventListener("click", function (event) {
-      var target = event.target;
-      var button = target && target.closest ? target.closest("[data-kit-tv-play]") : null;
+    document.addEventListener("click", (event) => {
+      const origin = event.target instanceof Element ? event.target : null;
+      const button = origin ? origin.closest("[data-kit-tv-play]") : null;
       if (!button) return;
-      var frame = frameOf(button);
-      var video = frame ? frame.querySelector("[data-kit-tv-video]") : null;
-      if (!frame || !video) return;
+      const frame = frameOf(button);
+      const video = frame ? frame.querySelector("[data-kit-tv-video]") : null;
+      if (!frame || !(video instanceof HTMLVideoElement)) return;
 
       frame.removeAttribute("data-error");
-      var fallback = partOf(frame, "[data-kit-tv-fallback]");
+      const fallback = partOf(frame, "[data-kit-tv-fallback]");
       if (fallback) fallback.hidden = true;
 
       setLoading(frame, true);
       setStatus(frame, "Loading the video.");
       video.controls = true;
 
-      var started = video.play();
+      const started = video.play();
       if (started && typeof started.catch === "function") {
-        started.catch(function () { fail(frame); });
+        started.catch(() => { fail(frame); });
       }
     });
 
     /* Media events do not bubble, so both of these listen in the capture phase. */
-    document.addEventListener("playing", function (event) {
-      var frame = frameOf(event.target);
+    document.addEventListener("playing", (event) => {
+      const frame = frameOf(event.target);
       if (!frame) return;
       setLoading(frame, false);
       setStatus(frame, "");
-      var button = frame.querySelector("[data-kit-tv-play]");
-      if (button) button.hidden = true;
+      const button = frame.querySelector("[data-kit-tv-play]");
+      if (button instanceof HTMLElement) button.hidden = true;
     }, true);
 
-    document.addEventListener("error", function (event) {
-      var frame = frameOf(event.target);
+    document.addEventListener("error", (event) => {
+      const frame = frameOf(event.target);
       if (frame) fail(frame);
     }, true);
   })();
 </script>
 
 <style>
-  /* A long unbroken token breaks rather than pushing the layout sideways. */
-  .tv { overflow-wrap: anywhere; }
-
   .tv__figure { margin: 0; display: grid; gap: var(--kit-space-lg); max-width: var(--kit-page-max); }
   .tv__figure--after-heading { margin-block-start: var(--kit-space-xl); }
 

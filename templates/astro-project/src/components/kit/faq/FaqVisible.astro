@@ -138,10 +138,8 @@ const structuredData = JSON.stringify({
     border-top-color: color-mix(in srgb, var(--kit-text-inverse) 24%, transparent);
   }
 
-  /* Long questions and answers wrap rather than widening the page; an unbroken string (a URL
-     pasted into an answer) breaks instead of forcing a horizontal scrollbar. */
   .kit-faq__q,
-  .kit-faq__a { overflow-wrap: break-word; max-width: var(--kit-measure); }
+  .kit-faq__a { max-width: var(--kit-measure); }
   .kit-faq__a { color: var(--kit-text-muted); text-wrap: pretty; }
   .kit-section--inverse .kit-faq__a {
     color: color-mix(in srgb, var(--kit-text-inverse) 78%, transparent);

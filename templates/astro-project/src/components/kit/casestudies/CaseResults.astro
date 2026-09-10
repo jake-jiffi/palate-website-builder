@@ -100,9 +100,6 @@ const four = rows.length % 4 === 0 || rows.length > 6;
 </section>
 
 <style>
-  /* A long unbroken token breaks rather than pushing the layout sideways. */
-  .cr { overflow-wrap: anywhere; }
-
   .cr__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
 
   /* Intrinsic rather than breakpointed: three results and seven both lay out sensibly, and the

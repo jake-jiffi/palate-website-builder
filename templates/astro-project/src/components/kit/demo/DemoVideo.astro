@@ -299,7 +299,13 @@ const toneClass =
     text-wrap: pretty;
   }
 
-  .dv-caption__meta { flex: none; font-family: var(--kit-font-mono); }
+  /* IT MAY NOT SHRINK BELOW THE LINE, BUT IT MAY NOT WIDEN THE PAGE EITHER.
+     `flex: none` held the running time on one line, which is right for "2 min 10 sec" and wrong
+     for anything a caller actually passes: a flex item that cannot shrink is laid out at its
+     max-content width no matter what wrapping the text is allowed, so a long value took the
+     figure 667px past a 390px viewport even with the kit's own break rule applied to it. The row
+     already wraps, so `0 1 auto` puts a long value on its own line and then lets it break. */
+  .dv-caption__meta { flex: 0 1 auto; min-width: 0; font-family: var(--kit-font-mono); }
 
   /* LAST, AND MORE SPECIFIC THAN THE RULES ABOVE, ON PURPOSE. `.dv-overlay { display: flex }` is
      an author rule and the browser's own `[hidden] { display: none }` is not, so the overlay wins

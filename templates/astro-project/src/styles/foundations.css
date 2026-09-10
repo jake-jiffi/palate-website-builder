@@ -229,6 +229,35 @@
 .kit-stack { display: flex; flex-direction: column; gap: var(--kit-space-md); }
 .kit-grid { display: grid; gap: var(--kit-gutter); }
 
+/* ---- A LONG UNBROKEN TOKEN BREAKS, IT DOES NOT PUSH THE PAGE SIDEWAYS -------------------
+   Real copy carries them. A pasted URL in a paragraph, a German or Dutch compound, a part
+   number, an email address that lands in a heading. One 108-character word with no break
+   opportunity took three pieces 270px past a 390px viewport, and a sideways-scrolling page is
+   the most obvious thing a phone can do wrong.
+
+   It lives here rather than in the pieces because it was ALREADY in the pieces, fifteen times,
+   in two different spellings, and the three that needed it most did not have it. A rule each
+   component has to remember is a rule the forty-sixth component will not have.
+
+   `anywhere` rather than `break-word`, and the difference is the whole reason this is one line
+   and not two. Both break the word once the box is fixed, but only `anywhere` lowers the
+   element's MIN-CONTENT contribution, and min-content is what a grid track or a flex item is
+   sized by. Measured on the dropdown wordmark at 390px: with `break-word` the flex item still
+   laid out 923px wide and the page still scrolled; with `anywhere` it wraps inside the bar.
+   The cost is that an `auto` grid track can now squeeze narrower than its longest word when
+   space is genuinely tight, which is the correct trade against a page that scrolls sideways.
+
+   Applied to the two structural primitives as well as the type roles because the property
+   inherits: a piece's own class (a wordmark, a table cell, a stat figure) is covered without
+   naming it, which is what makes a piece written next year correct for free. The navigation
+   roots are named individually because they are the pieces that sit outside .kit-section, and
+   gate-kit-complete asserts that list stays equal to the set of roots the kit actually uses. */
+:where(.kit-section, .kit-container, .kit-nav, .kit-navdd, .kit-sheet,
+       .kit-display, .kit-h2, .kit-h3, .kit-lede, .kit-body, .kit-label, .kit-link,
+       .kit-btn, .kit-field, .kit-empty) {
+  overflow-wrap: anywhere;
+}
+
 /* Type roles. A piece uses these rather than styling headings itself. */
 .kit-display { font-family: var(--kit-font-display); font-weight: var(--kit-weight-display);
   font-size: var(--kit-text-4xl); line-height: var(--kit-leading-tight);
@@ -318,8 +347,16 @@
 
 /* Tailwind's preflight normally supplies this. A build that vendors its own preset has no
    preflight, and then every full-width control with padding runs past the right edge of a
-   phone: measured, not assumed. Scoped to the kit so it cannot fight a host stylesheet. */
-.kit-section *, .kit-section *::before, .kit-section *::after { box-sizing: border-box; }
+   phone: measured, not assumed. Scoped to the kit so it cannot fight a host stylesheet.
+
+   THE ROOT LIST IS THE SAME ONE THE WRAP RULE USES, and it was not. This read `.kit-section *`
+   alone, so the three navigation pieces, whose root is `.kit-navdd`, `.kit-sheet` or
+   `.kit-nav` and never a section, got no border-box at all. On a build with Tailwind that is
+   invisible, which is exactly why it survived: the preflight was doing the work and the kit's
+   own net had a hole under the one piece that sits at the top of every page. */
+:where(.kit-section, .kit-nav, .kit-navdd, .kit-sheet) *,
+:where(.kit-section, .kit-nav, .kit-navdd, .kit-sheet) *::before,
+:where(.kit-section, .kit-nav, .kit-navdd, .kit-sheet) *::after { box-sizing: border-box; }
 
 .kit-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

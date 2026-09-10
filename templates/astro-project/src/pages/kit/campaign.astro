@@ -18,8 +18,12 @@
  * measurements and the quotes are not real people.
  *
  * Images are left unset wherever a piece allows it, so its own ratio box stands in. DemoVideo and
- * TestimonialVideo require a poster path and have no unset state, so they point at
- * public/images/kit/placeholder.svg, an image with nothing in it.
+ * TestimonialVideo require a poster path and have no unset state, so both carry a drawn stand-in.
+ *
+ * BOTH VIDEO SOURCES BELOW ARE DELIBERATELY ABSENT, and this is the page where that is the point.
+ * The kit demo pages carry real files so the two video pieces can be seen playing; here, pressing
+ * play is how the error overlay and the fallback link get seen at all. Leaving one surface broken
+ * on purpose is the only way to exercise a failure state that a working file hides.
  */
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import NavSimple from "../../components/kit/navigation/NavSimple.astro";
@@ -156,7 +160,7 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
     heading="Watch an assessment from the front door"
     lede="One visit, unedited, from arriving to handing over the findings on the kitchen bench. Nothing sped up."
     src="/media/kit/northaven-assessment.mp4"
-    poster="/images/kit/placeholder.svg"
+    poster="/images/kit/texture-hero.svg"
     posterAlt=""
     caption="A three bedroom weatherboard in New Town, assessed end to end in a little under two hours."
     duration="6 min 20 sec"
@@ -237,7 +241,7 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
 
   <TestimonialVideo
     tone="inverse"
-    poster="/images/kit/placeholder.svg"
+    poster="/images/kit/poster-testimonial.svg"
     videoUrl="/media/kit/northaven-testimonial.mp4"
     pullQuote="We had been told for years that the house needed double glazing. The report put the windows fourth, behind three things that cost us a weekend and about two hundred dollars. It is a different house in winter now."
     name="Aroha Fenwick"

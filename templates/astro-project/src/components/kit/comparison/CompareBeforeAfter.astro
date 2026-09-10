@@ -133,9 +133,6 @@ const items = (pairs ?? []).filter((p) => p?.before && p?.after);
 </section>
 
 <style>
-  /* A long unbroken token breaks rather than pushing the layout sideways. */
-  .cb { overflow-wrap: anywhere; }
-
   .cb__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
 
   /* The header row exists only from tablet up, where the per-pair labels are hidden. It is

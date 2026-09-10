@@ -119,11 +119,6 @@ const wide = quotes.length > 4;
 </section>
 
 <style>
-  /* A long unbroken token (a URL, a product code, a long compound word) breaks rather than
-     pushing the layout sideways. `anywhere` rather than `break-word`, because only `anywhere`
-     also lowers the min-content width, which is what a grid column sizes from. */
-  .tg { overflow-wrap: anywhere; }
-
   .tg__head { display: grid; gap: var(--kit-space-sm); margin-block-end: var(--kit-space-2xl); }
 
   /* An intrinsic grid rather than breakpoints: the column count follows the measure a quote needs

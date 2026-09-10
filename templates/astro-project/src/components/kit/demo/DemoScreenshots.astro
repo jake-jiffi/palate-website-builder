@@ -126,8 +126,7 @@ const toneClass =
   </div>
 
   <dialog class="ds-dialog" data-ds-dialog aria-labelledby={captionId}>
-    <div class="ds-dialog__inner">
-      <img class="ds-dialog__img" data-ds-image alt="" decoding="async" />
+    <div class="ds-dialog__inner" data-ds-frame>
       <div class="ds-dialog__bar">
         <p class="ds-dialog__caption kit-body" id={captionId} data-ds-caption-target></p>
         <button type="button" class="kit-btn kit-btn--secondary ds-dialog__close" data-ds-close>
@@ -268,6 +267,26 @@ const toneClass =
 
     let opener: HTMLElement | null = null;
 
+    /* THE ENLARGED IMAGE IS CREATED ON FIRST OPEN, NOT SERVER-RENDERED.
+       There is nothing to point it at before a thumbnail is clicked, so the markup used to carry
+       an <img> with no src: invalid HTML (src is required), and a broken-image element sitting in
+       every page that mounts this piece. It is inside a closed dialog so nobody ever saw it,
+       which is exactly why it survived. Made here instead, once per dialog, so a page that never
+       opens the lightbox never carries one. */
+    const imageFor = (dialog: HTMLDialogElement): HTMLImageElement | null => {
+      const existing = dialog.querySelector("[data-ds-image]");
+      if (existing instanceof HTMLImageElement) return existing;
+      const frame = dialog.querySelector("[data-ds-frame]");
+      if (!(frame instanceof HTMLElement)) return null;
+      const image = document.createElement("img");
+      image.className = "ds-dialog__img";
+      image.decoding = "async";
+      image.alt = "";
+      image.setAttribute("data-ds-image", "");
+      frame.prepend(image);
+      return image;
+    };
+
     /* CAPTURE PHASE. <ClientRouter /> also listens for clicks on `document` to drive view
        transitions, and it registers first, so a bubble-phase handler here lost: clicking a
        thumbnail NAVIGATED to the raw image file instead of opening the lightbox. Taking the
@@ -300,8 +319,8 @@ const toneClass =
       const dialog = section ? section.querySelector("[data-ds-dialog]") : null;
       if (!(dialog instanceof HTMLDialogElement)) return;
 
-      const image = dialog.querySelector("[data-ds-image]");
-      if (image instanceof HTMLImageElement) {
+      const image = imageFor(dialog);
+      if (image) {
         image.src = trigger.dataset.dsSrc || trigger.href;
         image.alt = trigger.dataset.dsAlt || "";
       }

@@ -23,8 +23,10 @@
  *
  * Images are left unset on purpose. Every piece that takes one renders its own ratio box, which
  * is the honest state for a template: a real build fills them, and nothing here 404s in the
- * meantime. DemoScreenshots is the exception, because it requires a path and has no unset state,
- * so it points at public/images/kit/placeholder.svg, an image with nothing in it.
+ * meantime. DemoScreenshots is the exception, because it requires a path and has no unset state.
+ * Its three screens were drawn for this page rather than borrowed from the DemoScreenshots demo,
+ * which shows a different invented product: a trades scheduler pasted onto a page about livestock
+ * records would make the page internally false, which is worse than an empty frame.
  */
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import NavDropdown from "../../components/kit/navigation/NavDropdown.astro";
@@ -181,17 +183,23 @@ import FooterGrouped from "../../components/kit/footer/FooterGrouped.astro";
     emptyMessage="Screenshots are being prepared for the current release."
     screenshots={[
       {
-        src: "/images/kit/placeholder.svg",
+        src: "/images/kit/screen-paddocks.svg",
+        width: 1600,
+        height: 1000,
         alt: "A paddock map with fourteen paddocks shaded by days since last grazed, and two mobs shown by their current location.",
         caption: "The map, shaded by days since the paddock was last grazed",
       },
       {
-        src: "/images/kit/placeholder.svg",
+        src: "/images/kit/screen-mob.svg",
+        width: 1600,
+        height: 1000,
         alt: "One mob record open, showing 218 head, the last three moves and a drench with eleven days of withholding left to run.",
         caption: "One mob, with its moves and its withholding in the same view",
       },
       {
-        src: "/images/kit/placeholder.svg",
+        src: "/images/kit/screen-yards.svg",
+        width: 1600,
+        height: 1000,
         alt: "The phone entry screen in the yards, showing a treatment being recorded against a mob with no network connection.",
         caption: "Recording a treatment in the yards, with no signal",
       },
