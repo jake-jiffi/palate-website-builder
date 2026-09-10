@@ -343,9 +343,10 @@ if (!existsSync(groundingPath)) {
     const entries = (text) => Array.from(text.matchAll(/\{\s*text:\s*"([^"]+)",\s*slugs:\s*\[([^\]]*)\]/g)).map((m) => ({ text: m[1], slugs: slugsIn(m[2]) }));
     grounding[id] = { donors, rules: entries(list("rules")), avoid: entries(list("avoid")) };
   }
-  const rhythms = Array.from(gsrc.matchAll(/id:\s*"([a-z-]+)",\s*\n\s*name:[\s\S]*?slugs:\s*\[([^\]]*)\]/g)).map((m) => ({
+  const rhythms = Array.from(gsrc.matchAll(/id:\s*"([a-z-]+)",\s*\n\s*name:[\s\S]*?steps:\s*\[([\s\S]*?)\],\s*\n\s*slugs:\s*\[([^\]]*)\]/g)).map((m) => ({
     id: m[1],
-    slugs: (m[2].match(/"[a-z0-9-]+"/g) || []).map((x) => x.replace(/"/g, "")),
+    steps: (m[2].match(/"(?:[^"\\]|\\.)*"/g) || []).map((x) => x.slice(1, -1)),
+    slugs: (m[3].match(/"[a-z0-9-]+"/g) || []).map((x) => x.replace(/"/g, "")),
   }));
 
   if (!Object.keys(grounding).length) {
@@ -411,6 +412,19 @@ if (!existsSync(groundingPath)) {
   const donorAnywhere = new Set(Object.values(grounding).flatMap((g) => g.donors));
   for (const r of rhythms) {
     if (r.slugs.length < 1) findings.push(`rhythm "${r.id}" cites no reference, so its order is invented`);
+    /**
+     * A COMPOSITE RHYTHM CITES EVERY STEP. When a rhythm names several references, each step has
+     * to name, in parentheses, which of them states it, and only from that list: two rhythms were
+     * syntheses attributed to references whose notes describe a different order, and the gate
+     * could not see it because it checked membership, never meaning.
+     */
+    if (r.slugs.length > 1) {
+      for (const step of r.steps) {
+        const cites = Array.from(step.matchAll(/\(([a-z0-9-]+(?:,\s*[a-z0-9-]+)*)\)/g)).flatMap((m) => m[1].split(/,\s*/));
+        if (!cites.length) findings.push(`rhythm "${r.id}" step "${step.slice(0, 50)}" names no reference that states it`);
+        for (const c of cites) if (!r.slugs.includes(c)) findings.push(`rhythm "${r.id}" step "${step.slice(0, 50)}" cites "${c}", which is not in the rhythm's own list`);
+      }
+    }
     for (const slug of r.slugs) {
       if (!read.has(slug)) findings.push(`rhythm "${r.id}" cites "${slug}", which the survey never read`);
       else if (!donorAnywhere.has(slug)) findings.push(`rhythm "${r.id}" cites "${slug}", which is no piece's donor, so no recorded note stands behind the order it is cited for`);
@@ -432,10 +446,14 @@ if (!existsSync(groundingPath)) {
   const manifestPath = survey.source && typeof survey.source.manifest === "string" ? survey.source.manifest : "";
   if (manifestPath && existsSync(manifestPath)) {
     try {
-      const derived = deriveSurvey(JSON.parse(readFileSync(manifestPath, "utf8")));
+      // Same windows, same cut-off: reads made after the snapshot are reported, never absorbed.
+      const derived = deriveSurvey(JSON.parse(readFileSync(manifestPath, "utf8")), Array.isArray(survey.excluded) ? survey.excluded : [], typeof survey.until === "string" ? survey.until : "");
       const key = (refs) => refs.map((r) => `${r.slug}:${[...r.layers].sort().join("+")}`).sort().join("|");
       if (key(derived.references) !== key(survey.references)) {
-        findings.push(`${relative(dir, surveyPath)} no longer matches the survey derived from ${manifestPath}; re-run kit-survey-snapshot.mjs (a hand-edited list, or a survey that has moved on)`);
+        findings.push(`${relative(dir, surveyPath)} no longer matches the survey derived from ${manifestPath} within its own windows; re-run kit-survey-snapshot.mjs (a hand-edited list)`);
+      }
+      if (derived.unabsorbed_calls) {
+        console.log(`gate-kit-complete: survey provenance: ${derived.unabsorbed_calls} call(s) recorded after the snapshot's cut-off are not part of the survey; re-run the snapshot to absorb them deliberately.`);
       }
     } catch (error) {
       findings.push(`${relative(dir, surveyPath)} names a manifest that could not be re-derived: ${error && error.message}`);

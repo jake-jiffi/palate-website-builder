@@ -381,6 +381,7 @@ const hasDestinations = links.length > 0 || groupsWithLinks.length > 0;
       return id ? document.getElementById(id) : null;
     };
 
+    let inertedBySheet: Element[] = [];
     const setOpen = (trigger: HTMLElement, open: boolean): void => {
       const panel = panelFor(trigger);
       if (!panel) return;
@@ -388,10 +389,43 @@ const hasDestinations = links.length > 0 || groupsWithLinks.length > 0;
       if (alreadyOpen === open) return;
       trigger.setAttribute("aria-expanded", open ? "true" : "false");
       panel.toggleAttribute("data-open", open);
-      // The page behind an open sheet is inert, so a screen reader's virtual cursor and a Tab
-      // cannot reach it; the trap below stays as the belt to this brace. The sheet is not made a
-      // dialog (see the header comment), so this is what keeps the rest of the page out of reach.
-      document.querySelectorAll("main, footer").forEach((el) => el.toggleAttribute("inert", open));
+      /**
+       * THE PAGE BEHIND AN OPEN SHEET IS INERT, and "behind" is structural, not a landmark name.
+       * The first version inerted `main` and `footer`, which is right on a page whose navigation
+       * sits in the header and wrong the moment a sheet is rendered INSIDE main: the kit's own
+       * frame pages do exactly that, and every navigation open state became a menu nobody could
+       * press while the chrome said "press it again to close it". Now every sibling of every
+       * ancestor of the panel (and of its toggle, which Escape returns focus to) is inerted up to
+       * body, so the sheet and the path to it stay live wherever the page put them. The frame's
+       * hidden page heading is left alone: it is demo chrome, and an inert h1 disappears from the
+       * accessibility tree.
+       */
+      const protectedNodes = new Set<Element>();
+      for (const origin of [panel, trigger]) {
+        let node: Element | null = origin;
+        while (node && node !== document.body) {
+          protectedNodes.add(node);
+          node = node.parentElement;
+        }
+      }
+      if (open) {
+        const inerted: Element[] = [];
+        let node: Element | null = panel;
+        while (node && node.parentElement && node !== document.body) {
+          for (const sibling of Array.from(node.parentElement.children)) {
+            if (protectedNodes.has(sibling)) continue;
+            if (sibling.tagName === "SCRIPT" || sibling.tagName === "STYLE") continue;
+            if (sibling.hasAttribute("data-kit-frame-heading") || sibling.hasAttribute("inert")) continue;
+            sibling.setAttribute("inert", "");
+            inerted.push(sibling);
+          }
+          node = node.parentElement;
+        }
+        inertedBySheet = inerted;
+      } else {
+        inertedBySheet.forEach((el) => el.removeAttribute("inert"));
+        inertedBySheet = [];
+      }
       if (open) {
         restoreOverflow = document.body.style.overflow;
         document.body.style.overflow = "hidden";

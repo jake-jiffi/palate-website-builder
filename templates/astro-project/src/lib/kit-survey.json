@@ -1,12 +1,27 @@
 {
-  "generated_at": "2026-09-10T13:11:37.236Z",
+  "generated_at": "2026-09-10T13:52:05.857Z",
+  "until": "2026-09-10T13:52:05.847Z",
+  "excluded": [
+    {
+      "from": "2026-09-10T11:59:00.000Z",
+      "to": "2026-09-10T12:05:00.000Z",
+      "reason": "critic 8 verification reads (eleven detailed refs_get calls), not the builder's survey"
+    },
+    {
+      "from": "2026-09-10T13:22:00.000Z",
+      "to": "2026-09-10T13:23:00.000Z",
+      "reason": "critic 9 verification reads (six detailed refs_get calls), not the builder's survey"
+    }
+  ],
   "source": {
     "manifest": "/Users/jakeshelley/dev/palate/build-manifest.json",
     "plugin_version": "1.17.0-beta.12",
     "mcp_version": null,
     "library": null
   },
-  "calls": 27,
+  "calls": 18,
+  "excluded_calls": 17,
+  "unabsorbed_calls": 0,
   "searches": 11,
   "layers_read": [
     "component_prompts",
@@ -19,15 +34,16 @@
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 1
     },
     {
       "slug": "aesop",
       "layers": [
         "component_prompts",
-        "do_dont"
+        "do_dont",
+        "pages"
       ],
-      "reads": 2
+      "reads": 3
     },
     {
       "slug": "anthropic",
@@ -50,21 +66,21 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "barrys",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "basecamp",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "bellroy",
@@ -77,9 +93,10 @@
       "slug": "block-renovation",
       "layers": [
         "component_prompts",
-        "do_dont"
+        "do_dont",
+        "pages"
       ],
-      "reads": 2
+      "reads": 3
     },
     {
       "slug": "caliber",
@@ -102,14 +119,14 @@
         "do_dont",
         "pages"
       ],
-      "reads": 3
+      "reads": 4
     },
     {
       "slug": "dropbox",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "glossier",
@@ -130,7 +147,7 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "habito",
@@ -159,15 +176,16 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "linear",
       "layers": [
         "component_prompts",
-        "do_dont"
+        "do_dont",
+        "pages"
       ],
-      "reads": 2
+      "reads": 3
     },
     {
       "slug": "loom",
@@ -188,15 +206,16 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "mercury",
       "layers": [
         "component_prompts",
-        "do_dont"
+        "do_dont",
+        "pages"
       ],
-      "reads": 2
+      "reads": 3
     },
     {
       "slug": "myodetox",
@@ -210,7 +229,7 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "one-medical",
@@ -282,7 +301,7 @@
       "layers": [
         "pages"
       ],
-      "reads": 2
+      "reads": 1
     },
     {
       "slug": "unoit",
@@ -313,7 +332,7 @@
         "do_dont",
         "pages"
       ],
-      "reads": 2
+      "reads": 3
     },
     {
       "slug": "webflow",
@@ -323,5 +342,5 @@
       "reads": 2
     }
   ],
-  "seal": "82632f95839b03c1781b708dffe9e80657b95eb1f8aeb6d2d62c7c3a7148e643"
+  "seal": "315971d8fb4fe9addbbb292281648fb18f53e6fa3927332694c64499279f6e8d"
 }

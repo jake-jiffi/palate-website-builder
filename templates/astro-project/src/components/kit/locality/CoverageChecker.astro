@@ -21,8 +21,14 @@
 export interface Props {
   heading?: string;
   lede?: string;
-  /** Postcodes and suburb names, in any case. Matching is on the whole value, case-insensitive. */
+  /** Postcodes and suburb names, in any case. A typed postcode must be on the list; a typed name
+   *  must be the whole place, so "Manly Vale" is never read as "Manly". */
   covered?: string[];
+  /**
+   * The state the list is in ("NSW"), so "Marrickville NSW" is accepted and "Manly, Queensland" is
+   * refused. Without it, a typed state is treated as a place the list does not name.
+   */
+  state?: string;
   inputLabel?: string;
   placeholder?: string;
   submitLabel?: string;
@@ -56,6 +62,7 @@ const {
   errorHref = "",
   errorLabel = "Ask anyway",
   requiredMessage = "Type a postcode or a suburb first.",
+  state = "",
   tone = "subtle",
   id,
   class: className,
@@ -93,6 +100,7 @@ const resultId = `${uid}-result`;
         class="kit-cov__box"
         data-kit-coverage
         data-kit-covered={list.join("|")}
+        data-kit-state={state.trim()}
         data-kit-success-text={successText}
         data-kit-error-text={errorText}
       >
@@ -157,20 +165,43 @@ const resultId = `${uid}-result`;
 
     const normalise = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     /**
-     * A PLACE IS RARELY TYPED BARE. "Marrickville NSW", "2204, Marrickville" and "Marrickville
-     * 2204" are the common shapes and the first version refused all three, because it compared
-     * the whole trimmed value. A covered postcode counts as a token; a covered name counts as a
-     * whole-word run, with a state or a postcode beside it ignored.
+     * A PLACE IS RARELY TYPED BARE, AND A LOOSE MATCH IS THE EXPENSIVE ERROR. "Marrickville NSW",
+     * "2204, Marrickville" and "Marrickville 2204" have to be accepted; the first fix accepted them
+     * by treating any covered name found as a whole-word run inside the typed value as a hit, and
+     * so promised coverage to "Manly Vale 2093" (Manly), "Chatswood 2000" (the postcode ignored)
+     * and "Manly, Queensland" (every state stripped). Now the pieces of what was typed are read
+     * separately: a four-digit token is a postcode and must be on the list; whatever remains after
+     * the postcode and the business's own state are removed is the place, and must equal a covered
+     * name whole; any other state refuses. Nothing is answered yes on a partial match.
      */
-    const STATES = /\b(nsw|vic|qld|sa|wa|tas|nt|act|australia|new south wales|victoria|queensland|south australia|western australia|tasmania|northern territory)\b/g;
-    const escape = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const matches = (typed: string, entry: string): boolean => {
-      const n = normalise(entry);
-      if (!n) return false;
-      if (typed === n) return true;
-      const stripped = typed.replace(STATES, " ").replace(/\b\d{4}\b/g, " ").replace(/\s+/g, " ").trim();
-      if (stripped === n) return true;
-      return new RegExp(`(^|\\s)${escape(n).replace(/ /g, "\\s+")}(\\s|$)`).test(typed);
+    const STATE_FORMS: Record<string, string[]> = {
+      nsw: ["nsw", "new south wales"], vic: ["vic", "victoria"], qld: ["qld", "queensland"],
+      sa: ["sa", "south australia"], wa: ["wa", "western australia"], tas: ["tas", "tasmania"],
+      nt: ["nt", "northern territory"], act: ["act", "australian capital territory"],
+    };
+    const ALL_STATE_FORMS = Object.values(STATE_FORMS).flat().sort((a, b) => b.length - a.length);
+    const decide = (raw: string, covered: string[], ownState: string): string | null => {
+      let typed = normalise(raw);
+      if (!typed) return null;
+      const own = STATE_FORMS[normalise(ownState)] || [];
+      // Another state's name anywhere in the value is a refusal, whatever else was typed.
+      for (const form of ALL_STATE_FORMS) {
+        const re = new RegExp(`(^|\\s)${form}(\\s|$)`);
+        if (!re.test(typed)) continue;
+        if (!own.includes(form)) return null;
+        typed = typed.replace(re, " ").replace(/\s+/g, " ").trim();
+      }
+      typed = typed.replace(/\baustralia\b/g, " ").replace(/\s+/g, " ").trim();
+      const postcodes = new Set(covered.filter((c) => /^\d{4}$/.test(c.trim())));
+      const names = covered.filter((c) => !/^\d{4}$/.test(c.trim()));
+      const typedCodes = typed.match(/\b\d{4}\b/g) || [];
+      for (const code of typedCodes) if (!postcodes.has(code)) return null;
+      const place = typed.replace(/\b\d{4}\b/g, " ").replace(/\s+/g, " ").trim();
+      if (place) {
+        const name = names.find((n) => normalise(n) === place);
+        return name ?? null;
+      }
+      return typedCodes.length ? typedCodes[0] : null;
     };
 
     document.addEventListener(
@@ -209,9 +240,7 @@ const resultId = `${uid}-result`;
         input.removeAttribute("aria-invalid");
 
         const covered = (box.dataset.kitCovered || "").split("|").filter(Boolean);
-        // A name before a postcode, so "Marrickville 2204" answers "Marrickville" rather than "2204".
-        const ordered = [...covered.filter((c) => /[a-z]/i.test(c)), ...covered.filter((c) => !/[a-z]/i.test(c))];
-        const hit = ordered.find((entry) => matches(typed, entry));
+        const hit = decide(input.value, covered, box.dataset.kitState || "");
         // The list's own casing when it matched, the visitor's words when it did not.
         const shown = hit ?? input.value.trim();
         const fill = (template: string) => template.replace(/\{place\}/g, shown);

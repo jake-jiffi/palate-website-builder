@@ -455,6 +455,7 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
       "Lane Cove", "Chatswood", "Willoughby", "Artarmon", "Naremburn",
       "Manly", "Dee Why", "Brookvale", "Narrabeen", "Mona Vale",
     ],
+    state: "NSW",
     nextHref: "/quote",
     nextLabel: "Ask for a quote",
     errorHref: "/contact",

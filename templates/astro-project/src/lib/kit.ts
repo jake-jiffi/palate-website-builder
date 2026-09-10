@@ -113,7 +113,7 @@ export const kit: KitPiece[] = [
     where: "Directly under the navigation, once per page.",
     variations: [
       { id: "HeroTextImage", name: "Text with image",
-        when: "A service or a system: the promise stated plainly beside a real photograph, one action, and trust directly beneath.",
+        when: "A service or a system: the promise stated plainly beside or over a real photograph, one action, and trust directly beneath.",
         needs: ["headline", "1-2 sentence lede", "1-2 calls to action", "one image (16:9 or 4:3)"],
         states: ["hover", "focus", "long"], ownsPageHeading: true, evidence: ["block-renovation", "warby-parker", "parsley-health", "attentive", "re-bath"] },
       { id: "HeroCentredPreview", name: "Centred headline with product preview",
@@ -121,9 +121,9 @@ export const kit: KitPiece[] = [
         needs: ["headline", "short lede", "1-2 calls to action", "a product screenshot"],
         states: ["hover", "focus", "long"], ownsPageHeading: true, evidence: ["linear", "dropbox", "loom", "basecamp", "crisp"] },
       { id: "HeroServicePhoto", name: "Service hero with real photography",
-        when: "Photography that is the brand: the image full-bleed with the headline set inside it, and at most one action on it; mejuri and lanserring carry none, aesop exactly one outline pill.",
+        when: "Photography that is the brand: the image full-bleed with the headline set inside it, and at most one action on it (aesop's single outline pill; mejuri's carries none).",
         needs: ["headline", "lede", "call to action", "a full-bleed photograph at 1600px or wider"],
-        states: ["hover", "focus", "long"], ownsPageHeading: true, evidence: ["aesop", "lanserring", "mejuri"] },
+        states: ["hover", "focus", "long"], ownsPageHeading: true, evidence: ["aesop", "mejuri"] },
     ],
   },
   {
@@ -203,7 +203,7 @@ export const kit: KitPiece[] = [
       { id: "DemoEntryPoint", name: "Interactive demo entry point",
         when: "The product's own first step offered directly, one card per genuine path.",
         needs: ["headline", "what they will be able to do", "the entry link", "what it costs them"],
-        states: ["hover", "focus"], evidence: ["webflow", "linear"] },
+        states: ["hover", "focus"], evidence: ["webflow"] },
     ],
   },
   {
@@ -284,7 +284,7 @@ export const kit: KitPiece[] = [
     where: "Late, after the value is established.",
     variations: [
       { id: "PricingCards", name: "Pricing cards",
-        when: "Clearly priced tiers as product cards with one recommended; on a high-trust purchase the price is part of the reassurance.",
+        when: "Clearly priced tiers as product cards; on a high-trust purchase the price is part of the reassurance.",
         needs: ["2-4 plans each with a name, a price, a cadence, 3-8 inclusions and a call to action"],
         states: ["hover", "focus", "long", "empty"], evidence: ["parsley-health", "pilot-accounting", "mercury", "lava-dental"] },
       { id: "PricingTable", name: "Comparison table",
@@ -324,7 +324,7 @@ export const kit: KitPiece[] = [
       { id: "FaqAccordion", name: "Expandable questions",
         when: "Everything else, framed as removing the unknowns that cause anxiety; the same position on the page.",
         needs: ["4-20 question and answer pairs"],
-        states: ["open", "hover", "focus", "long", "empty"], evidence: ["parsley-health", "lava-dental", "habito"] },
+        states: ["open", "hover", "focus", "long", "empty"], evidence: ["parsley-health", "lava-dental"] },
     ],
   },
   {
@@ -333,9 +333,9 @@ export const kit: KitPiece[] = [
     where: "The end of the argument, and at most one banner between two sections of it.",
     variations: [
       { id: "CtaBanner", name: "Compact banner",
-        when: "One line, one action, mid-page, for the reader who is already convinced.",
+        when: "A one-line band that repeats the page's one action once the argument has landed: block's 'Renovate confidently' band repeats the start-now conversion before the footer, webflow echoes its enterprise CTA before the close.",
         needs: ["one line", "one call to action"],
-        states: ["hover", "focus", "long"], evidence: ["block-renovation", "crisp"] },
+        states: ["hover", "focus", "long"], evidence: ["block-renovation", "webflow"] },
       { id: "CtaClosing", name: "Full-width closing section",
         when: "The single closing action, echoing the hero's, after the evidence and never before it.",
         needs: ["headline", "a sentence", "1-2 calls to action"],

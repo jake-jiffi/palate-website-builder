@@ -335,7 +335,7 @@ export const kitGrounding: Record<string, KitPieceGrounding> = {
     rules: [
       { text: "Surface the price where the purchase is high-trust; cost mystery is a conversion leak and price is part of the reassurance.", slugs: ["parsley-health", "lava-dental", "posthog"] },
       { text: "Where the price cannot be listed, make the quote path the primary action and say what moves the number.", slugs: ["caliber", "block-renovation", "greenwise-organic-lawn-care", "re-bath"] },
-      { text: "Tiers read as product cards with one recommended.", slugs: ["pilot-accounting", "parsley-health", "mercury"] },
+      { text: "Tiers read as product cards.", slugs: ["pilot-accounting", "parsley-health", "mercury"] },
     ],
     avoid: [
       { text: "Hidden pricing on a high-trust purchase.", slugs: ["parsley-health"] },
@@ -482,106 +482,114 @@ export const kitGrounding: Record<string, KitPieceGrounding> = {
 };
 
 /**
- * THE RHYTHMS. How the pieces sit together, read from the library's own 'rhythm to borrow' notes
- * rather than invented. A composed page declares which one it follows, and the example pages are
- * built to these exactly. Steps name kit pieces where one exists.
+ * THE RHYTHMS. How the pieces sit together, read from the library's own "rhythm to borrow" notes
+ * rather than invented. A rhythm that names ONE reference is that reference's own order (anthropic's
+ * five acts). A rhythm that names several is a COMPOSITE of their notes, and every step names, in
+ * parentheses, the reference(s) whose note states it; the gate refuses a step with no citation and
+ * a citation outside the rhythm's own list, because two rhythms were once attributed to references
+ * whose notes describe a different order. A composed page declares which rhythm it follows, and
+ * the example pages are built to these exactly. Steps name kit pieces where one exists.
  */
-export interface KitRhythm {
-  id: string;
-  name: string;
-  /** Who it is for, in the library's terms. */
-  when: string;
-  steps: string[];
-  slugs: string[];
-  /** What the notes say goes wrong when it is copied without the substance. */
-  caution: string;
-}
-
 export const kitRhythms: KitRhythm[] = [
   {
     id: "relief-through-process",
     name: "Relief through process",
     when: "A high-anxiety service: renovation, dental, legal, anything the buyer dreads.",
     steps: [
-      "Hero with the 'made easy' promise and the next step in view (form card or finder)",
-      "Trust strip or band directly beneath",
-      "Locality: find your local team, or the areas served",
-      "Benefits or service range",
-      "Outcome gallery (before and after) or aspirational proof",
-      "The named, numbered process",
-      "FAQ framed as reassurance, and transparent price where possible",
-      "Closing call to action echoing the hero",
-      "Deep footer with locations",
+      "Hero with the 'made easy' promise and the next step in view: a pinned consultation form (re-bath) or an early lead capture (block-renovation)",
+      "Trust or proof directly beneath (re-bath, block-renovation)",
+      "Locality: find your local team (re-bath), contractors and costs near you (block-renovation)",
+      "The service range (re-bath) or benefit cards (block-renovation)",
+      "Aspirational outcome: design styles and a gallery (re-bath), real results (lava-dental)",
+      "The named, numbered process that de-mystifies the scary part (re-bath, lava-dental)",
+      "Transparent price, and an FAQ framed as reassurance (lava-dental)",
+      "A confident closing call to action (block-renovation); contacts and a map as the close (lava-dental)",
+      "Deep footer with the service tree and locations (re-bath)",
     ],
     slugs: ["re-bath", "block-renovation", "lava-dental"],
-    caution: "Do not lead with history or a wall of services; the anxious buyer needs the promise and a clear next step first. Never hide the process.",
+    caution: "Do not lead with history or a wall of services; the anxious buyer needs the promise and a clear next step first, and never hide the process (re-bath). Do not render the process as a clinical step-list; it works because it feels calm and contained (lava-dental).",
   },
   {
     id: "evidence-spine",
     name: "Evidence spine",
     when: "A high-trust, high-consideration purchase: medical membership, advisory, anything with credentials.",
     steps: [
-      "Hero with trust badges under the CTA",
-      "Differentiation statement",
-      "The care or delivery journey as steps",
-      "Named credentials",
-      "A measurable outcome",
-      "Clearly priced cards",
-      "Testimonials and press",
-      "Head-to-head comparison",
-      "FAQ",
-      "The single CTA repeated, only now",
+      "Hero with trust badges under the CTA (parsley-health)",
+      "Differentiation statement (parsley-health)",
+      "The care or delivery journey as steps (parsley-health), or as a timeline that makes it feel contained (lava-dental)",
+      "Named credentials and the real team (parsley-health, lava-dental)",
+      "A measurable outcome (parsley-health); real results (lava-dental)",
+      "Clearly priced cards (parsley-health); transparent price as reassurance (lava-dental)",
+      "Testimonials and press (parsley-health)",
+      "Head-to-head comparison (parsley-health)",
+      "FAQ framed as reassurance, before the final CTA (parsley-health, lava-dental)",
+      "The single CTA repeated, only now (parsley-health)",
     ],
     slugs: ["parsley-health", "lava-dental"],
-    caution: "Nineteen sections is right for a medical membership, not a simple service. Keep the trust spine, drop any section you cannot back with evidence, and never bury the price.",
+    caution: "Nineteen sections is right for a medical membership, not a simple service. Keep the trust spine, drop any section you cannot back with evidence, and never bury the price (parsley-health).",
   },
   {
     id: "repeated-shape",
     name: "Repeated identical shape",
     when: "A product with several capabilities to show.",
     steps: [
-      "Hero with real product proof",
-      "A run of capability sections with identical anatomy: heading, subhead, proof",
-      "One deeper, data-rich section",
-      "Social proof as a counted claim",
-      "One warm closing block, then the CTA",
-      "Dense organised footer",
+      "Hero with real product proof (linear, dropbox)",
+      "A slim social-proof band as the breath between hero and features: a counted claim (dropbox) or a logo strip (webflow)",
+      "A run of capability sections with identical anatomy: heading, subhead, proof panel (linear, dropbox)",
+      "One deeper, data-rich section (linear, dropbox)",
+      "One warm closing block, then the CTA (linear); an enterprise CTA echo before the close (webflow)",
+      "Dense organised footer (linear, dropbox, webflow)",
     ],
     slugs: ["linear", "dropbox", "webflow"],
-    caution: "Show the UI in every section only if the UI is the proof; otherwise keep the shape and swap the panel for the client's real proof. Six to eight sections unless there are genuinely more stories.",
+    caution: "Show the UI in every section only if the UI is the proof; otherwise keep the shape and swap the panel for the client's real proof (linear). Six to eight sections unless there are genuinely more stories (dropbox).",
   },
   {
     id: "short-page-deep-nav",
     name: "Short page, deep nav",
     when: "A big product whose breadth belongs in the navigation, not the page.",
-    steps: ["Hero", "Two alternating-row capability sections", "Proof", "A short direct CTA"],
+    steps: [
+      "Hero with the argument and the product shown at full fidelity (notion, basecamp)",
+      "Two alternating-row capability sections (notion)",
+      "Proof (notion)",
+      "A short, direct CTA (notion) or a closing tagline (basecamp)",
+      "The breadth carried by the navigation: a deep mega-nav (notion) or a bulleted prose inventory of every page inside the hero (basecamp)",
+    ],
     slugs: ["notion", "basecamp"],
-    caution: "Works only when there is a real suite behind the nav; a single product copying it gets an empty mega-nav.",
+    caution: "Works only when there is a real suite behind the nav; a single product copying it gets an empty mega-nav (notion). Do not pad the page with sections; the discipline is the brand (basecamp).",
   },
   {
     id: "buy-then-read",
     name: "Alternate buy and read",
     when: "Editorial commerce, a brand with things to say as well as sell.",
-    steps: ["One photograph that is the brand", "Product row", "Editorial essay", "Product row", "Lower-commitment entry (samples, gifting)", "Stories row", "Store finder and newsletter", "Mode-flipped footer"],
+    steps: [
+      "One photograph that is the brand (aesop, gymshark, mejuri)",
+      "A product row immediately (aesop, gymshark)",
+      "An editorial block to be read rather than scanned (aesop), or an inverted full-bleed image act (mejuri)",
+      "Another product row (aesop, gymshark)",
+      "A lower-commitment entry: gifting and samples (aesop)",
+      "A stories row (aesop)",
+      "Store finder and newsletter (aesop); stores and services (mejuri)",
+      "A mode-flipped footer (aesop) or a calm text-led one (mejuri)",
+    ],
     slugs: ["aesop", "gymshark", "mejuri"],
-    caution: "Only with photography good enough to carry full-bleed acts; the emptiness reads as half-built otherwise.",
+    caution: "Only with photography good enough to carry full-bleed acts (mejuri, gymshark); a smaller store keeps one hero, one or two product rows and one category band, and none of the urgency machinery (gymshark).",
   },
   {
     id: "values-and-locality",
     name: "Values and locality",
     when: "A recurring local service where the buyer cares who you are and whether you come to them.",
     steps: [
-      "Values-and-place headline over warm photography, with a quote CTA",
-      "Why-choose reassurance band",
-      "Services overview",
-      "Service-area cards with per-area contact",
-      "Coverage checker (input, then personalise)",
-      "A genuine story that makes the values credible",
-      "Quote form close",
-      "Footer with services and service areas",
+      "Values-and-place headline over warm photography, with a quote CTA (greenwise-organic-lawn-care)",
+      "Why-choose reassurance band (greenwise-organic-lawn-care); benefit cards (block-renovation)",
+      "Services overview (greenwise-organic-lawn-care); project types (block-renovation)",
+      "Service-area cards with per-area contact (greenwise-organic-lawn-care); the city grid (block-renovation)",
+      "Coverage checker: input, then personalise (greenwise-organic-lawn-care); see contractors and costs near you (block-renovation)",
+      "A genuine story that makes the values credible (greenwise-organic-lawn-care)",
+      "Quote form close (greenwise-organic-lawn-care); a confident closing CTA (block-renovation)",
+      "Footer with services and service areas (greenwise-organic-lawn-care)",
     ],
     slugs: ["greenwise-organic-lawn-care", "block-renovation"],
-    caution: "Lead with values and place, not price, and never claim values without a real story behind them.",
+    caution: "Lead with values and place, not price, and never claim values without a real story behind them (greenwise-organic-lawn-care).",
   },
   {
     id: "five-acts",
@@ -595,34 +603,47 @@ export const kitRhythms: KitRhythm[] = [
     id: "one-product-per-act",
     name: "One product per act",
     when: "An adviser or a multi-service firm.",
-    steps: ["Warm serif hero", "One service per act on alternating grounds", "A trust count", "A single dark-pill CTA"],
+    steps: [
+      "A warm hero (wealthsimple, avalon-accounting), or a problem question with an immediate capture (pilot-accounting)",
+      "One service per act on alternating grounds (wealthsimple, pilot-accounting)",
+      "A trust count (wealthsimple), a partner badge band (avalon-accounting), a logo strip in the first fold (pilot-accounting)",
+      "A single clear CTA: a dark pill (wealthsimple) or a contact form (avalon-accounting)",
+    ],
     slugs: ["wealthsimple", "pilot-accounting", "avalon-accounting"],
-    caution: "A local adviser compresses to a warm hero, two or three acts, a trust block and a contact CTA; the ticker and the comparison tables are bank-scale.",
+    caution: "A local adviser compresses to a warm hero, two or three acts, a trust block and a contact CTA; the ticker and the comparison tables are bank-scale (wealthsimple).",
   },
   {
     id: "paid-landing",
     name: "Paid landing",
     when: "A page carrying paid traffic to one offer, built the way attentive, mercury and pilot-accounting convert a cold click.",
     steps: [
-      "Hero with the promise and the next step in it: an inline capture (mercury, pilot) or one action over real-people photography (attentive)",
-      "Trust directly beneath: a logo strip where the names are known (attentive, pilot), otherwise a count plus a character claim (mercury)",
-      "The problem framed in the buyer's own terms (pilot)",
-      "Feature deep-dives, each text plus a proof panel, one per act on alternating grounds (attentive, pilot)",
+      "Hero with the promise and the next step in it: an inline capture (mercury, pilot-accounting), or one or two actions over real-people photography (attentive)",
+      "Trust directly beneath: a logo strip where the names are known (attentive, pilot-accounting), otherwise a count plus a character claim (mercury)",
+      "The problem framed in the buyer's own terms (pilot-accounting)",
+      "Feature deep-dives, each text plus a proof panel, one per act on alternating grounds (attentive, pilot-accounting)",
       "The process as a short step list where the buyer has to act (mercury)",
       "Real results as customer cards (attentive); a quantitative flex only where the numbers genuinely flex (mercury)",
-      "A brand-voice block that speaks to the buyer's identity, with no action on it (mercury)",
-      "Tiers as priced cards with one recommended (mercury, pilot)",
+      "A brand-voice positioning block that speaks to the buyer's identity rather than the product (mercury)",
+      "Tiers as product cards (pilot-accounting)",
       "A closing call to action that echoes the hero's own control (attentive, mercury)",
     ],
     slugs: ["attentive", "mercury", "pilot-accounting"],
-    caution: "Compress hard: pilot's is a forty-section enterprise page, and a local business keeps the problem hero, the proof, a few acts and one CTA (pilot's own anti-pattern note). Swap logos nobody recognises for accreditations that mean something to the audience (pilot). Every step above is stated in at least one cited note; the footer is the reference's own (mercury's inset footer with disclosures, attentive's and pilot's large multi-column ones).",
+    caution: "Compress hard: pilot's is a forty-section enterprise page, and a local business keeps the problem hero, the proof, a few acts and one CTA; swap logos nobody recognises for accreditations that mean something to the audience (pilot-accounting). Do not ship twenty sections without genuine product depth (attentive).",
   },
   {
     id: "booking-first",
     name: "Booking first",
-    when: "Class or appointment businesses: studios, clinics, salons, restaurants.",
-    steps: ["Hero that does discovery and booking together (finder or book pill)", "Trust strip", "Alternating photographic and human bands", "Services as browsable rows", "Locations", "Community proof", "A warm closing booking CTA"],
-    slugs: ["barrys", "warby-parker", "unoit", "dishoom"],
-    caution: "Three to five bands for a single practice; the ten-band density belongs to a national retailer.",
+    when: "Class or appointment businesses: studios, clinics, salons.",
+    steps: [
+      "A hero that does discovery and booking together: a studio finder in the hero (barrys), BOOK NOW on the concept hero (unoit), the persistent book link in the ribbon (warby-parker)",
+      "Trust directly beneath the hero (warby-parker)",
+      "Alternate cinematic photographic bands with one or two bright human acts (barrys)",
+      "Services as browsable expandable rows (unoit); product features alternating with service explainers (warby-parker)",
+      "Locations, each with its own page, before the closing booking CTA (unoit)",
+      "Community proof (barrys); a social-proof band (warby-parker)",
+      "A warm closing booking CTA (unoit, barrys)",
+    ],
+    slugs: ["barrys", "warby-parker", "unoit"],
+    caution: "Three to five bands for a single practice; the ten-band density belongs to a national retailer (warby-parker). The dark cinematic atmosphere only works with genuinely strong photography; lighten the palette rather than fake the mood (barrys).",
   },
 ];

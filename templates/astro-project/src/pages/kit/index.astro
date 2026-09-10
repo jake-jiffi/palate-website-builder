@@ -26,6 +26,8 @@ const cited = new Set<string>();
 for (const piece of kit) for (const v of piece.variations) for (const s of v.evidence) cited.add(s);
 const libraryPieces = kit.filter((p) => p.origin === "library").length;
 const rhythmFor = (slug: string) => kitRhythms.filter((r) => r.slugs.includes(slug)).map((r) => r.name);
+// A proof build stamps the commit it was built from, so a review can say which source it judged.
+const builtFrom = import.meta.env.PUBLIC_KIT_BUILD || "";
 const pages = [
   { href: "/kit/product", name: "A product home page", rhythm: "repeated-shape", business: "Paddockline, stock and paddock records" },
   { href: "/kit/service", name: "A service home page", rhythm: "values-and-locality", business: "Thistlewood Gardens, design and build" },
@@ -51,13 +53,15 @@ const pages = [
       </p>
       <p class="kit-body ix__note">
         <strong>Where the contracts come from.</strong> Every piece's <em>when</em>, every rule
-        about what sits beside what, was read from the Palate library and is cited below by the
+        about what sits beside what, was read from the <span translate="no">Palate</span> library and is cited below by the
         reference whose own section notes show it. The survey behind this page read{" "}
         {survey.references.length} references across the {survey.layers_read.join(", ")} layers,
-        in {survey.calls} recorded calls; {cited.size} of them stand as evidence for a variation,
+        in {survey.calls} recorded calls by the builder ({survey.excluded_calls ?? 0} verification reads by
+        the critic passes are recorded in the same manifest and declared as excluded); {cited.size} of them stand as evidence for a variation,
         and {libraryPieces === 1 ? "one piece exists" : `${libraryPieces} pieces exist`} only because
         the library showed a beat the original sixteen could not compose. A citation outside that
         survey fails the build, so nothing here is remembered or assumed.
+        {builtFrom && <span class="mono"> Built from commit {builtFrom}.</span>}
       </p>
       <p class="kit-body kit-muted ix__note">
         Every piece also takes <code>tone</code>, which puts it on the default, subtle or inverse
@@ -219,7 +223,7 @@ const pages = [
 </BaseLayout>
 <style>
   .ix__note { margin-top: var(--kit-space-md); max-width: var(--kit-measure); }
-  .ix__note code { font-family: var(--kit-font-mono); font-size: var(--kit-text-sm); }
+  .ix__note code, .ix__note .mono { font-family: var(--kit-font-mono); font-size: var(--kit-text-sm); }
 
   .ix__pages { list-style: none; margin: var(--kit-space-lg) 0 0; padding: 0; display: grid; gap: var(--kit-gutter); grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
   .ix__page { display: grid; gap: var(--kit-space-2xs); border-top: var(--kit-border-width) solid var(--kit-border-strong); padding-top: var(--kit-space-md); }

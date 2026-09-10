@@ -305,6 +305,18 @@ if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a rhy
 else ok "gate-kit-complete catches a rhythm citing a reference with no donor note anywhere"; fi
 cp "$TMP/ground.bak" "$GROUND"
 
+# A composite rhythm step with no citation is a synthesis.
+node -e '
+const fs = require("fs"); const p = process.argv[1]; let s = fs.readFileSync(p, "utf8");
+s = s.replace(/"Trust or proof directly beneath \(re-bath, block-renovation\)"/, "\"Trust or proof directly beneath\"");
+fs.writeFileSync(p, s);
+' "$GROUND"
+if grep -q '"Trust or proof directly beneath"' "$GROUND"; then
+  if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a composite rhythm step that names no reference"
+  else ok "gate-kit-complete catches a composite rhythm step with no citation"; fi
+else bad "the step mutation did not apply (the relief rhythm's second step has moved)"; fi
+cp "$TMP/ground.bak" "$GROUND"
+
 # The survey is the recorder's: a hand-added reference breaks the seal.
 back_up "$SURVEY" survey0
 cp "$SURVEY" "$TMP/survey.bak"

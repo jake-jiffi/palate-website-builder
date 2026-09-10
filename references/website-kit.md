@@ -146,12 +146,15 @@ them should say why.
 | Paid landing | A campaign page carrying paid traffic to one offer. The promise and the next step one click away, trust beneath, the problem shown, the offer in detail, real results and one customer, the position stated once with no action, comparison and price, a close that echoes the hero, a slim footer with no exploration. | attentive, mercury, pilot-accounting |
 | Booking first | Class or appointment businesses. A hero that does discovery and booking together, trust strip, alternating photographic and human bands, services as browsable rows, locations, community proof, a warm closing booking CTA. | barrys, warby-parker, unoit, dishoom |
 
-What the gate holds a citation to, after the eighth critic pass: an anti-pattern (`avoid`) is never
-evidence, so a variation may cite only a piece's donors and rules; a rhythm may cite one reference
-where that reference's own note states the whole order (anthropic's five acts), and every
-reference a rhythm names has to be some piece's donor; and the survey snapshot is sealed and
-re-derived from the recorder's manifest wherever that manifest is present, so a hand-added
-reference fails.
+What the gate holds a citation to, after the eighth and ninth critic passes: an anti-pattern
+(`avoid`) is never evidence, so a variation may cite only a piece's donors and rules; a rhythm may
+cite one reference where that reference's own note states the whole order (anthropic's five acts);
+a rhythm that names several references is a COMPOSITE and every step carries, in parentheses, the
+reference whose "rhythm to borrow" note states it, from the rhythm's own list only; every reference
+a rhythm names has to be some piece's donor; and the survey snapshot is sealed, declares any
+windows of reads that are not the builder's (a critic's verification reads are recorded by the same
+hook), records its cut-off, and is re-derived inside those windows wherever the recorder's manifest
+is present, so a hand-added reference fails and a later read is reported rather than absorbed.
 
 Three rules cut across every rhythm, each with the references whose notes state it:
 

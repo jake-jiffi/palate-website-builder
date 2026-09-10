@@ -34,8 +34,19 @@ const DEEP = new Set(["mcp__palate__refs_get", "mcp__palate__refs_get_tokens", "
  * manifest the snapshot names and refuse a snapshot that no longer matches: a survey nobody can
  * regenerate is a survey somebody could have typed.
  */
-export function deriveSurvey(manifest) {
-  const calls = Array.isArray(manifest.mcp_calls) ? manifest.mcp_calls : [];
+/**
+ * `excluded` is a list of declared windows `{ from, to, reason }`: the recorder writes down every
+ * session's reads in this workspace, including a critic's verification reads, and a survey that
+ * absorbed those would grow every time it was audited. The windows are recorded in the snapshot
+ * itself so the exclusion is visible and the gate re-derives with the same windows; calls newer
+ * than the snapshot are counted in `unabsorbed` rather than absorbed.
+ */
+export function deriveSurvey(manifest, excluded = [], until = "") {
+  const all = Array.isArray(manifest.mcp_calls) ? manifest.mcp_calls : [];
+  const inWindow = (ts) => excluded.some((w) => w.from <= ts && ts <= w.to);
+  const calls = all.filter((c) => !(c.ts && inWindow(c.ts)) && !(until && c.ts && c.ts > until));
+  const unabsorbed = until ? all.filter((c) => c.ts && c.ts > until).length : 0;
+  const excludedCount = all.filter((c) => c.ts && inWindow(c.ts)).length;
   const read = new Map();
   let searches = 0;
   for (const c of calls) {
@@ -54,6 +65,8 @@ export function deriveSurvey(manifest) {
     .sort((a, b) => a.slug.localeCompare(b.slug));
   return {
     calls: calls.length,
+    excluded_calls: excludedCount,
+    unabsorbed_calls: unabsorbed,
     searches,
     layers_read: [...new Set(references.flatMap((e) => e.layers))].sort(),
     references,
@@ -80,8 +93,14 @@ if (invokedDirectly(import.meta.url)) {
     console.error("kit-survey-snapshot: could not run: pass the path to a build-manifest.json written by the Palate recorder.");
     process.exit(2);
   }
+  // --exclude <from>/<to>/<reason>, repeatable. ISO timestamps; the reason is recorded verbatim.
+  const excluded = args.flatMap((a, i) => (a === "--exclude" && args[i + 1] ? [args[i + 1]] : [])).map((spec) => {
+    const [from, to, ...rest] = spec.split("/");
+    return { from, to, reason: rest.join("/") || "declared exclusion" };
+  });
+  const until = new Date().toISOString();
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const derived = deriveSurvey(manifest);
+  const derived = deriveSurvey(manifest, excluded, until);
   if (!derived.calls) {
     console.error("kit-survey-snapshot: could not run: the manifest records zero MCP calls, so there is no survey to freeze.");
     process.exit(2);
@@ -92,6 +111,8 @@ if (invokedDirectly(import.meta.url)) {
   }
   const snapshot = {
     generated_at: new Date().toISOString(),
+    until,
+    excluded,
     source: {
       manifest: resolve(manifestPath),
       plugin_version: manifest.plugin_version ?? null,
@@ -102,5 +123,5 @@ if (invokedDirectly(import.meta.url)) {
     seal: sealOf(derived.references),
   };
   writeFileSync(outPath, JSON.stringify(snapshot, null, 2) + "\n");
-  console.log(`kit-survey-snapshot: ${snapshot.references.length} reference(s) read through ${snapshot.layers_read.join(", ")} across ${snapshot.calls} recorded call(s); written to ${outPath}`);
+  console.log(`kit-survey-snapshot: ${snapshot.references.length} reference(s) read through ${snapshot.layers_read.join(", ")} across ${snapshot.calls} recorded call(s), ${snapshot.excluded_calls} excluded by declared window(s); written to ${outPath}`);
 }

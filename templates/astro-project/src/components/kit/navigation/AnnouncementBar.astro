@@ -56,8 +56,10 @@ const uid = id || `ann-${Math.random().toString(36).slice(2, 8)}`;
     aria-label="Notice"
   >
     <div class="kit-container kit-ann__row">
+      {/* The text clamps; the link is its own flex item beside it, never inside the clamp, so a
+          long notice on a phone truncates its words and keeps its action visible and pressable. */}
       <p class="kit-ann__text">
-        {notice}
+        <span class="kit-ann__notice">{notice}</span>
         {link && link.href && link.label && (
           <a class="kit-ann__link" href={link.href}>{link.label}</a>
         )}
@@ -155,8 +157,16 @@ const uid = id || `ann-${Math.random().toString(36).slice(2, 8)}`;
   .kit-ann__text {
     margin: 0;
     flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--kit-space-2xs) var(--kit-space-sm);
     line-height: var(--kit-leading-snug);
-    text-wrap: balance;
+  }
+  .kit-ann__notice {
+    flex: 1 1 14rem;
+    min-width: 0;
     /* A notice is one line; a client who writes eight gets two and an ellipsis, not a hero. */
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -164,7 +174,7 @@ const uid = id || `ann-${Math.random().toString(36).slice(2, 8)}`;
     overflow: hidden;
   }
   .kit-ann__link {
-    margin-inline-start: var(--kit-space-xs);
+    flex: none;
     color: inherit;
     font-weight: var(--kit-weight-medium);
     text-decoration: underline;
