@@ -1,0 +1,318 @@
+---
+/**
+ * EXAMPLE PAGE 2 OF 3: A SERVICE HOME PAGE, BUILT ONLY FROM KIT PIECES.
+ *
+ * Deliberately shares nothing with /kit/product except the rule that a page alternates its
+ * grounds. Different navigation, a different hero, a different trust piece, a different problem
+ * piece and a quote-based price rather than published plans. If the two pages picked the same
+ * fourteen components they would prove the kit composes one way, which is not the claim.
+ *
+ * The shape is the one a service business actually needs: photography first because the work is
+ * visual, then a rating people can check, then one customer's story rather than a feature list,
+ * then how the job runs, then a job like theirs, then what it costs and how to ask for a number.
+ * The page ends on a form rather than a link, because on a service site the form IS the page.
+ *
+ * THE BUSINESS IS INVENTED. Thistlewood Gardens is not a real firm and the quotes are not real
+ * people.
+ *
+ * NOTE ON THE HERO: HeroServicePhoto ships its own inverse ground, so the section under it takes
+ * the default ground rather than a subtle one. The rhythm is set by what the pieces actually
+ * render, not by counting them.
+ *
+ * Every content prop is passed. The only defaults left standing are the messages for states this
+ * page never enters (an empty list, JavaScript turned off) and the form endpoint, which belongs to
+ * the site rather than to the page. CaseFeatured is passed an empty image on purpose: its default
+ * is a hardcoded photograph path, so leaving it out puts a missing file on the page.
+ */
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import NavSimple from "../../components/kit/navigation/NavSimple.astro";
+import HeroServicePhoto from "../../components/kit/hero/HeroServicePhoto.astro";
+import TrustRatings from "../../components/kit/trust/TrustRatings.astro";
+import ProblemStory from "../../components/kit/problem/ProblemStory.astro";
+import BenefitAlternating from "../../components/kit/benefits/BenefitAlternating.astro";
+import ProcessThreeStep from "../../components/kit/process/ProcessThreeStep.astro";
+import CaseFeatured from "../../components/kit/casestudies/CaseFeatured.astro";
+import TestimonialSingle from "../../components/kit/testimonials/TestimonialSingle.astro";
+import PricingQuote from "../../components/kit/pricing/PricingQuote.astro";
+import FaqVisible from "../../components/kit/faq/FaqVisible.astro";
+import CtaWithProof from "../../components/kit/cta/CtaWithProof.astro";
+import FormEnquiry from "../../components/kit/forms/FormEnquiry.astro";
+import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
+---
+<BaseLayout
+  title="Thistlewood Gardens, garden design and build"
+  description="An example service home page composed entirely from website kit pieces."
+  noindex={true}
+>
+  <NavSimple
+    slot="header"
+    siteName="Thistlewood Gardens"
+    homeHref="/"
+    sticky={true}
+    links={[
+      { label: "Gardens", href: "/gardens" },
+      { label: "What we do", href: "/services" },
+      { label: "Journal", href: "/journal" },
+      { label: "About", href: "/about" },
+    ]}
+    cta={{ label: "Ask for a quote", href: "/contact" }}
+  />
+
+  <HeroServicePhoto
+    headline="Gardens that look like they have always been there"
+    lede="Design, build and ongoing care across the eastern suburbs. The same three people draw the garden, plant it and come back to look after it."
+    ctas={[
+      { label: "Ask for a quote", href: "/contact" },
+      { label: "See recent gardens", href: "/gardens", variant: "secondary" },
+    ]}
+    level={1}
+    id="thistlewood-hero"
+  />
+
+  <TrustRatings
+    tone="default"
+    id="thistlewood-ratings"
+    heading="What people have said somewhere we do not control"
+    emptyMessage="Ratings appear here once a platform has enough verified reviews to report."
+    ratings={[
+      {
+        value: 4.9,
+        outOf: 5,
+        count: 168,
+        sourceName: "Gardenlink Directory",
+        sourceUrl: "/reviews",
+        note: "Verified jobs only, collected since we joined in 2021.",
+      },
+      {
+        value: 4.7,
+        outOf: 5,
+        count: 54,
+        sourceName: "Eastern Suburbs Trades Register",
+        sourceUrl: "/reviews",
+        note: "Includes two jobs we got wrong, and what we did about them.",
+      },
+    ]}
+  />
+
+  <ProblemStory
+    tone="subtle"
+    id="thistlewood-story"
+    heading="A courtyard that had been done three times already"
+    paragraphs={[
+      "The house in Ambrose Street had a courtyard nine metres by five, walled on three sides, and it had been landscaped three times in eleven years. Each time it looked right for a season and then the same thing happened: everything on the western wall cooked by February, and the paving stayed wet until October.",
+      "Nobody had measured the light. The wall opposite is rendered white and two storeys high, so the courtyard takes reflected heat for most of the afternoon on top of what it gets directly. It is not a shady courtyard at all, whatever it feels like at nine in the morning.",
+      "We spent a fortnight logging the temperature at three points before drawing anything. The planting that went in was chosen for a west-facing wall in a heat trap, the paving was lifted and relaid to a fall, and a single tree went in to break the reflection rather than to fill the space.",
+      "Four summers on it has not been replanted. The owners water it by hand about once a fortnight in January and not at all the rest of the year.",
+    ]}
+    image={{
+      ratio: "photo",
+      alt: "",
+      caption: "The Ambrose Street courtyard at the end of its fourth summer, before the annual prune.",
+    }}
+    attribution={{ name: "Ambrose Street", role: "Courtyard design and build", org: "Paddington" }}
+  />
+
+  <BenefitAlternating
+    tone="default"
+    id="thistlewood-approach"
+    heading="Three habits that decide whether a garden survives its third summer"
+    lede="None of them are about plant choice, which is the part everybody worries about first."
+    items={[
+      {
+        title: "The site is measured before anything is drawn",
+        body: "Light, drainage and what the soil actually is, logged over a fortnight rather than guessed on a single visit. It is the slowest part of the job and it is the reason we rarely replace a plant under warranty.",
+        image: { ratio: "photo", alt: "" },
+        href: "/services/design",
+        linkLabel: "How a design is put together",
+      },
+      {
+        title: "The plants are ordered before the build starts",
+        body: "Advanced stock in the sizes a design depends on is not something you pick up on the day. Everything is reserved at the nursery and confirmed in writing before we offer you a start date, so a start date means something.",
+        image: { ratio: "photo", alt: "" },
+      },
+      {
+        title: "We come back for the first two years",
+        body: "Four visits a year, included in the build price, because the second summer is when a garden either establishes or quietly fails. If something is struggling we would rather find it ourselves than have you ring us about it.",
+        image: { ratio: "photo", alt: "" },
+        href: "/services/care",
+        linkLabel: "What the care visits cover",
+      },
+    ]}
+  />
+
+  <ProcessThreeStep
+    tone="subtle"
+    heading="How a garden gets built"
+    lede="Three stages, and the only one that asks much of you is the first."
+    steps={[
+      {
+        title: "We come and look",
+        body: "About an hour on site. We want to know how you use the space, what you have killed before, and how much time you honestly want to spend in it each month. No charge, whether or not you go ahead.",
+      },
+      {
+        title: "You get a drawing and a fixed price",
+        body: "A planting plan, a materials list and one figure that holds for 60 days. Anything optional is priced separately so you can take it out without redrawing the garden.",
+      },
+      {
+        title: "We build it and then look after it",
+        body: "One crew from start to finish, photographs every Friday, and four care visits a year for the first two years included in the price.",
+      },
+    ]}
+    footnote="Most gardens take six to ten weeks on site once the drawing is signed off. Anything needing council approval adds to that, and we will tell you before you commit rather than after."
+  />
+
+  <CaseFeatured
+    tone="default"
+    heading="A job like yours"
+    customer="Bellhaven House, Woollahra"
+    title="A sloping back garden that had been unusable since the retaining wall failed"
+    situation="Two thirds of the garden sat above a failed sandstone retaining wall that had been propped with timber for six years. The family had been quoted for a full engineered wall and a complete rebuild, which came with a three month site shutdown and a figure they were not going to spend."
+    action="We had the slope assessed properly and found that only the middle eleven metres were actually moving. That section was rebuilt in sandstone to match, and the rest was terraced with planting rather than structure, which does the same job on a slope that is not going anywhere."
+    outcome="The garden was back in use in five weeks for under half the original quote, and the terraces have not moved in three winters."
+    outcomeFigures={[
+      { value: "5 weeks", label: "On site, start to finish" },
+      { value: "11 m", label: "Of wall rebuilt, rather than 34" },
+    ]}
+    image={{ src: "/images/kit/placeholder.svg", alt: "" }}
+    situationLabel="What we found"
+    actionLabel="What we did"
+    outcomeLabel="Where it landed"
+    href="/gardens/bellhaven-house"
+    linkLabel="Read the full story"
+  />
+
+  <TestimonialSingle
+    tone="inverse"
+    quote="They talked us out of the expensive version, which is not a thing anyone had done for us before. The drawing came with a price that did not move, and the crew swept the lane every afternoon without being asked."
+    name="Miriam Yarwood"
+    role=""
+    company=""
+    location="Woollahra"
+    accessibleName="What our clients say"
+  />
+
+  <PricingQuote
+    tone="default"
+    heading="How we price a garden"
+    lede="Every garden is quoted on its own, because the same courtyard can be three weeks of work or ten depending on what is under the paving. Here is what moves the number and how to get one out of us quickly."
+    range="Most full garden builds land between $28,000 and $70,000."
+    rangeNote="That span covers about four fifths of the work we did last year. It is not a quote and we will not hold you to it."
+    driversHeading="What moves the price"
+    drivers={[
+      {
+        title: "What has to come out first",
+        detail: "Removing an old concrete slab or a failed wall can add a fortnight before a single plant goes in. It is the single largest variable on most jobs.",
+      },
+      {
+        title: "How much of the ground moves",
+        detail: "Keeping the levels you already have is the biggest saving available. Every terrace, step or new fall adds structure, drainage and time.",
+      },
+      {
+        title: "The size of the plants",
+        detail: "The same planting plan in advanced stock rather than tube stock can double the planting cost and take four years off how long it takes to look finished. That trade is entirely yours to make.",
+      },
+      {
+        title: "Access",
+        detail: "A garden we can reach with a bobcat and one we have to barrow through the house are different jobs, whatever the drawing says.",
+      },
+    ]}
+    sendHeading="What to send us"
+    send={[
+      "A few photographs of the space, including one from an upstairs window if you have one",
+      "Rough measurements, or the survey plan if the house has been through council recently",
+      "Anything you already know you want, even if it is only a photograph of somebody else's garden",
+      "When you would like to be using it, and any date it cannot run past",
+    ]}
+    turnaroundHeading="How long it takes"
+    turnaround="A site visit within a fortnight of you getting in touch, and a drawing with a fixed price within two weeks of that visit."
+    ctaLabel="Ask for a quote"
+    ctaHref="#enquiry"
+    secondaryLabel="(02) 5550 0364"
+    secondaryHref="tel:+61255500364"
+    note="We do not charge for a quote and we do not send anyone back to talk you into a bigger one."
+  />
+
+  <FaqVisible
+    tone="subtle"
+    id="thistlewood-faq"
+    title="Questions we get asked on the first visit"
+    intro="Short answers. If yours is not here, ask us on the day."
+    jsonLd={false}
+    items={[
+      {
+        question: "Do you charge for the first visit?",
+        answer: "No, and there is no charge for the drawing either if you decide not to go ahead. The drawing stays ours in that case.",
+      },
+      {
+        question: "Which areas do you work in?",
+        answer: "The eastern suburbs and the inner south, roughly within 15 km of Randwick. Further out we will say no rather than quote you a travel charge.",
+      },
+      {
+        question: "How far ahead are you booked?",
+        answer: "Usually six to eight weeks before we can start a build, and two to three for small repair work. Autumn and early spring are the busiest, so plan around them if you can.",
+      },
+      {
+        question: "What happens if a plant dies?",
+        answer: "We replace anything that fails in the first two years unless it was clearly not watered. That is what the four care visits a year are for: we would rather catch it than argue about it later.",
+      },
+      {
+        question: "Can we do it in stages?",
+        answer: "Often yes, and sometimes it is the right call. We will tell you which parts genuinely can wait and which ones become more expensive if they are done second.",
+      },
+    ]}
+  />
+
+  <CtaWithProof
+    tone="inverse"
+    headline="Get a drawing with a price on it"
+    body="Send through the space and we will come and look at it. The visit is free, the drawing comes with a fixed price, and that price holds for 60 days."
+    primary={{ label: "Ask for a quote", href: "#enquiry" }}
+    secondary={{ label: "See recent gardens", href: "/gardens" }}
+    figures={[
+      { value: "2 years", label: "Of care visits included", note: "Four a year, in the build price" },
+      { value: "60 days", label: "The quoted price holds", note: "Written on every drawing" },
+      { value: "15 km", label: "From Randwick", note: "Our whole working radius" },
+    ]}
+  />
+
+  <FormEnquiry
+    tone="default"
+    id="enquiry"
+    title="Tell us about the garden"
+    intro="Five questions, about two minutes. The more you can tell us now, the closer the first number will be."
+    services={[
+      "A new garden, start to finish",
+      "Replanting an existing garden",
+      "Paving, walls or levels",
+      "Ongoing care and pruning",
+      "Something else",
+    ]}
+    phoneRequired={true}
+    fileField={true}
+    submitLabel="Send enquiry"
+    successTitle="Enquiry received"
+    successBody="We have your details and we will ring within one business day to arrange a look at the space. If it is easier for us to come at a weekend, say so when we call and we will make that work."
+    errorHelp="If it will not send, ring us on (02) 5550 0364 and we will take the details over the phone."
+    privacyNote="Your details are used to quote this garden and nothing else. We do not pass them to nurseries or anyone else."
+  />
+
+  <FooterSimple
+    slot="footer"
+    tone="subtle"
+    businessName="Thistlewood Gardens"
+    tagline="Garden design, build and care across Sydney's eastern suburbs since 2013."
+    contact={{ label: "(02) 5550 0364", href: "tel:+61255500364" }}
+    contactSecondary={{ label: "hello@thistlewoodgardens.example", href: "mailto:hello@thistlewoodgardens.example" }}
+    links={[
+      { label: "Gardens", href: "/gardens" },
+      { label: "What we do", href: "/services" },
+      { label: "Journal", href: "/journal" },
+      { label: "About", href: "/about" },
+      { label: "Contact", href: "/contact" },
+    ]}
+    legalLinks={[
+      { label: "Privacy", href: "/privacy" },
+      { label: "Licence NSW 214 806C", href: "/about#licence" },
+    ]}
+  />
+</BaseLayout>

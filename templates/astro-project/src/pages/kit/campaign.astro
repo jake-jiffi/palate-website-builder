@@ -1,0 +1,371 @@
+---
+/**
+ * EXAMPLE PAGE 3 OF 3: A CAMPAIGN LANDING PAGE, BUILT ONLY FROM KIT PIECES.
+ *
+ * A campaign page is not a home page with fewer sections. It answers one question about one offer
+ * and it carries paid traffic, so the argument has to close on the page rather than sending anyone
+ * off to browse. That shows up in the choices here: the navigation keeps its links but loses the
+ * exploration, the campaign's own destination is marked current so a visitor can see where they
+ * are, the header does not stick because there is nowhere else to go, and the page ends on a
+ * booking rather than on a link.
+ *
+ * It is also the page that tests the kit hardest, because a considered purchase needs the long
+ * pieces: the detailed process, the results table, the plan comparison and a real booking form
+ * with availability rules. Those are the four that a page of short marketing blocks never
+ * exercises.
+ *
+ * THE BUSINESS IS INVENTED. Northaven Home Energy is not a real firm, the figures are not real
+ * measurements and the quotes are not real people.
+ *
+ * Images are left unset wherever a piece allows it, so its own ratio box stands in. DemoVideo and
+ * TestimonialVideo require a poster path and have no unset state, so they point at
+ * public/images/kit/placeholder.svg, an image with nothing in it.
+ */
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import NavSimple from "../../components/kit/navigation/NavSimple.astro";
+import HeroTextImage from "../../components/kit/hero/HeroTextImage.astro";
+import TrustResults from "../../components/kit/trust/TrustResults.astro";
+import ProblemBeforeAfter from "../../components/kit/problem/ProblemBeforeAfter.astro";
+import BenefitShowcase from "../../components/kit/benefits/BenefitShowcase.astro";
+import DemoVideo from "../../components/kit/demo/DemoVideo.astro";
+import ProcessDetailed from "../../components/kit/process/ProcessDetailed.astro";
+import CaseResults from "../../components/kit/casestudies/CaseResults.astro";
+import TestimonialVideo from "../../components/kit/testimonials/TestimonialVideo.astro";
+import CompareBeforeAfter from "../../components/kit/comparison/CompareBeforeAfter.astro";
+import PricingTable from "../../components/kit/pricing/PricingTable.astro";
+import FormBooking from "../../components/kit/forms/FormBooking.astro";
+import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
+---
+<BaseLayout
+  title="Book a home energy assessment before winter, Northaven Home Energy"
+  description="An example campaign landing page composed entirely from website kit pieces."
+  noindex={true}
+>
+  <NavSimple
+    slot="header"
+    siteName="Northaven Home Energy"
+    homeHref="/"
+    sticky={false}
+    current="/winter-assessment"
+    links={[
+      { label: "Winter assessment", href: "/winter-assessment" },
+      { label: "What we do", href: "/services" },
+      { label: "Contact", href: "/contact" },
+    ]}
+    cta={{ label: "Book an assessment", href: "#booking" }}
+  />
+
+  <HeroTextImage
+    headline="Find out where the heat goes before winter does"
+    lede="Around two hours at your place with a thermal camera and a blower door, and a written report that says what to fix first, what it costs and what it saves. Booking now across greater Hobart."
+    ctas={[
+      { label: "Book an assessment", href: "#booking" },
+      { label: "See a sample report", href: "/sample-report", variant: "secondary" },
+    ]}
+    ratio="photo"
+    imageFirst={false}
+    level={1}
+    id="northaven-hero"
+  />
+
+  <TrustResults
+    tone="subtle"
+    id="northaven-results"
+    heading="What the assessments have found so far"
+    emptyMessage="Results appear here once there are figures with a source behind them."
+    results={[
+      {
+        figure: "612",
+        label: "Homes assessed since 2022",
+        source: "Our own job records, to 31 August 2026",
+      },
+      {
+        figure: "71%",
+        label: "Had their largest heat loss somewhere the owner had not suspected",
+        source: "Our own job records, 612 assessments",
+      },
+      {
+        figure: "$0",
+        label: "Spent on the two most common fixes we recommend",
+        source: "Draught sealing and a thermostat schedule, on 340 of 612 reports",
+      },
+      {
+        figure: "9 days",
+        label: "Median wait from booking to the visit",
+        source: "Our own scheduling data, last 12 months",
+      },
+    ]}
+  />
+
+  <ProblemBeforeAfter
+    tone="default"
+    id="northaven-before-after"
+    heading="The same wall, ten minutes apart"
+    lede="Most of what a cold house costs is not the heater. It is the four or five gaps nobody can see, and every one of them is cheaper to fix than to heat around."
+    ratio="photo"
+    before={{
+      label: "What the room looks like",
+      caption: "A rendered wall in a 1974 brick veneer in Moonah, painted last year, no visible damage and no draught you could feel standing next to it.",
+      alt: "",
+    }}
+    after={{
+      label: "What the camera sees",
+      caption: "The same wall in thermal. The insulation has slumped in the top third of the cavity, which is why this room ran four degrees behind the rest of the house.",
+      alt: "",
+    }}
+    ctaLabel="See a sample report"
+    ctaHref="/sample-report"
+  />
+
+  <BenefitShowcase
+    tone="subtle"
+    id="northaven-report"
+    title="The report is the thing you are actually buying"
+    body="Anyone can tell you a house is cold. The report tells you which gap is costing the most, in what order to close them, what each one costs to fix and roughly what it saves. It runs to about fourteen pages and it is written so a builder can quote from it without ringing us."
+    points={[
+      {
+        label: "Every finding photographed twice",
+        detail: "The room as you see it, and the same frame in thermal, so nothing rests on you taking our word for it.",
+      },
+      {
+        label: "Ranked by cost, not by severity",
+        detail: "The biggest hole is not always the one worth fixing first, and the report says so plainly.",
+      },
+      {
+        label: "A price range against each fix",
+        detail: "Drawn from what our customers have actually paid in the last year, not from a national average.",
+      },
+      { label: "A blower door result you can compare against next time" },
+      {
+        label: "Rebates listed with the ones you do not qualify for removed",
+        detail: "Checked against your postcode and the age of the house before the report is sent.",
+      },
+    ]}
+    image={{
+      ratio: "wide",
+      alt: "",
+      caption: "Page four of a report from a weatherboard cottage in New Town, showing the ranked findings.",
+    }}
+    mediaSide="start"
+    ctaLabel="See a full sample report"
+    ctaHref="/sample-report"
+  />
+
+  <DemoVideo
+    tone="default"
+    heading="Watch an assessment from the front door"
+    lede="One visit, unedited, from arriving to handing over the findings on the kitchen bench. Nothing sped up."
+    src="/media/kit/northaven-assessment.mp4"
+    poster="/images/kit/placeholder.svg"
+    posterAlt=""
+    caption="A three bedroom weatherboard in New Town, assessed end to end in a little under two hours."
+    duration="6 min 20 sec"
+    playLabel="Play the walkthrough"
+    fallbackLabel="Open the video directly"
+    errorMessage="The video could not be loaded. You can open the file directly, or ring us and we will describe what happens on the day."
+    slowMessage="The video is taking longer than it should. You can open the file directly instead."
+  />
+
+  <ProcessDetailed
+    tone="subtle"
+    heading="What happens, from booking to the follow-up call"
+    lede="Five stages over about three weeks. Only the first two need anything from you."
+    durationPrefix="Typically"
+    stages={[
+      {
+        title: "You book a time",
+        body: "Pick a slot below. We confirm by email the same day, and we ring if the age of the house means we should bring the roof cavity gear as well.",
+        duration: "two minutes",
+      },
+      {
+        title: "A short call before the visit",
+        body: "Ten minutes on the phone about how the house is heated, which rooms you avoid in July and what your last three power bills looked like. It is the difference between a generic report and a useful one.",
+        duration: "10 minutes",
+      },
+      {
+        title: "The assessment",
+        body: "Two hours at your place. Thermal imaging room by room, a blower door test to measure the air changes, and a look in the roof and under the floor where access allows. You are welcome to follow us around and most people do.",
+        duration: "2 hours",
+      },
+      {
+        title: "The report",
+        body: "Written up and emailed within five working days, with the findings ranked and priced. If something we found needs urgent attention you will hear from us before the report arrives.",
+        duration: "five working days",
+      },
+      {
+        title: "A call to go through it",
+        body: "Half an hour on the phone once you have read it, to answer questions and help you decide what is worth doing this year. No charge, and we do not sell the work.",
+        duration: "30 minutes",
+      },
+    ]}
+    durationNote="Timings assume we can get access to the roof space and under the floor. If we cannot, the report says which findings are estimates rather than measurements."
+  />
+
+  <CaseResults
+    tone="default"
+    heading="What the reports have led to"
+    lede="Four assessments from the last two winters, with the figures the owners were willing to have published."
+    emptyMessage="Results appear here once figures have been confirmed with the households they belong to."
+    results={[
+      {
+        figure: "$0",
+        label: "Cost of the fix that closed the biggest single heat loss",
+        customer: "Brick veneer, Moonah",
+        note: "A blocked underfloor vent and an unsealed wall cavity access panel.",
+      },
+      {
+        figure: "3.4°C",
+        label: "Warmer in the coldest bedroom, measured the following July",
+        customer: "Weatherboard cottage, New Town",
+        note: "After draught sealing and replacing slumped ceiling batts in one bay.",
+      },
+      {
+        figure: "$1,180",
+        label: "Lower winter heating spend, year on year",
+        customer: "Two storey, Sandy Bay",
+        note: "Owner's own bills, adjusted for the tariff change in July.",
+      },
+      {
+        figure: "6.8",
+        label: "Air changes an hour, down from 14.1",
+        customer: "1920s bungalow, West Hobart",
+        note: "Blower door result before and after sealing, same test conditions.",
+      },
+    ]}
+    sourceNote="Figures come from the households named and from our own before and after measurements. Where a figure is an owner's own bill we have said so, because we did not take that reading ourselves."
+  />
+
+  <TestimonialVideo
+    tone="inverse"
+    poster="/images/kit/placeholder.svg"
+    videoUrl="/media/kit/northaven-testimonial.mp4"
+    pullQuote="We had been told for years that the house needed double glazing. The report put the windows fourth, behind three things that cost us a weekend and about two hundred dollars. It is a different house in winter now."
+    name="Aroha Fenwick"
+    role=""
+    company=""
+    location="West Hobart"
+    duration="1 min 45 sec"
+    accessibleName="A customer on video"
+  />
+
+  <CompareBeforeAfter
+    tone="default"
+    heading="Another winter as it is, or one after the assessment"
+    lede="No part of this needs a renovation. Three of the five changes below cost nothing at all."
+    beforeLabel="How this winter goes otherwise"
+    afterLabel="How it goes after the report"
+    pairs={[
+      {
+        before: "The heater runs longer each year and you assume it is getting tired.",
+        after: "You know whether it is the heater or the four gaps feeding it, because both were measured.",
+      },
+      {
+        before: "One room is written off for three months and everybody just avoids it.",
+        after: "You know why that room runs cold, and what the cheapest fix for it is.",
+      },
+      {
+        before: "You get quoted for double glazing because that is what people quote for.",
+        after: "You have a ranked list, and the windows sit where the measurements actually put them.",
+      },
+      {
+        before: "Rebates are researched at the point of paying for something, which is too late.",
+        after: "The report lists what you qualify for before you commit to any of it.",
+      },
+      {
+        before: "Next winter you have no way of knowing whether anything helped.",
+        after: "You have a blower door number to test against, so the next result means something.",
+      },
+    ]}
+    note="We do not do the remedial work and we do not take referral fees from anyone who does. The report is what we sell."
+  />
+
+  <PricingTable
+    tone="subtle"
+    heading="What the assessment costs"
+    caption="Three levels of assessment, compared attribute by attribute."
+    plans={[
+      {
+        name: "Standard",
+        price: "$390",
+        cadence: "one off",
+        ctaLabel: "Book",
+        ctaHref: "#booking",
+      },
+      {
+        name: "Full",
+        price: "$590",
+        cadence: "one off",
+        ctaLabel: "Book",
+        ctaHref: "#booking",
+        recommended: true,
+        recommendedLabel: "most houses need this one",
+      },
+      {
+        name: "Full plus retest",
+        price: "$790",
+        cadence: "one off",
+        ctaLabel: "Book",
+        ctaHref: "#booking",
+      },
+    ]}
+    attributes={[
+      { name: "Time on site", values: ["About 90 minutes", "About 2 hours", "Two visits"] },
+      { name: "Thermal imaging, room by room", values: [true, true, true] },
+      { name: "Blower door test", values: [false, true, true] },
+      { name: "Roof space inspection", values: ["If access is easy", "Yes, where access allows", "Yes, where access allows"] },
+      { name: "Underfloor inspection", values: [false, "Yes, where access allows", "Yes, where access allows"] },
+      { name: "Written report", values: ["Six pages", "About fourteen pages", "About fourteen pages, plus the retest"] },
+      { name: "Findings ranked and priced", values: [true, true, true] },
+      { name: "Rebate check for your postcode", values: [false, true, true] },
+      { name: "Follow-up call", values: ["15 minutes", "30 minutes", "30 minutes, plus a call after the retest"] },
+      { name: "Return visit to measure the result", values: [false, false, "Within 18 months"], note: "Booked when you are ready, not on a deadline." },
+    ]}
+    includedLabel="Included"
+    excludedLabel="Not included"
+    notStatedLabel="Not stated"
+    footnote="Prices include GST and travel within 30 km of Hobart GPO. Beyond that we quote the travel before you book, never after."
+    emptyMessage="The comparison is published once the assessment levels are confirmed."
+  />
+
+  <FormBooking
+    tone="default"
+    id="booking"
+    title="Book your assessment"
+    intro="Pick a day and a time that suit you. We confirm by email the same day, and we ring first if the age of your house means we should bring extra gear."
+    services={[
+      "Standard assessment",
+      "Full assessment",
+      "Full assessment plus retest",
+      "Not sure yet, help me choose",
+    ]}
+    times={["8:00 am", "10:00 am", "12:30 pm", "2:30 pm"]}
+    openDays={[1, 2, 3, 4, 5, 6]}
+    leadDays={3}
+    horizonDays={90}
+    submitLabel="Request this time"
+    successTitle="Time requested"
+    successBody="We have your request and we are holding that slot while we check it against the run sheet. You will get a confirmation email within one business day. It is not booked until that email lands, so please do not take a day off work on the strength of this page."
+    errorHelp="If it will not send, ring us on (03) 5550 0219 and we will write you into the diary over the phone."
+    emptyMessage="There is nothing bookable online at the moment, which usually means the next few weeks are full. Ring us and we will find you a time, or put your name down for a cancellation."
+    emptyAction={{ label: "Ring us instead", href: "tel:+61355500219" }}
+    privacyNote="Your details are used to arrange this assessment and to send the report. We do not pass them to installers or to anyone selling anything."
+  />
+
+  <FooterSimple
+    slot="footer"
+    tone="inverse"
+    businessName="Northaven Home Energy"
+    tagline="Independent home energy assessments across greater Hobart. We do not sell or install the remedial work."
+    contact={{ label: "(03) 5550 0219", href: "tel:+61355500219" }}
+    contactSecondary={{ label: "book@northavenenergy.example", href: "mailto:book@northavenenergy.example" }}
+    links={[
+      { label: "Winter assessment", href: "/winter-assessment" },
+      { label: "Sample report", href: "/sample-report" },
+      { label: "Contact", href: "/contact" },
+    ]}
+    legalLinks={[
+      { label: "Privacy", href: "/privacy" },
+      { label: "Assessor accreditation", href: "/about#accreditation" },
+    ]}
+  />
+</BaseLayout>

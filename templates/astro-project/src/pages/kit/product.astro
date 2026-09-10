@@ -1,0 +1,497 @@
+---
+/**
+ * EXAMPLE PAGE 1 OF 3: A PRODUCT HOME PAGE, BUILT ONLY FROM KIT PIECES.
+ *
+ * The per-variation pages under /kit/<piece>/<id> prove each component renders. They cannot prove
+ * the harder thing, which is that fifteen sections built independently sit together as one page:
+ * that the grounds alternate instead of running into each other, that the headings descend in
+ * order, that the argument moves from claim to proof to price to objection, and that every piece
+ * accepts real content rather than the defaults it was written around.
+ *
+ * So every content prop here is passed, because a page of defaults would only re-prove what the
+ * variation pages already prove. The only defaults left standing are the messages for states this
+ * page never enters (an empty list, JavaScript turned off).
+ *
+ * THE BUSINESS IS INVENTED. Paddockline is not a real product, the farms are not real farms and
+ * the quotes are not real people. A kit example that borrows a real company's words is a kit
+ * example nobody can ship.
+ *
+ * ORDER follows each piece's own `where` guidance in src/lib/kit.ts, which is the point: nav,
+ * hero, trust, problem, benefits, demonstration, use cases, proof, price, comparison, questions,
+ * close. GROUND alternates deliberately (default, subtle, default) with the two inverse bands as
+ * punctuation, because two adjacent sections on the same ground read as one long section.
+ *
+ * Images are left unset on purpose. Every piece that takes one renders its own ratio box, which
+ * is the honest state for a template: a real build fills them, and nothing here 404s in the
+ * meantime. DemoScreenshots is the exception, because it requires a path and has no unset state,
+ * so it points at public/images/kit/placeholder.svg, an image with nothing in it.
+ */
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import NavDropdown from "../../components/kit/navigation/NavDropdown.astro";
+import HeroCentredPreview from "../../components/kit/hero/HeroCentredPreview.astro";
+import TrustLogos from "../../components/kit/trust/TrustLogos.astro";
+import ProblemSideBySide from "../../components/kit/problem/ProblemSideBySide.astro";
+import BenefitCards from "../../components/kit/benefits/BenefitCards.astro";
+import DemoScreenshots from "../../components/kit/demo/DemoScreenshots.astro";
+import DemoEntryPoint from "../../components/kit/demo/DemoEntryPoint.astro";
+import UseCasesIndustry from "../../components/kit/usecases/UseCasesIndustry.astro";
+import CtaBanner from "../../components/kit/cta/CtaBanner.astro";
+import TestimonialGrid from "../../components/kit/testimonials/TestimonialGrid.astro";
+import PricingCards from "../../components/kit/pricing/PricingCards.astro";
+import CompareAlternatives from "../../components/kit/comparison/CompareAlternatives.astro";
+import FaqAccordion from "../../components/kit/faq/FaqAccordion.astro";
+import CtaClosing from "../../components/kit/cta/CtaClosing.astro";
+import FooterGrouped from "../../components/kit/footer/FooterGrouped.astro";
+---
+<BaseLayout
+  title="Paddockline, stock and paddock records for family farms"
+  description="An example product home page composed entirely from website kit pieces."
+  noindex={true}
+>
+  <NavDropdown
+    slot="header"
+    siteName="Paddockline"
+    homeHref="/"
+    sticky={true}
+    groups={[
+      {
+        label: "The app",
+        links: [
+          { label: "Paddock map", href: "/app/paddock-map" },
+          { label: "Mob records", href: "/app/mobs" },
+          { label: "Treatments and withholding", href: "/app/treatments" },
+          { label: "Rainfall and feed", href: "/app/rainfall" },
+          { label: "Sale day paperwork", href: "/app/sale-day" },
+        ],
+      },
+      {
+        label: "Who uses it",
+        links: [
+          { label: "Beef breeders", href: "/for/beef" },
+          { label: "Sheep and wool", href: "/for/sheep" },
+          { label: "Dairy replacements", href: "/for/dairy" },
+          { label: "Mixed farms", href: "/for/mixed" },
+        ],
+      },
+    ]}
+    links={[
+      { label: "Pricing", href: "/pricing" },
+      { label: "Help", href: "/help" },
+    ]}
+    cta={{ label: "Start free", href: "/signup" }}
+  />
+
+  <HeroCentredPreview
+    headline="Every mob, every paddock, on the one screen"
+    lede="Paddockline keeps stock movements, treatments and rainfall in a single record, so the withholding date is in front of you before the truck is booked."
+    ctas={[
+      { label: "Start free", href: "/signup" },
+      { label: "Open a sample farm", href: "/sample-farm", variant: "secondary" },
+    ]}
+    note="Free for one farm and one user. Nothing to install, and it works on a phone with one bar."
+    ratio="wide"
+    level={1}
+    id="paddockline-hero"
+  />
+
+  <TrustLogos
+    tone="subtle"
+    id="paddockline-trust"
+    intro="In use on family farms from the Riverina to the Central Tablelands"
+    logos={[
+      { name: "Wirrindi Pastoral" },
+      { name: "Blackwood Creek Grazing" },
+      { name: "Nine Mile Merino" },
+      { name: "Coolabah Downs" },
+      { name: "Tarra Tarra Livestock" },
+      { name: "Kembla Ridge Beef" },
+    ]}
+  />
+
+  <ProblemSideBySide
+    tone="default"
+    id="paddockline-problem"
+    heading="Where the record actually lives on most farms"
+    lede="None of this is carelessness. It is what happens when the person moving the stock is also the person keeping the book."
+    fromLabel="The notebook in the ute"
+    toLabel="With Paddockline"
+    pairs={[
+      {
+        from: "The treatment date is in a notebook that lives in the ute, and the ute is at the mechanic.",
+        to: "Every treatment sits on the mob record, with the withholding date worked out for you.",
+      },
+      {
+        from: "Nobody can say for certain which paddock the weaners were in three weeks ago.",
+        to: "Every move is stamped with a date, so the grazing history reads back paddock by paddock.",
+      },
+      {
+        from: "Rainfall is on the kitchen calendar and the feed budget is in a spreadsheet nobody opens.",
+        to: "Rain, feed on hand and stock numbers sit against the same paddock, on the same screen.",
+      },
+      {
+        from: "The vet asks what the mob was given last and the answer takes two phone calls.",
+        to: "Treatment history for any mob, on a phone, standing in the yards.",
+      },
+      {
+        from: "At sale time the declaration is filled in from memory and a shoebox.",
+        to: "The declaration is filled from the record, and each figure says where it came from.",
+      },
+    ]}
+  />
+
+  <BenefitCards
+    tone="subtle"
+    id="paddockline-benefits"
+    heading="What you get in the first week"
+    lede="Six things that take an afternoon to set up and stop the guessing after that."
+    items={[
+      {
+        title: "Paddocks drawn once",
+        body: "Trace the boundaries from satellite imagery, or import the shapes your agronomist already has. Areas are calculated for you, so a stocking rate is never a mental estimate.",
+      },
+      {
+        title: "Mobs that keep their own history",
+        body: "A mob carries its numbers, its class and everything done to it. Split it, join it or sell half of it and both records still add up.",
+      },
+      {
+        title: "Withholding worked out, not remembered",
+        body: "Enter the product and the date and Paddockline holds the export and meat withholding periods against that mob until they clear.",
+      },
+      {
+        title: "Rainfall against the paddock, not the house",
+        body: "Log each gauge separately. A year in, you can see which paddocks actually caught the storms and which ones only looked like they did.",
+      },
+      {
+        title: "Works with no signal",
+        body: "Entries made in the yards queue on the phone and upload when you get back within range. Nothing is lost and nothing has to be retyped.",
+      },
+      {
+        title: "Sale paperwork from the record",
+        body: "Movement and treatment history exports in the format the processor and the saleyard both accept, with the source of every figure shown.",
+      },
+    ]}
+  />
+
+  <DemoScreenshots
+    tone="default"
+    heading="The three screens you will live in"
+    lede="Taken from a working account on a 900 hectare mixed farm, so you can judge the fit before you sign up for anything."
+    enlargeLabel="View full size"
+    closeLabel="Close"
+    emptyMessage="Screenshots are being prepared for the current release."
+    screenshots={[
+      {
+        src: "/images/kit/placeholder.svg",
+        alt: "A paddock map with fourteen paddocks shaded by days since last grazed, and two mobs shown by their current location.",
+        caption: "The map, shaded by days since the paddock was last grazed",
+      },
+      {
+        src: "/images/kit/placeholder.svg",
+        alt: "One mob record open, showing 218 head, the last three moves and a drench with eleven days of withholding left to run.",
+        caption: "One mob, with its moves and its withholding in the same view",
+      },
+      {
+        src: "/images/kit/placeholder.svg",
+        alt: "The phone entry screen in the yards, showing a treatment being recorded against a mob with no network connection.",
+        caption: "Recording a treatment in the yards, with no signal",
+      },
+    ]}
+  />
+
+  <DemoEntryPoint
+    tone="subtle"
+    heading="Open a sample farm before you sign up for anything"
+    lede="The sample farm has a full year of movements, treatments and rainfall already in it. Change whatever you like: it resets on the hour."
+    listHeading="What you can do in there"
+    abilities={[
+      "Move a mob to a new paddock and watch the stocking rate change",
+      "Record a drench and see the withholding date appear on the mob",
+      "Split a mob at weaning and check both records still add up",
+      "Export the movement history the way a processor asks for it",
+    ]}
+    href="/sample-farm"
+    ctaLabel="Open the sample farm"
+    cost="No account, no card, nothing to install. About ten minutes."
+  />
+
+  <UseCasesIndustry
+    tone="default"
+    heading="How it is used, enterprise by enterprise"
+    lede="The same records with a different vocabulary. Find the row that sounds like your year."
+    indexLabel="Enterprise, and how the record is kept"
+    emptyMessage="These pages are being written."
+    industries={[
+      {
+        name: "Beef breeding",
+        application: "Joining groups, calving records and a weaning split that leaves both mobs traceable.",
+        href: "/for/beef",
+      },
+      {
+        name: "Sheep and wool",
+        application: "Mob classes through the year, crutching and shearing dates, and withholding that clears before the truck.",
+        href: "/for/sheep",
+      },
+      {
+        name: "Dairy replacements",
+        application: "Heifer groups off the milking platform, kept traceable through agistment and back again.",
+        href: "/for/dairy",
+      },
+      {
+        name: "Mixed cropping and grazing",
+        application: "Stubble grazing recorded against the crop record, so the paddock has one history rather than two.",
+        href: "/for/mixed",
+      },
+      {
+        name: "Agistment",
+        application: "Someone else's stock on your country, with a record both parties can read at the end of the term.",
+        href: "/for/agistment",
+      },
+      {
+        name: "Stud stock",
+        application: "Individual animals alongside mobs, with treatments and movements kept at the same standard as the herd.",
+        href: "/for/stud",
+      },
+    ]}
+  />
+
+  <CtaBanner
+    tone="inverse"
+    text="Marking or shearing coming up? Set the mobs up now and the record starts itself."
+    action={{ label: "Start free", href: "/signup" }}
+    note="One farm and one user is free, for good."
+  />
+
+  <TestimonialGrid
+    tone="default"
+    heading="What farmers said after a season on it"
+    lede="Collected at the end of the first twelve months, and published with permission."
+    emptyMessage="Quotes appear here once they have been collected and approved for use."
+    items={[
+      {
+        quote: "I put the paddocks in on a wet Sunday and have not written in the ute book since. The part I did not expect was being able to answer the agronomist without ringing my son.",
+        name: "Bernadette Hollis",
+        company: "Wirrindi Pastoral",
+        location: "Temora",
+      },
+      {
+        quote: "We sold a line of steers eight days early because the withholding had actually cleared and I could prove it. That paid for the year.",
+        name: "Callan Prideaux",
+        company: "Coolabah Downs",
+      },
+      {
+        quote: "It works in the yards with no bars, which is the only test I cared about. Two of the others we tried did not.",
+        name: "Josie Mardling",
+        location: "Boorowa",
+      },
+      {
+        quote: "Splitting a mob at weaning used to be the moment the record fell apart. Now both halves keep their history and I stopped dreading it.",
+        name: "Tomas Neale",
+        company: "Nine Mile Merino",
+      },
+      {
+        quote: "Three gauges, three very different years. I would have sworn the back paddock got the same rain as the front. It does not, and now I can see by how much.",
+        name: "Ruth Okonjo",
+        company: "Blackwood Creek Grazing",
+      },
+    ]}
+  />
+
+  <PricingCards
+    tone="subtle"
+    heading="What it costs"
+    lede="Priced per farm, not per head, so a good season does not cost you more."
+    emptyMessage="Pricing is published here once the plans are confirmed."
+    footnote="Prices are in Australian dollars and exclude GST. Cancel any month and your records export in full."
+    plans={[
+      {
+        name: "One farm",
+        price: "$0",
+        cadence: "per month",
+        description: "One property, one person keeping the record.",
+        features: [
+          "Unlimited paddocks and mobs",
+          "Treatments with withholding tracking",
+          "Rainfall from up to three gauges",
+          "Offline entry on one phone",
+        ],
+        ctaLabel: "Start free",
+        ctaHref: "/signup?plan=one-farm",
+        note: "Free for good rather than for a fortnight. We would rather you kept the record than started one and stopped.",
+      },
+      {
+        name: "Whole operation",
+        price: "$49",
+        cadence: "per month",
+        description: "Several blocks, and more than one person entering things.",
+        features: [
+          "Everything in One farm",
+          "Up to eight properties under one record",
+          "Five people, each with their own login",
+          "Agistment records, in and out",
+          "Sale and movement exports",
+          "Phone support during the working week",
+        ],
+        ctaLabel: "Start free",
+        ctaHref: "/signup?plan=whole-operation",
+        recommended: true,
+        recommendedLabel: "most farms land here",
+        note: "Billed monthly. There is no minimum term and no setup fee.",
+      },
+      {
+        name: "Adviser",
+        price: "$120",
+        cadence: "per month",
+        description: "For agronomists and consultants working across client farms.",
+        features: [
+          "Everything in Whole operation",
+          "Up to twenty client farms",
+          "Read-only access your clients control",
+          "Comparison across farms you advise",
+          "Bulk export for reporting",
+        ],
+        ctaLabel: "Talk to us first",
+        ctaHref: "/contact?plan=adviser",
+        note: "Each client keeps ownership of their own records and can withdraw access at any time.",
+      },
+    ]}
+  />
+
+  <CompareAlternatives
+    tone="default"
+    heading="Paddockline, a spreadsheet, or the book in the ute"
+    caption="The three ways this record is usually kept, compared on the things that change the outcome."
+    yourName="Paddockline"
+    alternatives={["A spreadsheet", "The book in the ute"]}
+    emptyMessage="This comparison is published once the claims in it have been checked."
+    attributes={[
+      {
+        name: "Works in the yards",
+        yours: "Yes, offline. Entries upload when you are back in range.",
+        others: ["Only if the file is on the phone and nobody else has it open.", "Yes, as long as it is in the ute."],
+      },
+      {
+        name: "Withholding periods",
+        yours: "Calculated from the product and the date, and held against the mob until they clear.",
+        others: ["Whatever formula you wrote, if it was ever updated.", "Remembered, or looked up on the drum."],
+      },
+      {
+        name: "Splitting a mob",
+        yours: "Both halves keep the full history automatically.",
+        others: ["A new row, and the history stays with the old one.", "A new page, and the history stays two pages back."],
+      },
+      {
+        name: "More than one person entering",
+        yours: "Five logins on the middle plan, each change attributed.",
+        others: ["One file, and whoever saved last wins.", "One book, and whoever has it wins."],
+        source: "Attribution is shown on every record, so a disagreement is a lookup rather than an argument.",
+      },
+      {
+        name: "Getting the data out",
+        yours: "Full export any time, in the format processors and saleyards accept.",
+        others: ["It is already a file, which is genuinely the strongest thing about it.", "Photograph the pages."],
+      },
+      {
+        name: "What it costs",
+        yours: "Free for one farm and one user, then $49 a month for the whole operation.",
+        others: ["Nothing beyond the software you already pay for.", "The price of a notebook."],
+      },
+    ]}
+    fairnessNote="We wrote this, so read it as our account rather than an independent one. It was last checked in March against the two spreadsheet templates our customers most often arrive with. A spreadsheet is genuinely better if you want to model something we have not thought of, and the book in the ute has never once failed because of a flat battery."
+  />
+
+  <FaqAccordion
+    tone="subtle"
+    id="paddockline-faq"
+    title="Questions we get asked before people sign up"
+    intro="If yours is not here, send it through and we will answer it and add it."
+    single={false}
+    jsonLd={false}
+    emptyMessage="We are still collecting the questions people ask most."
+    items={[
+      {
+        question: "What happens to my records if I stop paying?",
+        open: true,
+        answer: "They stay yours. The account drops to read-only rather than closing, and a full export is available at any point, including after you have cancelled. We do not hold records hostage to a subscription.",
+      },
+      {
+        question: "Does it work without mobile coverage?",
+        answer: "Yes. Everything you enter in the yards is stored on the phone and uploads the next time you are in range. You will see a small count of items waiting, so you always know whether something is still sitting there.",
+      },
+      {
+        question: "Can I bring in what is already in a spreadsheet?",
+        answer: "Usually. Send us the file before you sign up and we will tell you honestly what will come across cleanly, what needs a decision from you, and what is better left behind.",
+      },
+      {
+        question: "Who else can see my numbers?",
+        answer: "Only the people you give a login to. We do not sell, share or aggregate farm data, and there is no arrangement with any processor, bank or agency to hand it over.",
+      },
+      {
+        question: "Is my agronomist going to need a subscription?",
+        answer: "No. You can give an adviser read-only access from your own account at no cost, and withdraw it whenever you like. The paid adviser plan exists for consultants who want their own view across several client farms.",
+      },
+      {
+        question: "What if I have two properties an hour apart?",
+        answer: "That is the middle plan. Both properties sit under one record with their own paddocks and gauges, and stock moving between them is recorded as a movement rather than a sale.",
+      },
+    ]}
+  />
+
+  <CtaClosing
+    tone="inverse"
+    align="start"
+    headline="Start with one paddock and one mob"
+    body="It takes about twenty minutes to draw your paddocks and enter what is currently where. After that the record keeps itself, and you can decide in a fortnight whether it earned its keep."
+    primary={{ label: "Start free", href: "/signup" }}
+    secondary={{ label: "Open the sample farm", href: "/sample-farm" }}
+    note="No card, and no call from anyone in sales."
+  />
+
+  <FooterGrouped
+    slot="footer"
+    tone="default"
+    businessName="Paddockline"
+    description="Stock and paddock records for family farms. Built in Wagga Wagga, used across south eastern Australia."
+    contacts={[
+      { label: "(02) 5550 0781", href: "tel:+61255500781" },
+      { label: "hello@paddockline.example", href: "mailto:hello@paddockline.example" },
+    ]}
+    groups={[
+      {
+        heading: "The app",
+        links: [
+          { label: "Paddock map", href: "/app/paddock-map" },
+          { label: "Mob records", href: "/app/mobs" },
+          { label: "Treatments", href: "/app/treatments" },
+          { label: "Rainfall and feed", href: "/app/rainfall" },
+        ],
+      },
+      {
+        heading: "Getting started",
+        links: [
+          { label: "Pricing", href: "/pricing" },
+          { label: "Sample farm", href: "/sample-farm" },
+          { label: "Bringing your data across", href: "/help/importing" },
+          { label: "Help centre", href: "/help" },
+        ],
+      },
+      {
+        heading: "Company",
+        links: [
+          { label: "About", href: "/about" },
+          { label: "How we handle farm data", href: "/data" },
+          { label: "Status", href: "/status" },
+          { label: "Contact", href: "/contact" },
+        ],
+      },
+    ]}
+    companyDetails={[
+      { term: "ABN", value: "42 615 908 337" },
+      { term: "Data held", value: "Sydney, Australia" },
+      { term: "Support hours", value: "Monday to Friday, 7am to 6pm AEST" },
+    ]}
+    legalLinks={[
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
+    ]}
+  />
+</BaseLayout>

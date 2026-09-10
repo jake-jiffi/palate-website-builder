@@ -1,0 +1,82 @@
+---
+/**
+ * THE KIT INDEX. Every piece, every variation, in one place.
+ *
+ * It exists so the kit can be JUDGED rather than asserted: a reviewer, a client or a gate can
+ * open one URL and see all forty-five variations, at any width, in every state. A section library
+ * nobody can look at is a section library nobody trusts.
+ *
+ * noindex, and gate-shipready removes /_kit at handover exactly as it removes the Explore
+ * surfaces. It is a working document, not a page of the client's site.
+ */
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { kit, KIT_VARIATION_COUNT } from "../../lib/kit";
+---
+<BaseLayout
+  title="Website kit"
+  description="Every section piece and variation in the kit."
+  noindex={true}
+>
+  <section class="kit-section kit-section--tight">
+    <div class="kit-container">
+      <h1 class="kit-display">The website kit</h1>
+      <p class="kit-lede" style="margin-top: var(--kit-space-md)">
+        {kit.length} pieces, {KIT_VARIATION_COUNT} variations. Each one is built to work at any
+        width, with real content of any length, in every state it can be in. Open a piece to see
+        its variations and what each is for.
+      </p>
+      <p class="kit-body kit-muted ix__note">
+        Every piece also takes <code>tone</code>, which puts it on the default, subtle or inverse
+        ground, and <code>id</code>, which anchors the section so a link can point at it. Neither
+        is listed under a piece's content, because neither is content. Nothing here defaults a
+        person, a firm or a file: leave a name or a photograph out and the piece shows an empty
+        state rather than an invented one, which is why a few of these pages carry a message
+        where a list would be.
+      </p>
+    </div>
+  </section>
+
+  <section class="kit-section">
+    <div class="kit-container">
+      <ol class="ix">
+        {kit.map((piece) => (
+          <li class="ix__piece">
+            <div class="ix__head">
+              <h2 class="kit-h3" id={`p-${piece.id}`}>{piece.name}</h2>
+              <p class="kit-body kit-muted ix__meta">{piece.when}</p>
+              <p class="kit-body kit-muted ix__meta"><strong>Where:</strong> {piece.where}</p>
+            </div>
+            <ul class="ix__vars">
+              {piece.variations.map((v) => (
+                <li class="ix__var">
+                  <a class="kit-link ix__name" href={`/kit/${piece.id}/${v.id}`}>{v.name}</a>
+                  <p class="kit-body kit-muted ix__when">{v.when}</p>
+                  <p class="ix__needs"><span class="kit-label">Needs</span> {v.needs.join(", ")}</p>
+                  <ul class="ix__states">
+                    {v.states.map((s) => <li class="ix__state">{s}</li>)}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+</BaseLayout>
+<style>
+  .ix__note { margin-top: var(--kit-space-md); max-width: var(--kit-measure); }
+  .ix__note code { font-family: var(--kit-font-mono); font-size: var(--kit-text-sm); }
+
+  .ix { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--kit-space-3xl); }
+  .ix__piece { display: grid; gap: var(--kit-space-lg); }
+  .ix__head { display: grid; gap: var(--kit-space-2xs); border-top: var(--kit-border-width) solid var(--kit-border-strong); padding-top: var(--kit-space-md); }
+  .ix__meta { font-size: var(--kit-text-sm); }
+  .ix__vars { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--kit-gutter); grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); }
+  .ix__var { display: grid; gap: var(--kit-space-xs); align-content: start; border: var(--kit-border-width) solid var(--kit-border); padding: var(--kit-space-lg); border-radius: var(--kit-radius); }
+  .ix__name { font-weight: var(--kit-weight-strong); font-size: var(--kit-text-base); }
+  .ix__when { font-size: var(--kit-text-sm); }
+  .ix__needs { font-size: var(--kit-text-sm); color: var(--kit-text-muted); margin: 0; }
+  .ix__states { list-style: none; margin: var(--kit-space-2xs) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--kit-space-2xs); }
+  .ix__state { font-family: var(--kit-font-mono); font-size: var(--kit-text-xs); color: var(--kit-text-muted); border: var(--kit-border-width) solid var(--kit-border); padding: 0 var(--kit-space-2xs); border-radius: var(--kit-radius-sm); }
+</style>
