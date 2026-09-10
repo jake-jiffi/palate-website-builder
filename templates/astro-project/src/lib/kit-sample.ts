@@ -30,9 +30,28 @@
  * numbers and quotes are all fictional, and the phone numbers and email addresses use the
  * reserved example ranges so nothing here can reach a real person.
  *
- * Image paths point at public/images/kit/placeholder.svg, a real file with nothing drawn in it,
- * so a demo page shows a correctly sized empty frame rather than a broken-image marker. The two
- * video files are the exception and are deliberately absent; the note beside them says why.
+ * ============================== THE ASSETS ==============================
+ *
+ * The media under public/images/kit/ and public/media/kit/ is drawn and encoded for this file.
+ * Nothing in it is a real company's logo, a real person, or a photograph anybody has rights to
+ * argue about: the screens are an invented product, the wordmarks are invented firms, and the
+ * pieces that want a photograph get a plainly synthetic stand-in rather than a fake picture of a
+ * real place. That is a deliberate line. A slot meant to carry a photograph of the client's own
+ * work cannot honestly be filled with an imitation of one, so it is filled with something nobody
+ * could mistake for one.
+ *
+ * They are real files rather than an empty frame because a component demonstrating its shape is
+ * not the same as a component demonstrating its content. A gallery of grey boxes cannot show
+ * whether the gallery is any good, and a video piece stuck on its poster cannot show that it
+ * plays. All of it loads through <img> or <video>, which makes each asset an isolated document,
+ * so the `var(--kit-*)` written inside them does NOT pick up the brand and the neutral literal
+ * beside it is what renders. That is why they are neutral: an asset cannot read the accent it
+ * would otherwise clash with.
+ *
+ * NOTHING HERE IS STRIPPED AUTOMATICALLY. gate-shipready retires the Explore surfaces and it has
+ * no rule for these, so the whole sample footprint is this file, src/pages/kit/, and those two
+ * asset directories. Delete all four at handover, or accept that they ship as dead weight on the
+ * client's domain.
  */
 
 /** Keyed by the variation id in src/lib/kit.ts. Spread into the component by the demo page. */
@@ -45,15 +64,65 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
     siteName: "Marram Supply",
   },
 
+  // ---------------------------------------------------------------- hero
+  HeroTextImage: {
+    /* Only the picture. The component's own headline and lede are about a joinery workshop and
+       are correct as they stand, so restating them here would be one more copy to keep in step. */
+    image: {
+      src: "/images/kit/texture-case-2.svg",
+      alt: "",
+      width: 1200,
+      height: 900,
+    },
+    ratio: "photo",
+  },
+  HeroCentredPreview: {
+    /*
+     * The copy is restated here, which the other hero entries do not do, because this one has to
+     * agree with the picture. The shipped screenshots are an invented scheduling tool called
+     * Roundhouse, and the component's own default copy names a different invented product, so a
+     * demo page taking the screenshot and leaving the words would read as two products in one
+     * hero. The words follow the asset rather than the asset being redrawn per hero.
+     */
+    headline: "Quote it in the van, before you have driven home",
+    lede: "Roundhouse keeps the costs, the hours and the materials on the one screen, so the total is in front of you while the quote is still editable.",
+    note: "Free for one van. Nothing to pay until you add a second.",
+    preview: {
+      src: "/images/kit/screen-quote.svg",
+      alt: "A quote on a phone, four line items deep, with the running total pinned under them.",
+      width: 1600,
+      height: 1000,
+    },
+    ratio: "wide",
+  },
+  HeroServicePhoto: {
+    /* A full-bleed slot with white type and a scrim over it, so the stand-in is drawn dark to
+       begin with rather than relying on the scrim to rescue a light one. */
+    photo: {
+      src: "/images/kit/texture-hero.svg",
+      alt: "",
+      width: 1920,
+      height: 1080,
+    },
+  },
+
   // ---------------------------------------------------------------- trust
   TrustLogos: {
+    /*
+     * Six invented wordmarks, one ink, each at its own natural proportion. TrustLogos constrains
+     * a mark by HEIGHT, so the widths differ on purpose: a strip where every file is the same
+     * shape proves nothing about how the piece handles a tall monogram beside a long wordmark.
+     *
+     * The mark drops the trade word ("Northbeam", not "Northbeam Civil") the way a real one does.
+     * `name` carries the full name because it is the alt text and the no-file fallback.
+     */
     logos: [
-      { name: "Northbeam Civil" },
-      { name: "Harbourline Freight" },
-      { name: "Tallow Creek Dairy" },
-      { name: "Verrall & Sons Joinery" },
-      { name: "Kestrel Signage" },
-      { name: "Merrivale Health" },
+      { name: "Northbeam Civil", src: "/images/kit/logo-northbeam.svg", width: 372, height: 80 },
+      { name: "Harbourline Freight", src: "/images/kit/logo-harbourline.svg", width: 352, height: 80 },
+      { name: "Tallow Creek Dairy", src: "/images/kit/logo-tallowcreek.svg", width: 372, height: 80 },
+      { name: "Verrall & Sons Joinery", src: "/images/kit/logo-verrall.svg", width: 392, height: 80 },
+      { name: "Kestrel Signage", src: "/images/kit/logo-kestrel.svg", width: 322, height: 80 },
+      { name: "Merrivale Health", src: "/images/kit/logo-merrivale.svg", width: 332, height: 80 },
     ],
   },
   TrustRatings: {
@@ -77,9 +146,32 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
   },
 
   // ---------------------------------------------------------------- problem
+  ProblemBeforeAfter: {
+    /*
+     * A matched pair: the same drawing, the same palette and the same seed, with only the edges
+     * changing. The "before" is broken and the "after" is made good, so the pair carries the
+     * difference itself instead of leaning on the two captions to explain it.
+     *
+     * The labels and captions repeat the component's own defaults verbatim. They have to be
+     * restated because `before` and `after` are whole objects and passing one replaces it.
+     */
+    before: {
+      src: "/images/kit/texture-before.svg",
+      alt: "",
+      label: "Before",
+      caption: "Rusted valley irons, two failed inspections and water tracking into the back bedroom.",
+    },
+    after: {
+      src: "/images/kit/texture-after.svg",
+      alt: "",
+      label: "After",
+      caption: "New valleys, re-bedded ridge capping and a report the insurer accepted without a second visit.",
+    },
+  },
   ProblemStory: {
     heading: "A dairy that had stopped answering its own phone",
     image: {
+      src: "/images/kit/texture-case-3.svg",
       ratio: "photo",
       alt: "",
       caption: "The order board in the Tallow Creek dispatch shed, photographed the week the form went live.",
@@ -93,37 +185,70 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
     attribution: { name: "Tallow Creek Dairy", role: "Wholesale orders", org: "Fernbrook" },
   },
 
+  // ---------------------------------------------------------------- benefits
+  BenefitShowcase: {
+    /* Only the picture and its caption. `image` is a single object, so passing it replaces the
+       component's own default image and nothing else; its title, paragraph and points stand.
+       BenefitAlternating is deliberately NOT here: its images live inside an items array, so
+       filling them would mean copying three paragraphs of its default prose into this file and
+       then keeping the two in step forever. It renders its ratio boxes instead. */
+    image: {
+      src: "/images/kit/texture-case-1.svg",
+      ratio: "wide",
+      alt: "",
+      caption: "A scope from a recent bathroom job, with the exclusions section on the second page.",
+    },
+  },
+
   // ---------------------------------------------------------------- demo
   DemoScreenshots: {
+    /* Four screens of an invented trades scheduling tool, drawn for this file. They are
+       deliberately unlike each other (a dense week grid, a two-column job record, a phone, a
+       customer-facing confirmation) because a gallery of four near-identical screens cannot show
+       whether the gallery is doing its job. */
     screenshots: [
       {
-        src: "/images/kit/placeholder.svg",
+        src: "/images/kit/screen-schedule.svg",
+        width: 1600,
+        height: 1000,
         alt: "A week view with eight jobs laid out across three vans, two of them marked as running late.",
         caption: "The week, before anyone rings to change it",
       },
       {
-        src: "/images/kit/placeholder.svg",
+        src: "/images/kit/screen-job.svg",
+        width: 1600,
+        height: 1000,
         alt: "One job opened, showing the accepted quote, the site notes and two photographs from the last visit.",
         caption: "One job, with the quote and the site notes in the same place",
       },
       {
-        src: "/images/kit/placeholder.svg",
+        src: "/images/kit/screen-quote.svg",
+        width: 1600,
+        height: 1000,
         alt: "A quote being built on a phone, with four line items and a running total at the bottom of the screen.",
         caption: "Quoting from the van, in about four minutes",
       },
       {
-        src: "/images/kit/placeholder.svg",
+        src: "/images/kit/screen-confirm.svg",
+        width: 1600,
+        height: 1000,
         alt: "The customer's confirmation screen, showing an arrival window and the name of the technician.",
         caption: "What the customer sees when you book them in",
       },
     ],
   },
   DemoVideo: {
-    // The mp4 below does not exist and is not meant to. It is the only way a demo page can reach
-    // the error state the manifest declares for this piece: press play, get the error overlay and
-    // the fallback link. Swap it for a real file on any site that ships one.
+    /*
+     * A real six-second file, so the demo page shows the piece PLAYING rather than the piece
+     * stuck on its poster, which is the only state a missing file can demonstrate.
+     *
+     * That does cost the error state a route: it used to be reachable here by pointing at a file
+     * that was never going to load. It is still reachable, on the campaign example page, which
+     * carries a deliberately absent src for exactly that reason.
+     */
     src: "/media/kit/product-tour.mp4",
-    poster: "/images/kit/placeholder.svg",
+    poster: "/images/kit/poster-tour.svg",
+    posterAlt: "",
   },
 
   // ---------------------------------------------------------------- testimonials
@@ -163,19 +288,48 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
     ],
   },
   TestimonialVideo: {
-    poster: "/images/kit/placeholder.svg",
-    // Absent on purpose, as above: pressing play is how the declared error state gets seen.
+    /* The poster is a drawn silhouette against a window, not a face. A rendered person would be
+       both uncanny and dishonest, and a silhouette is a real way to frame an interview, so the
+       piece gets a plausible composition without anybody being invented into existence. */
+    poster: "/images/kit/poster-testimonial.svg",
     videoUrl: "/media/kit/testimonial.mp4",
     name: "Dee Ashworth",
     role: "Owner",
     location: "Pemberton",
   },
 
+  /**
+   * BENEFIT CARDS ARE SHOWN LINKED, because the manifest says the piece has hover and focus
+   * states and the component's own defaults carry no href, so at rest there was nothing in the
+   * piece that could take focus at all. Found by driving the focus state rather than by reading
+   * the component: the driver reported "nothing in this piece takes keyboard focus", which is a
+   * true statement about a demo that was not showing the piece in the shape its states describe.
+   */
+  BenefitCards: {
+    items: [
+      {
+        title: "Measured on site, not from a plan",
+        body: "Somebody comes out and records the opening as it actually sits, including the out of square a drawing never shows.",
+        href: "/approach/the-measure",
+      },
+      {
+        title: "Made on our own bench",
+        body: "Which is what lets us match a profile nobody has manufactured for thirty years.",
+        href: "/approach/the-workshop",
+      },
+      {
+        title: "Fitted by the people who made it",
+        body: "The person adjusting the hardware assembled it, so there is nobody in between to blame.",
+        href: "/approach/installation",
+      },
+    ],
+  },
+
   // ---------------------------------------------------------------- case studies
   CaseFeatured: {
     customer: "Ferndale Community Housing",
     image: {
-      src: "/images/kit/placeholder.svg",
+      src: "/images/kit/texture-case-1.svg",
       alt: "Roofers working on one section of a terrace roof while the flats below remain occupied",
     },
   },
@@ -213,7 +367,7 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
         customer: "Ferndale Community Housing",
         outcome: "No tenant was rehoused and the work came in under the original rehousing budget alone.",
         image: {
-          src: "/images/kit/placeholder.svg",
+          src: "/images/kit/texture-case-1.svg",
           alt: "A terrace roof part way through replacement, with the flats below still occupied",
         },
         href: "/case-studies/ferndale-community-housing",
@@ -224,7 +378,7 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
         customer: "Copperline Brewing",
         outcome: "Gas use fell 31 per cent across a full season, with no lost brewing days.",
         image: {
-          src: "/images/kit/placeholder.svg",
+          src: "/images/kit/texture-case-2.svg",
           alt: "Stainless heat exchange pipework running above brewing vessels",
         },
         href: "/case-studies/copperline-brewing",
@@ -235,7 +389,7 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
         customer: "Tumbleweed Coffee Roasters",
         outcome: "The old system came out and the new one went in between close and the first roast.",
         image: {
-          src: "/images/kit/placeholder.svg",
+          src: "/images/kit/texture-case-3.svg",
           alt: "A coffee roaster with new extraction ducting fitted overhead",
         },
         href: "/case-studies/tumbleweed-coffee-roasters",

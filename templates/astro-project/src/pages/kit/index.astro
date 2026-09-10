@@ -22,8 +22,10 @@ import { kit, KIT_VARIATION_COUNT } from "../../lib/kit";
       <h1 class="kit-display">The website kit</h1>
       <p class="kit-lede" style="margin-top: var(--kit-space-md)">
         {kit.length} pieces, {KIT_VARIATION_COUNT} variations. Each one is built to work at any
-        width, with real content of any length, in every state it can be in. Open a piece to see
-        its variations and what each is for.
+        width, with real content of any length, in every state it can be in. Open a variation to
+        see it at rest, at three widths, and in each state listed under it: the content states are
+        rendered from a fixture and the runtime states are driven through the piece's own controls,
+        so nothing on these pages is a picture of a state rather than the state itself.
       </p>
       <p class="kit-body kit-muted ix__note">
         Every piece also takes <code>tone</code>, which puts it on the default, subtle or inverse
@@ -53,7 +55,12 @@ import { kit, KIT_VARIATION_COUNT } from "../../lib/kit";
                   <p class="kit-body kit-muted ix__when">{v.when}</p>
                   <p class="ix__needs"><span class="kit-label">Needs</span> {v.needs.join(", ")}</p>
                   <ul class="ix__states">
-                    {v.states.map((s) => <li class="ix__state">{s}</li>)}
+                    {v.states.map((s) => (
+                      <li class="ix__state">
+                        <a class="ix__statelink" href={`/kit/${piece.id}/${v.id}/${s}`} aria-label={`${s}, ${v.name}`}>{s}</a>
+                      </li>
+                    ))}
+                    {v.states.length === 0 && <li class="ix__state ix__state--none">resting only</li>}
                   </ul>
                 </li>
               ))}
@@ -78,5 +85,25 @@ import { kit, KIT_VARIATION_COUNT } from "../../lib/kit";
   .ix__when { font-size: var(--kit-text-sm); }
   .ix__needs { font-size: var(--kit-text-sm); color: var(--kit-text-muted); margin: 0; }
   .ix__states { list-style: none; margin: var(--kit-space-2xs) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--kit-space-2xs); }
-  .ix__state { font-family: var(--kit-font-mono); font-size: var(--kit-text-xs); color: var(--kit-text-muted); border: var(--kit-border-width) solid var(--kit-border); padding: 0 var(--kit-space-2xs); border-radius: var(--kit-radius-sm); }
+  .ix__state { display: flex; }
+  /* The chip IS the link now, so the whole chip is the target rather than the four characters
+     inside it, and it carries the full text colour: a control at 12px cannot also be muted. */
+  .ix__statelink {
+    font-family: var(--kit-font-mono);
+    font-size: var(--kit-text-xs);
+    color: var(--kit-text);
+    text-decoration: none;
+    border: var(--kit-border-width) solid var(--kit-control-border);
+    border-radius: var(--kit-radius-sm);
+    padding: var(--kit-space-2xs) var(--kit-space-xs);
+    line-height: 1;
+  }
+  .ix__statelink:hover { border-color: var(--kit-text); text-decoration: underline; }
+  .ix__state--none {
+    font-family: var(--kit-font-mono);
+    font-size: var(--kit-text-xs);
+    color: var(--kit-text-muted);
+    padding: var(--kit-space-2xs) 0;
+    line-height: 1;
+  }
 </style>

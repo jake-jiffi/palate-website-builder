@@ -1,27 +1,23 @@
 ---
 /**
- * ONE PAGE PER VARIATION, rendered from the real component.
+ * ONE PAGE PER VARIATION, at rest, with every state it declares one click away.
  *
- * This is the surface the kit is judged on, and it is deliberately not a screenshot gallery:
- * every page mounts the REAL component, so a piece that does not compile, does not render, or
- * throws on its own defaults fails the build here rather than on a client's site. It also means
- * "45 variations exist" is a fact the build proves rather than a number in a manifest.
- *
- * Components are resolved through import.meta.glob because a dynamic import by name cannot be
- * statically analysed, and a kit that only renders when someone remembers to add an import is a
- * kit that rots one piece at a time.
+ * This is the surface the kit is judged on, and it is deliberately not a screenshot gallery: the
+ * frame below mounts the REAL component, so a piece that does not compile, does not render, or
+ * throws on its own defaults fails the build rather than a client's site. "Forty five variations
+ * exist" is a fact the build proves rather than a number in a manifest.
  *
  * SAMPLE PROPS COME FROM src/lib/kit-sample.ts, NOT FROM THE COMPONENTS.
  *
- * A component may not default an identity, an asset path or a list of customer quotes, because
- * an omitted prop then becomes an invented firm or a broken image on a real client's site. That
- * leaves the demo pages with nothing to show, which would make the kit unjudgeable, so the
- * fiction lives in one file that only this page imports. A variation with no entry there renders
- * on its own defaults, which is the correct reading: it needs nothing invented to look right.
+ * A component may not default an identity, an asset path or a list of customer quotes, because an
+ * omitted prop then becomes an invented firm or a broken image on a real client's site. That would
+ * leave the demo pages with nothing to show, which would make the kit unjudgeable, so the fiction
+ * lives in one file that only the framed demo imports. A variation with no entry there renders on
+ * its own defaults, which is the correct reading: it needs nothing invented to look right.
  */
 import BaseLayout from "../../../layouts/BaseLayout.astro";
+import DemoViewer from "../../../components/kitdemo/DemoViewer.astro";
 import { kit } from "../../../lib/kit";
-import { kitSamples } from "../../../lib/kit-sample";
 
 export function getStaticPaths() {
   return kit.flatMap((piece) =>
@@ -33,43 +29,11 @@ export function getStaticPaths() {
 }
 
 const { piece, variation } = Astro.props;
-const modules = import.meta.glob("../../../components/kit/**/*.astro", { eager: true });
-const key = Object.keys(modules).find((k) => k.endsWith(`/${piece.id}/${variation.id}.astro`));
-const Component = key ? (modules[key] as any).default : null;
-const sample = kitSamples[variation.id] ?? {};
 ---
 <BaseLayout
   title={`${variation.name} - ${piece.name}`}
   description={variation.when}
   noindex={true}
 >
-  <div class="kv">
-    <nav class="kv__bar" aria-label="Kit">
-      <a class="kit-link" href="/kit">All pieces</a>
-      <span class="kv__crumb">{piece.name}</span>
-      <strong class="kv__title">{variation.name}</strong>
-    </nav>
-    <div class="kv__meta">
-      <p class="kit-body kit-muted"><strong>When:</strong> {variation.when}</p>
-      <p class="kit-body kit-muted"><strong>Needs:</strong> {variation.needs.join(", ")}</p>
-      <p class="kit-body kit-muted"><strong>Where:</strong> {piece.where}</p>
-      <p class="kit-body kit-muted"><strong>States:</strong> {variation.states.join(", ") || "resting only"}</p>
-    </div>
-  </div>
-
-  {Component ? <Component {...sample} /> : (
-    <div class="kit-container" style="padding-block: var(--kit-space-3xl)">
-      <p class="kit-empty">This variation is declared in the manifest and has no component.</p>
-    </div>
-  )}
+  <DemoViewer piece={piece} variation={variation} state="rest" />
 </BaseLayout>
-<style>
-  .kv { border-bottom: var(--kit-border-width) solid var(--kit-border); background: var(--kit-bg-subtle); }
-  .kv__bar { max-width: var(--kit-page-max); margin-inline: auto; padding: var(--kit-space-md) var(--kit-page-pad) var(--kit-space-xs);
-    display: flex; flex-wrap: wrap; gap: var(--kit-space-sm); align-items: baseline; font-size: var(--kit-text-sm); }
-  .kv__crumb { color: var(--kit-text-muted); }
-  .kv__title { font-size: var(--kit-text-sm); }
-  .kv__meta { max-width: var(--kit-page-max); margin-inline: auto; padding: 0 var(--kit-page-pad) var(--kit-space-md);
-    display: grid; gap: var(--kit-space-2xs); }
-  .kv__meta p { font-size: var(--kit-text-sm); margin: 0; }
-</style>

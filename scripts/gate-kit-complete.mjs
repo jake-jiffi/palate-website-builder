@@ -173,6 +173,75 @@ for (const p of pieces) {
   }
 }
 
+/**
+ * EVERY DECLARED STATE HAS TO BE REACHABLE WITHOUT EDITING CODE.
+ *
+ * The manifest has always listed the states a piece must handle, and for a while that list was
+ * the only evidence any of them worked: a reviewer could read "handles empty, long, open" and
+ * had no way to see one. Spec section 7 names a browsable state per variation in acceptance, so
+ * the routes and the fixtures are checked here rather than trusted.
+ *
+ * Content states need a FIXTURE, because a page cannot invent two hundred words of realistic
+ * prose at render time. Runtime states need no fixture: they are driven through the piece's own
+ * control by the demo, so a missing one shows up as a driver that reports it could not reach the
+ * state rather than as a page that quietly renders the resting view.
+ */
+const CONTENT_STATES = { empty: "EMPTY_PROPS", long: "LONG_PROPS" };
+const statesPath = join(base, "lib/kit-states.ts");
+const viewerRoute = join(base, "pages/kit/[piece]/[variation]/[state].astro");
+const frameRoute = join(base, "pages/kit-frame/[piece]/[variation]/[state].astro");
+
+if (!existsSync(statesPath)) {
+  findings.push(`${relative(dir, statesPath)} does not exist, so no declared state can be browsed and the manifest's state lists are unevidenced`);
+} else {
+  const statesSrc = readFileSync(statesPath, "utf8");
+  const fixtures = {};
+  for (const [state, name] of Object.entries(CONTENT_STATES)) {
+    const block = new RegExp(`export const ${name}[^{]*\\{([\\s\\S]*?)\\n\\};`).exec(statesSrc);
+    if (!block) {
+      console.error(`gate-kit-complete: could not run: ${relative(dir, statesPath)} has no parsable ${name}, so the ${state} fixtures were not checked. A gate never exits 0 having inspected nothing.`);
+      process.exit(2);
+    }
+    fixtures[state] = new Set((block[1].match(/^  ([A-Za-z]+):/gm) || []).map((m) => m.trim().replace(":", "")));
+  }
+
+  const declaredBy = { empty: new Set(), long: new Set() };
+  for (const p of pieces) {
+    for (const v of p.variations) {
+      for (const state of Object.keys(CONTENT_STATES)) {
+        if (!v.states.includes(state)) continue;
+        declaredBy[state].add(v.id);
+        if (!fixtures[state].has(v.id)) {
+          findings.push(`${v.id} declares the ${state} state and ${CONTENT_STATES[state]} has no fixture for it, so /kit/${p.id}/${v.id}/${state} would render the resting content and call it ${state}`);
+        }
+      }
+    }
+  }
+  // A fixture nobody can reach is dead weight that reads as coverage.
+  for (const state of Object.keys(CONTENT_STATES)) {
+    for (const id of fixtures[state]) {
+      if (!declaredBy[state].has(id)) {
+        findings.push(`${CONTENT_STATES[state]} carries a fixture for ${id}, which does not declare the ${state} state, so nothing can ever render it`);
+      }
+    }
+  }
+
+  if (!existsSync(viewerRoute)) findings.push(`${relative(dir, viewerRoute)} does not exist, so no state has a page`);
+  if (!existsSync(frameRoute)) findings.push(`${relative(dir, frameRoute)} does not exist, so no state has a render to put in one`);
+  else {
+    /**
+     * RENDERED, NOT MENTIONED. The first version of this check grepped for the driver's NAME and
+     * passed a file where the import had been renamed and nothing was rendered, because the name
+     * still appeared in the import PATH. Same class as a docs guard satisfied by a comment: match
+     * the tag being rendered, which is the thing that has to be true.
+     */
+    const frameSrc = readFileSync(frameRoute, "utf8");
+    if (!/<StateDriver[\s/>]/.test(frameSrc)) {
+      findings.push(`${relative(dir, frameRoute)} never renders <StateDriver />, so every runtime state would silently show the resting view`);
+    }
+  }
+}
+
 // The reverse direction: a component nobody declared.
 for (const pieceDir of readdirSync(kitRoot)) {
   const pd = join(kitRoot, pieceDir);
@@ -194,5 +263,6 @@ if (findings.length) {
   process.exit(1);
 }
 
-console.log(`gate-kit-complete: clean (${pieces.length} pieces, ${declared} variations, every one declared, built, documented and stateful).`);
+const browsable = pieces.reduce((n, p) => n + p.variations.reduce((m, v) => m + v.states.length, 0), 0);
+console.log(`gate-kit-complete: clean (${pieces.length} pieces, ${declared} variations, ${browsable} declared states, every one declared, built, documented and browsable).`);
 process.exit(0);

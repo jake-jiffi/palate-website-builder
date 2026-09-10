@@ -1,0 +1,254 @@
+---
+/**
+ * THE STATE BROWSER'S CHROME. One piece, one state, at a width you choose.
+ *
+ * The piece itself is rendered in an <iframe> rather than inline, and that is the whole design
+ * rather than a convenience. Three things follow from it and none of them is available inline:
+ *
+ *   - MEDIA QUERIES KEY ON THE VIEWPORT, NOT ON A CONTAINER. A mobile menu that only exists below
+ *     900px cannot be shown at all on a 1280px page, so before this the one state a nav most
+ *     needs reviewing in was the one nobody could open. Inside a frame the frame IS the viewport,
+ *     so phone and desktop are one click apart on the same page.
+ *   - THE CHROME STOPS INTERFERING. A sticky navigation pinned under a breadcrumb bar is not the
+ *     piece a client will get, and a page carrying two <main> elements is not the document the
+ *     piece was written for.
+ *   - THE DRIVER RUNS AGAINST THE PIECE ALONE, so "the first control in the piece" means what it
+ *     says instead of accidentally meaning a link in the chrome.
+ *
+ * The frame reports its own height and what it drove, so the reader is told what was done to the
+ * piece rather than left to infer it from a picture.
+ */
+import { kit, type KitVariation, type KitPiece } from "../../lib/kit";
+import { STATE_KIND, STATE_NOTE, NARROW_BY_DEFAULT, MOBILE_ONLY, type KitDemoState } from "../../lib/kit-states";
+
+interface Props {
+  piece: KitPiece;
+  variation: KitVariation;
+  /** "rest" is the piece as it ships. Anything else is one of its declared states. */
+  state: string;
+}
+const { piece, variation, state } = Astro.props;
+
+const isRest = state === "rest";
+const demoState = state as KitDemoState;
+const kind = isRest ? "content" : STATE_KIND[demoState];
+const note = isRest
+  ? "The piece with the content a real client would give it, at rest, with nothing driven."
+  : STATE_NOTE[demoState];
+
+const frameSrc = `/kit-frame/${piece.id}/${variation.id}/${state}`;
+// A piece with no desktop presence starts narrow in EVERY state, not only when something is
+// being opened: at full width its page is a blank frame, which reads as a broken demo.
+const startNarrow =
+  MOBILE_ONLY.has(variation.id) || (!isRest && NARROW_BY_DEFAULT.has(variation.id) && state === "open");
+
+// Every state this variation declares, plus rest, in a stable order so the tabs do not reshuffle
+// between two pieces and make the row unreadable.
+const ORDER: KitDemoState[] = ["empty", "long", "open", "loading", "success", "error", "focus", "hover"];
+const states = ORDER.filter((s) => variation.states.includes(s as never));
+
+const pieceIndex = kit.findIndex((p) => p.id === piece.id);
+---
+<div class="dvw">
+  <nav class="dvw__bar" aria-label="Kit">
+    <a class="kit-link" href="/kit">All pieces</a>
+    <span class="dvw__crumb">{piece.name}</span>
+    <strong class="dvw__title">{variation.name}</strong>
+    <span class="dvw__count">Piece {pieceIndex + 1} of {kit.length}</span>
+  </nav>
+
+  <div class="dvw__meta">
+    <p class="dvw__line"><strong>When:</strong> {variation.when}</p>
+    <p class="dvw__line"><strong>Needs:</strong> {variation.needs.join(", ")}</p>
+    <p class="dvw__line"><strong>Where:</strong> {piece.where}</p>
+  </div>
+
+  <div class="dvw__controls">
+    <div class="dvw__group">
+      <span class="kit-label" id="dvw-states">States</span>
+      <ul class="dvw__tabs" aria-labelledby="dvw-states">
+        <li>
+          <a
+            class="dvw__tab"
+            href={`/kit/${piece.id}/${variation.id}`}
+            aria-label={`at rest, ${variation.name}`}
+            aria-current={isRest ? "page" : undefined}
+          >
+            at rest
+          </a>
+        </li>
+        {states.map((s) => (
+          <li>
+            <!-- The visible word is the state; the accessible name carries the piece it belongs
+                 to, because "empty" read out of context in a list of links names nothing. The
+                 visible text stays inside the accessible name, which is what WCAG 2.5.3 asks. -->
+            <a
+              class="dvw__tab"
+              href={`/kit/${piece.id}/${variation.id}/${s}`}
+              aria-label={`${s}, ${variation.name}`}
+              aria-current={s === state ? "page" : undefined}
+            >
+              {s}
+            </a>
+          </li>
+        ))}
+        {states.length === 0 && <li class="dvw__none">this piece declares no states beyond resting</li>}
+      </ul>
+    </div>
+
+    <div class="dvw__group">
+      <span class="kit-label" id="dvw-widths">Width</span>
+      <div class="dvw__widths" role="group" aria-labelledby="dvw-widths">
+        <!-- The starting width is decided on the server, so the frame paints at the right size
+             once instead of painting full width and snapping to a phone a moment later. -->
+        <button type="button" class="dvw__width" data-width="390" aria-pressed={startNarrow ? "true" : "false"}>Phone, 390</button>
+        <button type="button" class="dvw__width" data-width="768" aria-pressed="false">Tablet, 768</button>
+        <button type="button" class="dvw__width" data-width="1024" aria-pressed="false">Laptop, 1024</button>
+        <button type="button" class="dvw__width" data-width="full" aria-pressed={startNarrow ? "false" : "true"}>Full width</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dvw__how" data-kind={kind}>
+    <div class="dvw__howin">
+    <p class="dvw__kind">
+      {kind === "content" && "Content state, rendered from a fixture"}
+      {kind === "driven" && "Driven through the piece's own mechanism"}
+      {kind === "unforceable" && "Cannot be forced, and is not faked"}
+    </p>
+    <p class="dvw__note">{note}</p>
+    <!-- A live region rather than a hidden box that is later revealed: a screen reader
+         announces a change to text that was already on the page, and reveals of freshly
+         populated hidden nodes are announced by some and not by others. -->
+    <p class="dvw__status" data-viewer-status role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div class="dvw__stage">
+    <iframe
+      class="dvw__frame"
+      data-viewer-frame
+      src={frameSrc}
+      title={`${variation.name}, ${isRest ? "at rest" : state}`}
+      loading="eager"
+      style={startNarrow ? "width: 390px" : undefined}
+    ></iframe>
+  </div>
+
+  <p class="dvw__escape">
+    <a class="kit-link" href={frameSrc}>Open this render on its own</a>, with no chrome around it,
+    which is what a screenshot or a colleague on a phone wants.
+  </p>
+</div>
+
+<style>
+  .dvw { display: grid; gap: var(--kit-space-md); }
+  .dvw__bar,
+  .dvw__meta,
+  .dvw__controls,
+  .dvw__how,
+  .dvw__escape { max-width: var(--kit-page-max); margin-inline: auto; padding-inline: var(--kit-page-pad); width: 100%; }
+
+  .dvw__bar { display: flex; flex-wrap: wrap; gap: var(--kit-space-sm); align-items: baseline; font-size: var(--kit-text-sm); padding-top: var(--kit-space-md); }
+  .dvw__crumb { color: var(--kit-text-muted); }
+  .dvw__title { font-size: var(--kit-text-sm); }
+  .dvw__count { color: var(--kit-text-muted); margin-inline-start: auto; }
+
+  .dvw__meta { display: grid; gap: var(--kit-space-2xs); }
+  .dvw__line { margin: 0; font-size: var(--kit-text-sm); color: var(--kit-text-muted); }
+
+  .dvw__controls { display: flex; flex-wrap: wrap; gap: var(--kit-space-lg) var(--kit-space-2xl); }
+  .dvw__group { display: grid; gap: var(--kit-space-2xs); align-content: start; }
+
+  .dvw__tabs { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--kit-space-2xs); }
+  .dvw__tab {
+    display: inline-block;
+    padding: var(--kit-space-2xs) var(--kit-space-sm);
+    border: var(--kit-border-width) solid var(--kit-control-border);
+    border-radius: var(--kit-radius-sm);
+    font-size: var(--kit-text-sm);
+    color: var(--kit-text);
+    text-decoration: none;
+  }
+  .dvw__tab:hover { border-color: var(--kit-text); }
+  .dvw__tab[aria-current="page"] { background: var(--kit-text); color: var(--kit-bg); border-color: var(--kit-text); }
+  .dvw__none { font-size: var(--kit-text-sm); color: var(--kit-text-muted); }
+
+  .dvw__widths { display: flex; flex-wrap: wrap; gap: var(--kit-space-2xs); }
+  .dvw__width {
+    font: inherit;
+    font-size: var(--kit-text-sm);
+    padding: var(--kit-space-2xs) var(--kit-space-sm);
+    border: var(--kit-border-width) solid var(--kit-control-border);
+    border-radius: var(--kit-radius-sm);
+    background: transparent;
+    color: var(--kit-text);
+    cursor: pointer;
+  }
+  .dvw__width[aria-pressed="true"] { background: var(--kit-text); color: var(--kit-bg); border-color: var(--kit-text); }
+
+  .dvw__howin {
+    border-inline-start: var(--kit-border-width) solid var(--kit-accent);
+    padding-inline-start: var(--kit-space-md);
+    padding-block: var(--kit-space-2xs);
+    display: grid;
+    gap: var(--kit-space-2xs);
+  }
+  .dvw__kind { margin: 0; font-size: var(--kit-text-sm); font-weight: var(--kit-weight-strong); }
+  .dvw__note { margin: 0; font-size: var(--kit-text-sm); color: var(--kit-text-muted); max-width: var(--kit-measure); }
+  .dvw__status { margin: 0; font-size: var(--kit-text-sm); color: var(--kit-text); max-width: var(--kit-measure); }
+  .dvw__status:empty { display: none; }
+
+  .dvw__stage {
+    background: var(--kit-bg-subtle);
+    border-block: var(--kit-border-width) solid var(--kit-border);
+    padding: var(--kit-space-md) var(--kit-space-md) var(--kit-space-xl);
+    display: flex;
+    justify-content: center;
+  }
+  .dvw__frame {
+    width: 100%;
+    max-width: 100%;
+    min-height: 60vh;
+    border: var(--kit-border-width) solid var(--kit-border);
+    background: var(--kit-bg);
+    display: block;
+  }
+  .dvw__escape { font-size: var(--kit-text-sm); color: var(--kit-text-muted); max-width: var(--kit-measure); padding-bottom: var(--kit-space-2xl); }
+</style>
+
+<script>
+  (() => {
+    const root = document.querySelector<HTMLElement>(".dvw");
+    const frame = document.querySelector<HTMLIFrameElement>("[data-viewer-frame]");
+    const status = document.querySelector<HTMLElement>("[data-viewer-status]");
+    if (!root || !frame) return;
+
+    const setWidth = (value: string) => {
+      frame.style.width = value === "full" ? "100%" : `${value}px`;
+      root.querySelectorAll<HTMLButtonElement>(".dvw__width").forEach((button) => {
+        button.setAttribute("aria-pressed", button.dataset.width === value ? "true" : "false");
+      });
+      // A width change re-lays the document inside the frame, so the height it reported a moment
+      // ago is now wrong. Ask again rather than leaving a gap or a scrollbar.
+      frame.contentWindow?.postMessage({ kitFrameMeasure: true }, window.location.origin);
+    };
+
+    root.querySelectorAll<HTMLButtonElement>(".dvw__width").forEach((button) => {
+      button.addEventListener("click", () => setWidth(button.dataset.width || "full"));
+    });
+
+
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { kitFrameHeight?: number; kitDriver?: boolean; message?: string };
+      if (typeof data?.kitFrameHeight === "number") {
+        frame.style.height = `${Math.max(240, Math.ceil(data.kitFrameHeight))}px`;
+        frame.style.minHeight = "0";
+      }
+      if (data?.kitDriver && status) {
+        status.textContent = `What was driven: ${data.message ?? ""}`;
+      }
+    });
+  })();
+</script>

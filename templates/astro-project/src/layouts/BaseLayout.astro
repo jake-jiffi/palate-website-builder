@@ -19,8 +19,21 @@ interface Props {
   description?: string;
   image?: string;
   noindex?: boolean;
+  /**
+   * The site's own header and footer. False renders the page content alone, which is what a
+   * section demo, a board and a print view all need: a piece shown underneath the real navigation
+   * is not the piece anybody is reviewing. Everything else about the page is unchanged, view
+   * transitions included, so a demo still runs in the configuration the site ships in.
+   */
+  chrome?: boolean;
 }
-const { title, description = business.description, image = "/og/default.png", noindex = false } = Astro.props;
+const {
+  title,
+  description = business.description,
+  image = "/og/default.png",
+  noindex = false,
+  chrome = true,
+} = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 
 // Is this build the live site? Everything else is a preview, and a preview is a real,
@@ -78,9 +91,9 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
   <body>
     <ExploreSwitcher />
     <Motion />
-    <slot name="header" />
+    {chrome && <slot name="header" />}
     <main><slot /></main>
-    <slot name="footer" />
+    {chrome && <slot name="footer" />}
     <CmsVisualEditing enabled={visualEditing} />
   </body>
 </html>

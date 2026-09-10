@@ -110,6 +110,50 @@ if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a dec
 else ok "gate-kit-complete catches a declared empty state that is not implemented"; fi
 cp "$TMP/empty.bak" "$EMPTYV"
 
+# ---------- every declared state has to be REACHABLE ----------
+# The manifest has always listed the states a piece must handle. These four assertions are what
+# stops that list drifting back into a promise: a state with no fixture, a fixture no state can
+# reach, a missing route, and a frame that imports the driver without rendering it. The last one
+# is here because the FIRST version of that check passed a file where the driver had been renamed
+# and nothing was rendered, since the name still appeared in the import path.
+STATES="$HERE/templates/astro-project/src/lib/kit-states.ts"
+VIEWER="$HERE/templates/astro-project/src/pages/kit/[piece]/[variation]/[state].astro"
+FRAME="$HERE/templates/astro-project/src/pages/kit-frame/[piece]/[variation]/[state].astro"
+
+cp "$STATES" "$TMP/states.bak"
+node -e '
+const fs = require("fs");
+const p = process.argv[1];
+const s = fs.readFileSync(p, "utf8");
+const start = s.indexOf("  FaqAccordion: {", s.indexOf("LONG_PROPS"));
+const end = s.indexOf("\n  },\n", start) + 5;
+fs.writeFileSync(p, s.slice(0, start) + s.slice(end));
+' "$STATES"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a declared long state with no fixture"
+else ok "gate-kit-complete catches a declared content state that has no fixture to render"; fi
+cp "$TMP/states.bak" "$STATES"
+
+node -e '
+const fs = require("fs");
+const p = process.argv[1];
+const s = fs.readFileSync(p, "utf8");
+fs.writeFileSync(p, s.replace("export const EMPTY_PROPS: Record<string, Record<string, unknown>> = {", "export const EMPTY_PROPS: Record<string, Record<string, unknown>> = {\n  CtaBanner: { items: [] },"));
+' "$STATES"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a fixture for a state nothing declares"
+else ok "gate-kit-complete catches a fixture no declared state can ever reach"; fi
+cp "$TMP/states.bak" "$STATES"
+
+mv "$VIEWER" "$TMP/viewer.bak"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED the state route being gone"
+else ok "gate-kit-complete catches the state route being gone, which makes every state unreachable"; fi
+mv "$TMP/viewer.bak" "$VIEWER"
+
+cp "$FRAME" "$TMP/frame.bak"
+sed -i.bak 's/import StateDriver from/import NoDriver from/; s/{drive \&\& <StateDriver/{drive \&\& <NoDriver/' "$FRAME" && rm -f "$FRAME.bak"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a frame that imports the driver and never renders it"
+else ok "gate-kit-complete catches a frame that names the driver without rendering it"; fi
+cp "$TMP/frame.bak" "$FRAME"
+
 "$COMPLETE" "$HERE" >/dev/null 2>&1 && ok "and the kit is clean again once every fixture is removed" \
   || bad "the kit did not return to clean after the fixtures were removed"
 

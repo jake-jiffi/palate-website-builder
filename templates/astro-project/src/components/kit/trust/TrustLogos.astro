@@ -64,8 +64,9 @@ const {
 const uid = id || `tl-${Math.random().toString(36).slice(2, 8)}`;
 const titleId = `${uid}-title`;
 const items = (Array.isArray(logos) ? logos : []).filter((logo) => logo && logo.name);
-const headingText = intro?.trim() || "Customers we work with";
-const headingHidden = !intro?.trim();
+/* The caller's sentence, if they wrote one. The section's NAME is fixed and hidden, so a strip
+   with no intro is named the same as one with a paragraph above it. */
+const introText = intro?.trim() || "";
 ---
 
 <section
@@ -79,9 +80,16 @@ const headingHidden = !intro?.trim();
   aria-labelledby={titleId}
 >
   <div class="kit-container">
-    <h2 id={titleId} class:list={["tl__intro", "kit-body", "kit-muted", headingHidden && "kit-visually-hidden"]}>
-      {headingText}
-    </h2>
+    {/*
+      THE INTRO IS A SENTENCE, NOT A HEADING.
+      This was an <h2> holding whatever intro the caller passed, so a full sentence at 17px body
+      size entered the document outline as a section heading. The section still needs a name, and
+      it gets one from a visually hidden heading that says what the strip IS, with the caller's
+      sentence rendered underneath as the paragraph it reads like. A strip with no intro at all
+      keeps the same name, which is why the fallback is not the caller's text.
+    */}
+    <h2 id={titleId} class="kit-visually-hidden">Customers we work with</h2>
+    {introText && <p class:list={["tl__intro", "kit-body", "kit-muted"]}>{introText}</p>}
 
     {items.length === 0 ? (
       <p class="kit-empty tl__empty">{emptyMessage}</p>
@@ -216,7 +224,6 @@ const headingHidden = !intro?.trim();
     letter-spacing: var(--kit-tracking-tight);
     text-align: center;
     text-wrap: balance;
-    overflow-wrap: break-word;
   }
 
   @media (prefers-reduced-motion: reduce) {

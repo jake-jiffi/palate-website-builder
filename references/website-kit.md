@@ -74,6 +74,31 @@ its open state from the mobile sheet it renders is not asked to duplicate it.
 `/kit/product`, `/kit/service` and `/kit/campaign` compose real pieces with real content and
 prove they sit together. `/kit` itself indexes every piece and variation with its guidance.
 
+## Browsing a state
+
+`/kit/<piece>/<Variation>` shows the piece at rest and lists every state its manifest entry
+declares. Each of those is a page: `/kit/<piece>/<Variation>/empty`, `/long`, `/open`, `/loading`
+and so on. Three width buttons put the same render at 390, 768 and 1024, which is how a mobile
+menu that only exists below a breakpoint can be opened without resizing the browser.
+
+**The piece itself is rendered in a frame, and the frame has its own URL.** `/kit-frame/...` is
+the piece alone, no chrome, which is what a screenshot wants and what you send a colleague. The
+frame is the viewport, so media queries behave, and a sticky nav is not pinned under a breadcrumb
+bar. It still renders inside the ordinary layout, view transitions included: the kit has to be
+demonstrated in the configuration it ships in, since the one defect that made every form in the
+kit dead was caused by that router and would have been invisible in a stripped-down harness.
+
+**Nothing on those pages is a picture of a state.** Content states come from a fixture in
+`src/lib/kit-states.ts` and are rendered by the real component at build time. Runtime states are
+DRIVEN: the demo presses the piece's own control, or answers the one network call the piece makes
+and lets the piece decide what to show. `focus` is moved programmatically, which is real focus.
+`hover` is the one state that cannot be forced at all, because the browser grants it to a real
+pointer only, and the page says so instead of dressing a resting render up as a hovered one.
+
+Adding a state to a variation in the manifest is therefore a two-part change: declare it, and, if
+it is `empty` or `long`, add its fixture. `gate-kit-complete.mjs` fails a declared content state
+with no fixture, and a fixture no declared state can reach.
+
 All of it is `noindex` and `gate-shipready` removes it at handover, exactly as it removes the
 Explore surfaces. It is a working document, not a page of the client's site.
 
