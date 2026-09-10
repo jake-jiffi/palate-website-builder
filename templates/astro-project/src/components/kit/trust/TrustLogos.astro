@@ -46,6 +46,17 @@ export interface Props {
    * semantic token flips with the ground in foundations.css, so nothing here restates a colour.
    */
   tone?: "default" | "subtle" | "inverse";
+  /**
+   * OPT IN when every mark supplied is a single dark colour and the section sits on the inverse
+   * ground. An SVG loaded through <img> is an isolated document: it cannot read this page's tone,
+   * so a one-colour dark wordmark renders dark ink on a dark ground and simply disappears. This
+   * flips it, and it is OPT IN rather than automatic because inverting a customer's real
+   * multi-colour logo would render their brand in colours they have never approved, which is a
+   * worse fault than the one it fixes.
+   *
+   * The better answer, where the customer has one, is a light-ground version of their mark.
+   */
+  monochromeLogos?: boolean;
   /** Shown in place of the strip when no logos have been supplied. */
   emptyMessage?: string;
 }
@@ -56,6 +67,7 @@ const {
   logos = [],
   id,
   tone = "default",
+  monochromeLogos = false,
   emptyMessage = "Customer logos appear here once they have been approved for use.",
 } = Astro.props;
 
@@ -76,6 +88,7 @@ const introText = intro?.trim() || "";
     "kit-section--tight",
     tone === "subtle" && "kit-section--subtle",
     tone === "inverse" && "kit-section--inverse",
+    monochromeLogos && "tl--mono",
   ]}
   aria-labelledby={titleId}
 >
@@ -215,6 +228,10 @@ const introText = intro?.trim() || "";
     max-width: 100%;
     object-fit: contain;
   }
+
+  /* Only on the inverse ground, and only when the caller has said every mark is one dark colour.
+     See the prop's own note: an automatic invert would recolour a real customer's brand. */
+  .kit-section--inverse .tl--mono .tl__img { filter: invert(1); }
 
   .tl__name {
     font-family: var(--kit-font-display);

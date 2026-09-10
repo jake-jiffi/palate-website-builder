@@ -313,13 +313,33 @@
 @keyframes kit-spin { to { transform: rotate(360deg); } }
 
 /* Form controls: inputs, selects, checkboxes, validation. */
-.kit-field { display: grid; gap: var(--kit-space-xs); }
+/* ---- A FIELD DOES NOT STRETCH ITS OWN ROWS ---------------------------------------------
+   Two fields side by side in a form row are grid items, so they are stretched to the height of
+   the taller one. `.kit-field` is itself a grid with auto rows, and an auto row under
+   `align-content: normal` STRETCHES to absorb that extra height, spread across however many
+   rows the field happens to have. A field with a hint has four rows and a field without has
+   three, so the same spare 30px was divided differently in each: measured on the booking form,
+   the email input rendered 67px tall starting at y9768 while the phone beside it rendered 52px
+   tall starting at y9752. Two controls in one row, different heights, different baselines, and
+   the only difference between them was that one carried a hint.
+
+   Nothing about that is visible at rest with matched content, which is why it survived: it
+   needs one field in a row to say something the other does not, which is the ordinary case.
+   `start` keeps every row at its content height and leaves the spare space at the bottom of
+   the shorter field, where it belongs. */
+.kit-field { display: grid; gap: var(--kit-space-xs); align-content: start; }
 .kit-field__label { font-size: var(--kit-text-sm); font-weight: var(--kit-weight-medium); color: var(--kit-text); }
 .kit-field__hint { font-size: var(--kit-text-sm); color: var(--kit-text-muted); margin: 0; }
 .kit-field__error { font-size: var(--kit-text-sm); color: var(--kit-error); margin: 0; }
 .kit-input, .kit-select, .kit-textarea {
   font: inherit; font-size: var(--kit-text-base); color: var(--kit-text); background: var(--kit-bg);
   border: var(--kit-border-width) solid var(--kit-control-border); border-radius: var(--kit-radius);
+  /* THE LINE HEIGHT IS SET SO THE THREE CONTROLS AGREE ON THEIR OWN HEIGHT.
+     Left at `normal` each one asks its host for a default, and they get different answers: with
+     identical padding, border and min-height, an input measured 52px and the select beside it 48px
+     on the booking form, side by side in the same row. Nobody writes a 4px difference on purpose,
+     and no token could have caught it because neither control had a size of its own to read. */
+  line-height: var(--kit-leading-snug);
   padding: var(--kit-space-sm) var(--kit-space-md); min-height: var(--kit-target); width: 100%; }
 .kit-textarea { min-height: calc(var(--kit-target) * 2.5); resize: vertical; }
 .kit-input:hover, .kit-select:hover, .kit-textarea:hover { border-color: var(--kit-border-strong); }

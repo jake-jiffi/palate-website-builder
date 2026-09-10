@@ -6,8 +6,11 @@
  * open one URL and see all forty-five variations, at any width, in every state. A section library
  * nobody can look at is a section library nobody trusts.
  *
- * noindex, and gate-shipready removes /_kit at handover exactly as it removes the Explore
- * surfaces. It is a working document, not a page of the client's site.
+ * noindex, and gate-shipready FAILS a production-stage hand-over that still carries any of it:
+ * /kit, /kit-frame, the demo artwork and the two sample files. That claim used to be written here
+ * and untrue, which is worse than not making it, because these pages render invented firms,
+ * invented people and invented quotes and would have shipped on a client's own domain. It is a
+ * working document, not a page of the client's site.
  */
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { kit, KIT_VARIATION_COUNT } from "../../lib/kit";

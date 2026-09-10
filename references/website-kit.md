@@ -99,6 +99,12 @@ Adding a state to a variation in the manifest is therefore a two-part change: de
 it is `empty` or `long`, add its fixture. `gate-kit-complete.mjs` fails a declared content state
 with no fixture, and a fixture no declared state can reach.
 
+**All of it goes at hand-over.** These pages render invented firms, invented people and invented
+quotes, which is exactly the content a real client build had to correct four separate times, so
+`gate-shipready.mjs` fails a production-stage build that still carries `/kit`, `/kit-frame`, the
+demo artwork or the two sample files. The composed pages keep working, because a page imports the
+COMPONENTS and never the demos.
+
 All of it is `noindex` and `gate-shipready` removes it at handover, exactly as it removes the
 Explore surfaces. It is a working document, not a page of the client's site.
 
