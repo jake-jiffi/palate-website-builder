@@ -118,7 +118,6 @@ const uid = id || `pq-${Math.random().toString(36).slice(2, 8)}`;
 const headingId = `${uid}-heading`;
 const driversId = `${uid}-drivers`;
 const sendId = `${uid}-send`;
-const turnaroundId = `${uid}-turnaround`;
 const toneClass =
   tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
 
@@ -146,8 +145,18 @@ const hasAnything = priceDrivers.length > 0 || sendItems.length > 0 || Boolean(t
       <div class="pq__body">
         {priceDrivers.length > 0 && (
           <div class="pq__block pq__block--wide">
-            <h3 id={driversId} class="pq__block-heading">{driversHeading}</h3>
-            <dl class="pq__drivers">
+            {/*
+              THESE ARE LABELS, NOT SECTIONS, AND THE STYLING ALREADY SAID SO.
+              All three were <h3>, set at 15px uppercase with label tracking, so a quote page
+              put "What moves the price", "What we send you" and "Turnaround" into the document
+              outline at the same level as a real subsection while never once looking like a
+              heading. Worse, each carried an id that nothing referenced: the wiring was
+              started and never finished, so the list under it had no accessible name at all.
+              A label over a group names the group through aria-labelledby; a label over a
+              single value needs nothing, because reading order already puts them together.
+            */}
+            <p id={driversId} class="pq__block-heading">{driversHeading}</p>
+            <dl class="pq__drivers" aria-labelledby={driversId}>
               {priceDrivers.map((driver) => (
                 <div class="pq__driver">
                   <dt class="pq__driver-title">{driver.title}</dt>
@@ -161,8 +170,8 @@ const hasAnything = priceDrivers.length > 0 || sendItems.length > 0 || Boolean(t
         <div class="pq__aside">
           {sendItems.length > 0 && (
             <div class="pq__block">
-              <h3 id={sendId} class="pq__block-heading">{sendHeading}</h3>
-              <ul class="pq__send" role="list">
+              <p id={sendId} class="pq__block-heading">{sendHeading}</p>
+              <ul class="pq__send" role="list" aria-labelledby={sendId}>
                 {sendItems.map((item) => (
                   <li class="pq__send-item">
                     <span class="pq__mark" aria-hidden="true"></span>
@@ -175,7 +184,7 @@ const hasAnything = priceDrivers.length > 0 || sendItems.length > 0 || Boolean(t
 
           {turnaround && (
             <div class="pq__block">
-              <h3 id={turnaroundId} class="pq__block-heading">{turnaroundHeading}</h3>
+              <p class="pq__block-heading">{turnaroundHeading}</p>
               <p class="pq__turnaround">{turnaround}</p>
             </div>
           )}
@@ -226,6 +235,10 @@ const hasAnything = priceDrivers.length > 0 || sendItems.length > 0 || Boolean(t
   }
 
   .pq__block { display: grid; gap: var(--kit-space-md); align-content: start; min-width: 0; }
+  /* Deliberately .kit-label one step larger: these head a column rather than sit beside a
+     value, so they carry a little more weight. Written out rather than composed with the
+     shared class because the size is the whole difference and an override at equal specificity
+     would depend on stylesheet order to win. */
   .pq__block-heading {
     margin: 0;
     font-family: var(--kit-font-body);

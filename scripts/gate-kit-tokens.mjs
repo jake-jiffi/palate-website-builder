@@ -42,7 +42,13 @@ function walk(d) {
   for (const e of readdirSync(d)) {
     const p = join(d, e);
     if (statSync(p).isDirectory()) out.push(...walk(p));
-    else if (e.endsWith(".astro")) out.push(p);
+    /**
+     * .ts TOO, AND IT WAS NOT. The kit ships shared runtimes beside its components
+     * (`form-runtime.ts`, `scroll-region.ts`), and a gate that globs only `.astro` cannot see a
+     * literal any of them introduces. Neither carries styles today, which is exactly the state in
+     * which this is cheap to close and invisible to leave.
+     */
+    else if (e.endsWith(".astro") || e.endsWith(".ts")) out.push(p);
   }
   return out;
 }
@@ -64,6 +70,25 @@ function styleRegions(src) {
   const inlineRe = /\bstyle\s*=\s*(["'])([\s\S]*?)\1/gi;
   while ((m = inlineRe.exec(src))) {
     regions.push({ text: m[2], offset: m.index + m[0].indexOf(m[2]) });
+  }
+
+  /**
+   * A STYLE WRITTEN FROM SCRIPT IS STILL A STYLE.
+   *
+   * The kit ships shared runtimes beside its components, and this gate globbed `.astro` only, so
+   * anything they set was invisible to it. Widening the glob alone would have been worse than
+   * leaving it: a `.ts` file has no <style> block, so the gate would have read two more files and
+   * still checked nothing, which is a check that reports itself as running and cannot fire. These
+   * are the three ways a script sets a style, and each one's value is scanned exactly like a
+   * declaration in a stylesheet.
+   */
+  const scriptRe = /\.style\.(?:setProperty\(\s*(["'])([^"']+)\1\s*,\s*(["'])([^"']*)\3|([A-Za-z]+)\s*=\s*(["'`])([^"'`]*)\6)|\.style\.cssText\s*=\s*(["'`])([^"'`]*)\7/g;
+  while ((m = scriptRe.exec(src))) {
+    const prop = m[2] || m[5] || "";
+    const value = m[4] ?? m[7] ?? m[8] ?? "";
+    if (!value) continue;
+    const text = prop ? `${prop.replace(/([A-Z])/g, "-$1").toLowerCase()}: ${value};` : value;
+    regions.push({ text, offset: m.index });
   }
   return regions;
 }
@@ -204,7 +229,7 @@ function findingsFor(prop, value, aliases) {
 
 const files = walk(root);
 if (!files.length) {
-  console.error(`gate-kit-tokens: could not run: ${root} exists but holds no .astro components.`);
+  console.error(`gate-kit-tokens: could not run: ${root} exists but holds no .astro or .ts files.`);
   process.exit(2);
 }
 

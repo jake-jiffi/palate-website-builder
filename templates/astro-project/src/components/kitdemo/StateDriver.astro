@@ -39,11 +39,17 @@ const { state, openTarget = "" } = Astro.props;
      * status line on the page itself. Either way the reader is told what was driven and how.
      */
     const say = (message: string) => {
-      const box = document.querySelector<HTMLElement>("[data-kit-driver-status]");
-      if (box) box.textContent = message;
+      /**
+       * ONE PLACE, NEVER TWO. Inside the viewer the chrome shows this sentence, and writing it into
+       * the frame as well put reviewer prose inside the render on every driven state: the frame is
+       * meant to hold the piece and nothing else, and the bare URL is what a screenshot uses.
+       */
       if (window.parent !== window) {
         window.parent.postMessage({ kitDriver: true, state, message }, window.location.origin);
+        return;
       }
+      const box = document.querySelector<HTMLElement>("[data-kit-driver-status]");
+      if (box) box.textContent = message;
     };
 
     const FOCUSABLE =
@@ -76,6 +82,35 @@ const { state, openTarget = "" } = Astro.props;
       return expanded === null ? true : expanded === "false";
     };
 
+    /**
+     * WHAT A READER WOULD SEE, WHICH IS THE ONLY THING WORTH CONFIRMING.
+     *
+     * The first readback asked `aria-expanded`, and an attribute is set by a piece's script whether
+     * or not any CSS renders anything. It was wrong in both directions on the same day it shipped:
+     * a mobile sheet whose toggle and panel are both `display: none` above the breakpoint reported
+     * that it had opened, and a lightbox that had genuinely opened a modal reported that nothing
+     * had, because the thumbnail carries no aria-expanded at all. Counting what is actually
+     * rendered cannot make either mistake: a panel that is display:none contributes nothing, and a
+     * dialog in the top layer contributes a great deal.
+     */
+    const rendered = () => {
+      let boxes = 0;
+      let ink = 0;
+      scope().querySelectorAll<HTMLElement>("*").forEach((el) => {
+        const b = el.getBoundingClientRect();
+        if (b.width > 0 && b.height > 0) {
+          boxes += 1;
+          ink += b.width * b.height;
+        }
+      });
+      const main = document.querySelector<HTMLElement>("main");
+      return { boxes, ink, text: (main?.innerText || "").length };
+    };
+    const grew = (before: ReturnType<typeof rendered>) => {
+      const after = rendered();
+      return after.boxes > before.boxes || after.text > before.text || after.ink > before.ink * 1.02;
+    };
+
     if (state === "open") {
       const candidates = [
         ...(openTarget ? Array.from(scope().querySelectorAll<HTMLElement>(openTarget)) : []),
@@ -92,13 +127,15 @@ const { state, openTarget = "" } = Astro.props;
         );
         return;
       }
+      const before = rendered();
       target.click();
-      // Same rule as focus: read the outcome back rather than assuming the press landed. A control
-      // that is present but inert at this width would otherwise be reported as having opened.
-      if (closed(target)) {
+      // Read the RENDERING back, not an attribute. See `rendered` above for why.
+      if (!grew(before)) {
         say(
-          "The piece's own control was pressed and nothing opened, which usually means this piece " +
-            "only opens below the small-screen breakpoint. Try the narrow frame.",
+          `The piece's own control was pressed and nothing became visible at ${window.innerWidth}px. ` +
+            "For a navigation that usually means its panel only exists below the small-screen " +
+            "breakpoint, so try the narrow frame; for anything else it means the control is present " +
+            "and inert at this width.",
         );
         return;
       }

@@ -186,10 +186,15 @@ const figures = (outcomeFigures ?? []).filter((f) => f?.value && f?.label);
   }
 
   .cf__part { display: grid; gap: var(--kit-space-xs); }
+  /* A HEADING IS NEVER SMALLER THAN THE COPY IT INTRODUCES.
+     At --kit-text-sm this rendered 15px over a 17px paragraph, so the fourth-level heading was
+     the smallest type in its own block and read as a bolded lead-in rather than a heading.
+     Matched to the body size, with the weight carrying the distinction, which is what a fourth
+     level is for. It is the only inversion of its kind in the kit; the sweep found no other. */
   .cf__part-heading {
     margin: 0;
     font-family: var(--kit-font-body);
-    font-size: var(--kit-text-sm);
+    font-size: var(--kit-text-base);
     font-weight: var(--kit-weight-strong);
     line-height: var(--kit-leading-snug);
   }

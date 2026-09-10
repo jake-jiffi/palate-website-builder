@@ -75,6 +75,7 @@ const toneClass =
    it, falling back to a per-render value so two copies on one page cannot collide. */
 const uid = id || `fc-${Math.random().toString(36).slice(2, 8)}`;
 const headingId = `${uid}-heading`;
+const asideId = `${uid}-aside`;
 const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
 ---
 
@@ -85,8 +86,18 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
       {intro && <p class="kit-lede kit-muted kit-formsec__intro-text">{intro}</p>}
       {aside && (
         <div class="kit-formsec__aside">
-          <h3 class="kit-label kit-formsec__aside-head">{aside.heading}</h3>
-          <ul class="kit-formsec__aside-list" role="list">
+          {/*
+            NOT A HEADING, AND IT NEVER LOOKED LIKE ONE.
+            This was an <h3> carrying .kit-label, so it rendered at 13px uppercase and still
+            sat in the document outline one level under the form's own title: a screen-reader
+            user listing the headings on a contact page heard "If you would rather just ring"
+            ranked as a subsection of the page. It is a label over a list, which is the use
+            .kit-label is for, so the tag follows the treatment rather than fighting it.
+            The list keeps the name through aria-labelledby, the same wiring the mobile sheet
+            uses for its groups, so nothing is lost from the accessible tree.
+          */}
+          <p class="kit-label kit-formsec__aside-head" id={asideId}>{aside.heading}</p>
+          <ul class="kit-formsec__aside-list" role="list" aria-labelledby={asideId}>
             {aside.lines.map((line) => <li>{line}</li>)}
           </ul>
         </div>

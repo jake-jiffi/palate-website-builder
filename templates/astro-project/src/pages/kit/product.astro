@@ -45,7 +45,12 @@ import FaqAccordion from "../../components/kit/faq/FaqAccordion.astro";
 import CtaClosing from "../../components/kit/cta/CtaClosing.astro";
 import FooterGrouped from "../../components/kit/footer/FooterGrouped.astro";
 ---
+{/* NO HOST CHROME. These pages carry the kit's OWN navigation and footer, so rendering the site's
+    header and footer around them stacked two banners, two contentinfos and two unrelated businesses
+    on the three pages whose whole job is proving the kit composes without a seam. axe agreed on all
+    three at both widths. */}
 <BaseLayout
+  chrome={false}
   title="Paddockline, stock and paddock records for family farms"
   description="An example product home page composed entirely from website kit pieces."
   noindex={true}

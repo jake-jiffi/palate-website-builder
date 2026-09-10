@@ -144,9 +144,28 @@ export const EMPTY_PROPS: Record<string, Record<string, unknown>> = {
   CaseCards: { studies: [] },
   FaqVisible: { items: [] },
   FaqAccordion: { items: [] },
-  // A booking form with no services and no open days has nothing to book, which is a real
-  // condition (a business that has closed its diary) and not the same as an empty list.
-  FormBooking: { services: [], openDays: [] },
+  /**
+   * A DIARY WITH NOTHING IN IT, WHICH IS NOT THE SAME AS AN EMPTY LIST.
+   *
+   * The first version set `services` and `openDays` and left `times` alone, so the branch the
+   * component wrote for exactly this condition could never render, and `openDays: []` is read by
+   * the piece as "every day is bookable". The state labelled empty therefore offered a diary open
+   * seven days a week and accepted a Sunday: MORE permissive than at rest, which is the same fault
+   * as a long fixture that shortens the page. `times` is what the branch is gated on.
+   */
+  FormBooking: { services: [], openDays: [], times: [] },
+
+  // The nine below render an empty message their manifest entry never declared, so nothing could
+  // show it. Declaring the state and giving it a fixture is what makes the message reachable.
+  BenefitShowcase: { points: [] },
+  CompareAlternatives: { attributes: [], alternatives: [] },
+  CompareBeforeAfter: { pairs: [] },
+  PricingCards: { plans: [] },
+  PricingQuote: { drivers: [], send: [], range: "", turnaround: "" },
+  PricingTable: { plans: [], attributes: [] },
+  ProblemSideBySide: { pairs: [] },
+  ProblemStory: { paragraphs: [] },
+  ProcessThreeStep: { steps: [] },
 };
 
 /**

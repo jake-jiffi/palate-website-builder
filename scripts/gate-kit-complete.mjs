@@ -47,13 +47,16 @@ function parsePieces(text) {
     if (!/variations:\s*\[/.test(body)) continue;
     const piece = { id, name, when: /when:\s*"([^"]*)"/.exec(body)?.[1] || "",
       where: /where:\s*"([^"]*)"/.exec(body)?.[1] || "", variations: [] };
-    const varRe = /\{\s*id:\s*"([A-Za-z]+)",\s*name:\s*"([^"]+)",\s*\n?\s*when:\s*"([^"]*)",\s*\n?\s*needs:\s*\[([^\]]*)\],\s*\n?\s*states:\s*\[([^\]]*)\]/g;
+    // The optional tail is what carries per-variation flags. Without it they sit outside the
+    // match and read as absent, which is a check that quietly answers "no" to everything.
+    const varRe = /\{\s*id:\s*"([A-Za-z]+)",\s*name:\s*"([^"]+)",\s*\n?\s*when:\s*"([^"]*)",\s*\n?\s*needs:\s*\[([^\]]*)\],\s*\n?\s*states:\s*\[([^\]]*)\]((?:\s*,\s*[A-Za-z]+:\s*[^,}]+)*)/g;
     let v;
     while ((v = varRe.exec(body))) {
       piece.variations.push({
         id: v[1], name: v[2], when: v[3],
         needs: (v[4].match(/"[^"]+"/g) || []).length,
         states: (v[5].match(/"[^"]+"/g) || []).map((s) => s.replace(/"/g, "")),
+        ownsPageHeading: /ownsPageHeading:\s*true/.test(v[6] || ""),
       });
     }
     pieces.push(piece);
@@ -165,6 +168,40 @@ for (const p of pieces) {
         const value = /=\s*["'`]([^"'`]+)["'`]/.exec(a[0])?.[1] || "";
         findings.push(`${v.id} defaults the asset "${a[2]}" to ${value}, which 404s on every site that does not carry that exact file`);
       }
+    }
+
+    /**
+     * AN EMPTY MESSAGE IS COPY A VISITOR READS, NOT A NOTE TO WHOEVER IS BUILDING THE PAGE.
+     *
+     * Five components defaulted to a builder's instruction ("Add three to eight benefits, each
+     * with a title and a sentence or two"). Those are component DEFAULTS, so they ship, and this
+     * project has already had to fix the same class once: a blog index that served "Add a markdown
+     * file to src/content/posts/" as public copy on a reachable page.
+     */
+    /**
+     * A PIECE THAT RENDERS THE PAGE'S h1 HAS TO SAY SO, because the demo frame supplies a hidden
+     * one for every piece that does not. Get it wrong in one direction and a hero demo ships two
+     * h1s; get it wrong in the other and 166 single-section documents ship none. The signal is the
+     * component's own heading level rather than where the file happens to live.
+     */
+    const ownsByDefault = /\blevel\s*=\s*1\b/.test(body);
+    if (ownsByDefault && !v.ownsPageHeading) {
+      findings.push(`${v.id} renders a level-1 heading by default and does not declare ownsPageHeading, so the demo frame adds a second h1 to the same document`);
+    }
+    if (!ownsByDefault && v.ownsPageHeading) {
+      findings.push(`${v.id} declares ownsPageHeading and renders no level-1 heading by default, so its demo document has no h1 at all`);
+    }
+
+    const emptyDefault = /emptyMessage\s*=\s*["'`]([^"'`]+)["'`]/.exec(body);
+    if (emptyDefault && /^(Add|Set|Pass|Provide|Supply|Configure|Populate|Fill|Use)\s/.test(emptyDefault[1])) {
+      findings.push(`${v.id} defaults its empty message to "${emptyDefault[1].slice(0, 60)}", which instructs whoever is building the page rather than telling a visitor what is going on. It ships, so a visitor reads it.`);
+    }
+    /**
+     * AND A PIECE THAT RENDERS AN EMPTY MESSAGE HAS AN EMPTY STATE. Nine did not declare one, so
+     * the state browser could never show the message and nobody reviewing the kit could see it.
+     */
+    if (emptyDefault && !v.states.includes("empty")) {
+      findings.push(`${v.id} renders an empty message and does not declare the empty state, so nothing can show it and no reviewer can see what a visitor would read`);
     }
 
     if (!/^\s*\/\*[\s\S]{60,}?\*\//m.test(body) && !/^---[\s\S]{0,400}?\/\*\*/m.test(body)) {

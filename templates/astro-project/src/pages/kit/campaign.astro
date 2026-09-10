@@ -40,7 +40,12 @@ import PricingTable from "../../components/kit/pricing/PricingTable.astro";
 import FormBooking from "../../components/kit/forms/FormBooking.astro";
 import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
 ---
+{/* NO HOST CHROME. These pages carry the kit's OWN navigation and footer, so rendering the site's
+    header and footer around them stacked two banners, two contentinfos and two unrelated businesses
+    on the three pages whose whole job is proving the kit composes without a seam. axe agreed on all
+    three at both widths. */}
 <BaseLayout
+  chrome={false}
   title="Book a home energy assessment before winter, Northaven Home Energy"
   description="An example campaign landing page composed entirely from website kit pieces."
   noindex={true}

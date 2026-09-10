@@ -38,6 +38,14 @@ export type KitState =
   | "hover" | "focus" | "open" | "loading" | "success" | "error" | "empty" | "long";
 
 export interface KitVariation {
+  /**
+   * TRUE when this piece renders the PAGE's top-level heading rather than a section heading.
+   * Only a hero does, and only because a hero's headline IS the page's h1 on a real page. It is
+   * declared rather than inferred because a demo that renders one section alone still has to be a
+   * valid document: the frame supplies a hidden h1 for every piece EXCEPT these, and without the
+   * distinction it would either ship two h1s on a hero or none anywhere else.
+   */
+  ownsPageHeading?: boolean;
   /** Component file under src/components/kit/<piece>/<id>.astro */
   id: string;
   /** Jake's own words for this variation, from the spec table. */
@@ -88,15 +96,15 @@ export const kit: KitPiece[] = [
       { id: "HeroTextImage", name: "Text with image",
         when: "There is one strong image and a claim that needs a paragraph to land.",
         needs: ["headline", "1-2 sentence lede", "1-2 calls to action", "one image (16:9 or 4:3)"],
-        states: ["hover", "focus", "long"] },
+        states: ["hover", "focus", "long"], ownsPageHeading: true },
       { id: "HeroCentredPreview", name: "Centred headline with product preview",
         when: "The product IS the proof: software, an app, anything with a screen worth showing.",
         needs: ["headline", "short lede", "1-2 calls to action", "a product screenshot"],
-        states: ["hover", "focus", "long"] },
+        states: ["hover", "focus", "long"], ownsPageHeading: true },
       { id: "HeroServicePhoto", name: "Service hero with real photography",
         when: "A trade or service business with genuinely good photography of their own work.",
         needs: ["headline", "lede", "call to action", "a full-bleed photograph at 1600px or wider"],
-        states: ["hover", "focus", "long"] },
+        states: ["hover", "focus", "long"], ownsPageHeading: true },
     ],
   },
   {
@@ -130,11 +138,11 @@ export const kit: KitPiece[] = [
       { id: "ProblemSideBySide", name: "Side-by-side comparison",
         when: "The change is not visual but is enumerable.",
         needs: ["3-6 paired statements", "a label for each column"],
-        states: ["long"] },
+        states: ["long", "empty"] },
       { id: "ProblemStory", name: "Short problem-to-outcome story",
         when: "One customer's arc says it better than a list.",
         needs: ["2-4 short paragraphs", "optional image", "optional attribution"],
-        states: ["long"] },
+        states: ["long", "empty"] },
     ],
   },
   {
@@ -153,7 +161,7 @@ export const kit: KitPiece[] = [
       { id: "BenefitShowcase", name: "Detailed feature showcase",
         when: "One feature carries the product and needs room.",
         needs: ["title", "paragraph", "3-5 supporting points", "one large image"],
-        states: ["hover", "focus", "long"] },
+        states: ["hover", "focus", "long", "empty"] },
     ],
   },
   {
@@ -183,7 +191,7 @@ export const kit: KitPiece[] = [
       { id: "ProcessThreeStep", name: "Three-step process",
         when: "The process genuinely is short. Do not pad to three.",
         needs: ["3 steps each with a title and 1-2 sentences"],
-        states: ["long"] },
+        states: ["long", "empty"] },
       { id: "ProcessDetailed", name: "Detailed onboarding or delivery process",
         when: "A considered purchase where the visitor needs the whole sequence and its timings.",
         needs: ["4-8 stages each with a title, a description and optionally a duration"],
@@ -255,15 +263,15 @@ export const kit: KitPiece[] = [
       { id: "PricingCards", name: "Pricing cards",
         when: "2-4 packages that differ by inclusion rather than by degree.",
         needs: ["2-4 plans each with a name, a price, a cadence, 3-8 inclusions and a call to action"],
-        states: ["hover", "focus", "long"] },
+        states: ["hover", "focus", "long", "empty"] },
       { id: "PricingTable", name: "Comparison table",
         when: "The plans differ across many attributes and the visitor is comparing carefully.",
         needs: ["2-5 plans", "6-20 attributes with a value per plan"],
-        states: ["hover", "focus", "long"] },
+        states: ["hover", "focus", "long", "empty"] },
       { id: "PricingQuote", name: "Custom quote option",
         when: "Every job is priced individually. The honest answer for most trades.",
         needs: ["what drives the price", "what the visitor should send", "how long a quote takes", "a call to action"],
-        states: ["hover", "focus", "long"] },
+        states: ["hover", "focus", "long", "empty"] },
     ],
   },
   {
@@ -274,11 +282,11 @@ export const kit: KitPiece[] = [
       { id: "CompareAlternatives", name: "Your solution versus alternatives",
         when: "Named or generic competitors, compared on attributes that can be defended.",
         needs: ["your column", "1-3 alternative columns", "4-10 attributes", "a fairness note"],
-        states: ["long"] },
+        states: ["long", "empty"] },
       { id: "CompareBeforeAfter", name: "Current approach versus improved approach",
         when: "The competitor is the status quo, which it usually is.",
         needs: ["4-8 paired statements", "a label for each column"],
-        states: ["long"] },
+        states: ["long", "empty"] },
     ],
   },
   {

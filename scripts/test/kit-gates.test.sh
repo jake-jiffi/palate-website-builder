@@ -12,7 +12,23 @@
 # colour check was a hand-written denylist. Both are pinned below.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"
+# EVERY MUTATION BELOW EDITS A TRACKED FILE AND RESTORES IT ON THE NEXT LINE. A failure between the
+# two leaves the repository edited, and one run of this suite did exactly that: it left the manifest
+# a flag short and the next assertion failed on a file the test had broken. The trap restores
+# whatever is backed up here however the run ends, so a mid-test failure costs a red line and never
+# a corrupted tree.
+restore_backups() {
+  for b in "$TMP"/*.restore; do
+    [ -e "$b" ] || continue
+    dest="$(cat "${b%.restore}.dest" 2>/dev/null)"
+    [ -n "$dest" ] && [ -e "$dest" ] && cp "$b" "$dest"
+  done
+  rm -rf "$TMP"
+}
+trap restore_backups EXIT
+# back_up <file> <name>: keep a copy the trap will put back no matter how the run ends.
+back_up() { cp "$1" "$TMP/$2.restore"; printf '%s' "$1" > "$TMP/$2.dest"; }
 pass=0; fail=0
 ok()  { echo "ok   - $1"; pass=$((pass+1)); }
 bad() { echo "FAIL - $1"; fail=$((fail+1)); }
@@ -120,6 +136,7 @@ STATES="$HERE/templates/astro-project/src/lib/kit-states.ts"
 VIEWER="$HERE/templates/astro-project/src/pages/kit/[piece]/[variation]/[state].astro"
 FRAME="$HERE/templates/astro-project/src/pages/kit-frame/[piece]/[variation]/[state].astro"
 
+back_up "$STATES" states
 cp "$STATES" "$TMP/states.bak"
 node -e '
 const fs = require("fs");
@@ -148,11 +165,46 @@ if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED the s
 else ok "gate-kit-complete catches the state route being gone, which makes every state unreachable"; fi
 mv "$TMP/viewer.bak" "$VIEWER"
 
+back_up "$FRAME" frame
 cp "$FRAME" "$TMP/frame.bak"
 sed -i.bak 's/import StateDriver from/import NoDriver from/; s/{drive \&\& <StateDriver/{drive \&\& <NoDriver/' "$FRAME" && rm -f "$FRAME.bak"
 if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a frame that imports the driver and never renders it"
 else ok "gate-kit-complete catches a frame that names the driver without rendering it"; fi
 cp "$TMP/frame.bak" "$FRAME"
+
+# ---------- empty copy is for a VISITOR, and the state has to be declared ----------
+# Five components defaulted to an instruction for whoever was building the page, and those are
+# defaults, so they ship. Three of the five did not declare `empty`, so nothing could show a
+# reviewer what a visitor would read.
+EMPTYC="$HERE/templates/astro-project/src/components/kit/benefits/BenefitCards.astro"
+back_up "$EMPTYC" emptyc
+cp "$EMPTYC" "$TMP/emptyc.bak"
+sed -i.bak 's/emptyMessage = "What you get from this is being written up."/emptyMessage = "Add three to eight benefits, each with a title."/' "$EMPTYC" && rm -f "$EMPTYC.bak"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED an empty message written for the builder"
+else ok "gate-kit-complete catches an empty message that instructs the builder rather than the visitor"; fi
+cp "$TMP/emptyc.bak" "$EMPTYC"
+
+MANIFEST="$HERE/templates/astro-project/src/lib/kit.ts"
+back_up "$MANIFEST" kit
+cp "$MANIFEST" "$TMP/kit.bak"
+node -e '
+const fs = require("fs");
+const p = process.argv[1];
+const s = fs.readFileSync(p, "utf8");
+const m = /(\{ id: "PricingCards", name: "[^"]*",[\s\S]*?states: \[)([^\]]*)(\])/.exec(s);
+fs.writeFileSync(p, s.slice(0, m.index) + m[1] + m[2].replace(/,\s*"empty"/, "") + m[3] + s.slice(m.index + m[0].length));
+' "$MANIFEST"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a piece that renders an empty message and declares no empty state"
+else ok "gate-kit-complete catches a piece whose empty message no state can ever show"; fi
+cp "$TMP/kit.bak" "$MANIFEST"
+
+# A hero renders the page's h1; every other piece needs the frame to supply one. Get the flag
+# wrong either way and the demo document has two h1s or none.
+perl -0pi -e 's/, ownsPageHeading: true//' "$MANIFEST"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a level-1 piece that does not declare ownsPageHeading"
+else ok "gate-kit-complete catches a piece that renders an h1 without declaring it, so the frame adds a second"; fi
+cp "$TMP/kit.bak" "$MANIFEST"
+
 
 "$COMPLETE" "$HERE" >/dev/null 2>&1 && ok "and the kit is clean again once every fixture is removed" \
   || bad "the kit did not return to clean after the fixtures were removed"

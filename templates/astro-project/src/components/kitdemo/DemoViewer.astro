@@ -239,7 +239,10 @@ const pieceIndex = kit.findIndex((p) => p.id === piece.id);
   }
   .dvw__frame {
     width: 100%;
-    min-height: 60vh;
+    /* NOT 60vh. A viewport-sized floor set the frame's height before anything had been measured,
+       and the frame's own measurement could then never fall below it, so a 77px navigation bar sat
+       in a 600px white box. A small floor is enough to stop a flash of nothing. */
+    min-height: 4rem;
     background: var(--kit-bg);
     display: block;
     /* NO BORDER. A 1px border plus border-box made "Phone, 390" deliver a 388px viewport and left
@@ -311,31 +314,49 @@ const pieceIndex = kit.findIndex((p) => p.id === piece.id);
      * exact failure this whole surface exists to avoid. Reloading re-drives the state at the new
      * width, and the status is cleared until the driver reports again.
      */
+    const redrive = () => {
+      if (status) status.textContent = "";
+      frameHeight = 0;
+      // eslint-disable-next-line no-self-assign
+      frame.src = frame.src;
+    };
+
     const setWidth = (value: string) => {
       const changed = value !== requested;
       requested = value;
       apply();
       if (!changed) return;
-      if (status) {
-        status.textContent = "";
-      }
-      frameHeight = 0;
-      // eslint-disable-next-line no-self-assign
-      frame.src = frame.src;
+      redrive();
     };
 
     root.querySelectorAll<HTMLButtonElement>(".dvw__width").forEach((button) => {
       button.addEventListener("click", () => setWidth(button.dataset.width || "full"));
     });
 
-    window.addEventListener("resize", apply);
+    /**
+     * A WINDOW DRAG IS A WIDTH CHANGE TOO.
+     *
+     * The reload-and-re-drive was bound to the BUTTON, and `apply()` also runs on resize, so
+     * dragging the window across a piece's breakpoint reproduced the exact fault the buttons were
+     * fixed for: the piece closed itself and the live region went on announcing that it was open.
+     * The trigger is now the delivered width changing, whatever moved it.
+     */
+    let delivered = 0;
+    const onResize = () => {
+      apply();
+      const after = Math.round(frame.getBoundingClientRect().width);
+      if (delivered && Math.abs(after - delivered) >= 2) redrive();
+      delivered = after;
+    };
+    window.addEventListener("resize", onResize);
     apply();
+    delivered = Math.round(frame.getBoundingClientRect().width);
 
     window.addEventListener("message", (event) => {
       if (event.origin !== window.location.origin) return;
       const data = event.data as { kitFrameHeight?: number; kitDriver?: boolean; message?: string };
       if (typeof data?.kitFrameHeight === "number") {
-        frameHeight = Math.max(240, Math.ceil(data.kitFrameHeight));
+        frameHeight = Math.max(48, Math.ceil(data.kitFrameHeight));
         frame.style.height = `${frameHeight}px`;
         frame.style.minHeight = "0";
         apply();

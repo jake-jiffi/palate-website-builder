@@ -51,13 +51,26 @@ function mapOf(name) {
     process.exit(2);
   }
   const out = {};
-  const re = /^ {2}([A-Za-z]+): \{([\s\S]*?)\n {2}\},$/gm;
+  /**
+   * BOTH SHAPES. The first version matched only a MULTI-LINE entry, and every empty fixture is
+   * written on one line, so EMPTY_PROPS parsed to nothing and the whole empty-state check ran over
+   * zero fixtures while reporting itself clean. Exists-but-never-fires, caught by reading the
+   * count in the pass message rather than by the check failing.
+   */
+  const multi = /^ {2}([A-Za-z]+): \{([\s\S]*?)\n {2}\},$/gm;
+  const single = /^ {2}([A-Za-z]+): \{([^\n]*)\},$/gm;
   let e;
-  while ((e = re.exec(m[1]))) out[e[1]] = e[2];
+  while ((e = multi.exec(m[1]))) out[e[1]] = e[2];
+  while ((e = single.exec(m[1]))) if (!(e[1] in out)) out[e[1]] = e[2];
+  if (!Object.keys(out).length) {
+    console.error(`gate-kit-fixtures: could not run: ${name} parsed to zero fixtures, so nothing was checked. A gate never exits 0 having inspected nothing.`);
+    process.exit(2);
+  }
   return out;
 }
 
 const LONG = mapOf("LONG_PROPS");
+const EMPTY = mapOf("EMPTY_PROPS");
 if (!Object.keys(LONG).length) {
   console.error("gate-kit-fixtures: could not run: LONG_PROPS parsed to zero fixtures.");
   process.exit(2);
@@ -131,7 +144,13 @@ const MIN_FIELD = 1.5;
 
 /** Visible text per element, so a collapsed <details> answer still counts. */
 function textStats(html) {
-  const body = html.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<style[\s\S]*?<\/style>/g, " ");
+  const body = html
+    .replace(/<script[\s\S]*?<\/script>/g, " ")
+    .replace(/<style[\s\S]*?<\/style>/g, " ")
+    // The frame's own hidden heading is chrome, not the piece. Counting it added the same run of
+    // characters to both sides of every ratio, which pulls the ratio toward 1 and failed two
+    // fixtures that had not changed: a measurement polluted by the thing doing the measuring.
+    .replace(/<h1[^>]*data-kit-frame-heading[^>]*>[\s\S]*?<\/h1>/g, " ");
   const main = /<main[^>]*>([\s\S]*?)<\/main>/.exec(body)?.[1] ?? body;
   const fields = [...main.matchAll(/>([^<>]{12,})</g)]
     .map((m) => m[1].replace(/&#39;/g, "'").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/\s+/g, " ").trim())
@@ -164,6 +183,40 @@ for (const variation of Object.keys(LONG)) {
   }
 }
 
+/**
+ * AN EMPTY FIXTURE HAS TO REACH THE EMPTY BRANCH, and one did not.
+ *
+ * FormBooking's empty state set two props and left a third, so the message the component wrote for
+ * exactly that condition could never render, and one of the props it did set is read by the piece
+ * as "every day is bookable": the state labelled empty offered a diary open seven days a week and
+ * accepted a Sunday. That is the long-fixture fault in the other direction, a state that removes
+ * strain rather than showing the absence it names, and the ratio checks above only ever looked at
+ * LONG_PROPS so nothing could catch it.
+ *
+ * The test is what a reader would see: fewer items than at rest, and the piece's own empty message
+ * actually on the page.
+ */
+for (const variation of Object.keys(EMPTY)) {
+  const piece = pieceOf[variation];
+  if (!piece) {
+    findings.push(`EMPTY_PROPS carries a fixture for ${variation}, which no piece in the manifest declares`);
+    continue;
+  }
+  const emptyFile = join(dist, "kit-frame", piece, variation, "empty", "index.html");
+  const restFile = join(dist, "kit-frame", piece, variation, "rest", "index.html");
+  if (!existsSync(emptyFile) || !existsSync(restFile)) continue;
+  const emptyHtml = readFileSync(emptyFile, "utf8");
+  const empty = textStats(emptyHtml);
+  const rest = textStats(readFileSync(restFile, "utf8"));
+  sized += 1;
+  if (empty.items >= rest.items && rest.items > 0) {
+    findings.push(`${variation}'s empty fixture renders ${empty.items} item(s) against ${rest.items} at rest, so it is not showing the absence it names`);
+  }
+  if (!/kit-empty/.test(emptyHtml)) {
+    findings.push(`${variation}'s empty state never renders .kit-empty, so the message the component wrote for this condition is unreachable and the page shows a working piece instead`);
+  }
+}
+
 if (findings.length) {
   console.error(`gate-kit-fixtures: ${findings.length} finding(s) over ${checked} fixture string(s) and ${sized} sized fixture(s).`);
   for (const f of findings.slice(0, 20)) console.error(`  - ${f}`);
@@ -171,5 +224,5 @@ if (findings.length) {
   process.exit(1);
 }
 
-console.log(`gate-kit-fixtures: clean (${checked} fixture strings reach the page; ${sized} long fixtures each carry at least ${MIN_TOTAL}x the resting text and ${MIN_FIELD}x its longest field).`);
+console.log(`gate-kit-fixtures: clean (${checked} fixture strings reach the page; ${sized} sized renders, every long state at least ${MIN_TOTAL}x the resting text and ${MIN_FIELD}x its longest field, every empty state showing its own empty message).`);
 process.exit(0);

@@ -85,8 +85,6 @@ const {
    per-render value, so two copies of a piece on one page cannot collide. */
 const uid = id || `cb-${Math.random().toString(36).slice(2, 8)}`;
 const headingId = `${uid}-heading`;
-const beforeHeadId = `${uid}-before`;
-const afterHeadId = `${uid}-after`;
 const toneClass =
   tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
 
@@ -105,8 +103,12 @@ const items = (pairs ?? []).filter((p) => p?.before && p?.after);
     ) : (
       <div class="cb__body">
         <div class="cb__columns" aria-hidden="true">
-          <p class="cb__column-label" id={beforeHeadId}>{beforeLabel}</p>
-          <p class="cb__column-label cb__column-label--after" id={afterHeadId}>{afterLabel}</p>
+          {/* No ids here. They existed and nothing referenced them, which read as wiring
+              somebody meant to finish; it was not. This row is aria-hidden by design, and
+              naming a hidden element from a visible one is a way to lose the name entirely.
+              Each pair below carries its own "Before: " / "After: " prefix instead. */}
+          <p class="cb__column-label">{beforeLabel}</p>
+          <p class="cb__column-label cb__column-label--after">{afterLabel}</p>
         </div>
 
         <ul class="cb__list" role="list">

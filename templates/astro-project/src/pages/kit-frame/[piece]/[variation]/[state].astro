@@ -53,6 +53,17 @@ const drive = !isRest && STATE_KIND[state as KitDemoState] === "driven";
   noindex={true}
   chrome={false}
 >
+  {/*
+    A REAL DOCUMENT NEEDS A TOP-LEVEL HEADING, even one holding a single section.
+    Without it every one of these pages failed axe `page-has-heading-one`, so an accessibility
+    sweep of the kit returned 166 findings of noise at each width, which is how a team learns to
+    stop reading the tool. It is visually hidden because the piece owns everything visible here,
+    and it names the piece and the state so a screen reader arriving at the bare URL is told what
+    it has landed on.
+  */}
+  {!variation.ownsPageHeading && (
+    <h1 class="kit-visually-hidden" data-kit-frame-heading>{variation.name}, {isRest ? "at rest" : state}</h1>
+  )}
   {Component ? <Component {...props} /> : (
     <div class="kit-container" style="padding-block: var(--kit-space-3xl)">
       <p class="kit-empty">This variation is declared in the manifest and has no component.</p>
@@ -106,11 +117,19 @@ const drive = !isRest && STATE_KIND[state as KitDemoState] === "driven";
      * real change ends it after one round.
      */
     let last = -1;
+    /**
+     * THE BODY'S OWN BOX, NEVER scrollHeight.
+     *
+     * `documentElement.scrollHeight` can never be smaller than the iframe's own viewport, and the
+     * parent sets that viewport from this very measurement, so the number could grow and could
+     * never shrink. A 77px navigation sat in a 600px white box on every page, and opening five
+     * accordion answers and closing them again left 524px of nothing. The body's border box is
+     * content height and is not floored by the viewport, which breaks the ratchet.
+     */
     const measure = () => {
-      const height = Math.max(
-        document.documentElement.scrollHeight,
-        document.body ? document.body.scrollHeight : 0,
-      );
+      const body = document.body;
+      if (!body) return;
+      const height = Math.ceil(body.getBoundingClientRect().height);
       if (Math.abs(height - last) < 2) return;
       last = height;
       window.parent.postMessage({ kitFrameHeight: height }, window.location.origin);

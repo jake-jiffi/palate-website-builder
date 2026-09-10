@@ -89,10 +89,14 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
     <ClientRouter />
   </head>
   <body>
+    {/* First in the tab order, so the bypass is reachable before the navigation it bypasses. */}
+    <a class="skip-link" href="#main">Skip to content</a>
     <ExploreSwitcher />
     <Motion />
     {chrome && <slot name="header" />}
-    <main><slot /></main>
+    {/* The id the skip link points at. Without it the link leads nowhere and axe fails
+        `skip-link` on every page, which is a keyboard user's first control on the site. */}
+    <main id="main"><slot /></main>
     {chrome && <slot name="footer" />}
     <CmsVisualEditing enabled={visualEditing} />
   </body>

@@ -55,6 +55,36 @@
     outline-offset: 2px;
   }
 
+  /**
+   * THE BYPASS. WCAG 2.4.1, and nothing in this template offered one.
+   *
+   * Every page puts a navigation ahead of its content, so a keyboard or switch user tabbed through
+   * the whole menu on every page before reaching anything they came for. It lives in the LAYOUT
+   * rather than in a navigation component because a page is allowed to use no navigation at all,
+   * and the requirement is about the page.
+   *
+   * Off-screen rather than display:none, because a hidden element is not focusable and a bypass
+   * nobody can focus is not a bypass. It is the first thing in the tab order and it shows itself
+   * the moment it is reached.
+   */
+  .skip-link {
+    position: absolute;
+    left: 0.5rem;
+    top: -3rem;
+    z-index: 100;
+    padding: 0.5rem 0.875rem;
+    border-radius: 4px;
+    background: var(--brand-bg-default, var(--brand-bg, #ffffff));
+    color: var(--brand-text-primary, var(--brand-text, #111111));
+    box-shadow: 0 2px 12px rgb(0 0 0 / 0.24);
+    text-decoration: underline;
+    transition: top 120ms ease;
+  }
+
+  .skip-link:focus {
+    top: 0.5rem;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
