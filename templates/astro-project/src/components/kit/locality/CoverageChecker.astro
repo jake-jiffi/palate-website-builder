@@ -190,27 +190,28 @@ const resultId = `${uid}-result`;
     };
     const ALL_STATE_FORMS = Object.values(STATE_FORMS).flat().sort((a, b) => b.length - a.length);
     /**
-     * THE RULES, IN ORDER, AND THE ORDER IS THE FIX. Three rounds found this one function fixed
-     * into its own opposite: loosened until "Manly Vale" read as Manly, tightened until "Bondi
-     * Beach 2026" was refused on a postcode the list carries, then loosened until "Chatswood 2026"
-     * and "2026 total gibberish here" were both covered, while "North Sydney" (city Sydney),
-     * "Victoria Point" (state QLD) and "Marrickville 2204" on a names-only list were refused,
-     * because the business's own qualifiers were stripped out of place NAMES before any match.
+     * THE RULE, AFTER FIVE ROUNDS: a four-digit POSTCODE is the only thing this piece can verify,
+     * so it answers on the postcode and never guesses a suburb it does not list. `decide` returns
+     * a covered place or null; the submit handler turns null into a NO (a postcode the list does
+     * not carry) or a REFINE (a name it cannot confirm, or the whole city).
      *
-     *  1. The typed words, postcode aside, are matched WHOLE against the listed names first, so a
-     *     name that contains the city or a state is found before anything is stripped. The same
-     *     is then tried with the business's own state, its city and the country removed, which is
-     *     how "Marrickville NSW" and "Coogee, Sydney" are read.
-     *  2. A listed name decides yes, unless a typed postcode is one the list does not carry while
-     *     the list carries postcodes at all ("Chatswood 2000" against a list that says 2067). A
-     *     names-only list has no postcode to be contradicted by.
-     *  3. With no listed name, another state as the LAST word refuses ("Manly, Queensland"). A
-     *     state's name inside a longer place name is part of the name and never triggers this.
-     *  4. Then a typed postcode decides: off the list it refuses; on the list it answers yes when
-     *     nothing else was typed, or when the words share a whole word with a listed name ("Bondi
-     *     Beach" for Bondi, echoed as Bondi). Any other words name a place the list does not
-     *     ("Chatswood 2026", "2026 total gibberish here"), and refuse.
-     * Nothing is answered yes on a partial match, and the answer echoes the list's own name.
+     *  1. The typed words, postcode aside, are matched WHOLE against the listed names, most literal
+     *     first (raw, then the business's own state removed, then its city and the country removed),
+     *     so a name that contains the city or a state ("North Sydney", "Port Victoria") is found
+     *     before that qualifier strips, and "Marrickville NSW" / "Coogee, Sydney" read correctly.
+     *  2. A listed name decides YES, unless a typed postcode is one the list does not carry while
+     *     the list carries postcodes at all ("Chatswood 2000" against a list that says 2067): a
+     *     covered suburb with a contradicting postcode is refused. A names-only list has no
+     *     postcode to be contradicted by.
+     *  3. Otherwise a LISTED POSTCODE is authoritative: if any typed postcode is on the list the
+     *     area is covered, even beside an unlisted postcode ("2026 2000") or a state word ("2026
+     *     Victoria"); the echo is a whole-matched name where one exists, else the listed postcode,
+     *     never the visitor's raw words.
+     *  4. With no listed name and no listed postcode, `decide` returns null and the handler decides:
+     *     a postcode the list COULD have carried but does not is a NO; a name the piece cannot
+     *     confirm (or the whole city) is sent to its postcode, the certain path, never refused,
+     *     because a covered suburb the list happens not to spell out must not be told "we do not
+     *     work there". Nothing is answered YES on a partial match.
      */
     const decide = (raw: string, covered: string[], ownState: string, ownCity: string): string | null => {
       const typed = normalise(raw);
@@ -316,9 +317,16 @@ const resultId = `${uid}-result`;
         // given when a postcode was typed and is not on the list (which the piece CAN verify); a
         // bare name it cannot match is sent to the certain path, its own postcode.
         const codes = (input.value.match(/\b\d{4}\b/g) || []);
-        if (!hit && codes.length === 0) {
+        const hasPostcodes = covered.some((c) => /^\d{4}$/.test(c.trim()));
+        // A NO is only ever given to a postcode the list COULD carry but does not. Anything else the
+        // piece cannot verify is a refine: a name it does not list, or a bare postcode against a
+        // names-only list (which has nothing to check it against), sent to the path it can answer.
+        if (!hit && !(codes.length > 0 && hasPostcodes)) {
+          const digitsOnly = !/[a-z]/i.test(input.value);
           if (error) {
-            error.textContent = `We cannot confirm ${input.value.trim()} by name. Pop your postcode in and we will tell you for certain.`;
+            error.textContent = digitsOnly
+              ? "We check coverage by suburb here. Which suburb are you in?"
+              : `We cannot confirm ${input.value.trim()} by name. Pop your postcode in and we will tell you for certain.`;
             error.hidden = false;
           }
           input.setAttribute("aria-invalid", "true");
