@@ -209,6 +209,85 @@ cp "$TMP/kit.bak" "$MANIFEST"
 "$COMPLETE" "$HERE" >/dev/null 2>&1 && ok "and the kit is clean again once every fixture is removed" \
   || bad "the kit did not return to clean after the fixtures were removed"
 
+# ---------- every citation names a reference the survey actually read ----------
+# The kit was first written with the MCP configured and not connected, and nothing noticed. These
+# assertions are what stops a rule drifting back into taste: a slug the survey never read, a slug
+# borrowed from another piece's notes, a piece with no grounding entry, a rule that cites nothing,
+# a rhythm citing an unread reference, a library piece resting on one reading, and a survey that
+# is missing, which must read as "could not run" rather than as clean.
+GROUND="$HERE/templates/astro-project/src/lib/kit-grounding.ts"
+SURVEY="$HERE/templates/astro-project/src/lib/kit-survey.json"
+back_up "$MANIFEST" kit2
+back_up "$GROUND" ground
+cp "$MANIFEST" "$TMP/kit2.bak"; cp "$GROUND" "$TMP/ground.bak"
+
+sed -i.bak 's/evidence: \["mercury"\] }/evidence: ["mercury", "never-read-reference"] }/' "$MANIFEST" && rm -f "$MANIFEST.bak"
+if grep -q "never-read-reference" "$MANIFEST"; then
+  if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED evidence citing a reference the survey never read"
+  else ok "gate-kit-complete catches evidence that cites a reference the survey never read"; fi
+else bad "the evidence mutation did not apply (FooterSimple evidence has moved)"; fi
+cp "$TMP/kit2.bak" "$MANIFEST"
+
+sed -i.bak 's/evidence: \["mercury"\] }/evidence: ["1rebel"] }/' "$MANIFEST" && rm -f "$MANIFEST.bak"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED evidence borrowed from another piece's notes"
+else ok "gate-kit-complete catches evidence borrowed from a piece its notes were never recorded against"; fi
+cp "$TMP/kit2.bak" "$MANIFEST"
+
+node -e '
+const fs = require("fs"); const p = process.argv[1]; let s = fs.readFileSync(p, "utf8");
+const i = s.indexOf("id: \"locality\"");
+const j = s.indexOf("\n  },\n", i);
+const block = s.slice(i, j).replace(/evidence: \[[^\]]*\]/g, "evidence: [\"barrys\"]");
+fs.writeFileSync(p, s.slice(0, i) + block + s.slice(j));
+' "$MANIFEST"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a library piece resting on one reference"
+else ok "gate-kit-complete catches a library-added piece that cites fewer than three references"; fi
+cp "$TMP/kit2.bak" "$MANIFEST"
+
+sed -i.bak 's/^  footer: {$/  footerx: {/' "$GROUND" && rm -f "$GROUND.bak"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a piece with no grounding entry"
+else ok "gate-kit-complete catches a piece with no grounding entry, and an entry that grounds nothing"; fi
+cp "$TMP/ground.bak" "$GROUND"
+
+node -e '
+const fs = require("fs"); const p = process.argv[1]; let s = fs.readFileSync(p, "utf8");
+s = s.replace(/(rules: \[\n\s*\{ text: "[^"]+", slugs: )\[[^\]]*\]/, "$1[]");
+fs.writeFileSync(p, s);
+' "$GROUND"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a rule that cites nothing"
+else ok "gate-kit-complete catches a rule with no citation, which is taste rather than evidence"; fi
+cp "$TMP/ground.bak" "$GROUND"
+
+node -e '
+const fs = require("fs"); const p = process.argv[1]; let s = fs.readFileSync(p, "utf8");
+const i = s.indexOf("export const kitRhythms");
+s = s.slice(0, i) + s.slice(i).replace(/slugs: \[/, "slugs: [\"never-read-reference\", ");
+fs.writeFileSync(p, s);
+' "$GROUND"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a rhythm citing a reference the survey never read"
+else ok "gate-kit-complete catches a rhythm that cites a reference the survey never read"; fi
+cp "$TMP/ground.bak" "$GROUND"
+
+back_up "$SURVEY" survey
+mv "$SURVEY" "$TMP/survey.moved"
+"$COMPLETE" "$HERE" >/dev/null 2>&1; rc=$?
+if [ "$rc" -eq 2 ]; then ok "gate-kit-complete reports it could not run (exit 2) when the survey snapshot is missing, rather than passing"
+else bad "gate-kit-complete exited $rc with no survey snapshot; a gate never passes having inspected nothing"; fi
+mv "$TMP/survey.moved" "$SURVEY"
+
+# ---------- a page's own header and footer survive chrome={false} ----------
+# The layout once gated the header and footer SLOTS on the chrome flag, so the three composed pages
+# shipped with no navigation and no footer while every gate passed. A screenshot found it.
+LAYOUT="$HERE/templates/astro-project/src/layouts/BaseLayout.astro"
+back_up "$LAYOUT" layout
+cp "$LAYOUT" "$TMP/layout.bak"
+sed -i.bak 's/{Astro.slots.has("footer") \&\& <slot name="footer" \/>}/{chrome \&\& <slot name="footer" \/>}/' "$LAYOUT" && rm -f "$LAYOUT.bak"
+if grep -q '{chrome && <slot name="footer" />}' "$LAYOUT"; then
+  if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a layout that drops a supplied footer under chrome={false}"
+  else ok "gate-kit-complete catches a layout that gates a supplied footer slot on the chrome flag"; fi
+else bad "the layout mutation did not apply (the footer slot line has moved)"; fi
+cp "$TMP/layout.bak" "$LAYOUT"
+
 # ---------- the client-imagery gate ----------
 SITE="$TMP/site"; mkdir -p "$SITE/_assets-archive/photos" "$SITE/dist/client"
 for i in 1 2 3; do printf 'x' > "$SITE/_assets-archive/photos/p$i.jpg"; done

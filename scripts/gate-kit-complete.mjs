@@ -49,16 +49,20 @@ function parsePieces(text) {
       where: /where:\s*"([^"]*)"/.exec(body)?.[1] || "", variations: [] };
     // The optional tail is what carries per-variation flags. Without it they sit outside the
     // match and read as absent, which is a check that quietly answers "no" to everything.
-    const varRe = /\{\s*id:\s*"([A-Za-z]+)",\s*name:\s*"([^"]+)",\s*\n?\s*when:\s*"([^"]*)",\s*\n?\s*needs:\s*\[([^\]]*)\],\s*\n?\s*states:\s*\[([^\]]*)\]((?:\s*,\s*[A-Za-z]+:\s*[^,}]+)*)/g;
+    // The tail also carries `evidence: [...]`, an array, so a flag value may be a bracketed list.
+    const varRe = /\{\s*id:\s*"([A-Za-z]+)",\s*name:\s*"([^"]+)",\s*\n?\s*when:\s*"([^"]*)",\s*\n?\s*needs:\s*\[([^\]]*)\],\s*\n?\s*states:\s*\[([^\]]*)\]((?:\s*,\s*[A-Za-z]+:\s*(?:\[[^\]]*\]|[^,}]+))*)/g;
     let v;
     while ((v = varRe.exec(body))) {
+      const tail = v[6] || "";
       piece.variations.push({
         id: v[1], name: v[2], when: v[3],
         needs: (v[4].match(/"[^"]+"/g) || []).length,
         states: (v[5].match(/"[^"]+"/g) || []).map((s) => s.replace(/"/g, "")),
-        ownsPageHeading: /ownsPageHeading:\s*true/.test(v[6] || ""),
+        ownsPageHeading: /ownsPageHeading:\s*true/.test(tail),
+        evidence: ((/evidence:\s*\[([^\]]*)\]/.exec(tail) || [])[1]?.match(/"[^"]+"/g) || []).map((s) => s.replace(/"/g, "")),
       });
     }
+    piece.origin = /origin:\s*"library"/.test(body) ? "library" : "spec";
     pieces.push(piece);
   }
   return pieces;
@@ -279,6 +283,145 @@ if (!existsSync(statesPath)) {
   }
 }
 
+/**
+ * EVERY CLAIM ABOUT WHEN A PIECE WORKS HAS TO NAME A REFERENCE THAT WAS ACTUALLY READ.
+ *
+ * The kit was first written with the MCP configured and not connected, and every `when` came out
+ * of one head. Nothing caught it because nothing asked where a rule came from. Now the manifest
+ * carries `evidence` per variation, kit-grounding.ts carries donors, rules and anti-patterns per
+ * piece, and kit-survey.json is the recorder's own list of what was deep-read. This block holds
+ * the three to each other:
+ *
+ *   - every slug cited anywhere is in the survey, so a reference seen only in a search result,
+ *     or never seen at all, cannot stand as evidence;
+ *   - every piece has a grounding entry with at least three donors, and a rule with no citation
+ *     is taste and is refused;
+ *   - a variation's evidence is drawn from the references recorded FOR ITS PIECE, so a slug
+ *     cannot be borrowed from another piece's notes to make a claim about this one;
+ *   - a piece the library added (`origin: "library"`) cites at least three distinct references
+ *     across its variations, because a piece that exists only because the library showed it
+ *     needs the library to show it more than once.
+ *
+ * The survey file is generated, never hand-written: kit-survey-snapshot.mjs reads the build
+ * manifest the PostToolUse hook wrote and keeps only deep-read calls. A missing or empty survey is
+ * a run that cannot be trusted, and the gate says so rather than passing over nothing.
+ */
+const groundingPath = join(base, "lib/kit-grounding.ts");
+const surveyPath = join(base, "lib/kit-survey.json");
+if (!existsSync(groundingPath)) {
+  findings.push(`${relative(dir, groundingPath)} does not exist, so no piece's contract has a recorded source`);
+} else if (!existsSync(surveyPath)) {
+  console.error(`gate-kit-complete: could not run: ${relative(dir, surveyPath)} does not exist, so no citation can be checked. Generate it: node scripts/kit-survey-snapshot.mjs <build-manifest.json>.`);
+  process.exit(2);
+} else {
+  let survey;
+  try {
+    survey = JSON.parse(readFileSync(surveyPath, "utf8"));
+  } catch {
+    survey = null;
+  }
+  const read = new Set(((survey && survey.references) || []).map((r) => r && r.slug).filter(Boolean));
+  if (!read.size) {
+    console.error(`gate-kit-complete: could not run: ${relative(dir, surveyPath)} records zero deep reads, so every citation would fail and nothing would be learned. Re-run the survey and the snapshot.`);
+    process.exit(2);
+  }
+
+  const gsrc = readFileSync(groundingPath, "utf8");
+  const grounding = {};
+  const gBlockRe = /\n  ([a-z]+): \{\n([\s\S]*?)\n  \},/g;
+  let g;
+  while ((g = gBlockRe.exec(gsrc))) {
+    const [, id, body] = g;
+    const list = (name) => {
+      const m = new RegExp(`${name}:\\s*\\[([\\s\\S]*?)\\n    \\]`).exec(body);
+      return m ? m[1] : "";
+    };
+    const slugsIn = (text) => (text.match(/"[a-z0-9-]+"/g) || []).map((x) => x.replace(/"/g, ""));
+    const donors = (list("donors").match(/slug:\s*"([a-z0-9-]+)"/g) || []).map((x) => x.replace(/slug:\s*"|"/g, ""));
+    const entries = (text) => Array.from(text.matchAll(/\{\s*text:\s*"([^"]+)",\s*slugs:\s*\[([^\]]*)\]/g)).map((m) => ({ text: m[1], slugs: slugsIn(m[2]) }));
+    grounding[id] = { donors, rules: entries(list("rules")), avoid: entries(list("avoid")) };
+  }
+  const rhythms = Array.from(gsrc.matchAll(/id:\s*"([a-z-]+)",\s*\n\s*name:[\s\S]*?slugs:\s*\[([^\]]*)\]/g)).map((m) => ({
+    id: m[1],
+    slugs: (m[2].match(/"[a-z0-9-]+"/g) || []).map((x) => x.replace(/"/g, "")),
+  }));
+
+  if (!Object.keys(grounding).length) {
+    console.error(`gate-kit-complete: could not run: ${relative(dir, groundingPath)} parsed to zero pieces, so no citation was checked.`);
+    process.exit(2);
+  }
+
+  for (const p of pieces) {
+    const gp = grounding[p.id];
+    if (!gp) {
+      findings.push(`piece "${p.id}" has no entry in kit-grounding.ts, so its contract has no recorded source`);
+      continue;
+    }
+    if (gp.donors.length < 3) {
+      findings.push(`piece "${p.id}" cites ${gp.donors.length} donor(s) and needs at least three, or its contract rests on one reading`);
+    }
+    for (const slug of gp.donors) {
+      if (!read.has(slug)) findings.push(`piece "${p.id}" names "${slug}" as a donor and the survey never read it`);
+    }
+    for (const kind of ["rules", "avoid"]) {
+      for (const r of gp[kind]) {
+        if (!r.slugs.length) findings.push(`piece "${p.id}" ${kind === "rules" ? "rule" : "anti-pattern"} "${r.text.slice(0, 50)}" cites nothing, which makes it taste rather than evidence`);
+        for (const slug of r.slugs) {
+          if (!read.has(slug)) findings.push(`piece "${p.id}" ${kind === "rules" ? "rule" : "anti-pattern"} "${r.text.slice(0, 50)}" cites "${slug}", which the survey never read`);
+        }
+      }
+    }
+    const recordedForPiece = new Set([...gp.donors, ...gp.rules.flatMap((r) => r.slugs), ...gp.avoid.flatMap((r) => r.slugs)]);
+    const cited = new Set();
+    for (const v of p.variations) {
+      if (!v.evidence.length) {
+        findings.push(`${v.id} declares no evidence, so its "when" is a claim with no reference behind it`);
+        continue;
+      }
+      for (const slug of v.evidence) {
+        cited.add(slug);
+        if (!read.has(slug)) findings.push(`${v.id} cites "${slug}" as evidence and the survey never read it`);
+        else if (!recordedForPiece.has(slug)) findings.push(`${v.id} cites "${slug}", which has no recorded note for the "${p.id}" piece in kit-grounding.ts; a slug cannot stand as evidence for a piece its notes were never recorded against`);
+      }
+    }
+    if (p.origin === "library" && cited.size < 3) {
+      findings.push(`piece "${p.id}" was added because the library showed it and cites ${cited.size} distinct reference(s) across its variations; a library piece needs at least three`);
+    }
+  }
+  for (const id of Object.keys(grounding)) {
+    if (!pieces.some((p) => p.id === id)) findings.push(`kit-grounding.ts carries an entry for "${id}", which no manifest piece declares, so it grounds nothing`);
+  }
+  if (!rhythms.length) findings.push(`kit-grounding.ts declares no rhythms, so no page order has a recorded source`);
+  for (const r of rhythms) {
+    if (r.slugs.length < 2) findings.push(`rhythm "${r.id}" cites ${r.slugs.length} reference(s) and needs at least two`);
+    for (const slug of r.slugs) {
+      if (!read.has(slug)) findings.push(`rhythm "${r.id}" cites "${slug}", which the survey never read`);
+    }
+  }
+}
+
+/**
+ * A PAGE'S OWN HEADER AND FOOTER ARE NOT CHROME, AND THE LAYOUT MUST NOT DROP THEM.
+ *
+ * BaseLayout's `chrome` flag exists so a frame can show a piece with no site header around it.
+ * The first version gated the `header` and `footer` SLOTS on the same flag, so the three composed
+ * example pages, which pass their own navigation and footer through those slots and ask for the
+ * host chrome to go away, shipped with neither. Every kit gate passed; a screenshot found it. The
+ * layout has to render a supplied slot unconditionally, and this is checked as source because it
+ * is a one-line regression that nothing else in the build would notice.
+ */
+const layoutPath = join(base, "layouts/BaseLayout.astro");
+if (existsSync(layoutPath)) {
+  const layout = readFileSync(layoutPath, "utf8");
+  for (const name of ["header", "footer"]) {
+    const gated = new RegExp(`\\{\\s*chrome\\s*&&\\s*<slot\\s+name="${name}"`).test(layout);
+    const supplied = new RegExp(`Astro\\.slots\\.has\\("${name}"\\)\\s*&&\\s*<slot\\s+name="${name}"`).test(layout);
+    if (gated || !supplied) {
+      findings.push(`${relative(dir, layoutPath)} does not render a supplied "${name}" slot unconditionally, so a composed page that passes its own ${name} and chrome={false} ships without one`);
+    }
+  }
+}
+
 // The reverse direction: a component nobody declared.
 for (const pieceDir of readdirSync(kitRoot)) {
   const pd = join(kitRoot, pieceDir);
@@ -301,5 +444,6 @@ if (findings.length) {
 }
 
 const browsable = pieces.reduce((n, p) => n + p.variations.reduce((m, v) => m + v.states.length, 0), 0);
-console.log(`gate-kit-complete: clean (${pieces.length} pieces, ${declared} variations, ${browsable} declared states, every one declared, built, documented and browsable).`);
+const cited = new Set(pieces.flatMap((p) => p.variations.flatMap((v) => v.evidence)));
+console.log(`gate-kit-complete: clean (${pieces.length} pieces, ${declared} variations, ${browsable} declared states, every one declared, built, documented, browsable and grounded in ${cited.size} deep-read references).`);
 process.exit(0);

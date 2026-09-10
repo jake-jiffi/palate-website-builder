@@ -33,12 +33,17 @@
  * ============================== THE ASSETS ==============================
  *
  * The media under public/images/kit/ and public/media/kit/ is drawn and encoded for this file.
- * Nothing in it is a real company's logo, a real person, or a photograph anybody has rights to
- * argue about: the screens are an invented product, the wordmarks are invented firms, and the
- * pieces that want a photograph get a plainly synthetic stand-in rather than a fake picture of a
- * real place. That is a deliberate line. A slot meant to carry a photograph of the client's own
- * work cannot honestly be filled with an imitation of one, so it is filled with something nobody
- * could mistake for one.
+ * Nothing in it is a real company's logo or a real person: the screens are an invented product
+ * and the wordmarks are invented firms.
+ *
+ * PHOTOGRAPHS. public/images/kit/photo/ holds licensed Unsplash photography, every file listed
+ * with its photographer in credits.json beside it, fetched and LOOKED AT before it was kept. They
+ * exist so the composed example pages can be judged as pages rather than as grey boxes, which is
+ * what the library's own notes say a photographic hero needs (aesop, lanserring: emptiness without
+ * real photography reads as half-built). They are never presented as anybody's own work: no
+ * caption on a demo page claims a photograph shows the invented business's job, and no
+ * testimonial carries a face. A slot meant for the client's own photograph is still filled with
+ * the client's own photograph on a real build, and gate-shipready strips these with the rest.
  *
  * They are real files rather than an empty frame because a component demonstrating its shape is
  * not the same as a component demonstrating its content. A gallery of grey boxes cannot show
@@ -62,6 +67,11 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
   },
   NavDropdown: {
     siteName: "Marram Supply",
+  },
+
+  AnnouncementBar: {
+    text: "Storm season bookings are open: a roof check now beats a bucket in the hallway in July.",
+    link: { label: "Book a roof check", href: "/book" },
   },
 
   // ---------------------------------------------------------------- hero
@@ -183,6 +193,13 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
       "Orders through the site now cover about a third of weekly volume, and the milk room phone rings for the things a form cannot handle.",
     ],
     attribution: { name: "Tallow Creek Dairy", role: "Wholesale orders", org: "Fernbrook" },
+  },
+
+  ProblemStatement: {
+    kicker: "Where we stand",
+    statement:
+      "A roof should be the part of the house you think about least. We fix it once, in the material " +
+      "it was built in, and we tell you plainly when a repair is the honest answer and a new roof is not.",
   },
 
   // ---------------------------------------------------------------- benefits
@@ -396,6 +413,79 @@ export const kitSamples: Record<string, Record<string, unknown>> = {
         tag: "Manufacturing",
       },
     ],
+  },
+
+  // ---------------------------------------------------------------- locality
+  ServiceArea: {
+    lede: "Three crews, each based in the area it covers, so the person who quotes is the person who turns up.",
+    areas: [
+      {
+        name: "Inner west",
+        covers: "Marrickville, Dulwich Hill, Summer Hill, Ashfield, Leichhardt and Petersham.",
+        phone: "(02) 5550 0142",
+        href: "/areas/inner-west",
+        linkLabel: "Inner west crew",
+      },
+      {
+        name: "Lower north shore",
+        covers: "Lane Cove, Chatswood, Willoughby, Artarmon and Naremburn.",
+        phone: "(02) 5550 0143",
+        href: "/areas/lower-north-shore",
+        linkLabel: "North shore crew",
+      },
+      {
+        name: "Northern beaches",
+        covers: "Manly, Dee Why, Brookvale, Narrabeen and Mona Vale.",
+        phone: "(02) 5550 0144",
+        href: "/areas/northern-beaches",
+        linkLabel: "Beaches crew",
+      },
+    ],
+    outsideNote: "Not on the list?",
+    outsideHref: "/contact",
+    outsideLabel: "Ask whether we can come to you",
+  },
+  CoverageChecker: {
+    lede: "Type your postcode or suburb and we will tell you straight away, no form first.",
+    covered: [
+      "2204", "2203", "2130", "2131", "2040", "2049",
+      "2066", "2067", "2068", "2064", "2065",
+      "2095", "2099", "2100", "2101", "2103",
+      "Marrickville", "Dulwich Hill", "Summer Hill", "Ashfield", "Leichhardt", "Petersham",
+      "Lane Cove", "Chatswood", "Willoughby", "Artarmon", "Naremburn",
+      "Manly", "Dee Why", "Brookvale", "Narrabeen", "Mona Vale",
+    ],
+    nextHref: "/quote",
+    nextLabel: "Ask for a quote",
+    errorHref: "/contact",
+  },
+  LocationFinder: {
+    lede: "Drop in with a sample of your tile or gutter profile and we will match it on the spot.",
+    locations: [
+      {
+        name: "Marrickville workshop",
+        address: "Unit 4, 118 Wentworth Parade, Marrickville NSW 2204",
+        href: "/locations/marrickville",
+        hours: "Mon to Fri 7am to 4pm, Sat 8am to 12pm",
+        phone: "(02) 5550 0142",
+      },
+      {
+        name: "Artarmon yard",
+        address: "31 Kiln Lane, Artarmon NSW 2064",
+        href: "/locations/artarmon",
+        hours: "Mon to Fri 7am to 3.30pm",
+        phone: "(02) 5550 0143",
+      },
+      {
+        name: "Brookvale depot",
+        address: "9 Cooperage Way, Brookvale NSW 2100",
+        href: "/locations/brookvale",
+        hours: "Mon to Fri 7am to 3.30pm",
+        phone: "(02) 5550 0144",
+      },
+    ],
+    bookLabel: "Book a visit",
+    allHref: "/locations",
   },
 
   // ---------------------------------------------------------------- footer

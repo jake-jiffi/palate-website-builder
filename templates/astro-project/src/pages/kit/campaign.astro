@@ -2,6 +2,19 @@
 /**
  * EXAMPLE PAGE 3 OF 3: A CAMPAIGN LANDING PAGE, BUILT ONLY FROM KIT PIECES.
  *
+ * RHYTHM: `paid-landing` (kitRhythms in src/lib/kit-grounding.ts), read from the library's own
+ * notes on attentive, mercury and pilot-accounting, and followed step for step:
+ *
+ *   1. Hero with the promise and the next step one click away ............ HeroTextImage
+ *   2. Trust directly beneath, as counted claims with their sources ....... TrustResults
+ *   3. The problem the offer answers, shown not described ................. ProblemBeforeAfter
+ *   4. What is actually being bought, in detail ........................... BenefitShowcase, DemoVideo, ProcessDetailed
+ *   5. Real results and one customer in their own words ................... CaseResults, TestimonialVideo
+ *   6. The brand's position, stated once, with no action .................. ProblemStatement
+ *   7. The comparison and the price ....................................... CompareBeforeAfter, PricingTable
+ *   8. The close echoes the hero's action ................................. FormBooking
+ *   9. A slim footer with no exploration .................................. FooterSimple
+ *
  * A campaign page is not a home page with fewer sections. It answers one question about one offer
  * and it carries paid traffic, so the argument has to close on the page rather than sending anyone
  * off to browse. That shows up in the choices here: the navigation keeps its links but loses the
@@ -15,10 +28,11 @@
  * exercises.
  *
  * THE BUSINESS IS INVENTED. Northaven Home Energy is not a real firm, the figures are not real
- * measurements and the quotes are not real people.
- *
- * Images are left unset wherever a piece allows it, so its own ratio box stands in. DemoVideo and
- * TestimonialVideo require a poster path and have no unset state, so both carry a drawn stand-in.
+ * measurements and the quotes are not real people. The two photographs are licensed Unsplash
+ * photography, credited in public/images/kit/photo/credits.json, standing in for the client's own
+ * on a demo page that gate-shipready strips at hand-over. The before-and-after pair is left as
+ * ratio boxes on purpose: a thermal image of a wall is something only the client's own camera can
+ * supply, and a stock stand-in would make the caption a lie.
  *
  * BOTH VIDEO SOURCES BELOW ARE DELIBERATELY ABSENT, and this is the page where that is the point.
  * The kit demo pages carry real files so the two video pieces can be seen playing; here, pressing
@@ -35,6 +49,7 @@ import DemoVideo from "../../components/kit/demo/DemoVideo.astro";
 import ProcessDetailed from "../../components/kit/process/ProcessDetailed.astro";
 import CaseResults from "../../components/kit/casestudies/CaseResults.astro";
 import TestimonialVideo from "../../components/kit/testimonials/TestimonialVideo.astro";
+import ProblemStatement from "../../components/kit/problem/ProblemStatement.astro";
 import CompareBeforeAfter from "../../components/kit/comparison/CompareBeforeAfter.astro";
 import PricingTable from "../../components/kit/pricing/PricingTable.astro";
 import FormBooking from "../../components/kit/forms/FormBooking.astro";
@@ -71,6 +86,12 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
       { label: "Book an assessment", href: "#booking" },
       { label: "See a sample report", href: "/sample-report", variant: "secondary" },
     ]}
+    image={{
+      src: "/images/kit/photo/house-1.jpg",
+      alt: "A weatherboard house behind a white picket fence in low winter sun.",
+      width: 1440,
+      height: 958,
+    }}
     ratio="photo"
     imageFirst={false}
     level={1}
@@ -165,8 +186,8 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
     heading="Watch an assessment from the front door"
     lede="One visit, unedited, from arriving to handing over the findings on the kitchen bench. Nothing sped up."
     src="/media/kit/northaven-assessment.mp4"
-    poster="/images/kit/texture-hero.svg"
-    posterAlt=""
+    poster="/images/kit/photo/insulation-1.jpg"
+    posterAlt="An assessor in a roof space, lit by a head torch, checking the ceiling insulation."
     caption="A three bedroom weatherboard in New Town, assessed end to end in a little under two hours."
     duration="6 min 20 sec"
     playLabel="Play the walkthrough"
@@ -257,8 +278,15 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
     accessibleName="A customer on video"
   />
 
-  <CompareBeforeAfter
+  <ProblemStatement
     tone="default"
+    id="northaven-position"
+    kicker="Why we do not sell the work"
+    statement="An assessment is only worth paying for if the person doing it has nothing to gain from what it finds. We measure, we rank, we price, and then we leave. The installers you choose are yours to choose."
+  />
+
+  <CompareBeforeAfter
+    tone="subtle"
     heading="Another winter as it is, or one after the assessment"
     lede="No part of this needs a renovation. Three of the five changes below cost nothing at all."
     beforeLabel="How this winter goes otherwise"
@@ -289,7 +317,7 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
   />
 
   <PricingTable
-    tone="subtle"
+    tone="default"
     heading="What the assessment costs"
     caption="Three levels of assessment, compared attribute by attribute."
     plans={[
@@ -337,7 +365,7 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
   />
 
   <FormBooking
-    tone="default"
+    tone="subtle"
     id="booking"
     title="Book your assessment"
     intro="Pick a day and a time that suit you. We confirm by email the same day, and we ring first if the age of your house means we should bring extra gear."
@@ -360,6 +388,15 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
     privacyNote="Your details are used to arrange this assessment and to send the report. We do not pass them to installers or to anyone selling anything."
   />
 
+  {/* The way back to the kit, at the end of the page so it never reads as part of the site. The
+      three example pages were unreachable from the index and none of them linked back. */}
+  <nav class="kit-section kit-section--tight kitback" aria-label="Website kit">
+    <p class="kit-container kit-body kit-muted kitback__line">
+      This page is composed entirely from website kit pieces for an invented business, Northaven Home Energy.
+      <a class="kit-link" href="/kit">Back to the kit index</a>
+    </p>
+  </nav>
+
   <FooterSimple
     slot="footer"
     tone="inverse"
@@ -378,3 +415,8 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
     ]}
   />
 </BaseLayout>
+<style>
+  .kitback { padding-block: var(--kit-space-md); }
+  .kitback__line { margin: 0; font-size: var(--kit-text-sm); }
+  .kitback__line .kit-link { margin-inline-start: var(--kit-space-xs); }
+</style>

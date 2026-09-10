@@ -166,6 +166,13 @@ export const EMPTY_PROPS: Record<string, Record<string, unknown>> = {
   ProblemSideBySide: { pairs: [] },
   ProblemStory: { paragraphs: [] },
   ProcessThreeStep: { steps: [] },
+
+  // The library-grounded pieces. A statement with no words, a coverage list with no places, and a
+  // finder with nowhere to point all have to say something a visitor can act on.
+  ProblemStatement: { statement: "" },
+  ServiceArea: { areas: [] },
+  CoverageChecker: { covered: [] },
+  LocationFinder: { locations: [] },
 };
 
 /**
@@ -180,6 +187,13 @@ export const EMPTY_PROPS: Record<string, Record<string, unknown>> = {
  * own defaults, so what you are comparing against the resting page is the length and nothing else.
  */
 export const LONG_PROPS: Record<string, Record<string, unknown>> = {
+  AnnouncementBar: {
+    text:
+      "Storm season bookings are open across the inner west, the lower north shore and the northern " +
+      "beaches, so get the roof checked before the first big front comes through, and ask about the " +
+      "gutter-clearing add-on while the crew is already up the ladder rather than paying a call-out twice.",
+    link: { label: "Book a roof check for your place before the weather turns", href: "/book" },
+  },
   NavSimple: {
     siteName: "Ridgeway, Calder and Associates",
     links: [
@@ -408,6 +422,15 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
       "one. What none of the three did was mention the render, which would have had to be cut " +
       "back and made good afterwards on every one of those quotes and appeared on none of them.",
     ],
+  },
+  ProblemStatement: {
+    kicker: "Where we stand, and why we keep saying it",
+    statement:
+      "A roof should be the part of the house you think about least, and most of the calls we take " +
+      "are from people who were made to think about theirs far too often. We fix it once, in the " +
+      "material it was built in, with the flashing and the fixings the original roofer should have " +
+      "used, and we tell you plainly when a repair is the honest answer and a new roof is a sale " +
+      "somebody else wanted to make. That is the whole position, and it has not changed since 2009.",
   },
   BenefitCards: {
     heading: "Three things about how we work that are worth knowing before you ask anyone for a price",
@@ -1366,6 +1389,102 @@ export const LONG_PROPS: Record<string, Record<string, unknown>> = {
     privacyNote:
       "What you send here goes to the workshop email and nowhere else. It is not added to a mailing " +
       "list, and we do not pass it on to anybody who supplies us.",
+  },
+  ServiceArea: {
+    areas: [
+      {
+        name: "Inner west, from the harbour to the Cooks River",
+        covers:
+          "Marrickville, Dulwich Hill, Summer Hill, Ashfield, Croydon, Burwood, Leichhardt, Lilyfield, " +
+          "Annandale, Petersham, Stanmore, Enmore, Newtown, Tempe, Sydenham and St Peters, including " +
+          "the older terraces where the original slate is still worth saving.",
+        phone: "(02) 5550 0142",
+        href: "/areas/inner-west",
+        linkLabel: "The inner west crew and what they carry on the truck",
+      },
+      {
+        name: "Lower north shore and the Lane Cove valley",
+        covers:
+          "Lane Cove, Lane Cove North, Chatswood, Chatswood West, Willoughby, Artarmon, Naremburn, " +
+          "St Leonards, Crows Nest, Wollstonecraft and Greenwich; the steep blocks here are why this " +
+          "crew carries the longest ladders.",
+        phone: "(02) 5550 0143",
+        href: "/areas/lower-north-shore",
+        linkLabel: "The north shore crew and what they carry on the truck",
+      },
+      {
+        name: "Northern beaches, Manly to Mona Vale",
+        covers:
+          "Manly, Fairlight, Balgowlah, Freshwater, Curl Curl, Dee Why, Brookvale, Collaroy, Narrabeen, " +
+          "Warriewood and Mona Vale, where salt air shortens the life of every fixing and we specify " +
+          "marine-grade fasteners as standard.",
+        phone: "(02) 5550 0144",
+        href: "/areas/northern-beaches",
+        linkLabel: "The beaches crew and what they carry on the truck",
+      },
+      {
+        name: "Upper north shore and the Hills, by arrangement",
+        covers:
+          "Gordon, Pymble, Turramurra, Wahroonga, Hornsby, Castle Hill and Baulkham Hills; we take " +
+          "larger jobs here and combine them so nobody pays for the drive.",
+        phone: "(02) 5550 0145",
+        href: "/areas/upper-north-shore",
+        linkLabel: "How the by-arrangement areas work",
+      },
+      {
+        name: "Sutherland Shire, larger jobs only",
+        covers:
+          "Cronulla, Caringbah, Miranda, Sutherland, Engadine and Menai for full re-roofs and " +
+          "guttering across a whole house; not for single-tile repairs, which a local roofer will do " +
+          "quicker and cheaper than we can from the inner west.",
+        phone: "(02) 5550 0146",
+        href: "/areas/sutherland-shire",
+        linkLabel: "What counts as a larger job",
+      },
+    ],
+  },
+  LocationFinder: {
+    lede:
+      "Drop in with a sample of your tile, a length of the gutter profile or a photo of the flashing " +
+      "and we will match it on the spot from the profile library, which holds cutters for sections " +
+      "that left production in the eighties; ring ahead for the two collection points, which are staffed part-time.",
+    locations: [
+      {
+        name: "Marrickville workshop and profile library",
+        address: "Unit 4, 118 Wentworth Parade, Marrickville NSW 2204 (enter from the rear lane off Carrington Road)",
+        href: "/locations/marrickville",
+        hours: "Mon to Fri 7am to 4pm, Sat 8am to 12pm, closed public holidays and the week between Christmas and New Year",
+        phone: "(02) 5550 0142",
+      },
+      {
+        name: "Artarmon yard, sheet metal and guttering",
+        address: "31 Kiln Lane, Artarmon NSW 2064, behind the timber merchant",
+        href: "/locations/artarmon",
+        hours: "Mon to Fri 7am to 3.30pm, by appointment on Saturday mornings",
+        phone: "(02) 5550 0143",
+      },
+      {
+        name: "Brookvale depot and tile yard",
+        address: "9 Cooperage Way, Brookvale NSW 2100, gate two",
+        href: "/locations/brookvale",
+        hours: "Mon to Fri 7am to 3.30pm",
+        phone: "(02) 5550 0144",
+      },
+      {
+        name: "Hornsby collection point",
+        address: "Unit 12, 6 Salisbury Road, Hornsby NSW 2077",
+        href: "/locations/hornsby",
+        hours: "Tue and Thu 8am to 2pm only",
+        phone: "(02) 5550 0145",
+      },
+      {
+        name: "Caringbah collection point",
+        address: "3 Tannery Street, Caringbah NSW 2229",
+        href: "/locations/caringbah",
+        hours: "Wed 8am to 2pm only",
+        phone: "(02) 5550 0146",
+      },
+    ],
   },
   FooterSimple: {
     businessName: "Ridgeway, Calder and Associates Window Fabrication",

@@ -38,6 +38,11 @@ const { state, openTarget = "" } = Astro.props;
      * the message goes to the parent and is shown as chrome; opened on its own, it falls back to a
      * status line on the page itself. Either way the reader is told what was driven and how.
      */
+    let lastSaid = "";
+    const post = () => {
+      if (!lastSaid) return;
+      window.parent.postMessage({ kitDriver: true, state, message: lastSaid }, window.location.origin);
+    };
     const say = (message: string) => {
       /**
        * ONE PLACE, NEVER TWO. Inside the viewer the chrome shows this sentence, and writing it into
@@ -45,12 +50,19 @@ const { state, openTarget = "" } = Astro.props;
        * meant to hold the piece and nothing else, and the bare URL is what a screenshot uses.
        */
       if (window.parent !== window) {
-        window.parent.postMessage({ kitDriver: true, state, message }, window.location.origin);
+        lastSaid = message;
+        post();
         return;
       }
       const box = document.querySelector<HTMLElement>("[data-kit-driver-status]");
       if (box) box.textContent = message;
     };
+    // The viewer may bind after this driver has already spoken; when it announces itself, repeat
+    // the last sentence so the chrome is never silent about a state that was driven.
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      if ((event.data as { kitViewerReady?: boolean })?.kitViewerReady) post();
+    });
 
     const FOCUSABLE =
       'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
@@ -325,7 +337,45 @@ const { state, openTarget = "" } = Astro.props;
       return true;
     };
 
+    /* --- coverage check -------------------------------------------------------------------- */
+
+    /**
+     * THE COVERAGE CHECKER MAKES NO NETWORK CALL, so there is nothing to answer and it is driven
+     * the way a visitor drives it: type a place, press Check. `success` types a place the piece's
+     * own baked-in list covers, read from the markup rather than guessed; `error` types one that
+     * is on nobody's list. The outcome is read back from what rendered, never from the state
+     * attribute the piece's script sets, for the reason `rendered` gives above.
+     */
+    const driveCoverage = (kind: "success" | "error") => {
+      const box = scope().querySelector<HTMLElement>("[data-kit-coverage]");
+      if (!box) return false;
+      const form = box.querySelector<HTMLFormElement>("[data-kit-coverage-form]");
+      const input = box.querySelector<HTMLInputElement>("[data-kit-coverage-input]");
+      if (!form || !input) return false;
+      const covered = (box.dataset.kitCovered || "").split("|").filter(Boolean);
+      // A named place reads better in the answer than a postcode, so prefer one when the list has any.
+      const place = kind === "success" ? covered.find((c) => /[a-z]/i.test(c)) || covered[0] || "" : "Nowhere in particular";
+      input.value = place;
+      const before = rendered();
+      form.requestSubmit();
+      const shown = box.querySelector<HTMLElement>(kind === "success" ? "[data-kit-coverage-yes]" : "[data-kit-coverage-no]");
+      if (!shown || !usable(shown) || !grew(before)) {
+        say(
+          `"${place}" was typed and Check was pressed, and the piece rendered no ` +
+            `${kind === "success" ? "covered" : "uncovered"} answer, so this state could not be reached.`,
+        );
+        return true;
+      }
+      say(
+        kind === "success"
+          ? `"${place}" was typed, which the piece's own list covers, and Check was pressed: this is its covered answer.`
+          : `"${place}" was typed, which is on nobody's list, and Check was pressed: this is its uncovered answer.`,
+      );
+      return true;
+    };
+
     if (state === "loading" || state === "error" || state === "success") {
+      if (state !== "loading" && driveCoverage(state as "success" | "error")) return;
       if (driveForm(state as "loading" | "success" | "error")) return;
       if (state !== "success" && driveVideo(state === "error")) return;
       say("This piece has no runtime this state could be driven through.");

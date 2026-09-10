@@ -18,7 +18,7 @@ import BaseLayout from "../../../../layouts/BaseLayout.astro";
 import StateDriver from "../../../../components/kitdemo/StateDriver.astro";
 import { kit } from "../../../../lib/kit";
 import { kitSamples } from "../../../../lib/kit-sample";
-import { statePropsFor, STATE_KIND, OPEN_TARGET, type KitDemoState } from "../../../../lib/kit-states";
+import { statePropsFor, STATE_KIND, OPEN_TARGET, type KitDemoState, MOBILE_ONLY } from "../../../../lib/kit-states";
 
 export function getStaticPaths() {
   return kit.flatMap((piece) =>
@@ -45,7 +45,14 @@ const props = isRest
 
 // Only a driven state gets a driver. `hover` deliberately gets none: it renders at rest, and the
 // chrome around the frame says why, because a hovered-looking render nobody hovered is a lie.
-const drive = !isRest && STATE_KIND[state as KitDemoState] === "driven";
+//
+// ONE CONTENT STATE IS DRIVEN TOO. A mobile-only sheet's `long` links live inside a closed sheet,
+// so on a real phone that page rendered the word "Menu" and demonstrated nothing; the fixture gate
+// passed it because it reads the built markup rather than what renders. The long content is still
+// the fixture's, and the sheet is opened through its own control so the content can be seen.
+const driven = !isRest && STATE_KIND[state as KitDemoState] === "driven";
+const driveState = driven ? state : state === "long" && MOBILE_ONLY.has(variation.id) ? "open" : "";
+const drive = driveState !== "";
 ---
 <BaseLayout
   title={`${variation.name}, ${isRest ? "at rest" : state}`}
@@ -69,7 +76,7 @@ const drive = !isRest && STATE_KIND[state as KitDemoState] === "driven";
       <p class="kit-empty">This variation is declared in the manifest and has no component.</p>
     </div>
   )}
-  {drive && <StateDriver state={state} openTarget={OPEN_TARGET[variation.id] ?? ""} />}
+  {drive && <StateDriver state={driveState} openTarget={OPEN_TARGET[variation.id] ?? ""} />}
   <p class="frame-status" data-kit-driver-status role="status" aria-live="polite"></p>
 </BaseLayout>
 <style is:global>
@@ -126,20 +133,78 @@ const drive = !isRest && STATE_KIND[state as KitDemoState] === "driven";
      * accordion answers and closing them again left 524px of nothing. The body's border box is
      * content height and is not floored by the viewport, which breaks the ratchet.
      */
-    const measure = () => {
+    /**
+     * PLUS WHATEVER RENDERS OUTSIDE THE FLOW. The body's box cannot see a fixed panel, an
+     * absolutely positioned dropdown or a dialog in the top layer, and those are exactly what the
+     * three navigation `open` states render: the frame was sized to the closed bar and the opened
+     * menu had nowhere to go, so the chrome said "opened" over a 48px sliver with 0 of 6 links
+     * visible. Every rendered element's bottom edge now counts, and a fixed panel with `inset: 0`
+     * (exactly as tall as the viewport being decided, which is circular) counts by its CONTENT
+     * height, which is what the reader needs to see. Off-canvas elements, hidden ones and anything
+     * outside the horizontal viewport are skipped so a closed drawer parked at translateX(100%)
+     * does not inflate the frame.
+     */
+    const extent = () => {
       const body = document.body;
-      if (!body) return;
-      const height = Math.ceil(body.getBoundingClientRect().height);
-      if (Math.abs(height - last) < 2) return;
+      if (!body) return 0;
+      let height = Math.ceil(body.getBoundingClientRect().height);
+      const vw = window.innerWidth;
+      body.querySelectorAll<HTMLElement>("*").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return;
+        if (r.right <= 0 || r.left >= vw) return;
+        const cs = getComputedStyle(el);
+        if (cs.visibility === "hidden" || cs.opacity === "0") return;
+        const inner = cs.position === "fixed" ? Math.max(r.height, el.scrollHeight) : r.height;
+        height = Math.max(height, Math.ceil(r.top + window.scrollY + inner));
+      });
+      return height;
+    };
+    const measure = () => {
+      const height = extent();
+      if (!height || Math.abs(height - last) < 2) return;
       last = height;
       window.parent.postMessage({ kitFrameHeight: height }, window.location.origin);
     };
+    let queued = 0;
+    const schedule = () => {
+      if (queued) return;
+      queued = requestAnimationFrame(() => {
+        queued = 0;
+        measure();
+      });
+    };
     window.addEventListener("load", measure);
     window.addEventListener("resize", measure);
+    // The viewer announces itself when it binds, which may be after this frame first reported; a
+    // height nobody heard is re-sent rather than assumed delivered.
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      if ((event.data as { kitViewerReady?: boolean })?.kitViewerReady) {
+        last = -1;
+        measure();
+      }
+    });
+    // A panel that animates open is measured mid-transition by the observer below and never again,
+    // so the settled layout is measured once more when the transition ends and, for pieces that
+    // animate with no transition event, a beat later.
+    document.addEventListener("transitionend", schedule, true);
+    document.addEventListener("animationend", schedule, true);
+    const settle = () => window.setTimeout(measure, 450);
 
     // A driven state changes the height after the driver runs, and an accordion changes it when
-    // the reader presses something, so watch rather than measure once.
-    if ("ResizeObserver" in window) new ResizeObserver(measure).observe(document.documentElement);
+    // the reader presses something, so watch rather than measure once. A fixed panel opening does
+    // not change the document's size, so attribute changes (hidden, open, class, style,
+    // aria-expanded) are watched as well.
+    if ("ResizeObserver" in window) new ResizeObserver(schedule).observe(document.documentElement);
+    if ("MutationObserver" in window) {
+      new MutationObserver(() => { schedule(); settle(); }).observe(document.documentElement, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+        attributeFilter: ["hidden", "open", "class", "style", "aria-expanded", "aria-hidden"],
+      });
+    }
     measure();
   })();
 </script>

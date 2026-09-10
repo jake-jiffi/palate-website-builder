@@ -1,0 +1,165 @@
+---
+/**
+ * ANNOUNCEMENT BAR. One line above the navigation, for a live notice, an offer, or the one
+ * service action that has to be reachable on every page.
+ *
+ * The library's surveyed flagships put a strip above the bar far more often than not: a price
+ * hook and a persistent "Book an exam" (warby-parker), an insurance notice (parsley-health), a
+ * shipping threshold (gymshark, glossier), an event with tickets (swillhouse), a product launch
+ * (attentive, crisp, webflow), a campus notice (vivvi), and a marquee (1rebel). The kit had no
+ * piece for it, so a composed page could not carry the one thing those pages carry first.
+ *
+ * ONE LINE, ONE LINK. The moment it grows a second sentence or a second action it has become a
+ * hero in the wrong place. Dismissal is remembered for the session only, so a notice that matters
+ * comes back tomorrow; a permanent hide is a decision for the page, not the visitor.
+ *
+ * It renders NOTHING when there is no text. A bar with nothing to say is chrome, and the survey's
+ * caution is explicit: one piece of first-view chrome, not three (vivvi).
+ */
+export interface Props {
+  /** The notice itself. One line. If it needs a full stop and then another sentence, cut it. */
+  text?: string;
+  /** Optional one link. Where the persistent service action lives when a page has one. */
+  link?: { label: string; href: string };
+  /** Whether the visitor may close it for this session. Off for a legal or safety notice. */
+  dismissible?: boolean;
+  /** Accessible label for the dismiss control. */
+  dismissLabel?: string;
+  tone?: "default" | "subtle" | "inverse";
+  id?: string;
+  class?: string;
+}
+
+const {
+  text = "",
+  link,
+  dismissible = true,
+  dismissLabel = "Hide this notice",
+  tone = "inverse",
+  id,
+  class: className,
+} = Astro.props as Props;
+
+const notice = text.trim();
+const toneClass =
+  tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
+const uid = id || `ann-${Math.random().toString(36).slice(2, 8)}`;
+---
+
+{notice && (
+  <div
+    id={id || undefined}
+    class:list={["kit-ann", toneClass, className]}
+    data-kit-announcement={uid}
+    role="region"
+    aria-label="Notice"
+  >
+    <div class="kit-container kit-ann__row">
+      <p class="kit-ann__text">
+        {notice}
+        {link && link.href && link.label && (
+          <a class="kit-ann__link" href={link.href}>{link.label}</a>
+        )}
+      </p>
+      {dismissible && (
+        <button type="button" class="kit-ann__close" data-kit-announcement-close aria-label={dismissLabel}>
+          <span aria-hidden="true">&times;</span>
+        </button>
+      )}
+    </div>
+  </div>
+)}
+
+<script>
+  /**
+   * Bound once on document, delegated, so it survives Astro's ClientRouter swapping the body and
+   * a page that carries two notices needs no extra wiring. Dismissal lives in sessionStorage,
+   * keyed by the bar's id, so a closed notice stays closed for the visit and returns next time.
+   */
+  type AnnWindow = Window & { __kitAnnouncementBound?: boolean };
+  const scope = window as AnnWindow;
+  if (!scope.__kitAnnouncementBound) {
+    scope.__kitAnnouncementBound = true;
+
+    const key = (bar: HTMLElement) => `kit-ann:${bar.dataset.kitAnnouncement || "notice"}`;
+
+    const restore = () => {
+      document.querySelectorAll<HTMLElement>("[data-kit-announcement]").forEach((bar) => {
+        let hidden = false;
+        try {
+          hidden = sessionStorage.getItem(key(bar)) === "1";
+        } catch {
+          hidden = false;
+        }
+        bar.hidden = hidden;
+      });
+    };
+
+    document.addEventListener("click", (event) => {
+      const origin = event.target instanceof Element ? event.target : null;
+      const close = origin ? origin.closest("[data-kit-announcement-close]") : null;
+      if (!close) return;
+      const bar = close.closest<HTMLElement>("[data-kit-announcement]");
+      if (!bar) return;
+      bar.hidden = true;
+      try {
+        sessionStorage.setItem(key(bar), "1");
+      } catch {
+        /* Storage refused: the notice simply returns on the next page, which is the safe way round. */
+      }
+    });
+
+    document.addEventListener("astro:page-load", restore);
+    restore();
+  }
+</script>
+
+<style>
+  .kit-ann {
+    background: var(--kit-bg);
+    color: var(--kit-text);
+    border-bottom: var(--kit-border-width) solid var(--kit-border);
+    font-size: var(--kit-text-sm);
+  }
+  .kit-ann__row {
+    display: flex;
+    align-items: center;
+    gap: var(--kit-space-md);
+    min-height: var(--kit-target);
+    padding-block: var(--kit-space-2xs);
+  }
+  .kit-ann__text {
+    margin: 0;
+    flex: 1 1 auto;
+    line-height: var(--kit-leading-snug);
+    text-wrap: balance;
+  }
+  .kit-ann__link {
+    margin-inline-start: var(--kit-space-xs);
+    color: inherit;
+    font-weight: var(--kit-weight-medium);
+    text-decoration: underline;
+    text-underline-offset: var(--kit-underline-offset);
+  }
+  .kit-ann__link:hover { text-decoration-thickness: var(--kit-underline-hover); }
+  .kit-ann__close {
+    flex: none;
+    inline-size: var(--kit-target);
+    block-size: var(--kit-target);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: var(--kit-radius-pill);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: var(--kit-text-lg);
+    cursor: pointer;
+  }
+  .kit-ann__close:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+  .kit-ann__close:focus-visible {
+    outline: var(--kit-focus-width) solid var(--kit-focus-ring);
+    outline-offset: var(--kit-focus-offset);
+  }
+</style>

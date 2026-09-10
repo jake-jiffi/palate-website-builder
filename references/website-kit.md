@@ -95,6 +95,16 @@ and lets the piece decide what to show. `focus` is moved programmatically, which
 `hover` is the one state that cannot be forced at all, because the browser grants it to a real
 pointer only, and the page says so instead of dressing a resting render up as a hovered one.
 
+**Height follows the content, unless you ask for a device.** The frame reports its own height, and
+that height counts everything that renders, including a fixed panel, an absolutely positioned
+dropdown and a dialog in the top layer, so an opened menu is never clipped to the closed bar. Two
+consequences are stated in the chrome rather than hidden: a piece sized in `vh` is measured against
+the content rather than a device, and the **Device height** toggle beside the width buttons gives
+the frame the device's height (390 x 844, 768 x 1024, 1024 x 768) with the piece scrolling inside
+it, which is the only honest way to review a 72vh hero. The chrome is bound per document, so
+clicking from state to state with the view-transition router keeps every control live; the first
+version bound once per session and every page after the first rendered in a letterbox.
+
 Adding a state to a variation in the manifest is therefore a two-part change: declare it, and, if
 it is `empty` or `long`, add its fixture. `gate-kit-complete.mjs` fails a declared content state
 with no fixture, and a fixture no declared state can reach.
@@ -110,6 +120,40 @@ Explore surfaces. It is a working document, not a page of the client's site.
 
 ## Rhythm
 
-Consecutive sections must not share a ground. Alternate `kit-section--subtle`, the default, and
-`kit-section--inverse` deliberately: two adjacent sections on the same ground read as one long
-section, which is the commonest way a composed page turns into a wall.
+A composed page follows one of the rhythms in `src/lib/kit-grounding.ts` (`kitRhythms`) and
+declares which at the top of its source. Every rhythm was read from the library's own "rhythm to
+borrow" notes on the references it names, and `gate-kit-complete` fails a rhythm that cites a
+reference the survey never deep-read. None of them was invented, and a page that follows none of
+them should say why.
+
+| Rhythm | For | After |
+|---|---|---|
+| Relief through process | A high-anxiety service: renovation, dental, legal, anything the buyer dreads. Hero with the "made easy" promise and the next step in view, trust beneath, locality, benefits, outcome gallery, the named numbered process, FAQ as reassurance and transparent price, a close that echoes the hero, deep footer with locations. | re-bath, block-renovation, lava-dental |
+| Evidence spine | A high-trust, high-consideration purchase. Badges under the hero CTA, differentiation, the journey as steps, named credentials, a measurable outcome, priced cards, testimonials and press, head-to-head comparison, FAQ, then the single CTA repeated. | parsley-health, lava-dental |
+| Repeated identical shape | A product with several capabilities. Hero with real product proof, then a run of sections with identical anatomy (heading, subhead, proof), one deeper data-rich section, social proof as a counted claim, one warm closing block, the CTA, a dense footer. | linear, dropbox, webflow |
+| Short page, deep nav | A big product whose breadth belongs in the navigation. Hero, two alternating-row capability sections, proof, a short direct CTA. Only with a real suite behind the nav. | notion, basecamp |
+| Alternate buy and read | Editorial commerce. One photograph that is the brand, product row, essay, product row, a lower-commitment entry, stories, store finder and newsletter, mode-flipped footer. Only with photography good enough to carry full-bleed acts. | aesop, gymshark, mejuri |
+| Values and locality | A recurring local service. Values-and-place headline over warm photography with a quote CTA, a why-choose band, services, service-area cards with per-area contact, a coverage check, a genuine story, a quote form close, a footer with services and areas. | greenwise-organic-lawn-care, block-renovation |
+| Five acts | A service or consultancy selling judgement. State the position on the calmest canvas, one flagship project given the whole stage, a small proof grid, the mission repeated as a statement with no CTA, a footer that weighs as much as the hero. | anthropic, setia-law, swillhouse |
+| One product per act | An adviser or multi-service firm. Warm serif hero, one service per act on alternating grounds, a trust count, a single dark-pill CTA. | wealthsimple, pilot-accounting, avalon-accounting |
+| Paid landing | A campaign page carrying paid traffic to one offer. The promise and the next step one click away, trust beneath, the problem shown, the offer in detail, real results and one customer, the position stated once with no action, comparison and price, a close that echoes the hero, a slim footer with no exploration. | attentive, mercury, pilot-accounting |
+| Booking first | Class or appointment businesses. A hero that does discovery and booking together, trust strip, alternating photographic and human bands, services as browsable rows, locations, community proof, a warm closing booking CTA. | barrys, warby-parker, unoit, dishoom |
+
+Three rules cut across every rhythm, each with the references whose notes state it:
+
+- **Trust lands directly under the hero**, before any feature claim, and its form depends on what
+  this buyer recognises: logos only when the names are known to the audience, otherwise a count
+  plus a character claim, an accreditation, a partner badge or a rating (attentive, warby-parker,
+  pilot-accounting, mercury, habito).
+- **The FAQ sits before the final call to action**, framed as reassurance, and a statement band
+  carries no action at all (parsley-health, lava-dental, anthropic).
+- **Consecutive sections must not share a ground.** Alternate `kit-section--subtle`, the default
+  and `kit-section--inverse` deliberately: two adjacent sections on the same ground read as one
+  long section, which is the commonest way a composed page turns into a wall. Note that a piece
+  which ships its own inverse ground (HeroServicePhoto) counts as one, so the section under it
+  takes a subtle ground, not an inverse one.
+
+The three example pages each follow one rhythm exactly: `/kit/product` is repeated shape,
+`/kit/service` is values and locality, `/kit/campaign` is paid landing. The kit index at `/kit`
+lists every rhythm with its steps, and under every piece the donors, rules and anti-patterns its
+contract was read from.
