@@ -107,7 +107,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
     <div class="kit-formsec__panel">
       <form
         class="kit-form"
-        novalidate
+        method="post"
+        action={endpoint}
         data-kit-form
         data-kit-endpoint={endpoint}
         data-kit-sending="Sending your message."
@@ -352,6 +353,16 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY;
 </style>
 
 <script>
+  /**
+   * NOVALIDATE ONLY ONCE THIS SCRIPT IS RUNNING. The form carries a real `action` and `method`,
+   * so with scripts off or before they bind it still posts to the endpoint as form data, and the
+   * browser's own validation stands in for the piece's. The first version wrote `novalidate` into
+   * the markup, which switched native validation off on exactly the path that had nothing else.
+   */
+  const armNovalidate = () => document.querySelectorAll<HTMLFormElement>("form[data-kit-form]").forEach((f) => f.setAttribute("novalidate", ""));
+  armNovalidate();
+  document.addEventListener("astro:page-load", armNovalidate);
+
   import { initKitForms } from "./form-runtime";
   initKitForms();
 </script>

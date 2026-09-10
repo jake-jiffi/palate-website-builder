@@ -91,7 +91,9 @@ if (visualEditing) Astro.response.headers.set("Cache-Control", "no-store");
          until an audit months later. -->
     <slot name="head" />
     <!-- Analytics: Humblytics (swap for Plausible via flag). Skipped in preview. -->
-    {!visualEditing && <script defer data-site="{{HUMBLYTICS_SITE_ID}}" src="https://app.humblytics.com/h.js"></script>}
+    {/* Skipped while the site id is still the scaffold's placeholder: a demo or proof build would
+        otherwise load a live analytics script with a token that reads "{{HUMBLYTICS_SITE_ID}}". */}
+    {!visualEditing && !"{{HUMBLYTICS_SITE_ID}}".startsWith("{{") && <script defer data-site="{{HUMBLYTICS_SITE_ID}}" src="https://app.humblytics.com/h.js"></script>}
     <ClientRouter />
   </head>
   <body>

@@ -13,7 +13,9 @@
  * Exit: 0 clean, 1 findings, 2 could not run (never a pass).
  */
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { deriveSurvey, sealOf } from "./kit-survey-snapshot.mjs";
 
 const dir = process.argv[2] || ".";
 const base = existsSync(join(dir, "templates/astro-project/src"))
@@ -371,7 +373,14 @@ if (!existsSync(groundingPath)) {
         }
       }
     }
-    const recordedForPiece = new Set([...gp.donors, ...gp.rules.flatMap((r) => r.slugs), ...gp.avoid.flatMap((r) => r.slugs)]);
+    /**
+     * DONORS AND RULES, NEVER `avoid`. The first version unioned the anti-patterns in as well, so a
+     * slug whose only note for a piece said "do not do this" stood as evidence for a variation's
+     * `when`, and one variation relied on it (a pricing table citing the reference whose pricing
+     * note is a warning against comparison tables). An anti-pattern citation is the opposite of
+     * showing the piece in use.
+     */
+    const recordedForPiece = new Set([...gp.donors, ...gp.rules.flatMap((r) => r.slugs)]);
     const cited = new Set();
     for (const v of p.variations) {
       if (!v.evidence.length) {
@@ -392,11 +401,47 @@ if (!existsSync(groundingPath)) {
     if (!pieces.some((p) => p.id === id)) findings.push(`kit-grounding.ts carries an entry for "${id}", which no manifest piece declares, so it grounds nothing`);
   }
   if (!rhythms.length) findings.push(`kit-grounding.ts declares no rhythms, so no page order has a recorded source`);
+  /**
+   * A rhythm is read from a reference's own "rhythm to borrow" note, so one reference that states
+   * it is enough (anthropic's five acts are anthropic's), and every reference it names has to be a
+   * DONOR somewhere: a slug that appears only in a rhythm has no recorded note anywhere for the
+   * gate to hold it to, which is how two rhythms became syntheses attributed to references whose
+   * notes describe a different order.
+   */
+  const donorAnywhere = new Set(Object.values(grounding).flatMap((g) => g.donors));
   for (const r of rhythms) {
-    if (r.slugs.length < 2) findings.push(`rhythm "${r.id}" cites ${r.slugs.length} reference(s) and needs at least two`);
+    if (r.slugs.length < 1) findings.push(`rhythm "${r.id}" cites no reference, so its order is invented`);
     for (const slug of r.slugs) {
       if (!read.has(slug)) findings.push(`rhythm "${r.id}" cites "${slug}", which the survey never read`);
+      else if (!donorAnywhere.has(slug)) findings.push(`rhythm "${r.id}" cites "${slug}", which is no piece's donor, so no recorded note stands behind the order it is cited for`);
     }
+  }
+
+  /**
+   * THE SURVEY MUST BE THE RECORDER'S, NOT A HAND'S. Adding a slug to the snapshot and a note to the
+   * grounding used to pass, which made the whole chain only as honest as whoever last edited the
+   * JSON. Two checks: the seal over the reference list has to match (an edit that forgets to
+   * re-seal is caught), and wherever the manifest the snapshot names is present the survey is
+   * re-derived from it and has to match slug for slug and layer for layer, which cannot be forged
+   * without forging the recorder's own output. Where the manifest is absent (another machine) the
+   * gate says so rather than counting it as verified.
+   */
+  if (typeof survey.seal !== "string" || survey.seal !== sealOf(survey.references)) {
+    findings.push(`${relative(dir, surveyPath)} does not carry a seal matching its reference list; regenerate it with kit-survey-snapshot.mjs rather than editing it`);
+  }
+  const manifestPath = survey.source && typeof survey.source.manifest === "string" ? survey.source.manifest : "";
+  if (manifestPath && existsSync(manifestPath)) {
+    try {
+      const derived = deriveSurvey(JSON.parse(readFileSync(manifestPath, "utf8")));
+      const key = (refs) => refs.map((r) => `${r.slug}:${[...r.layers].sort().join("+")}`).sort().join("|");
+      if (key(derived.references) !== key(survey.references)) {
+        findings.push(`${relative(dir, surveyPath)} no longer matches the survey derived from ${manifestPath}; re-run kit-survey-snapshot.mjs (a hand-edited list, or a survey that has moved on)`);
+      }
+    } catch (error) {
+      findings.push(`${relative(dir, surveyPath)} names a manifest that could not be re-derived: ${error && error.message}`);
+    }
+  } else {
+    console.log(`gate-kit-complete: survey provenance: manifest not present on this machine, so only the seal was checked (${survey.references.length} references).`);
   }
 }
 

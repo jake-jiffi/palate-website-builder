@@ -2,56 +2,47 @@
 /**
  * EXAMPLE PAGE 3 OF 3: A CAMPAIGN LANDING PAGE, BUILT ONLY FROM KIT PIECES.
  *
- * RHYTHM: `paid-landing` (kitRhythms in src/lib/kit-grounding.ts), read from the library's own
- * notes on attentive, mercury and pilot-accounting, and followed step for step:
+ * RHYTHM: `paid-landing` (kitRhythms in src/lib/kit-grounding.ts). Every step is stated in the
+ * cited notes of attentive, mercury or pilot-accounting, and the page follows them in order:
  *
- *   1. Hero with the promise and the next step one click away ............ HeroTextImage
- *   2. Trust directly beneath, as counted claims with their sources ....... TrustResults
- *   3. The problem the offer answers, shown not described ................. ProblemBeforeAfter
- *   4. What is actually being bought, in detail ........................... BenefitShowcase, DemoVideo, ProcessDetailed
- *   5. Real results and one customer in their own words ................... CaseResults, TestimonialVideo
- *   6. The brand's position, stated once, with no action .................. ProblemStatement
- *   7. The comparison and the price ....................................... CompareBeforeAfter, PricingTable
- *   8. The close echoes the hero's action ................................. FormBooking
- *   9. A slim footer with no exploration .................................. FooterSimple
+ *   1. Hero with the promise and the next step one click away (attentive) ..... HeroTextImage
+ *   2. Trust beneath, as counted claims with sources (mercury) ................ TrustResults
+ *   3. The problem framed in the buyer's own terms (pilot) .................... ProblemSideBySide
+ *   4. Feature deep-dives, text plus a proof panel (attentive, pilot) ......... BenefitShowcase, DemoVideo
+ *   5. The process as a short step list (mercury) ............................ ProcessDetailed
+ *   6. Real results as customer cards (attentive) ............................. CaseResults, TestimonialVideo
+ *   7. A brand-voice block with no action on it (mercury) ..................... ProblemStatement
+ *   8. Tiers as priced cards with one recommended (mercury, pilot) ............ PricingCards
+ *   9. The close echoes the hero's own action (attentive, mercury) ............ FormBooking
+ *      Footer: mercury's inset footer with the disclosures a regulated service carries ... FooterSimple
  *
  * A campaign page is not a home page with fewer sections. It answers one question about one offer
- * and it carries paid traffic, so the argument has to close on the page rather than sending anyone
- * off to browse. That shows up in the choices here: the navigation keeps its links but loses the
- * exploration, the campaign's own destination is marked current so a visitor can see where they
- * are, the header does not stick because there is nowhere else to go, and the page ends on a
- * booking rather than on a link.
- *
- * It is also the page that tests the kit hardest, because a considered purchase needs the long
- * pieces: the detailed process, the results table, the plan comparison and a real booking form
- * with availability rules. Those are the four that a page of short marketing blocks never
- * exercises.
+ * and carries paid traffic, so the argument closes on the page: the navigation keeps its links but
+ * loses the exploration, the campaign's own destination is marked current, the header does not
+ * stick because there is nowhere else to go, and the page ends on a booking rather than a link.
  *
  * THE BUSINESS IS INVENTED. Northaven Home Energy is not a real firm, the figures are not real
  * measurements and the quotes are not real people. The two photographs are licensed Unsplash
- * photography, credited in public/images/kit/photo/credits.json, standing in for the client's own
- * on a demo page that gate-shipready strips at hand-over. The before-and-after pair is left as
- * ratio boxes on purpose: a thermal image of a wall is something only the client's own camera can
- * supply, and a stock stand-in would make the caption a lie.
+ * photography, credited in public/images/kit/photo/credits.json; no caption names a job. The
+ * report page is drawn (public/images/kit/report-page.svg), the way the product page's screens
+ * are: the one image a stock library cannot honestly supply is drawn rather than left as a box.
  *
  * BOTH VIDEO SOURCES BELOW ARE DELIBERATELY ABSENT, and this is the page where that is the point.
  * The kit demo pages carry real files so the two video pieces can be seen playing; here, pressing
- * play is how the error overlay and the fallback link get seen at all. Leaving one surface broken
- * on purpose is the only way to exercise a failure state that a working file hides.
+ * play is how the error overlay and the fallback link get seen at all.
  */
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import NavSimple from "../../components/kit/navigation/NavSimple.astro";
 import HeroTextImage from "../../components/kit/hero/HeroTextImage.astro";
 import TrustResults from "../../components/kit/trust/TrustResults.astro";
-import ProblemBeforeAfter from "../../components/kit/problem/ProblemBeforeAfter.astro";
+import ProblemSideBySide from "../../components/kit/problem/ProblemSideBySide.astro";
 import BenefitShowcase from "../../components/kit/benefits/BenefitShowcase.astro";
 import DemoVideo from "../../components/kit/demo/DemoVideo.astro";
 import ProcessDetailed from "../../components/kit/process/ProcessDetailed.astro";
 import CaseResults from "../../components/kit/casestudies/CaseResults.astro";
 import TestimonialVideo from "../../components/kit/testimonials/TestimonialVideo.astro";
 import ProblemStatement from "../../components/kit/problem/ProblemStatement.astro";
-import CompareBeforeAfter from "../../components/kit/comparison/CompareBeforeAfter.astro";
-import PricingTable from "../../components/kit/pricing/PricingTable.astro";
+import PricingCards from "../../components/kit/pricing/PricingCards.astro";
 import FormBooking from "../../components/kit/forms/FormBooking.astro";
 import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
 ---
@@ -127,24 +118,35 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
     ]}
   />
 
-  <ProblemBeforeAfter
+  <ProblemSideBySide
     tone="default"
-    id="northaven-before-after"
-    heading="The same wall, ten minutes apart"
+    id="northaven-problem"
+    heading="Where a cold house usually gets diagnosed, and where it should be"
     lede="Most of what a cold house costs is not the heater. It is the four or five gaps nobody can see, and every one of them is cheaper to fix than to heat around."
-    ratio="photo"
-    before={{
-      label: "What the room looks like",
-      caption: "A rendered wall in a 1974 brick veneer in Moonah, painted last year, no visible damage and no draught you could feel standing next to it.",
-      alt: "",
-    }}
-    after={{
-      label: "What the camera sees",
-      caption: "The same wall in thermal. The insulation has slumped in the top third of the cavity, which is why this room ran four degrees behind the rest of the house.",
-      alt: "",
-    }}
-    ctaLabel="See a sample report"
-    ctaHref="/sample-report"
+    fromLabel="How it goes without a measurement"
+    toLabel="With the assessment"
+    pairs={[
+      {
+        from: "The heater runs longer each year and you assume it is getting tired.",
+        to: "You know whether it is the heater or the four gaps feeding it, because both were measured.",
+      },
+      {
+        from: "One room is written off for three months and everybody just avoids it.",
+        to: "You know why that room runs cold, and what the cheapest fix for it is.",
+      },
+      {
+        from: "You get quoted for double glazing because that is what people quote for.",
+        to: "You have a ranked list, and the windows sit where the measurements actually put them.",
+      },
+      {
+        from: "Rebates are researched at the point of paying for something, which is too late.",
+        to: "The report lists what you qualify for before you commit to any of it.",
+      },
+      {
+        from: "Next winter you have no way of knowing whether anything helped.",
+        to: "You have a blower door number to test against, so the next result means something.",
+      },
+    ]}
   />
 
   <BenefitShowcase
@@ -172,9 +174,10 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
       },
     ]}
     image={{
+      src: "/images/kit/report-page.svg",
       ratio: "wide",
-      alt: "",
-      caption: "Page four of a report from a weatherboard cottage in New Town, showing the ranked findings.",
+      alt: "Page four of an assessment report: five findings ranked by what each costs to fix, each with a price range and a saving.",
+      caption: "Page four of the report: the findings, ranked by what each one costs to fix.",
     }}
     mediaSide="start"
     ctaLabel="See a full sample report"
@@ -188,7 +191,7 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
     src="/media/kit/northaven-assessment.mp4"
     poster="/images/kit/photo/insulation-1.jpg"
     posterAlt="An assessor in a roof space, lit by a head torch, checking the ceiling insulation."
-    caption="A three bedroom weatherboard in New Town, assessed end to end in a little under two hours."
+    caption="One visit, unedited, from the front door to the findings on the kitchen bench."
     duration="6 min 20 sec"
     playLabel="Play the walkthrough"
     fallbackLabel="Open the video directly"
@@ -285,46 +288,24 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
     statement="An assessment is only worth paying for if the person doing it has nothing to gain from what it finds. We measure, we rank, we price, and then we leave. The installers you choose are yours to choose."
   />
 
-  <CompareBeforeAfter
+  <PricingCards
     tone="subtle"
-    heading="Another winter as it is, or one after the assessment"
-    lede="No part of this needs a renovation. Three of the five changes below cost nothing at all."
-    beforeLabel="How this winter goes otherwise"
-    afterLabel="How it goes after the report"
-    pairs={[
-      {
-        before: "The heater runs longer each year and you assume it is getting tired.",
-        after: "You know whether it is the heater or the four gaps feeding it, because both were measured.",
-      },
-      {
-        before: "One room is written off for three months and everybody just avoids it.",
-        after: "You know why that room runs cold, and what the cheapest fix for it is.",
-      },
-      {
-        before: "You get quoted for double glazing because that is what people quote for.",
-        after: "You have a ranked list, and the windows sit where the measurements actually put them.",
-      },
-      {
-        before: "Rebates are researched at the point of paying for something, which is too late.",
-        after: "The report lists what you qualify for before you commit to any of it.",
-      },
-      {
-        before: "Next winter you have no way of knowing whether anything helped.",
-        after: "You have a blower door number to test against, so the next result means something.",
-      },
-    ]}
-    note="We do not do the remedial work and we do not take referral fees from anyone who does. The report is what we sell."
-  />
-
-  <PricingTable
-    tone="default"
     heading="What the assessment costs"
-    caption="Three levels of assessment, compared attribute by attribute."
+    lede="Three levels. Most houses need the middle one, and the report says which fixes are worth doing this year."
+    emptyMessage="Pricing is published here once the assessment levels are confirmed."
+    footnote="Prices include GST and travel within 30 km of Hobart GPO. Beyond that we quote the travel before you book, never after."
     plans={[
       {
         name: "Standard",
         price: "$390",
         cadence: "one off",
+        description: "About 90 minutes on site, thermal imaging room by room, a six-page report.",
+        features: [
+          "Thermal imaging, room by room",
+          "Roof space inspection where access is easy",
+          "Findings ranked and priced",
+          "Fifteen-minute follow-up call",
+        ],
         ctaLabel: "Book",
         ctaHref: "#booking",
       },
@@ -332,6 +313,14 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
         name: "Full",
         price: "$590",
         cadence: "one off",
+        description: "About two hours on site, with the blower door test and the rebate check.",
+        features: [
+          "Everything in Standard",
+          "Blower door test, measured in air changes an hour",
+          "Roof space and underfloor, where access allows",
+          "Rebate check for your postcode",
+          "About fourteen pages, and a thirty-minute call",
+        ],
         ctaLabel: "Book",
         ctaHref: "#booking",
         recommended: true,
@@ -341,31 +330,22 @@ import FooterSimple from "../../components/kit/footer/FooterSimple.astro";
         name: "Full plus retest",
         price: "$790",
         cadence: "one off",
+        description: "The full assessment, and a return visit within eighteen months to measure what changed.",
+        features: [
+          "Everything in Full",
+          "A second blower door test after the work",
+          "The two results side by side",
+          "A call after the retest",
+        ],
         ctaLabel: "Book",
         ctaHref: "#booking",
+        note: "Booked when you are ready, not on a deadline.",
       },
     ]}
-    attributes={[
-      { name: "Time on site", values: ["About 90 minutes", "About 2 hours", "Two visits"] },
-      { name: "Thermal imaging, room by room", values: [true, true, true] },
-      { name: "Blower door test", values: [false, true, true] },
-      { name: "Roof space inspection", values: ["If access is easy", "Yes, where access allows", "Yes, where access allows"] },
-      { name: "Underfloor inspection", values: [false, "Yes, where access allows", "Yes, where access allows"] },
-      { name: "Written report", values: ["Six pages", "About fourteen pages", "About fourteen pages, plus the retest"] },
-      { name: "Findings ranked and priced", values: [true, true, true] },
-      { name: "Rebate check for your postcode", values: [false, true, true] },
-      { name: "Follow-up call", values: ["15 minutes", "30 minutes", "30 minutes, plus a call after the retest"] },
-      { name: "Return visit to measure the result", values: [false, false, "Within 18 months"], note: "Booked when you are ready, not on a deadline." },
-    ]}
-    includedLabel="Included"
-    excludedLabel="Not included"
-    notStatedLabel="Not stated"
-    footnote="Prices include GST and travel within 30 km of Hobart GPO. Beyond that we quote the travel before you book, never after."
-    emptyMessage="The comparison is published once the assessment levels are confirmed."
   />
 
   <FormBooking
-    tone="subtle"
+    tone="default"
     id="booking"
     title="Book your assessment"
     intro="Pick a day and a time that suit you. We confirm by email the same day, and we ring first if the age of your house means we should bring extra gear."

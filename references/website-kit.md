@@ -118,6 +118,13 @@ COMPONENTS and never the demos.
 All of it is `noindex` and `gate-shipready` removes it at handover, exactly as it removes the
 Explore surfaces. It is a working document, not a page of the client's site.
 
+**Demo photography never names a job.** The composed pages carry licensed, credited Unsplash
+photography so they can be judged as pages. A caption describes what is in the frame ("paving laid
+to a fall, planting chosen for a hot western wall") and never claims the frame is the story beside
+it, because a stock photograph captioned as the client's own project is the exact fabrication a
+real build had to correct four times, and the example pages are what a build copies. The one image
+a stock library cannot honestly supply (a report page, a product screen) is drawn.
+
 ## Rhythm
 
 A composed page follows one of the rhythms in `src/lib/kit-grounding.ts` (`kitRhythms`) and
@@ -138,6 +145,13 @@ them should say why.
 | One product per act | An adviser or multi-service firm. Warm serif hero, one service per act on alternating grounds, a trust count, a single dark-pill CTA. | wealthsimple, pilot-accounting, avalon-accounting |
 | Paid landing | A campaign page carrying paid traffic to one offer. The promise and the next step one click away, trust beneath, the problem shown, the offer in detail, real results and one customer, the position stated once with no action, comparison and price, a close that echoes the hero, a slim footer with no exploration. | attentive, mercury, pilot-accounting |
 | Booking first | Class or appointment businesses. A hero that does discovery and booking together, trust strip, alternating photographic and human bands, services as browsable rows, locations, community proof, a warm closing booking CTA. | barrys, warby-parker, unoit, dishoom |
+
+What the gate holds a citation to, after the eighth critic pass: an anti-pattern (`avoid`) is never
+evidence, so a variation may cite only a piece's donors and rules; a rhythm may cite one reference
+where that reference's own note states the whole order (anthropic's five acts), and every
+reference a rhythm names has to be some piece's donor; and the survey snapshot is sealed and
+re-derived from the recorder's manifest wherever that manifest is present, so a hand-added
+reference fails.
 
 Three rules cut across every rhythm, each with the references whose notes state it:
 

@@ -96,7 +96,10 @@ const toneClass =
         {list.map((step, index) => (
           <li class="pt-step">
             <h3 class="kit-h3 pt-heading">
-              <span class="pt-num">{index + 1}</span>
+              {/* The numeral is drawn, the words are read: "1We come and look" was one glued
+                  heading to a screen reader. */}
+              <span class="pt-num" aria-hidden="true">{index + 1}</span>
+              <span class="kit-visually-hidden">Step {index + 1}: </span>
               <span class="pt-title">{step.title}</span>
             </h3>
             <p class="kit-body pt-body">{step.body}</p>

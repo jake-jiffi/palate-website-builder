@@ -155,8 +155,29 @@ const drive = driveState !== "";
         if (r.right <= 0 || r.left >= vw) return;
         const cs = getComputedStyle(el);
         if (cs.visibility === "hidden" || cs.opacity === "0") return;
+        /**
+         * THE LIST INSIDE THE PANEL, NOT THE PANEL. A fixed panel with `inset: 0` is exactly as
+         * tall as the viewport being decided, so its scrollHeight is circular and the first fix
+         * measured nothing: the scrolling happens one level down, in the sheet's own list and the
+         * dropdown's card (scrollHeight 205 in a 117px box at 293px). Any box that scrolls counts
+         * by its CONTENT, so the frame grows until nothing inside it has to scroll.
+         */
         const inner = cs.position === "fixed" ? Math.max(r.height, el.scrollHeight) : r.height;
         height = Math.max(height, Math.ceil(r.top + window.scrollY + inner));
+        /**
+         * A SCROLLING BOX THAT WOULD GROW WITH THE FRAME. The sheet's list sits inside a fixed
+         * panel with other things above and below it, so "the list's top plus its content" still
+         * left the frame short by whatever sat under the list; what the frame needs is its current
+         * height plus the amount the list is hiding, because giving the panel that much more room
+         * lets the list grow by exactly that. Only boxes inside a fixed or absolute ancestor count,
+         * which is the sheet and the dropdown card: a fixed-height scroll region in the flow does not
+         * grow with the viewport and would otherwise grow the frame without end. Converges in one
+         * round: once the box no longer hides anything it adds nothing.
+         */
+        const scrolls = /(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1;
+        if (scrolls && (el.closest("[data-kit-sheet], [data-kit-dd], dialog") !== null || cs.position === "fixed" || cs.position === "absolute")) {
+          height = Math.max(height, Math.ceil(window.innerHeight + (el.scrollHeight - el.clientHeight)));
+        }
       });
       return height;
     };

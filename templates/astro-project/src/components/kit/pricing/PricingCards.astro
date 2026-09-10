@@ -155,10 +155,14 @@ const columns = Math.min(Math.max(cards.length, 1), 4);
               <article class:list={["pc__card", isPick && "pc__card--pick"]} aria-labelledby={planId}>
                 <h3 class="pc__name" id={planId}>
                   {plan.name}
+                  {/* The pick label is a badge, not part of the plan's name: a screen reader read
+                      "Whole operationmost farms land here" as one heading. It is hidden from the
+                      heading and announced through the card's description instead. */}
                   {isPick && (
-                    <span class="pc__pick">{plan.recommendedLabel ?? "most chosen"}</span>
+                    <span class="pc__pick" aria-hidden="true">{plan.recommendedLabel ?? "most chosen"}</span>
                   )}
                 </h3>
+                {isPick && <p class="kit-visually-hidden pc__pick-sr">Recommended: {plan.recommendedLabel ?? "most chosen"}</p>}
 
                 <p class="pc__price">
                   <span class="pc__amount">{plan.price}</span>

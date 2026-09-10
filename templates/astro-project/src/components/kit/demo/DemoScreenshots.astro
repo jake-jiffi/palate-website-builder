@@ -139,6 +139,14 @@ const toneClass =
     <div class="ds-dialog__inner" data-ds-frame>
       <div class="ds-dialog__bar">
         <p class="ds-dialog__caption kit-body" id={captionId} data-ds-caption-target></p>
+        {/* Previous and next, so a reader walks the set without closing and reopening; the
+            arrow keys do the same while the dialog is open. */}
+        <button type="button" class="kit-btn kit-btn--secondary ds-dialog__step" data-ds-prev aria-label="Previous screenshot">
+          <span aria-hidden="true">&larr;</span>
+        </button>
+        <button type="button" class="kit-btn kit-btn--secondary ds-dialog__step" data-ds-next aria-label="Next screenshot">
+          <span aria-hidden="true">&rarr;</span>
+        </button>
         <button type="button" class="kit-btn kit-btn--secondary ds-dialog__close" data-ds-close>
           {closeLabel}
         </button>
@@ -253,6 +261,7 @@ const toneClass =
 
   .ds-dialog__caption { flex: 1 1 calc(var(--kit-measure) / 2); }
   .ds-dialog__close { flex: none; }
+  .ds-dialog__step { flex: none; min-inline-size: var(--kit-target); }
 
   .ds-dialog__close:focus-visible {
     outline: var(--kit-focus-width) solid var(--kit-focus-ring);
@@ -297,6 +306,44 @@ const toneClass =
       return image;
     };
 
+    /** Put one thumbnail's image and caption in its section's dialog, and open it if closed. */
+    const show = (trigger: HTMLAnchorElement): boolean => {
+      const section = trigger.closest("[data-kit-screenshots]");
+      const dialog = section ? section.querySelector("[data-ds-dialog]") : null;
+      if (!(dialog instanceof HTMLDialogElement)) return false;
+      const image = imageFor(dialog);
+      if (image) {
+        image.src = trigger.dataset.dsSrc || trigger.href;
+        image.alt = trigger.dataset.dsAlt || "";
+      }
+      const caption = dialog.querySelector("[data-ds-caption-target]");
+      if (caption instanceof HTMLElement) caption.textContent = trigger.dataset.dsCaption || "";
+      const triggers = section ? Array.from(section.querySelectorAll<HTMLAnchorElement>("[data-ds-open]")) : [trigger];
+      const at = triggers.indexOf(trigger);
+      dialog.querySelectorAll<HTMLButtonElement>("[data-ds-prev], [data-ds-next]").forEach((b) => {
+        const next = b.hasAttribute("data-ds-next");
+        b.disabled = next ? at >= triggers.length - 1 : at <= 0;
+      });
+      if (!dialog.open) {
+        opener = trigger;
+        dialog.showModal();
+      } else {
+        opener = trigger;
+      }
+      return true;
+    };
+
+    /** Move to the neighbouring screenshot of the open dialog's section. */
+    const step = (direction: 1 | -1) => {
+      const open = document.querySelector("dialog[data-ds-dialog][open]");
+      const section = open ? open.closest("[data-kit-screenshots]") : null;
+      if (!section || !opener) return;
+      const triggers = Array.from(section.querySelectorAll<HTMLAnchorElement>("[data-ds-open]"));
+      const at = triggers.indexOf(opener as HTMLAnchorElement);
+      const target = triggers[at + direction];
+      if (target) show(target);
+    };
+
     /* CAPTURE PHASE. <ClientRouter /> also listens for clicks on `document` to drive view
        transitions, and it registers first, so a bubble-phase handler here lost: clicking a
        thumbnail NAVIGATED to the raw image file instead of opening the lightbox. Taking the
@@ -320,27 +367,26 @@ const toneClass =
         return;
       }
 
+      if (origin.closest("[data-ds-prev], [data-ds-next]")) {
+        step(origin.closest("[data-ds-next]") ? 1 : -1);
+        return;
+      }
+
       const trigger = origin.closest("[data-ds-open]");
       if (!(trigger instanceof HTMLAnchorElement)) return;
       if (event.defaultPrevented) return;
       if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-
-      const section = trigger.closest("[data-kit-screenshots]");
-      const dialog = section ? section.querySelector("[data-ds-dialog]") : null;
-      if (!(dialog instanceof HTMLDialogElement)) return;
-
-      const image = imageFor(dialog);
-      if (image) {
-        image.src = trigger.dataset.dsSrc || trigger.href;
-        image.alt = trigger.dataset.dsAlt || "";
-      }
-      const caption = dialog.querySelector("[data-ds-caption-target]");
-      if (caption instanceof HTMLElement) caption.textContent = trigger.dataset.dsCaption || "";
-
+      if (!show(trigger)) return;
       event.preventDefault();
-      opener = trigger;
-      dialog.showModal();
     }, { capture: true });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      const open = document.querySelector("dialog[data-ds-dialog][open]");
+      if (!open) return;
+      event.preventDefault();
+      step(event.key === "ArrowRight" ? 1 : -1);
+    });
 
     // `close` does not bubble, so it is caught on the way down instead of on the way up.
     document.addEventListener(

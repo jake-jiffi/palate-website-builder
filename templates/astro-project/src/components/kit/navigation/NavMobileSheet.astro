@@ -388,6 +388,10 @@ const hasDestinations = links.length > 0 || groupsWithLinks.length > 0;
       if (alreadyOpen === open) return;
       trigger.setAttribute("aria-expanded", open ? "true" : "false");
       panel.toggleAttribute("data-open", open);
+      // The page behind an open sheet is inert, so a screen reader's virtual cursor and a Tab
+      // cannot reach it; the trap below stays as the belt to this brace. The sheet is not made a
+      // dialog (see the header comment), so this is what keeps the rest of the page out of reach.
+      document.querySelectorAll("main, footer").forEach((el) => el.toggleAttribute("inert", open));
       if (open) {
         restoreOverflow = document.body.style.overflow;
         document.body.style.overflow = "hidden";

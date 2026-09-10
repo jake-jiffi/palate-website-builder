@@ -268,6 +268,55 @@ if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a rhy
 else ok "gate-kit-complete catches a rhythm that cites a reference the survey never read"; fi
 cp "$TMP/ground.bak" "$GROUND"
 
+# An anti-pattern is not evidence: `notion` is recorded for navigation only under avoid.
+sed -i.bak 's/evidence: \["mercury"\] }/evidence: ["mercury", "notion"] }/' "$MANIFEST" && rm -f "$MANIFEST.bak"
+node -e '
+const fs = require("fs"); const p = process.argv[1]; let s = fs.readFileSync(p, "utf8");
+// give the footer piece an avoid entry naming notion so the slug is recorded for the piece ONLY as an anti-pattern
+s = s.replace(/(\n  footer: \{[\s\S]*?avoid: \[\n)/, "$1      { text: \"A mega footer for a single product.\", slugs: [\"notion\"] },\n");
+fs.writeFileSync(p, s);
+' "$GROUND"
+if grep -q '"mercury", "notion"' "$MANIFEST" && grep -q 'A mega footer for a single product' "$GROUND"; then
+  if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED evidence whose only note for the piece is an anti-pattern"
+  else ok "gate-kit-complete refuses an avoid-only slug as evidence"; fi
+else bad "the avoid-only mutation did not apply"; fi
+cp "$TMP/kit2.bak" "$MANIFEST"; cp "$TMP/ground.bak" "$GROUND"
+
+# A rhythm may cite only references that are somebody's donor.
+node -e '
+const fs = require("fs"); const p = process.argv[1]; let s = fs.readFileSync(p, "utf8");
+const i = s.indexOf("export const kitRhythms");
+s = s.slice(0, i) + s.slice(i).replace(/slugs: \[/, "slugs: [\"caliber\", ");
+fs.writeFileSync(p, s);
+' "$GROUND"
+if grep -q "caliber" templates/astro-project/src/lib/kit-survey.json 2>/dev/null || grep -q '"caliber"' "$SURVEY"; then
+  # caliber is in the survey; it is a pricing donor, so make it no donor anywhere for this check
+  node -e '
+  const fs = require("fs"); const p = process.argv[1]; let s = fs.readFileSync(p, "utf8");
+  s = s.replace(/\n\s*\{ slug: "caliber", note: "[^"]*" \},/, "");
+  s = s.replace(/"caliber", ?/g, "").replace(/, ?"caliber"/g, "");
+  // restore the one rhythm citation the mutation above added
+  const i = s.indexOf("export const kitRhythms");
+  s = s.slice(0, i) + s.slice(i).replace(/slugs: \[/, "slugs: [\"caliber\", ");
+  fs.writeFileSync(p, s);
+  ' "$GROUND"
+fi
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a rhythm citing a reference that is no piece's donor"
+else ok "gate-kit-complete catches a rhythm citing a reference with no donor note anywhere"; fi
+cp "$TMP/ground.bak" "$GROUND"
+
+# The survey is the recorder's: a hand-added reference breaks the seal.
+back_up "$SURVEY" survey0
+cp "$SURVEY" "$TMP/survey.bak"
+node -e '
+const fs = require("fs"); const p = process.argv[1]; const j = JSON.parse(fs.readFileSync(p, "utf8"));
+j.references.push({ slug: "hand-added-reference", layers: ["pages"], reads: 1 });
+fs.writeFileSync(p, JSON.stringify(j, null, 2) + "\n");
+' "$SURVEY"
+if "$COMPLETE" "$HERE" >/dev/null 2>&1; then bad "gate-kit-complete MISSED a survey with a hand-added reference"
+else ok "gate-kit-complete catches a survey edited by hand (seal and re-derivation)"; fi
+cp "$TMP/survey.bak" "$SURVEY"
+
 back_up "$SURVEY" survey
 mv "$SURVEY" "$TMP/survey.moved"
 "$COMPLETE" "$HERE" >/dev/null 2>&1; rc=$?

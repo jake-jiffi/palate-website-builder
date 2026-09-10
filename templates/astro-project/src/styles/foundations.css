@@ -192,6 +192,21 @@
    Redefining the tokens per band means a piece writes `color: var(--kit-text)` once and is
    correct on every ground, and a piece added next year inherits that for free. */
 .kit-section { padding-block: var(--kit-section-y); background: var(--kit-bg); color: var(--kit-text); }
+/* An in-page anchor lands the section's heading BELOW a sticky bar, not under it: a tight section's
+   48px of top padding left its h2 under a 77px navigation. The offset is a token so a build with a
+   taller bar changes one number. */
+.kit-section, .kit-anchor { scroll-margin-top: var(--kit-anchor-offset, 6rem); }
+/* A wide table scrolls inside its own region; the edges say so with a soft shadow that fades as
+   the reader reaches the end, with no script: the first two layers ride with the content and cover
+   the shadows, the second two stay put. */
+.kit-scroll-x {
+  overflow-x: auto;
+  background:
+    linear-gradient(90deg, var(--kit-bg) 40%, transparent) left / 3rem 100% no-repeat local,
+    linear-gradient(270deg, var(--kit-bg) 40%, transparent) right / 3rem 100% no-repeat local,
+    linear-gradient(90deg, var(--kit-scrim), transparent) left / 1rem 100% no-repeat scroll,
+    linear-gradient(270deg, var(--kit-scrim), transparent) right / 1rem 100% no-repeat scroll;
+}
 .kit-section--tight { padding-block: var(--kit-section-y-tight); }
 
 .kit-section--subtle {

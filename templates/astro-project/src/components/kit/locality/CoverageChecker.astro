@@ -62,8 +62,9 @@ const {
   emptyMessage = "The areas we cover are being confirmed. Ring us and we will tell you straight away.",
 } = Astro.props as Props;
 
+// Kept in the list's own casing: the answer echoes "Mona Vale", not whatever the visitor typed.
 const list = (Array.isArray(covered) ? covered : [])
-  .map((c) => String(c).trim().toLowerCase())
+  .map((c) => String(c).trim())
   .filter(Boolean);
 const toneClass =
   tone === "subtle" ? "kit-section--subtle" : tone === "inverse" ? "kit-section--inverse" : "";
@@ -104,7 +105,7 @@ const resultId = `${uid}-result`;
               name="place"
               type="text"
               inputmode="text"
-              autocomplete="postal-code"
+              autocomplete="off"
               placeholder={placeholder}
               aria-describedby={errorId}
               data-kit-coverage-input
@@ -154,7 +155,23 @@ const resultId = `${uid}-result`;
   if (!scope.__kitCoverageBound) {
     scope.__kitCoverageBound = true;
 
-    const normalise = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+    const normalise = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    /**
+     * A PLACE IS RARELY TYPED BARE. "Marrickville NSW", "2204, Marrickville" and "Marrickville
+     * 2204" are the common shapes and the first version refused all three, because it compared
+     * the whole trimmed value. A covered postcode counts as a token; a covered name counts as a
+     * whole-word run, with a state or a postcode beside it ignored.
+     */
+    const STATES = /\b(nsw|vic|qld|sa|wa|tas|nt|act|australia|new south wales|victoria|queensland|south australia|western australia|tasmania|northern territory)\b/g;
+    const escape = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matches = (typed: string, entry: string): boolean => {
+      const n = normalise(entry);
+      if (!n) return false;
+      if (typed === n) return true;
+      const stripped = typed.replace(STATES, " ").replace(/\b\d{4}\b/g, " ").replace(/\s+/g, " ").trim();
+      if (stripped === n) return true;
+      return new RegExp(`(^|\\s)${escape(n).replace(/ /g, "\\s+")}(\\s|$)`).test(typed);
+    };
 
     document.addEventListener(
       "submit",
@@ -191,9 +208,12 @@ const resultId = `${uid}-result`;
         }
         input.removeAttribute("aria-invalid");
 
-        const covered = (box.dataset.kitCovered || "").split("|").map(normalise).filter(Boolean);
-        const hit = covered.includes(typed);
-        const shown = input.value.trim();
+        const covered = (box.dataset.kitCovered || "").split("|").filter(Boolean);
+        // A name before a postcode, so "Marrickville 2204" answers "Marrickville" rather than "2204".
+        const ordered = [...covered.filter((c) => /[a-z]/i.test(c)), ...covered.filter((c) => !/[a-z]/i.test(c))];
+        const hit = ordered.find((entry) => matches(typed, entry));
+        // The list's own casing when it matched, the visitor's words when it did not.
+        const shown = hit ?? input.value.trim();
         const fill = (template: string) => template.replace(/\{place\}/g, shown);
 
         if (hit) {

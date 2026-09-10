@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-10T10:41:08.547Z",
+  "generated_at": "2026-09-10T13:11:37.236Z",
   "source": {
     "manifest": "/Users/jakeshelley/dev/palate/build-manifest.json",
     "plugin_version": "1.17.0-beta.12",
     "mcp_version": null,
     "library": null
   },
-  "calls": 16,
+  "calls": 27,
   "searches": 11,
   "layers_read": [
     "component_prompts",
@@ -19,7 +19,7 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "aesop",
@@ -32,16 +32,18 @@
     {
       "slug": "anthropic",
       "layers": [
-        "do_dont"
+        "do_dont",
+        "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "attentive",
       "layers": [
-        "do_dont"
+        "do_dont",
+        "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "avalon-accounting",
@@ -121,7 +123,7 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "gymshark",
@@ -224,14 +226,14 @@
         "do_dont",
         "pages"
       ],
-      "reads": 3
+      "reads": 4
     },
     {
       "slug": "pilot-accounting",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "pitch",
@@ -259,7 +261,7 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "sealed-home",
@@ -280,14 +282,14 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "unoit",
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     },
     {
       "slug": "vivvi",
@@ -303,7 +305,7 @@
         "do_dont",
         "pages"
       ],
-      "reads": 3
+      "reads": 4
     },
     {
       "slug": "wealthsimple",
@@ -318,7 +320,8 @@
       "layers": [
         "pages"
       ],
-      "reads": 1
+      "reads": 2
     }
-  ]
+  ],
+  "seal": "82632f95839b03c1781b708dffe9e80657b95eb1f8aeb6d2d62c7c3a7148e643"
 }
