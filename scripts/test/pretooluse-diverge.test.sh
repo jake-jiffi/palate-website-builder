@@ -513,6 +513,17 @@ want "an empty admired list -> deny" DENY "$(run "$I7" Write "$I7/src/pages/inde
 I8="$(mk_cp in8)"; set_cp "$I8" "$(cp_ladder "$(set_key "$INTAKE_OK" primary_action '"   "')")"
 want "a blank primary action -> deny" DENY "$(run "$I8" Write "$I8/src/pages/index.astro")"
 
+I12="$(mk_cp in12)"; set_cp "$I12" "$(cp_ladder "$(set_key "$INTAKE_OK" admired '"northwind"')")"
+want "admired given as one string rather than a list -> deny" DENY "$(run "$I12" Write "$I12/src/pages/index.astro")"
+I13="$(mk_cp in13)"; set_cp "$I13" "$(cp_ladder "$(set_key "$INTAKE_OK" avoid '[1,2,3]')")"
+want "an avoid list of things that are not words -> deny" DENY "$(run "$I13" Write "$I13/src/pages/index.astro")"
+
+# THE BOARDS ARE THE THING THE INTAKE EXISTS TO STEER, so the wall has to hold the artboard
+# path too: a ladder drawn before the six answers is the exact run that prompted this.
+I14="$TMP/art-no-intake"; mkdir -p "$I14"; echo "$MARKER" > "$I14/.palate-skill-state.json"; write_valid_manifest "$I14"
+node -e 'const fs=require("fs");const f=process.argv[1];const m=JSON.parse(fs.readFileSync(f,"utf8"));delete m.plan_checkpoint.shown.intake;fs.writeFileSync(f,JSON.stringify(m));' "$I14/build-manifest.json"
+want "an artboard drawn before the intake was asked -> deny" DENY "$(run "$I14" Write "$I14/.palate/explore/seed/B1.dc.html")"
+
 I9="$(mk_cp in9)"; set_cp "$I9" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"supplied-example","source":"mock.html"}},"go":{"given":true,"how":"asked","quote":"rebuild that"}}'
 want "a supplied example needs no intake (no ladder is drawn) -> allow" ALLOW "$(run "$I9" Write "$I9/src/pages/index.astro")"
 I10="$(mk_cp in10)"; set_cp "$I10" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"named-direction","source":"https://northwind.example"}},"go":{"given":true,"how":"brief","quote":"build it like Northwind"}}'
