@@ -117,17 +117,17 @@ const sectionRenderPath = join(shotsRoot, sectionPick.variant_id, "rendered.html
 // --------------------------------------------------------------- where the home is
 const serveUrl = opt("--serve", null);
 /**
- * The build is required even when --serve names a running preview.
+ * dist is required only when there is no other way to reach the home.
  *
- * The board's archived render carries ABSOLUTE asset paths (`/_astro/...`), so it has to be
- * served from an origin where those resolve, and that origin is the build. Served from the
- * shots directory instead it renders with no stylesheet at all, and the first thing that
- * reports is a font set that has nothing to do with the direction: measured that way, an
- * honest build failed on "missing system-ui, added ui-monospace".
+ * The board no longer needs it. Its archived render is an ARTBOARD (Task 3): self-contained
+ * CSS in its own helmet, bare-filename images copied beside it, so it is served from its own
+ * directory below and resolves without a build at all. What still needs a build, or a running
+ * --serve preview, is the HOME ITSELF: the composed page has to come from somewhere before it
+ * can be compared with the picked board.
  */
 const distRoot = ["dist/client", "dist"].map((d) => join(dir, d)).find((d) => existsSync(join(d, "index.html")));
-if (!distRoot) {
-  cannotCheck(`no built site under ${join(dir, "dist")}. The board's archived render needs the build's own stylesheets to resolve, so a build is required even with --serve.`);
+if (!distRoot && !serveUrl) {
+  cannotCheck(`no built site under ${join(dir, "dist")} and no --serve URL. The composed home has to be built (or served) before it can be compared with the picked board.`);
 }
 
 // --------------------------------------------------------------- section identities
@@ -142,9 +142,16 @@ function sectionIds(html) {
 }
 const heroIds = sectionIds(readFileSync(heroRenderPath, "utf8"));
 if (!heroIds.length) {
-  cannotCheck(`the archived render of ${heroPick.variant_id} carries no data-section-id, so its sections cannot be identified. Wrap each board section in <SectionMark id="..." /> and re-render.`);
+  cannotCheck(`the archived render of ${heroPick.variant_id} carries no data-section-id, so its sections cannot be identified. Mark the hero root data-section-id="${heroPick.variant_id}-hero" in the artboard and re-run boards-render.`);
 }
-const heroSectionId = heroIds[0];
+/**
+ * THE HERO IS FOUND BY NAME, not position.
+ *
+ * An artboard opens with its navigation (BoardFrame's own chrome), so the first mark in
+ * document order is `<id>-navigation`, not the hero. Falls back to the first mark when the
+ * expected name is not there, which is the old behaviour and still better than refusing.
+ */
+const heroSectionId = heroIds.includes(`${heroPick.variant_id}-hero`) ? `${heroPick.variant_id}-hero` : heroIds[0];
 const sectionIdsOfPick = existsSync(sectionRenderPath) ? sectionIds(readFileSync(sectionRenderPath, "utf8")) : heroIds;
 
 /**
@@ -368,8 +375,11 @@ let exitCode = 0;
 try {
   const ctx = await browser.newContext({ viewport: { width: WIDTH, height: FOLD }, deviceScaleFactor: 1 });
 
-  // --- the board, from its archived render, on the build's own origin ----------------
-  const boardServed = await serveOnFreePort(distRoot, Number(opt("--port", "8791")), readFileSync(heroRenderPath, "utf8"));
+  // --- the board, from its own archived directory -------------------------------------
+  // The board is an artboard: self-contained CSS, bare-filename images copied beside it
+  // (Task 3). Serve its own directory, not the build's, so b1-img1.jpg resolves and no dist
+  // is needed for the board itself.
+  const boardServed = await serveOnFreePort(join(shotsRoot, heroPick.variant_id), Number(opt("--port", "8791")), readFileSync(heroRenderPath, "utf8"));
   boardServer = boardServed.server;
   const boardPage = await ctx.newPage();
   await boardPage.goto(`http://127.0.0.1:${boardServed.port}${BOARD_ROUTE}`, { waitUntil: "load", timeout: 30000 });
@@ -379,8 +389,15 @@ try {
     cannotCheck(`the archived render of ${heroPick.variant_id} has no element marked ${heroSectionId}, so its hero could not be scoped.`);
   }
 
-  // --- the built home ----------------------------------------------------------------
-  const homeUrl = serveUrl || `http://127.0.0.1:${boardServed.port}/`;
+  // --- the built home, from its own build directory (a second server) or --serve ------
+  async function serveDist(root) {
+    // Same starting port as the board: the board already holds it, so serveOnFreePort's own
+    // EADDRINUSE handling walks past it onto the next free one, with no port math here.
+    const served = await serveOnFreePort(root, Number(opt("--port", "8791")), null);
+    homeServer = served.server;
+    return `http://127.0.0.1:${served.port}/`;
+  }
+  const homeUrl = serveUrl || (distRoot ? await serveDist(distRoot) : null);
   const homePage = await ctx.newPage();
   const res = await homePage.goto(homeUrl, { waitUntil: "networkidle", timeout: 45000 }).catch(() => null);
   if (!res || !res.ok()) cannotCheck(`the built home did not load at ${homeUrl} (${res ? res.status() : "no response"}).`);

@@ -12,7 +12,13 @@
  * So the assertions are about the gate catching a plausible drift and refusing to claim
  * anything it did not measure.
  *
- * Slow: an npm install, two builds and a browser. run.sh skips it under --fast.
+ * THE PICKED BOARD IS AN ARTBOARD, not something this suite builds with Astro any more
+ * (Task 3). Its archived render (`shots/b1/rendered.html`) is written directly as a fixture,
+ * self-contained CSS and a bare-filename image beside it, exactly the shape boards-render.mjs
+ * now produces. boards-render.mjs is never invoked here.
+ *
+ * Slow: an npm install, an Astro build (for the home) and a browser. run.sh skips it under
+ * --fast.
  * Run: node --test scripts/test/gate-fidelity.test.mjs
  */
 import { test, before, after } from "node:test";
@@ -22,13 +28,17 @@ import { promisify } from "node:util";
 import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
 const CLI = join(ROOT, "scripts", "gate-fidelity.mjs");
-const RENDER = join(ROOT, "scripts", "boards-render.mjs");
 const PORT = 8791; // reserved for this suite
+// The same engine gate-fidelity.mjs itself loads playwright from, so a screenshot taken here
+// renders identically to one it would take.
+const engineRequire = createRequire(new URL("../reference-capture/", import.meta.url));
+let browser = null;
 
 let TMP = null;
 let SITE = null;
@@ -36,13 +46,13 @@ let ready = false;
 let skipReason = "";
 
 const REGISTRY = `export interface Variant {
-  id: string; name: string; href: string; ambition: number; what: string; why: string;
-  feeling: string; donor: string; section: string; motion: string; ctas: string[];
+  id: string; name: string; href: string; artboard: string; ambition: number; what: string;
+  why: string; feeling: string; donor: string; section: string; motion: string; ctas: string[];
   clip?: string; lookAt?: string;
 }
 export const variants: Variant[] = [
   {
-    id: "b1", name: "The Quiet Room", href: "/boards/b1", ambition: 1,
+    id: "b1", name: "The Quiet Room", href: "/boards/b1", artboard: "B1.dc.html", ambition: 1,
     what: "One column, one photograph, and a great deal of air.",
     why: "The people arriving are anxious and have been dismissed once already.",
     feeling: "unhurried, private, adult",
@@ -84,18 +94,55 @@ const SERVICES = (mark) => `
   </div>
 </section>`;
 
-const boardPage = () => `---
-import BoardFrame from "../../layouts/BoardFrame.astro";
-import { variants } from "../../lib/variants";
-const variant = variants.find((v) => v.id === "b1");
----
-{variant && (
-  <BoardFrame variant={variant}>
-    <Fragment slot="hero" set:html={${JSON.stringify(HERO('data-section-id="b1-hero"', '<span data-palate-mark data-section-id="b1-hero" style="font-family:ui-monospace,monospace;font-size:10px;color:#ffffff;background:#000000">b1-hero</span>').replace("ACCENT", "#2f5d50"))}} />
-    <Fragment slot="section" set:html={${JSON.stringify(SERVICES('data-section-id="b1-services"').replace("ACCENT", "#2f5d50"))}} />
-  </BoardFrame>
-)}
-`;
+const BADGE = '<span data-palate-mark data-section-id="b1-hero" style="font-family:ui-monospace,monospace;font-size:10px;color:#ffffff;background:#000000">b1-hero</span>';
+
+/**
+ * The picked board's archived render, written directly as a fixture: exactly what
+ * boards-render.mjs now produces from a `.dc.html` artboard (Task 3), not something this
+ * suite builds. Self-contained CSS in its own helmet, a navigation header FIRST (BoardFrame's
+ * own chrome, ahead of the hero, which is why the gate has to find the hero by name and not
+ * by position), then the hero and the inner section under test, in the accent the client
+ * picked (fixed at #2f5d50 throughout this file; the home's own accent is what each test
+ * varies).
+ */
+function boardArtboard() {
+  return "<!doctype html><html><head><meta charset=\"utf-8\">" +
+    "<script src=\"./support.js\"></script></head><body><x-dc>" +
+    "<helmet><style>a{color:#000}a:hover{color:#333}</style></helmet>" +
+    "<header class=\"nav\" data-section-id=\"b1-navigation\"><a class=\"nav-logo\" href=\"#\">Eastcoast</a><a class=\"nav-cta\" href=\"#\">Ring</a></header>" +
+    HERO('data-section-id="b1-hero"', BADGE).replace("ACCENT", "#2f5d50") +
+    SERVICES('data-section-id="b1-services"') +
+    '<aside class="motion-note" data-palate-motion="">On load the column rules draw down over 800ms on one curve, then hold; nothing loops.</aside>' +
+    '<section class="cta" data-section-id="b1-cta"><a class="cta-btn" href="#">Book</a></section>' +
+    '<footer class="footer" data-section-id="b1-footer"><p class="footer-line">Ballina</p></footer>' +
+    "</x-dc></body></html>";
+}
+
+/**
+ * The archived shot, written directly: the fixture form of what boards-render.mjs leaves.
+ *
+ * `hero.png` is a REAL screenshot of the artboard's own markup, taken the same way
+ * boards-render.mjs takes it (over file://, at 1440x900), not an unrelated synthetic image.
+ * The gate's appearance-similarity check compares it against a screenshot of the BUILT HOME,
+ * and the home renders the identical HERO() markup (same faces, same accent, same copy) once
+ * an honest build lands, so a fixture that is not visually related to that would fail the
+ * gate's own 0.85 floor on every honest build and the drift tests would prove nothing.
+ */
+async function writeBoardFixture() {
+  const shotsDir = join(SITE, ".palate/explore/shots/b1");
+  mkdirSync(shotsDir, { recursive: true });
+  const renderedPath = join(shotsDir, "rendered.html");
+  writeFileSync(renderedPath, boardArtboard());
+  writeFileSync(join(shotsDir, "b1-img1.jpg"), Buffer.alloc(1024, 0xaa));
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await page.goto(pathToFileURL(renderedPath).href, { waitUntil: "load", timeout: 30000 });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: join(shotsDir, "hero.png") });
+  } finally {
+    await page.close();
+  }
+}
 
 /**
  * A THIRD SECTION, IN A FACE THE BOARD NEVER SET, sitting inside the top 900px.
@@ -149,6 +196,8 @@ before(async () => {
     skipReason = "playwright is not installed (scripts/reference-capture/setup.sh); fidelity is UNPROVEN.";
     return;
   }
+  const { chromium } = engineRequire("playwright");
+  browser = await chromium.launch();
   TMP = mkdtempSync(join(tmpdir(), "gate-fidelity-"));
   SITE = join(TMP, "site");
   try {
@@ -161,22 +210,18 @@ before(async () => {
     return;
   }
   writeFileSync(join(SITE, "src/lib/variants.ts"), REGISTRY);
-  mkdirSync(join(SITE, "src/pages/boards"), { recursive: true });
-  writeFileSync(join(SITE, "src/pages/boards/b1.astro"), boardPage());
   writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50"));
   writeManifest([]);
-
-  // Render the boards, which is what leaves the shots the gate reads.
-  try {
-    execFileSync(process.execPath, [RENDER, SITE, "--port", "8792"], { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
-  } catch (e) {
-    skipReason = `boards-render could not produce the shots: ${(e.stderr || e.message || "").toString().slice(-400)}`;
-    return;
-  }
+  // The picked board's archived render, written directly (never boards-render.mjs; see the
+  // file header).
+  await writeBoardFixture();
   ready = true;
 });
 
-after(() => { if (TMP) rmSync(TMP, { recursive: true, force: true }); });
+after(async () => {
+  if (browser) await browser.close().catch(() => {});
+  if (TMP) rmSync(TMP, { recursive: true, force: true });
+});
 
 test("no picks is a refusal, never a pass", async (t) => {
   if (!ready) return t.skip(skipReason);
@@ -208,6 +253,21 @@ test("an honest build passes, and says what it could not measure", async (t) => 
     `the similarity is gated on an environment variable rather than on whether the head can load: ${sim[1]}`);
   assert.ok(/^[0-9]/.test(sim[1]) || /UNMEASURED/.test(sim[1]),
     `the similarity is neither a number nor a stated refusal: ${sim[1]}`);
+});
+
+test("the hero is found by name when the board opens with navigation", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // Fixture assumption this case exists to protect: the artboard's FIRST data-section-id is
+  // its navigation, not its hero.
+  const rendered = readFileSync(join(SITE, ".palate/explore/shots/b1/rendered.html"), "utf8");
+  assert.match(rendered, /data-section-id="b1-navigation"[\s\S]*data-section-id="b1-hero"/,
+    "fixture setup is wrong: navigation must precede the hero in the archived render");
+  writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50"));
+  build();
+  writeManifest([{ surface: "hero", variant_id: "b1", rung: 1, position: 1, picked_at: new Date().toISOString() }]);
+  const r = await run([SITE, "--port", String(PORT)]);
+  assert.equal(r.status, 0, `an honest build with navigation opening the board should pass:\n${r.stdout}\n${r.stderr}`);
+  assert.match(r.stdout, /hero b1-hero/, "the gate names the navigation, not the hero, as the picked hero");
 });
 
 test("an accent moved past deltaE 6 fails, naming both hexes", async (t) => {
@@ -246,6 +306,29 @@ import { business } from "../lib/business";
   const r = await run([SITE, "--port", String(PORT)]);
   assert.equal(r.status, 1, `a missing picked section should fail:\n${r.stdout}\n${r.stderr}`);
   assert.match(r.stderr, /b1-services/, "the failure does not name the missing section");
+
+  writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50"));
+  build();
+});
+
+test("--serve reaches the comparison even with no dist directory", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  writeManifest([{ surface: "hero", variant_id: "b1", rung: 1, position: 1, picked_at: new Date().toISOString() }]);
+  // No build at all for this case: the board is an artboard and no longer needs one, so the
+  // OLD skip text ("a build is required even with --serve") must never appear again once a
+  // --serve URL is given. It is fine for the run to still fail, since the url below serves
+  // nothing real; what matters is which reason it fails for.
+  rmSync(join(SITE, "dist"), { recursive: true, force: true });
+  const r = await run([SITE, "--port", String(PORT), "--serve", "http://127.0.0.1:1/nowhere"]);
+  // The dist skip must never fire once --serve is given, whatever it happens to say: assert
+  // the POSITIVE (it reached the comparison and failed only because the served URL answers
+  // nothing) rather than one literal old phrase, or a reworded dist-skip message would slip
+  // this assertion unnoticed.
+  assert.doesNotMatch(r.stderr, /no built site under/,
+    `--serve with no dist directory hit the dist skip instead of reaching the comparison:\n${r.stderr}`);
+  assert.match(r.stderr, /the built home did not load at/,
+    `--serve with no dist directory should reach the home-load attempt, not stop earlier:\n${r.stderr}`);
+  assert.equal(r.status, 2, `an unreachable --serve URL should still be a refusal:\n${r.stdout}\n${r.stderr}`);
 
   writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50"));
   build();
