@@ -15,7 +15,7 @@ it as an artboard. Once we pick the direction, it moves into the Astro build, as
 
 ## The shape
 
-1. **Boards are drawn, not built.** Each rung is a hand-authored `.dc.html` artboard at
+1. **Boards are drawn, not built, and each is a whole page.** Each rung is a hand-authored `.dc.html` artboard at
    `.palate/explore/seed/B{ambition}.dc.html`, grounded in the survey and the locked brand tokens,
    following the Claude Design authoring contract (see "Artboard contract"). No Astro is written
    for a board. Astro is built ONCE, at Compose, for the picked direction.
@@ -46,7 +46,7 @@ it as an artboard. Once we pick the direction, it moves into the Astro build, as
 
 - Skeleton verbatim: `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>…</style></helmet>…</x-dc></body></html>`.
 - `x-dc` is 1440px wide (`x-dc{display:block;width:1440px;overflow:hidden}`); the frame `h` is measured, never guessed.
-- Two section roots, each carrying `data-section-id`: `"{id}-hero"` and `"{id}-{section}"` where `section` is the registry's `Variant.section`. The hero root comes first in document order.
+- **An artboard is the WHOLE home page in that direction, nav to footer, composed from the website kit** (`src/lib/kit.ts`, 17 pieces, the rhythms in `src/lib/kit-grounding.ts`), never a hero plus one section. It declares its rhythm the way the kit pages do. Every kit section it renders is a root carrying `data-section-id="{id}-{piece}"` where `piece` is the kit piece id (`navigation`, `hero`, `trust`, `problem`, `benefits`, `demo`, `process`, `proof`, `pricing`, `faq`, `cta`, `footer`, `locality`, ...). Required at minimum: `{id}-navigation`, `{id}-hero`, `{id}-cta`, `{id}-footer`, and `{id}-{section}` where `section` is the registry's `Variant.section` (the inner section the person is asked to look at). The hero is found by name, not by position.
 - Every block element carries at least one class token naming its role (uniqueness signs structure by class; inline-styles-only artboards sign blind). Copy is literal markup (viewers retype in place); inline `style` on the few properties a viewer should tweak.
 - Images: bare basename beside the artboard, ≤ 70 KB each, `<img src="b1-img1.jpg">` double-quoted; only png/jpg/jpeg/gif/webp/avif/bmp/svg. No remote URLs except Google Fonts via `<link>`/`@import` in `<helmet>`; other faces as `@font-face` data URIs. No `<script>` other than `support.js`. `a` and `a:hover` defined.
 - Registry: `src/lib/variants.ts` keeps `Variant` with `artboard: "B{ambition}.dc.html"` REQUIRED and `href` OPTIONAL (deprecated, no route exists). `id`, `name`, `ambition`, `what`, `why`, `feeling`, `donor`, `section`, `motion`, `ctas` unchanged.

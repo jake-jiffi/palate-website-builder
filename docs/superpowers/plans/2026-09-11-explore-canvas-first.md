@@ -181,7 +181,7 @@ Confirm `readFileSync` is imported. Keep check 1 (explore.astro) as is.
 
 ```js
 import { validateArtboard, stampKeys } from "../boards-render.mjs";
-const GOOD = `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>a{color:#000}a:hover{color:#333}</style></helmet><section class="hero" data-section-id="b1-hero"><h1 class="hero-title">Hogan Street</h1><img src="b1-img1.jpg" alt=""></section><section class="services" data-section-id="b1-services"><ul class="list"><li class="row">Doors</li></ul></section></x-dc></body></html>`;
+const GOOD = `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>a{color:#000}a:hover{color:#333}</style></helmet><header class="nav" data-section-id="b1-navigation"><a class="nav-logo" href="#">Eastcoast</a><a class="nav-cta" href="#">Ring</a></header><section class="hero" data-section-id="b1-hero"><h1 class="hero-title">Hogan Street</h1><img src="b1-img1.jpg" alt=""></section><section class="services" data-section-id="b1-services"><ul class="list"><li class="row">Doors</li></ul></section><section class="cta" data-section-id="b1-cta"><a class="cta-btn" href="#">Book</a></section><footer class="footer" data-section-id="b1-footer"><p class="footer-line">Ballina</p></footer></x-dc></body></html>`;
 test("a conforming artboard validates", () => {
   const r = validateArtboard(GOOD, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
   assert.equal(r.ok, true, r.problems.join("; "));
@@ -189,6 +189,16 @@ test("a conforming artboard validates", () => {
 test("a missing hero mark is named", () => {
   const r = validateArtboard(GOOD.replace(' data-section-id="b1-hero"', ""), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
   assert.equal(r.ok, false); assert.match(r.problems.join("\n"), /b1-hero/);
+});
+test("a whole page is required: nav, cta and footer marks are each named when missing", () => {
+  for (const piece of ["navigation", "cta", "footer"]) {
+    const r = validateArtboard(GOOD.replace(` data-section-id="b1-${piece}"`, ""), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+    assert.equal(r.ok, false, piece); assert.match(r.problems.join("\n"), new RegExp(`b1-${piece}`));
+  }
+});
+test("the hero is found by name, not by position (nav first is fine)", () => {
+  const r = validateArtboard(GOOD, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
 });
 test("a remote image is refused", () => {
   const r = validateArtboard(GOOD.replace("b1-img1.jpg", "https://example.com/x.jpg"), { id: "b1", section: "services", dir: fixtureDirWith({}) });
@@ -230,7 +240,10 @@ export function validateArtboard(html, { id, section, dir }) {
   const scripts = [...html.matchAll(/<script\b[^>]*>/gi)].map((m) => m[0]);
   if (scripts.length !== 1 || !/src="\.\/support\.js"/.test(scripts[0])) problems.push(`exactly one <script> is allowed, ./support.js; found ${scripts.length}`);
   const ids = [...html.matchAll(/data-section-id="([^"]+)"/g)].map((m) => m[1]);
-  if (ids[0] !== `${id}-hero`) problems.push(`the first data-section-id must be "${id}-hero" (found ${ids[0] || "none"}); gate-fidelity scopes the hero by it`);
+  // A board is the WHOLE page in that direction, nav to footer, composed from the kit's pieces.
+  for (const piece of ["navigation", "hero", "cta", "footer"]) {
+    if (!ids.includes(`${id}-${piece}`)) problems.push(`no element carries data-section-id="${id}-${piece}"; an artboard is the whole page (navigation, hero, the inner sections, cta, footer), composed from the kit, never a hero plus one section`);
+  }
   if (!ids.includes(`${id}-${section}`)) problems.push(`no element carries data-section-id="${id}-${section}"; the registry says this board shows "${section}"`);
   for (const m of html.matchAll(/<img\b[^>]*\bsrc=("[^"]*"|'[^']*'|[^\s>]+)/gi)) {
     const raw = m[1];
@@ -363,7 +376,7 @@ if (!distRoot && !serveUrl) {
 // directory, not the build's, so `b1-img1.jpg` resolves and no dist is needed for the board.
 const boardServed = await serveOnFreePort(join(shotsRoot, heroPick.variant_id), Number(opt("--port", "8791")), readFileSync(heroRenderPath, "utf8"));
 ```
-and the home URL: `const homeUrl = serveUrl || (distRoot ? await serveDist(distRoot) : null)` where `serveDist` reuses `serveOnFreePort` on `distRoot` (a second server, closed in `finally`). Update the `data-section-id` skip text to say "mark the hero root data-section-id=\"<id>-hero\" in the artboard and re-run boards-render" instead of naming `SectionMark`.
+and the home URL: `const homeUrl = serveUrl || (distRoot ? await serveDist(distRoot) : null)` where `serveDist` reuses `serveOnFreePort` on `distRoot` (a second server, closed in `finally`). Update the `data-section-id` skip text to say "mark the hero root data-section-id=\"<id>-hero\" in the artboard and re-run boards-render" instead of naming `SectionMark`. **The hero is found by NAME**: replace `const heroSectionId = heroIds[0];` with `const heroSectionId = heroIds.includes(`${heroPick.variant_id}-hero`) ? `${heroPick.variant_id}-hero` : heroIds[0];` because an artboard opens with its navigation, so the first mark is `<id>-navigation`, not the hero. Add a fixture case where the artboard's first `data-section-id` is `b1-navigation` and assert the gate still names `b1-hero` as the hero.
 - [ ] **Step 4: Run green; mutation: put the unconditional dist check back and watch the new case fail; restore.**
 - [ ] **Step 5: Commit** `git commit -am "gate-fidelity: the picked board is an artboard served from its own directory; dist only for the home"`
 
@@ -451,7 +464,7 @@ if (Object.keys(answers).length) patch.explore = { ...(patch.explore || {}), que
 - Consumes: everything above. The doctrine must name exactly: `.palate/explore/seed/B<rung>.dc.html`, `node scripts/boards-render.mjs <project-dir> [--refs …]`, `explore.canvas = { url } | { skipped, reason }`, `palate-pick.mjs --answer motion=… --answer mix=… --answer cms=…`, `Variant.artboard`.
 
 - [ ] **Step 1: Write the docs-truth assertions first** (they fail on the current text).
-- [ ] **Step 2: Rewrite `explore-stage.md` step 2** as "Draw the boards": one artboard per rung, authored by hand against the contract (copy the "Artboard contract" section of the spec into the doc verbatim as a checklist), grounded in the survey (name the donor, its section notes, the locked tokens), each carrying `data-section-id="<id>-hero"` first and `"<id>-<section>"`, one class per block, images ≤ 70 KB beside the file, the motion written in `Variant.motion` because the artboard is still. Registration in `src/lib/variants.ts` with `artboard`. Then **2b "Validate, measure, publish"**: `boards-render.mjs` (what it refuses, what it writes), then `/design` seeding from `.palate/explore/seed/` and `manifest.explore.canvas = { url }`, or `{ skipped: true, reason }` when no design skill; then `deploy-preview.sh --explore` for the stills page. State plainly: no Astro is written for a board; the first Astro of the build is the picked hero at Compose. **Step 3 "Pause, pick, ask"**: the pick on the canvas or from `/explore`, `/pick`, then the question round (three questions, one pass, `--answer`), then `--canvas <extract-dir>` read-back. **Step 4 Compose**: proof of motion first (the picked hero alone, `--proof`), then honour `question_round.mix` and `feedback.json`, keep `data-palate-section` identities matching the artboard's `data-section-id`s. Delete the "Compose lifts component FILES" mechanics and "Section identifiers via SectionMark". Rewrite "Where this lives" to "the artboards are the direction; the project acquires its first page at Compose".
+- [ ] **Step 2: Rewrite `explore-stage.md` step 2** as "Draw the boards": one artboard per rung, **each the WHOLE home page in that direction, navigation to footer, composed from the website kit's pieces (`src/lib/kit.ts`, the rhythms in `src/lib/kit-grounding.ts`), declaring its rhythm the way the kit pages do, every rendered kit section a root marked `data-section-id="<id>-<piece>"`** (required at minimum navigation, hero, cta, footer and the registry's `section`), authored by hand against the contract (copy the "Artboard contract" section of the spec into the doc verbatim as a checklist), grounded in the survey (name the donor, its section notes, the locked tokens), each carrying `data-section-id="<id>-hero"` first and `"<id>-<section>"`, one class per block, images ≤ 70 KB beside the file, the motion written in `Variant.motion` because the artboard is still. Registration in `src/lib/variants.ts` with `artboard`. Then **2b "Validate, measure, publish"**: `boards-render.mjs` (what it refuses, what it writes), then `/design` seeding from `.palate/explore/seed/` and `manifest.explore.canvas = { url }`, or `{ skipped: true, reason }` when no design skill; then `deploy-preview.sh --explore` for the stills page. State plainly: no Astro is written for a board; the first Astro of the build is the picked hero at Compose. **Step 3 "Pause, pick, ask"**: the pick on the canvas or from `/explore`, `/pick`, then the question round (three questions, one pass, `--answer`), then `--canvas <extract-dir>` read-back. **Step 4 Compose**: proof of motion first (the picked hero alone, `--proof`), then honour `question_round.mix` and `feedback.json`, keep `data-palate-section` identities matching the artboard's `data-section-id`s. Delete the "Compose lifts component FILES" mechanics and "Section identifiers via SectionMark". Rewrite "Where this lives" to "the artboards are the direction; the project acquires its first page at Compose".
 - [ ] **Step 3: Rewrite SKILL.md A.4** to the same sequence in the same compressed register (one paragraph), A.5 to include the question round, A.6 to drop the archive-boards step and keep "delete `public/_explore/`, clear `src/lib/variants.ts`, delete `explore.astro`". Fix lines 151, 184, 227, 348 to stop claiming boards are Astro routes.
 - [ ] **Step 4: Update** `agents/palate-surveyor.md` (the `--refs` invocation is unchanged; remove any `--no-build`), `commands/pick.md` (`--answer`), `references/build-manifest.md` (`explore.canvas`, `explore.question_round`, `Variant.artboard`), `references/cache-invalidation.md` (artefact list).
 - [ ] **Step 5: Run** `bash scripts/test/docs-truth.test.sh` and the full fast suite green.
