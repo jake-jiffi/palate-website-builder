@@ -269,7 +269,7 @@ JSON
 want "shown, nothing judged and no canvas -> block" BLOCK "$(run "$V")"
 has "and it names both unjudged boards" "$V" "b1, b2"
 hasnt_out "and it does NOT also demand a canvas record" "$V" "neither published nor declined"
-has "and it says the canvas comes after the judge" "$V" "after the judge passes"
+has "and it says the canvas comes after EVERY board passes" "$V" "once EVERY board has passed the judge"
 
 # One board judged, one not: still the judge's finding alone, still no canvas demand.
 cat > "$V/build-manifest.json" <<'JSON'
@@ -287,6 +287,36 @@ cat > "$V/build-manifest.json" <<'JSON'
 JSON
 want "shown, fully judged, no canvas -> block" BLOCK "$(run "$V")"
 has "and now it IS the canvas that is owed" "$V" "neither published nor declined"
+
+# === 18d. A BOARD THE JUDGE JUST REFUSED IS NOT "JUDGED, SO WHERE IS THE CANVAS?". A board read
+# clearly_worse is redrawn, so the canvas is owed no more on it than on a board nobody looked at.
+W="$TMP/k18d"; mk "$W"; page "$W"; boards "$W" b1 b2; write_valid "$W"
+cat > "$W/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z",
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},
+                     {"id":"b2","donor":"the-modern-house","rung":"clearly_worse","consistent":true}]}}
+JSON
+want "shown, one board refused and no canvas -> block" BLOCK "$(run "$W")"
+has "and it says which board is worse than its donor" "$W" "clearly worse"
+hasnt_out "and the canvas is NOT owed on a build the judge refused" "$W" "neither published nor declined"
+
+# === 18e. A BUILD WITH NO DONOR ROW IS OUTSIDE THE JUDGE, so the canvas check must fire as it
+# always did. Reading "no judgements" as "still owed" would silence check 7 forever on exactly
+# the builds that still owe a canvas.
+X="$TMP/k18e"; mk "$X"; page "$X"; boards "$X" b1 b2; write_valid "$X"
+cat > "$X/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","donor_row":{"skipped":true}}}
+JSON
+want "no donor row, no canvas record -> block" BLOCK "$(run "$X")"
+has "and it IS the canvas that is owed" "$X" "neither published nor declined"
+has "and it says the judge does not apply here" "$X" "the board judge does not apply here"
+hasnt_out "and it does not ask for judgements nothing can produce" "$X" "never compared with their donor"
+
+cat > "$X/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","donor_row":{"skipped":true},
+ "canvas":{"url":"https://claude.ai/code/artifact/abc"}}}
+JSON
+want "no donor row, canvas recorded -> pass" PASS "$(run "$X")"
 
 # Not shown yet: a judgement cannot be owed before a client has seen anything.
 U="$TMP/k18b"; mk "$U"; page "$U"; boards "$U" b1 b2; write_valid "$U"

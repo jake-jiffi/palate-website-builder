@@ -89,7 +89,9 @@ never held to the bold bar.
       carries `question`, the four `rungs` (`clearly_worse`, `somewhat_worse`, `comparable`,
       `better`) and, per board, TWO `comparisons`, the same pair with the images swapped, so the
       main agent owes two judgements per pair, one fresh general-purpose subagent each, collected
-      into `<projectDir>/.palate/explore/judgements.json` as `[{ id, verdict }]` and scored by
+      into `<projectDir>/.palate/explore/judgements.json` as `[{ id, candidate_is, verdict }]`
+      (`candidate_is` is the letter, `A` or `B`, the comparison named as the candidate, echoed back
+      by the subagent; the gate refuses a pair without it) and scored by
       `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <projectDir> --judgements
       <projectDir>/.palate/explore/judgements.json` before the canvas is published. The
       procedure is `references/explore-stage.md`; do not run it here.

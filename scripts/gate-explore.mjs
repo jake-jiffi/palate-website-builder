@@ -391,34 +391,47 @@ if (isHigh && entries.length < MIN_BOARDS) {
 }
 
 /**
- * Which shown boards have never been compared with their donor. Checks 7 and 8 both read it,
- * because the canvas is owed only AFTER the judge has passed: doctrine publishes once every
- * board is judged, so a round-one build with unjudged boards owes a judgement and does NOT yet
- * owe a canvas. Reported together they contradicted each other, telling the same build to
- * publish the canvas and to judge the boards it would have published.
+ * WHAT THE JUDGE STILL OWES, and whether it applies to this build at all. Checks 7 and 8 both
+ * read this, because the canvas is owed only AFTER every board has PASSED the judge: doctrine
+ * publishes at that point, so a build with a board still to judge, or with one the judge has
+ * just refused, owes a drawing and does NOT yet owe a canvas. Reported together the two checks
+ * contradicted each other, telling one build to publish the canvas and to redraw the board it
+ * would have published.
+ *
+ * A BUILD WITH NO DONOR ROW IS OUTSIDE THE JUDGE ENTIRELY. `--no-donors` writes
+ * `explore.donor_row = { skipped: true }` and leaves no donor hero for a board to be compared
+ * with, so no board on that build can ever be judged. Reading it as "unjudged" would suppress
+ * the canvas check forever on exactly the builds that still owe a canvas, which is the same
+ * silence check 7 exists to refuse.
  */
-const unjudgedBoards =
-  process.env.PALATE_GATE_JUDGE === "0" || !manifest?.explore?.shown_at
+const donorRowSkipped = manifest?.explore?.donor_row?.skipped === true;
+const judgeApplies = process.env.PALATE_GATE_JUDGE !== "0" && !donorRowSkipped;
+const judgedById = new Map(
+  (Array.isArray(manifest?.explore?.board_judgements) ? manifest.explore.board_judgements : []).map((j) => [j?.id, j]),
+);
+// Owed = never judged, OR judged and refused. A board read `clearly_worse` is judged and is not
+// shippable, so a canvas is no more owed on it than on a board nobody has looked at.
+const boardsOwingJudgement =
+  !judgeApplies || !manifest?.explore?.shown_at
     ? []
-    : (() => {
-        const judged = new Set(
-          (Array.isArray(manifest.explore.board_judgements) ? manifest.explore.board_judgements : []).map((j) => j?.id),
-        );
-        return parsed.filter((v) => !judged.has(v.id)).map((v) => v.id);
-      })();
+    : parsed.filter((v) => (judgedById.get(v.id)?.rung ?? null) !== null ? judgedById.get(v.id).rung === "clearly_worse" : true).map((v) => v.id);
+const unjudgedBoards = !judgeApplies || !manifest?.explore?.shown_at ? [] : parsed.filter((v) => !judgedById.has(v.id)).map((v) => v.id);
 
 // ------------------------------------------------ 7. shown boards were put somewhere
 // The canvas is where the person iterates. Publishing it is not optional when the design skill
 // is present, and when it is absent that is RECORDED with a reason, never left silent.
 {
   const ex = manifest?.explore || {};
-  if (ex.shown_at && !unjudgedBoards.length) {
+  if (ex.shown_at && !boardsOwingJudgement.length) {
     const c = ex.canvas || {};
     const ok = (typeof c.url === "string" && c.url.trim()) || (c.skipped === true && typeof c.reason === "string" && c.reason.trim());
     if (!ok) {
       add(
         "The boards were shown but the canvas was neither published nor declined",
-        `explore.shown_at is ${ex.shown_at} and manifest.explore.canvas records nothing. Publish the canvas with the design skill and record explore.canvas = { url }, or record explore.canvas = { skipped: true, reason } when no design skill can run in this session.`,
+        `explore.shown_at is ${ex.shown_at} and manifest.explore.canvas records nothing. Publish the canvas with the design skill and record explore.canvas = { url }, or record explore.canvas = { skipped: true, reason } when no design skill can run in this session.` +
+          (donorRowSkipped
+            ? " This build recorded explore.donor_row = { skipped: true }, so there is no donor hero for a board to be judged against and the board judge does not apply here: the canvas is owed as soon as the boards are shown."
+            : ""),
       );
     }
   }
@@ -430,14 +443,14 @@ const unjudgedBoards =
 // the boards are in front of a client, a board with no judgement, and a board judged clearly
 // worse than its own donor, are both things a person finds out by looking rather than by being
 // told. PALATE_GATE_JUDGE=0 releases the whole check, the same variable the judge itself reads.
-if (process.env.PALATE_GATE_JUDGE !== "0") {
+if (judgeApplies) {
   const ex = manifest?.explore || {};
   if (ex.shown_at) {
-    const judged = new Map((Array.isArray(ex.board_judgements) ? ex.board_judgements : []).map((j) => [j?.id, j]));
+    const judged = judgedById;
     if (unjudgedBoards.length) {
       add(
         `${unjudgedBoards.length} shown board(s) were never compared with their donor`,
-        `${unjudgedBoards.join(", ")} have no entry in manifest.explore.board_judgements. Every board is judged against the library reference it was drawn from, both ways round, before a client sees it: run node scripts/gate-board-judge.mjs <projectDir>, the main build agent dispatches each comparison to a fresh subagent, then run it again with --judgements <file>. Publish the canvas after the judge passes, which is why nothing here asks for a canvas record yet.`,
+        `${unjudgedBoards.join(", ")} have no entry in manifest.explore.board_judgements. Every board is judged against the library reference it was drawn from, both ways round, before a client sees it: run node scripts/gate-board-judge.mjs <projectDir>, the main build agent dispatches each comparison to a fresh subagent, then run it again with --judgements <file>. The canvas is owed only once EVERY board has passed the judge, which is why nothing here asks for a canvas record yet.`,
       );
     }
     for (const v of parsed) {

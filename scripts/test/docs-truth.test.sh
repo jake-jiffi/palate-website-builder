@@ -568,6 +568,17 @@ matches "palate-verifier.md's tools line carries no Agent or Task tool" \
 present "explore-stage.md publishes the canvas only once the judge has passed" \
   "references/explore-stage.md" "once the board judge"
 
+# THE ANSWER SHAPE THE JUDGE ACTUALLY VALIDATES. `scoreBoardPair` REQUIRES `candidate_is`, so a
+# surface that still asks for `[{ id, verdict }]` sends every judgement back in a shape the gate
+# refuses, after the subagents have been paid for. The old shape must appear nowhere.
+for f in SKILL.md references/explore-stage.md agents/palate-verifier.md; do
+  absent "$f asks for no judgement shape the judge refuses" "$f" "[{ id, verdict }]"
+done
+present "SKILL.md A.4 asks for the shape the judge validates" \
+  "SKILL.md" "[{ id, candidate_is, verdict }]"
+present "SKILL.md A.4 tells the subagent which letter is the candidate" \
+  "SKILL.md" "candidate_is"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

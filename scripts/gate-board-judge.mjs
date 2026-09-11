@@ -26,7 +26,7 @@
  *     agree with itself.
  *
  *   node scripts/gate-board-judge.mjs <projectDir> --judgements <file>
- *     Reads `[{ id, verdict }]`, scores every pair, records
+ *     Reads `[{ id, candidate_is, verdict }]`, scores every pair, records
  *     `manifest.explore.board_judgements`, and refuses any board at `clearly_worse`.
  *
  * THE JUDGEMENTS ARE RECORDED EVEN WHEN THE GATE REFUSES. A refusal that leaves no trace gets
@@ -238,7 +238,7 @@ export function main(argv = process.argv.slice(2)) {
     process.stdout.write(
       `gate-board-judge: ${pairs.length} board(s), ${pairs.length * 2} comparisons stated in ${requestPath}\n` +
         `  Dispatch each comparison to a FRESH subagent (one per ordering, never both in one context), then run\n` +
-        `  node scripts/gate-board-judge.mjs ${projectDir} --judgements <file> with [{ id, verdict }] per comparison.\n`,
+        `  node scripts/gate-board-judge.mjs ${projectDir} --judgements <file> with [{ id, candidate_is, verdict }] per comparison.\n`,
     );
     return;
   }
@@ -276,7 +276,7 @@ export function main(argv = process.argv.slice(2)) {
   }
   const judgements = readJSON(resolve(judgementsFile));
   if (!Array.isArray(judgements)) {
-    process.stderr.write(`gate-board-judge: ${judgementsFile} must hold an array of { id, verdict }. NOT a pass.\n`);
+    process.stderr.write(`gate-board-judge: ${judgementsFile} must hold an array of { id, candidate_is, verdict }. NOT a pass.\n`);
     process.exitCode = 2;
     return;
   }
