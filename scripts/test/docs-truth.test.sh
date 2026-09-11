@@ -503,6 +503,26 @@ present "pick.md names the question round flags" \
 present "explore-stage.md names the question round" \
   "references/explore-stage.md" "question_round"
 
+# The donor half. The surveyor writes the file, boards-render draws from it, and the judge reads
+# what boards-render wrote, so a doctrine that never names the file describes a board drawn from
+# a slug.
+present "explore-stage.md names the file the drawing brief is read from" \
+  "references/explore-stage.md" "donor-heroes.json"
+present "explore-stage.md names the flag that draws the donor row" \
+  "references/explore-stage.md" "--donors"
+present "explore-stage.md names the gate that judges a board against its donor" \
+  "references/explore-stage.md" "gate-board-judge.mjs"
+present "explore-stage.md names the rung a board is refused at" \
+  "references/explore-stage.md" "clearly_worse"
+present "SKILL.md A.4 names the judge that runs before the canvas" \
+  "SKILL.md" "gate-board-judge.mjs"
+present "palate-verifier.md carries the judging step" \
+  "agents/palate-verifier.md" "2c."
+present "palate-verifier.md names the file the judgements are collected into" \
+  "agents/palate-verifier.md" "judgements.json"
+present "build-manifest.md records what the judge wrote" \
+  "references/build-manifest.md" "board_judgements"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

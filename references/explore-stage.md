@@ -56,6 +56,22 @@ onto `/explore` and the canvas.
    brand tokens (`references/website-kit.md`, `reference-library-usage.md`).
    One distinct donor per rung.
 
+   **THE DRAWING BRIEF - DRAW FROM THE DONOR, NOT FROM ITS NAME.** Before rung N
+   is drawn, read `.palate/explore/donor-heroes.json[N]` (the surveyor writes it,
+   `agents/palate-surveyor.md`) and the kit's grounding for the pieces that
+   rung's rhythm uses (`src/lib/kit-grounding.ts`). The entry carries the donor's
+   `hero_url`, its `signature_move`, the `component_prompts` and `do_dont` lines
+   the board will reproduce, and its `copy_voice`. Draw FROM that hero:
+   its composition, its weight, its negative space and the signature move, in the
+   donor's own rhythm, with the conversion spine (the phone-first CTA, the trust
+   beat, the locality beat) placed where the library places it rather than where
+   habit puts it. THEN re-skin to the LOCKED brand. The registry `why` names what
+   this rung took from the donor, in those terms, because a `why` that could have
+   been written without opening the reference is the tell that the reference was
+   never opened. A rung whose donor has no entry in that file is a board drawn
+   from a slug, and `boards-render.mjs` refuses it rather than drawing half a
+   donor row.
+
    **THE ARTBOARD CONTRACT.** `scripts/boards-render.mjs` holds every board to
    it and names every fault ON THAT BOARD in one pass, then stops at the first
    board that fails, so read it as a checklist before drawing rather than after:
@@ -116,8 +132,25 @@ onto `/explore` and the canvas.
    first impression of the product, so a board that looks AI-made has lost the
    argument before anyone reads a word.
 
+   **AND YOUR EYE IS THE FIRST PASS, NEVER THE GATE. THE GATE IS THE DONOR
+   COMPARISON.** Every board is judged against the one thing it has to answer to,
+   the library reference it was drawn from, by
+   `node scripts/gate-board-judge.mjs <project-dir>` (the verifier runs it, step
+   2c of `agents/palate-verifier.md`). Each board's entrance still is compared
+   with its donor's hero on four rungs, `clearly_worse`, `somewhat_worse`,
+   `comparable`, `better`, both ways round, and the LOWER of the two readings
+   stands. **A board read `clearly_worse` than its donor is refused, at EVERY
+   intensity**: a calm brand is not a reason to hand someone a weak drawing, and
+   the visual rubric every board already clears measures hygiene, which is how
+   five boards scored 25 to 28 out of 30 and were bland. A refused board is
+   redrawn from the donor's hero, re-rendered and judged again before the canvas
+   is published, on the same three-attempts-then-drop-the-rung rule as the rest
+   of this gate. `scripts/gate-explore.mjs` blocks a shown build whose registered
+   boards carry no judgement or carry `clearly_worse`, so a board cannot reach a
+   client by being judged late. `PALATE_GATE_JUDGE=0` releases both.
+
    As each board is registered, it is also recorded in `build-manifest.json`
-   under `explore.shown` (`{ id, name, donor_slug, hero_pattern, position }`) so
+   under `explore.shown` (`{ id, name, donor_slug, position }`) so
    every direction SHOWN is captured for the taste flywheel, not just the one
    picked (`references/build-memory.md`).
    Before drawing each board, state a **Design Read** out loud (see
@@ -134,7 +167,8 @@ onto `/explore` and the canvas.
    **Match drawing complexity to the aesthetic vision**: a maximalist board is
    drawn elaborately; a minimalist one practises restraint.
 2b. **Validate, measure, publish** - `node scripts/boards-render.mjs <project-dir>
-   [--out .palate/explore] [--refs .palate/explore/refs.json]`. It builds
+   [--out .palate/explore] [--refs .palate/explore/refs.json]
+   [--donors .palate/explore/donor-heroes.json | --no-donors]`. It builds
    nothing. It holds every registered artboard to the contract and REFUSES with
    every fault named, stamps a stable `data-palate-k` on each element in place
    (so the published canvas and the read-back align), archives the board as
@@ -146,7 +180,26 @@ onto `/explore` and the canvas.
    `public/_explore/<id>-full.png`, and writes `canvas.json` and `README.md`
    beside the seed. It records `manifest.explore = { ran, shown_at, boards }`,
    and `shown_at` is half of the only number this stage produces, because time
-   to pick is `picked_at - shown_at`. **A refusal never deletes the seed**:
+   to pick is `picked_at - shown_at`.
+
+   **IT ALSO DRAWS THE DONOR ROW, and that is on by default.** With
+   `.palate/explore/donor-heroes.json` present it fetches each rung's
+   `hero_url` over HTTPS (10 seconds, and an answer that is not an image is
+   refused), re-encodes it under the canvas image ceiling, and writes
+   `seed/d<rung>-hero.jpg`, `seed/D<rung>.dc.html` (a 720 by 580 donor card: the
+   hero, the reference's name and slug, and the one signature move the rung
+   reproduces), `shots/<id>/donor.jpg` and `public/_explore/<id>-donor.jpg`. The
+   card is laid on the canvas at the same `y` as its own board, immediately to its
+   right, and the next board steps past both. It records
+   `explore.shown[] = { id, name, donor_slug, position }`, which is the lineage
+   the Stop hook's `.palate/donors.json` is built from. `--donors <path>` names
+   the file explicitly, and then a file that is not there is a refusal, because
+   it was asked for. `--no-donors` is the deliberate skip and is RECORDED as
+   `explore.donor_row = { skipped: true }`, so a canvas with no donor row can
+   never be mistaken for one whose donors were simply never recorded.
+   `shots/<id>/donor.jpg` is also what the board judge compares against, so a run
+   with no donor row leaves nothing for the judge to read and it skips saying so.
+   **A refusal never deletes the seed**:
    those are the operator's own drawings, not this script's output, and wiping
    them over one oversized image would throw away hours of authoring.
 
@@ -357,6 +410,17 @@ NOT govern the bold bar: `commission.intensity`, the inferred one, still does
 that, because a client under-reporting their own appetite is exactly the case the
 bar exists for.
 
+**TWO ROWS OF REAL SITES, AND THEY ANSWER DIFFERENT QUESTIONS.** The calibration
+row (`.palate/explore/refs.json`, drawn as `Ref<position>.dc.html` on row 0) is
+the RANGE of the vertical, shown once, to ask the client how bold they want to
+be. The donor row (`.palate/explore/donor-heroes.json`, drawn as
+`D<rung>.dc.html` beside each board) is the ONE reference that rung was drawn
+from, shown per rung, so the client can check the board against the thing it
+reproduces and the judge can compare the two. Same 720 by 580 frame on purpose,
+because both are real sites shown as evidence and a row of mismatched frames
+reads as a mistake; different jobs, so a reference in one row is not thereby in
+the other.
+
 ## Generating distinct boards - concept-led, not skin-deep
 
 Five boards that all feel like a slightly-reskinned Linear is failure, and so
@@ -514,7 +578,10 @@ had in mind, and the restrained rung reads as "the boring one" rather than as on
 deliberate end of a distance the boldest rung defines. So the preview always ships
 `src/pages/explore.astro`, and it is the URL you hand over whenever there is no canvas.
 It shows each board inline (its entrance still from `/_explore/<id>.png`, its
-argument, its motion plan), links each card to the whole board at
+argument, its motion plan), shows the donor still beside each rung card from
+`/_explore/<id>-donor.jpg`, captioned `Drawn from <donor>`, so the reference a
+direction reproduces is on the page the client actually opens, links each card to
+the whole board at
 `/_explore/<id>-full.png`, draws the calibration row above the ladder, and links
 the canvas first when one exists. A landing board is shown on the canvas only:
 nothing draws a still for one, so `/explore` lists it without a link.
@@ -660,7 +727,15 @@ the canonical pages exist. Same pattern as today.
 The artboards are the direction; the Astro project is the site. During Explore
 the project carries `.palate/explore/seed/B1.dc.html`..`BN.dc.html` and their
 images (working state, never shipped), `src/lib/variants.ts` and
-`src/pages/explore.astro`, and it has no page of its own at all. **It acquires
+`src/pages/explore.astro`, and it has no page of its own at all. Beside them, all
+generated and all re-derivable from what the surveyor and the operator wrote:
+`.palate/explore/donor-heroes.json` (the surveyor's, one entry per rung),
+`seed/D<rung>.dc.html` + `seed/d<rung>-hero.jpg` (the donor card and its fetched
+hero), `shots/<id>/donor.jpg` and `public/_explore/<id>-donor.jpg` (the same
+still, for the judge and for `/explore`), and
+`.palate/explore/judge-request.json` + the judgements file the verifier collects
+(`.palate/explore/judgements.json` by convention), which is the one record of
+what the judge was asked and what it answered. **It acquires
 its first page at Compose**, when the picked rung's home page is written in full
 and proved moving. One project, one build, and only the chosen direction is ever
 built.
