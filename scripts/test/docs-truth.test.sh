@@ -582,6 +582,56 @@ present "SKILL.md A.4 tells the subagent which letter is the candidate" \
 present "explore-stage holds board copy to the client's own facts" references/explore-stage.md "arithmetic is not a source"
 present "explore-stage says gate-facts never reads an artboard" references/explore-stage.md "never reads an artboard"
 
+# THE INTAKE. The v3 run asked the calibration question after the boards were drawn, so the
+# answer could not steer anything it was for. The surveyor now runs in two acts and the wall
+# holds the six answers on the checkpoint; these assertions pin the doctrine that says so.
+present "the surveyor names its calibration-only first act" \
+  "agents/palate-surveyor.md" "calibration only"
+present "the surveyor names the intake it is handed for the deep survey" \
+  "agents/palate-surveyor.md" "the intake"
+present "the surveyor sets the intensity facet from the calibration answer" \
+  "agents/palate-surveyor.md" "\`intensity\` facet from the calibration position"
+present "the surveyor searches the admired sites with refs_for_business" \
+  "agents/palate-surveyor.md" "\`refs_for_business\` on each site they admire"
+present "the surveyor treats the avoid list as an exclusion" \
+  "agents/palate-surveyor.md" "never a donor"
+present "the surveyor names the primary action in the composition note" \
+  "agents/palate-surveyor.md" "COMPOSITION NOTE: the primary action is"
+present "SKILL.md's checkpoint names the recorded intake" "SKILL.md" "shown.intake"
+present "SKILL.md's checkpoint says the intake comes before the deep survey" \
+  "SKILL.md" "BEFORE THE DEEP SURVEY"
+present "explore-stage step 1 asks which calibration reference is closest" \
+  "references/explore-stage.md" "which of the calibration references is closest"
+present "explore-stage step 1 asks for admired sites" \
+  "references/explore-stage.md" "two or three sites in your field you admire"
+present "explore-stage step 1 asks for one they do not admire" \
+  "references/explore-stage.md" "one you do not"
+present "explore-stage step 1 asks for the primary action" \
+  "references/explore-stage.md" "call, a form, a booking or a purchase"
+present "explore-stage step 1 asks for the wow moment" \
+  "references/explore-stage.md" "the wow moment"
+present "explore-stage step 1 asks for the avoid list" \
+  "references/explore-stage.md" "the avoid list"
+present "explore-stage step 1 says the six are asked in one round" \
+  "references/explore-stage.md" "ONE round"
+present "explore-stage step 1 records them on the checkpoint" \
+  "references/explore-stage.md" "plan_checkpoint.shown.intake"
+
+# ASKING THE PERSON. Prose questions in a terminal get prose answers, or none: the person has
+# to type, so they answer the first and skip the rest. Where the harness has a structured
+# question tool, every question the skill puts to a person goes through it.
+matches "SKILL.md carries an Asking the person house rule" "SKILL.md" "^### Asking the person"
+present "the rule names the tool" "SKILL.md" "AskUserQuestion"
+present "the rule asks for 2 to 4 options per question" "SKILL.md" "two to four options"
+present "the rule puts the recommended option first and labels it" "SKILL.md" "(Recommended)"
+present "the rule caps a round at four questions in one call" "SKILL.md" "four questions in ONE call"
+present "the rule asks for multi-select where answers are not exclusive" "SKILL.md" "multi-select"
+present "the rule falls back to prose only where the tool is absent" "SKILL.md" "only where the tool is absent"
+present "explore-stage asks the intake through the tool" \
+  "references/explore-stage.md" "AskUserQuestion"
+present "explore-stage asks the question round through the tool" \
+  "references/explore-stage.md" "as one AskUserQuestion call"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

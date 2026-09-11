@@ -38,6 +38,49 @@ onto `/explore` and the canvas.
    board count and whether to include landing-page boards. Then ask:
    "Proceed?"
 
+   **THE INTAKE COMES FIRST, AND IT IS ASKED IN ONE ROUND.** Nothing about the
+   range used to come from the person: the calibration question was asked after
+   the boards were already drawn, so the answer reached the canvas too late to
+   steer the research it was for. So the cheap half of the survey runs first.
+   Dispatch `palate-surveyor` with `calibration only` (its act 1: 3 or 4 real
+   sites from the client's own vertical spanning restrained to bold, written to
+   `.palate/explore/refs.json` with their stills), show that row, and ask all six
+   at once, in their language and not ours:
+
+   a. **which of the calibration references is closest** to how bold you want to
+      be, and what do you dislike about it?
+   b. **two or three sites in your field you admire**, and **one you do not**.
+   c. what is the one thing you want a visitor to do?
+      A **call, a form, a booking or a purchase**.
+   d. **the wow moment** - what should this site do that nothing else in your
+      field does? One sentence.
+   e. **the avoid list** - three to five things we must not do ("no purple", "no
+      stock people photos").
+   f. the host, who edits this copy in six months, and how many directions you
+      want to see (the count, per the paragraph below).
+
+   Ask them in ONE round, never one at a time: six separate questions across six
+   turns reads as an interrogation and the person answers the last three in three
+   words. **Ask them with `AskUserQuestion`** (SKILL.md, "Asking the person"),
+   four in the first call and two in the second: the calibration question's
+   options are the row's own positions ("1, Aesop: restrained ..."), the primary
+   action's are call / form / booking / buy, the count's are 3 / 5 / 8 with 5
+   recommended, and the avoid list is multi-select over the usual don'ts with
+   "Other" for theirs. The admired and disliked sites come in as "Other" on their
+   own question, because nobody can list a client's field for them. Where the
+   tool is absent, one message listing all six.
+
+   Record the answers on the checkpoint as
+   `plan_checkpoint.shown.intake = { calibration: { position: 1..4, why },
+   admired: [...], disliked: [...], primary_action, wow, avoid: [3 to 5] }`.
+   The write wall refuses a ladder whose checkpoint lacks any of them
+   (`hooks/palate-pretooluse.mjs`), because an unanswered intake is a range drawn
+   on our own taste rather than theirs. Then hand that block verbatim to the
+   surveyor's act 2: the calibration position sets the `intensity` facet and where
+   the ladder's ends sit, the admired sites are searched with `refs_for_business`,
+   the disliked and avoided are ruled out as donors, and the primary action is the
+   conversion spine every board places.
+
    **ASK FOR THE COUNT, AND SAY WHAT IT BUYS.** The count sets the RESOLUTION of
    the ambition ladder, never its range. Whether they pick 3 or 8, rung 1 is
    genuinely understated and rung N is genuinely bold; a larger number buys finer
@@ -300,8 +343,11 @@ onto `/explore` and the canvas.
    surface that already has one, because everything downstream trusts this
    record. Also record the calibration answer (`--intensity`, 1 to 4).
 
-   **THEN THE QUESTION ROUND, ONE PASS.** Three questions asked together, the
-   moment the direction is settled, and answered in one command:
+   **THEN THE QUESTION ROUND, ONE PASS.** Three questions asked together,
+   **as one AskUserQuestion call** (SKILL.md, "Asking the person"): `motion` and `cms` are
+   single-select with the recommended option first, `mix` is multi-select over
+   the other boards' sections. The moment the direction is settled, and answered
+   in one command:
 
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> \
