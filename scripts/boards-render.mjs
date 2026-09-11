@@ -94,6 +94,25 @@ const REF_WIDTH = 720;
 const REF_HEIGHT = 580;
 const ROW_GAP = 120;
 const FRAME_GAP = 80;
+/** The phone. A board drawn at any other width is a desktop board captioned "mobile". */
+const MOBILE_WIDTH = 390;
+/**
+ * The columns every direction's row reads down.
+ *
+ * They are constants rather than a running offset because the point of a row is COMPARISON: a
+ * client scanning two directions compares home with home and phone with phone, and a row whose
+ * inner page slides left because that direction had no donor cannot be read against the row
+ * above it.
+ */
+const COLUMNS = {
+  board: 0,
+  donor: FRAME_WIDTH + FRAME_GAP,                                       // 1520
+  inner: FRAME_WIDTH + FRAME_GAP + REF_WIDTH + FRAME_GAP,               // 2320
+  mobile: (FRAME_WIDTH + FRAME_GAP) * 2 + REF_WIDTH + FRAME_GAP,        // 3840
+  sheet: (FRAME_WIDTH + FRAME_GAP) * 2 + REF_WIDTH + FRAME_GAP + MOBILE_WIDTH + FRAME_GAP, // 4310
+};
+/** Under this much visible copy, a sheet is a type specimen rather than the pieces as used. */
+const SHEET_MIN_TEXT = 120;
 
 /** The image types the canvas resolves from a bare filename beside the artboard. */
 const IMG_OK = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
@@ -154,7 +173,89 @@ export function parseRegistry(src) {
     section: field(o, "section"),
     motion: field(o, "motion"),
     clip: field(o, "clip"),
+    /**
+     * THE OTHER THREE BOARDS OF THE DIRECTION. A direction is the home page, the inner page the
+     * primary action lands on, the same home at 390, and the sheet of the kit pieces as used.
+     * Null when the registry never declared them, which is a refusal rather than something to
+     * derive from the rung: a derived name means a registry that declared nothing still passes
+     * while the client is shown one board out of four.
+     */
+    presentation: presentationOf(o),
   })).filter((v) => v.id);
+}
+
+function presentationOf(obj) {
+  const body = blockAfterKey(obj, "presentation", "{", "}");
+  if (!body) return null;
+  const inner = field(body, "inner");
+  const mobile = field(body, "mobile");
+  const sheet = field(body, "sheet");
+  return inner || mobile || sheet ? { inner, mobile, sheet } : null;
+}
+
+/**
+ * The body of the `[...]` or `{...}` that follows a key, brace-matched and string-aware.
+ *
+ * The registry and the kit manifest are TypeScript, so nothing here can be read with one regex:
+ * a variation's `needs: [...]` sits inside the array this is looking for the end of, and a
+ * `when:` string can carry a brace. Same string handling as `arrayBody`, for the same reason.
+ */
+function blockAfterKey(src, key, open, close) {
+  const m = new RegExp(`\\b${key}\\s*:\\s*\\${open}`).exec(src);
+  if (!m) return null;
+  let i = m.index + m[0].length;
+  const start = i;
+  let depth = 1;
+  while (i < src.length && depth > 0) {
+    const c = src[i];
+    if (c === '"' || c === "'" || c === "`") {
+      const q = c;
+      i++;
+      while (i < src.length) {
+        if (src[i] === "\\") { i += 2; continue; }
+        if (src[i] === q) { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    if (c === open) depth++;
+    else if (c === close) depth--;
+    i++;
+  }
+  return depth === 0 ? src.slice(start, i - 1) : null;
+}
+
+/**
+ * The kit manifest, read as `piece id -> the variation ids that belong to it`.
+ *
+ * The detail sheet marks every block `data-kit-piece="<piece>:<Variation>:<state>"`, and the
+ * whole value of that mark is that it names something that EXISTS: a sheet showing a navigation
+ * variation the kit does not carry is a promise the build cannot keep, and the client signs it
+ * off. So the mark is checked against `src/lib/kit.ts` itself rather than against a list kept
+ * here, which would be a second copy of the manifest drifting from the first.
+ *
+ * Exported because gate-explore checks the registry's own per-piece provenance against the same
+ * manifest, and two parsers reading one file differently is how a check passes on one surface
+ * and fails on the other.
+ */
+export function parseKitVariations(src) {
+  const out = new Map();
+  const body = arrayBody(stripComments(String(src || "")), "kit");
+  if (!body) return out;
+  for (const piece of objects(body)) {
+    const id = field(piece, "id");
+    if (!id) continue;
+    const set = new Set();
+    const variations = blockAfterKey(piece, "variations", "[", "]");
+    if (variations) {
+      for (const v of objects(variations)) {
+        const vid = field(v, "id");
+        if (vid) set.add(vid);
+      }
+    }
+    out.set(id, set);
+  }
+  return out;
 }
 
 function stripComments(src) {
@@ -253,8 +354,121 @@ const escapeHtml = (s) => String(s)
  * a broken box; a board that is only a hero and one section looks like a direction until the
  * client asks what the footer does.
  */
-export function validateArtboard(html, { id, section, dir }) {
+/**
+ * THE FOUR KINDS OF BOARD A DIRECTION IS MADE OF.
+ *
+ * The shared rules (skeleton, one script, images, links, class ratio, a:hover) are the same for
+ * all four, because they are about what a canvas can render. Three things differ, and each is a
+ * fault a canvas reports as nothing at all:
+ *
+ *   `width`  a frame neither scales nor crops, so a mobile board drawn at 1440 is a second
+ *            desktop board that the client signs off as the phone;
+ *   `prefix` the inner page's marks are `<id>-inner-<piece>`, so the fidelity gate can tell the
+ *            inner entrance from the home one; the sheet has no section marks at all and is
+ *            checked on its `data-kit-piece` blocks instead (`prefix: null`);
+ *   `motion` the motion plan belongs to the home board. Repeating it on the phone and the sheet
+ *            would be three copies of one plan, drifting.
+ */
+const KINDS = {
+  home: { width: FRAME_WIDTH, prefix: "", motion: true, label: "home board" },
+  inner: { width: FRAME_WIDTH, prefix: "inner-", motion: false, label: "inner page" },
+  mobile: { width: MOBILE_WIDTH, prefix: "", motion: false, label: "mobile board" },
+  sheet: { width: FRAME_WIDTH, prefix: null, motion: false, label: "detail sheet" },
+};
+
+/**
+ * The blocks the detail sheet owes, whatever variation the direction chose.
+ *
+ * These eight are what a client is actually signing off: how the navigation looks closed AND
+ * open, what the footer carries, how the closing band asks, how the enquiry form looks filled
+ * AND wrong, one card, one trust strip. A sheet of entrances proves none of it, which is the
+ * failure this list exists to stop.
+ */
+const SHEET_REQUIRED = [
+  { pieces: ["navigation"], state: "default", say: "navigation:<Variation>:default, the bar at rest" },
+  { pieces: ["navigation"], state: "open", say: "navigation:<Variation>:open, the menu open" },
+  { pieces: ["footer"], state: "default", say: "footer:<Variation>:default" },
+  { pieces: ["cta"], state: "default", say: "cta:<Variation>:default, the closing band" },
+  { pieces: ["forms"], state: "default", say: "forms:<Variation>:default, the enquiry form filled in" },
+  { pieces: ["forms"], state: "error", say: "forms:<Variation>:error, the same form with its errors shown" },
+  { pieces: ["benefits", "usecases", "casestudies"], state: "default", say: "one card, from benefits, usecases or casestudies, at :default" },
+  { pieces: ["trust"], state: "default", say: "trust:<Variation>:default, the trust strip" },
+];
+
+/**
+ * The detail sheet's own contract: real kit pieces, in real variations, carrying real copy.
+ *
+ * Exported so the sheet can be held to this without the rest of the artboard rules, which is
+ * what a caller wants when it is checking a sheet it did not read off disk.
+ */
+export function validateSheet(html, { id, kit } = {}) {
   const problems = [];
+  if (!kit || !kit.size) {
+    problems.push("the kit manifest (src/lib/kit.ts) could not be read, so no data-kit-piece mark on this sheet could be checked against a piece that exists");
+    return { ok: false, problems };
+  }
+
+  const marks = [...String(html).matchAll(/\bdata-kit-piece="([^"]*)"/g)].map((m) => m[1]);
+  if (!marks.length) {
+    problems.push(`the detail sheet carries no data-kit-piece blocks; every block on it is marked data-kit-piece="<piece>:<Variation>:<state>" so the sheet names the pieces the direction actually uses`);
+  }
+  const present = new Set();
+  for (const raw of marks) {
+    const parts = raw.split(":").map((s) => s.trim());
+    if (parts.length !== 3 || parts.some((s) => !s)) {
+      problems.push(`data-kit-piece="${raw}" is not <piece>:<Variation>:<state>, e.g. navigation:NavSimple:default`);
+      continue;
+    }
+    const [piece, variation, state] = parts;
+    if (!kit.has(piece)) {
+      problems.push(`data-kit-piece="${raw}" names the piece "${piece}", which src/lib/kit.ts does not carry; the sheet shows the pieces the site is composed from, so a piece that does not exist is a promise the build cannot keep`);
+      continue;
+    }
+    if (!kit.get(piece).has(variation)) {
+      problems.push(`data-kit-piece="${raw}" names the variation "${variation}", which is not one of ${piece}'s in src/lib/kit.ts (${[...kit.get(piece)].join(", ") || "none"})`);
+      continue;
+    }
+    present.add(`${piece}:${state}`);
+  }
+
+  for (const need of SHEET_REQUIRED) {
+    if (!need.pieces.some((p) => present.has(`${p}:${need.state}`))) {
+      problems.push(`the detail sheet has no ${need.say}; without it the client signs off a direction whose ${need.pieces.join(" or ")} in that state nobody has drawn`);
+    }
+  }
+
+  /**
+   * AND IT IS THE PIECES AS USED, NEVER A TYPE SPECIMEN.
+   *
+   * Jake rejected exactly this on 9 September: half of every board was an Ag ramp, swatches and
+   * a button pair, identical in layout across every direction, with the type DISPLAYED rather
+   * than used. A sheet of correctly marked blocks with nothing written in them is that board
+   * again in different markup, and every other rule here passes it.
+   */
+  const text = visibleText(html);
+  if (text.length < SHEET_MIN_TEXT) {
+    problems.push(`the detail sheet carries ${text.length} characters of visible copy, under the ${SHEET_MIN_TEXT} the rule asks for: it reads as a type specimen (a ramp, swatches, a button pair) rather than the pieces as used. Write the real copy, in the brand's voice, into every block`);
+  }
+  return { ok: problems.length === 0, problems };
+}
+
+/** What a reader sees: style, script and comments removed, tags stripped, whitespace collapsed. */
+function visibleText(html) {
+  return String(html)
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function validateArtboard(html, { id, section, dir, kind = "home", kit = null }) {
+  const problems = [];
+  const spec = KINDS[kind];
+  if (!spec) {
+    return { ok: false, problems: [`${kind} is not a kind of board; the four are ${Object.keys(KINDS).join(", ")}`] };
+  }
   const head = html.replace(/\s+/g, " ").replace(/> </g, "><").trim();
   if (!/^<!doctype html><html><head><meta charset="utf-8"><script src="\.\/support\.js"><\/script><\/head><body><x-dc><helmet><style>/i.test(head)) {
     problems.push('the skeleton must be exactly <!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>...; the editor replaces support.js at render time and a different spelling silently breaks editing');
@@ -271,8 +485,8 @@ export function validateArtboard(html, { id, section, dir }) {
    */
   const helmet = /<helmet>\s*<style>([\s\S]*?)<\/style>/i.exec(html);
   const helmetStyle = helmet ? helmet[1] : "";
-  if (!/(^|[};\s])x-dc\s*\{[^}]*\bwidth\s*:\s*1440px/i.test(helmetStyle)) {
-    problems.push(`the frame must be ${FRAME_WIDTH} wide: <helmet><style> needs an x-dc{display:block;width:${FRAME_WIDTH}px;overflow:hidden} rule. A canvas frame neither scales nor crops, so a board at any other width is cropped or sits in a gutter beside the rungs next to it`);
+  if (!new RegExp(`(^|[};\\s])x-dc\\s*\\{[^}]*\\bwidth\\s*:\\s*${spec.width}px`, "i").test(helmetStyle)) {
+    problems.push(`the frame must be ${spec.width} wide: <helmet><style> needs an x-dc{display:block;width:${spec.width}px;overflow:hidden} rule. A canvas frame neither scales nor crops, so a board at any other width is cropped or sits in a gutter beside the boards next to it`);
   }
 
   const scripts = [...html.matchAll(/<script\b[^>]*>/gi)].map((m) => m[0]);
@@ -297,22 +511,32 @@ export function validateArtboard(html, { id, section, dir }) {
   }
   const ids = [...html.matchAll(/data-section-id="([^"]+)"/g)].map((m) => m[1]);
   // A board is the WHOLE page in that direction, nav to footer, composed from the kit's pieces.
-  for (const piece of ["navigation", "hero", "cta", "footer"]) {
-    if (!ids.includes(`${id}-${piece}`)) {
-      problems.push(`no element carries data-section-id="${id}-${piece}"; an artboard is the whole page (navigation, hero, the inner sections, cta, footer), composed from the kit, never a hero plus one section`);
+  // The sheet is the one exception: it is the pieces themselves, so it carries no page marks and
+  // is held to its own contract below.
+  if (spec.prefix !== null) {
+    for (const piece of ["navigation", "hero", "cta", "footer"]) {
+      if (!ids.includes(`${id}-${spec.prefix}${piece}`)) {
+        problems.push(`no element carries data-section-id="${id}-${spec.prefix}${piece}"; the ${spec.label} is the whole page (navigation, hero, the inner sections, cta, footer), composed from the kit, never a hero plus one section`);
+      }
     }
   }
-  if (section && !ids.includes(`${id}-${section}`)) {
+  // The registry's `section` is the HOME board's inner section: it is what the client picks the
+  // home page on. The inner page shows the service, and the phone shows the home stacked.
+  if (kind === "home" && section && !ids.includes(`${id}-${section}`)) {
     problems.push(`no element carries data-section-id="${id}-${section}"; the registry says this board shows "${section}"`);
   }
 
   // The motion is written ON the board: a still cannot show it, and a side panel is not where
   // the client is looking when they judge the direction.
-  const motion = html.match(/<([a-z][a-z0-9]*)\b[^>]*\bdata-palate-motion\b[^>]*>([\s\S]*?)<\/\1>/i);
-  const motionText = motion ? motion[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "";
-  if (motionText.length < 40) {
-    problems.push(`the planned motion must be written on the board as text: one block with class="motion-note" data-palate-motion carrying what moves, when and how it feels (found ${motionText ? JSON.stringify(motionText) : "none"})`);
+  if (spec.motion) {
+    const motion = html.match(/<([a-z][a-z0-9]*)\b[^>]*\bdata-palate-motion\b[^>]*>([\s\S]*?)<\/\1>/i);
+    const motionText = motion ? motion[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "";
+    if (motionText.length < 40) {
+      problems.push(`the planned motion must be written on the board as text: one block with class="motion-note" data-palate-motion carrying what moves, when and how it feels (found ${motionText ? JSON.stringify(motionText) : "none"})`);
+    }
   }
+
+  if (kind === "sheet") problems.push(...validateSheet(html, { id, kit }).problems);
 
   /**
    * ONE RULE FOR EVERY PICTURE ON THE BOARD, whatever named it.
@@ -462,51 +686,71 @@ export function writeCanvasJson({ boards, refs = [], donors = [], out }) {
     });
   }
 
-  const boardY = refs.length ? rowHeight + ROW_GAP : 0;
-  let bx = 0;
+  /**
+   * ONE ROW PER DIRECTION, and the columns are fixed.
+   *
+   * Boards used to run left to right along a single row, which read as a strip of home pages. A
+   * direction is four boards now, beside the reference it is drawn from, and the row that
+   * carries all five is what an agency puts on the wall to get a direction signed off. The x
+   * positions are constants rather than a running offset because the value of a row is
+   * COMPARISON: a direction with no donor must not slide its inner page into the donor's column,
+   * or the row cannot be read against the one above it.
+   */
+  let rowY = refs.length ? rowHeight + ROW_GAP : 0;
+  const safeId = (v) => String(v).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 34);
   for (const b of boards) {
+    const heights = [b.h || 0];
+    const note = (prefix, x, y, text) => annotations.push({ id: `${prefix}-${safeId(b.id)}`, x, y, w: 420, text });
+
     artboards.push({
       file: b.file || `B${b.ambition}.dc.html`,
-      x: bx,
-      y: boardY,
+      x: COLUMNS.board,
+      y: rowY,
       w: FRAME_WIDTH,
       h: b.h,
       title: `Rung ${b.ambition} of ${boards.length}: ${b.name}`,
     });
-    annotations.push({
-      id: `board-${String(b.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 34)}`,
-      x: bx,
-      y: boardY + b.h + 24,
-      w: 420,
-      text: `${b.name} - rung ${b.ambition} of ${boards.length}. ${b.feeling}. ${b.what}`,
-    });
+    note("board", COLUMNS.board, rowY + b.h + 24, `${b.name} - rung ${b.ambition} of ${boards.length}. ${b.feeling}. ${b.what}`);
+
     /**
-     * THE DONOR SITS BESIDE ITS OWN BOARD, on the board's row, and the next board steps PAST
-     * it. A donor card laid without stepping bx lands exactly where the next board lands and
-     * covers it, which a canvas reports as nothing at all: one frame on top of another reads
-     * as a board that was never drawn.
+     * THE DONOR SITS BESIDE ITS OWN BOARD, on the board's row. A donor card laid in another
+     * direction's column lands on top of a frame, which a canvas reports as nothing at all: one
+     * frame over another reads as a board that was never drawn.
      */
     const d = donors.find((x) => x && Number(x.rung) === Number(b.ambition));
     if (d) {
       artboards.push({
         file: `D${d.rung}.dc.html`,
-        x: bx + FRAME_WIDTH + FRAME_GAP,
-        y: boardY,
+        x: COLUMNS.donor,
+        y: rowY,
         w: REF_WIDTH,
         h: REF_HEIGHT,
         title: `Donor for rung ${d.rung}: ${d.name}`,
       });
-      annotations.push({
-        id: `donor-${String(b.id).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 34)}`,
-        x: bx + FRAME_WIDTH + FRAME_GAP,
-        y: boardY + REF_HEIGHT + 24,
-        w: 420,
-        text: `Drawn from ${d.slug}: ${d.signature_move}`,
-      });
-      bx += FRAME_WIDTH + FRAME_GAP + REF_WIDTH + FRAME_GAP;
-    } else {
-      bx += FRAME_WIDTH + FRAME_GAP;
+      note("donor", COLUMNS.donor, rowY + REF_HEIGHT + 24, `Drawn from ${d.slug}: ${d.signature_move}`);
+      heights.push(REF_HEIGHT);
     }
+
+    const p = b.presentation || {};
+    const rest = [
+      { key: "inner", file: p.inner, h: b.innerH, x: COLUMNS.inner, w: FRAME_WIDTH,
+        title: `${b.name}: the inner page`, text: "The primary service page in this direction." },
+      { key: "mobile", file: p.mobile, h: b.mobileH, x: COLUMNS.mobile, w: MOBILE_WIDTH,
+        title: `${b.name}: the phone`, text: `At ${MOBILE_WIDTH}, the same page stacked.` },
+      { key: "sheet", file: p.sheet, h: b.sheetH, x: COLUMNS.sheet, w: FRAME_WIDTH,
+        title: `${b.name}: the pieces as used`,
+        text: "The pieces as used: navigation, footer, CTA, form and their states." },
+    ];
+    for (const f of rest) {
+      // A frame with no MEASURED height is not laid out at all. Declaring a guess would crop the
+      // board, and a canvas reports a cropped frame as a board that was drawn badly.
+      if (!f.file || !(f.h > 0)) continue;
+      artboards.push({ file: f.file, x: f.x, y: rowY, w: f.w, h: f.h, title: f.title });
+      note(f.key, f.x, rowY + f.h + 24, f.text);
+      heights.push(f.h);
+    }
+
+    rowY += Math.max(...heights) + ROW_GAP;
   }
 
   const doc = { artboards, annotations, launch: { view: "canvas" } };
@@ -540,15 +784,32 @@ async function main() {
   if (!boards.length) die("no boards registered in src/lib/variants.ts. Register them first; nothing was measured.");
   if (!existsSync(seedDir)) die(`no ${seedDir}. Draw the artboards first: one .palate/explore/seed/B<rung>.dc.html per registered board.`);
 
-  // 1. EVERY registered board has a conforming artboard, and the set is refused on the first
-  //    bad one. Half a set handed to a client reads as the whole set, and the board that was
-  //    refused is the one they never see and never ask about.
+  // The kit manifest, which is what every `data-kit-piece` mark on a detail sheet is checked
+  // against. The project's own copy first (a build may have added a piece), the plugin's
+  // template as the fallback, and a refusal when neither parses: a sheet checked against an
+  // empty manifest is a sheet checked against nothing.
+  const kit = loadKit(projectDir);
+
+  /**
+   * The four files of every direction, resolved BEFORE anything else happens.
+   *
+   * Resolved once, up here, because `boardFiles` refuses a direction that declared no
+   * presentation, and a refusal must never have to step over an open browser to exit.
+   */
+  const files = new Map(boards.map((b) => [b.id, boardFiles(b)]));
+
+  // 1. EVERY registered direction has FOUR conforming artboards, and the set is refused on the
+  //    first bad one. Half a set handed to a client reads as the whole set, and the board that
+  //    was refused is the one they never see and never ask about.
   for (const b of boards) {
-    const file = b.artboard || `B${b.ambition}.dc.html`;
-    const p = join(seedDir, file);
-    if (!existsSync(p)) die(`board ${b.id} registers ${file} and ${p} does not exist. Nothing measured.`);
-    const v = validateArtboard(readFileSync(p, "utf8"), { id: b.id, section: b.section, dir: seedDir });
-    if (!v.ok) die(`artboard ${file} (${b.id}) does not meet the canvas contract:\n  - ${v.problems.join("\n  - ")}`);
+    for (const { kind, file } of files.get(b.id)) {
+      const p = join(seedDir, file);
+      if (!existsSync(p)) {
+        die(`board ${b.id} registers ${file} as its ${KINDS[kind].label} and ${p} does not exist. A direction is four boards (the home page, the inner page, the phone and the detail sheet); three of them read to a client as the whole direction. Nothing measured.`);
+      }
+      const v = validateArtboard(readFileSync(p, "utf8"), { id: b.id, section: b.section, dir: seedDir, kind, kit });
+      if (!v.ok) die(`artboard ${file} (${b.id}, the ${KINDS[kind].label}) does not meet the canvas contract:\n  - ${v.problems.join("\n  - ")}`);
+    }
   }
 
   // The calibration row is written BEFORE the browser opens: it needs sharp and no page, and a
@@ -584,58 +845,85 @@ async function main() {
   try {
     const ctx = await browser.newContext({ viewport: { width: FRAME_WIDTH, height: HERO_HEIGHT }, deviceScaleFactor: 1 });
     const page = await ctx.newPage();
+    // The phone gets its own context, at its own width: a 390-wide board shot through a
+    // 1440-wide viewport is a 390-wide drawing in a 1050px field of page background, which is
+    // not what anybody is being shown.
+    const mobileCtx = await browser.newContext({ viewport: { width: MOBILE_WIDTH, height: 844 }, deviceScaleFactor: 1 });
+    const mobilePage = await mobileCtx.newPage();
+    const pub = join(projectDir, "public", "_explore");
+    mkdirSync(pub, { recursive: true });
+
     for (const b of boards) {
-      const file = b.artboard || `B${b.ambition}.dc.html`;
-      const p = join(seedDir, file);
-
-      // 2. Key the artboard IN PLACE, so the published canvas and the archived copy align on
-      //    data-palate-k. Idempotent, so a re-run does not renumber a board already on a canvas.
-      const stamped = stampKeys(readFileSync(p, "utf8"));
-      writeFileSync(p, stamped);
-
-      // 3. The archived render IS the artboard. It is already self-contained (its CSS is in its
-      //    own helmet and its images are bare filenames beside it), which is what the old
-      //    harvest had to work to reproduce, so the copy carries the images too.
       const boardShots = join(shotsDir, b.id);
       mkdirSync(boardShots, { recursive: true });
-      writeFileSync(join(boardShots, "rendered.html"), stamped);
-      for (const img of [...stamped.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/gi)].map((m) => m[1])) {
-        try { copyFileSync(join(seedDir, img), join(boardShots, img)); }
-        catch { /* validated above; a copy that fails costs the archive its picture, not the run */ }
+      const sizes = {};
+      let file = null;
+
+      for (const { kind, file: name } of files.get(b.id)) {
+        const p = join(seedDir, name);
+        if (kind === "home") file = name;
+
+        // 2. Key the artboard IN PLACE, so the published canvas and the archived copy align on
+        //    data-palate-k. Idempotent, so a re-run does not renumber a board already on a
+        //    canvas, and every one of the four is keyed because the client may edit any of them.
+        const stamped = stampKeys(readFileSync(p, "utf8"));
+        writeFileSync(p, stamped);
+
+        // 3. The archived render IS the artboard. It is already self-contained (its CSS is in
+        //    its own helmet and its images are bare filenames beside it), which is what the old
+        //    harvest had to work to reproduce, so the copy carries the images too. The home
+        //    board archives as `rendered.html` because the fidelity gate reads that name.
+        const archive = kind === "home" ? "rendered.html" : `${kind}.html`;
+        writeFileSync(join(boardShots, archive), stamped);
+        for (const img of [...stamped.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/gi)].map((m) => m[1])) {
+          try { copyFileSync(join(seedDir, img), join(boardShots, img)); }
+          catch { /* validated above; a copy that fails costs the archive its picture, not the run */ }
+        }
+
+        // 4. MEASURE THE ARTBOARD ITSELF, over file://, which is the same layout the canvas
+        //    draws. A frame neither scales nor crops and `x-dc` carries `overflow: hidden`, so
+        //    a declared height that is short clips the bottom off the board with nothing
+        //    reporting it.
+        const on = kind === "mobile" ? mobilePage : page;
+        await on.goto(pathToFileURL(p).href, { waitUntil: "load", timeout: 30000 });
+        await on.waitForTimeout(150);
+        sizes[kind] = await on.evaluate(() => {
+          const dc = document.querySelector("x-dc");
+          return Math.ceil(dc ? Math.max(dc.getBoundingClientRect().height, dc.scrollHeight) : document.documentElement.scrollHeight);
+        });
+
+        if (kind === "home") {
+          await on.screenshot({ path: join(boardShots, "hero.png"), fullPage: false });
+          /**
+           * AND THE WHOLE BOARD, because an artboard is the whole home page.
+           *
+           * `hero.png` is the top 900px and nothing else: it is what the fidelity gate compares
+           * against the built hero, and it is the right size for a card. It is the WRONG thing
+           * to open behind a link reading "the still at full size", which is what /explore
+           * offered for the whole of a board's life. `full.png` is the board end to end.
+           */
+          await on.screenshot({ path: join(boardShots, "full.png"), fullPage: true });
+          copyFileSync(join(boardShots, "hero.png"), join(pub, `${b.id}.png`));
+          copyFileSync(join(boardShots, "full.png"), join(pub, `${b.id}-full.png`));
+        } else {
+          /**
+           * THE INNER PAGE IS SHOT AS AN ENTRANCE, the phone and the sheet end to end.
+           *
+           * The inner still is compared against the built inner page by the judge, exactly as
+           * `hero.png` is, so it has to be the same 1440x900 crop. The phone and the sheet are
+           * evidence rather than comparisons: a fold of a detail sheet is the navigation and
+           * nothing else, which is the half of the sheet that was never in doubt.
+           */
+          await on.screenshot({ path: join(boardShots, `${kind}.png`), fullPage: kind !== "inner" });
+          copyFileSync(join(boardShots, `${kind}.png`), join(pub, `${b.id}-${kind}.png`));
+        }
       }
 
-      // 4. MEASURE THE ARTBOARD ITSELF, over file://, which is the same layout the canvas draws.
-      //    A frame neither scales nor crops and `x-dc` carries `overflow: hidden`, so a declared
-      //    height that is short clips the bottom off the board with nothing reporting it.
-      await page.goto(pathToFileURL(p).href, { waitUntil: "load", timeout: 30000 });
-      await page.waitForTimeout(150);
-      const h = await page.evaluate(() => {
-        const dc = document.querySelector("x-dc");
-        return Math.ceil(dc ? Math.max(dc.getBoundingClientRect().height, dc.scrollHeight) : document.documentElement.scrollHeight);
-      });
-      await page.screenshot({ path: join(boardShots, "hero.png"), fullPage: false });
-      /**
-       * AND THE WHOLE BOARD, because an artboard is the whole home page.
-       *
-       * `hero.png` is the top 900px and nothing else: it is what the fidelity gate compares
-       * against the built hero, and it is the right size for a card. It is the WRONG thing to
-       * open behind a link reading "the still at full size", which is what /explore offered
-       * for the whole of a board's life. `full.png` is the board end to end.
-       */
-      await page.screenshot({ path: join(boardShots, "full.png"), fullPage: true });
-
-      // The card image /explore renders. Copied rather than linked so a `public/` that is
-      // cleaned between builds cannot empty the page that coaches the client.
-      const pub = join(projectDir, "public", "_explore");
-      mkdirSync(pub, { recursive: true });
-      copyFileSync(join(boardShots, "hero.png"), join(pub, `${b.id}.png`));
-      copyFileSync(join(boardShots, "full.png"), join(pub, `${b.id}-full.png`));
-
-      measured.push({ ...b, file, h });
+      measured.push({ ...b, file, h: sizes.home, innerH: sizes.inner, mobileH: sizes.mobile, sheetH: sizes.sheet });
       lines.push(
-        `  ${b.id} rung ${b.ambition} ${b.name}: ${file} ${Math.round(stamped.length / 1024)} KB, ` +
-        `hero.png ${Math.round(statSync(join(boardShots, "hero.png")).size / 1024)} KB, ` +
-        `full.png ${Math.round(statSync(join(boardShots, "full.png")).size / 1024)} KB, ${h}px tall`,
+        `  ${b.id} rung ${b.ambition} ${b.name}: ${file} ${sizes.home}px, ` +
+        `${b.presentation.inner} ${sizes.inner}px, ${b.presentation.mobile} ${sizes.mobile}px at ${MOBILE_WIDTH}, ` +
+        `${b.presentation.sheet} ${sizes.sheet}px; hero, full, inner, mobile and sheet stills written`,
       );
     }
   } finally {
@@ -646,9 +934,53 @@ async function main() {
   writeFileSync(join(seedDir, "README.md"), seedReadme(measured, refs, donors));
   recordShown(projectDir, boards, donorRow);
 
-  process.stdout.write(`boards-render: ${measured.length} artboard(s) validated, keyed, measured and archived under ${outDir}\n`);
+  process.stdout.write(`boards-render: ${measured.length} direction(s), ${measured.length * 4} artboard(s) validated, keyed, measured and archived under ${outDir}\n`);
   for (const l of lines) process.stdout.write(`${l}\n`);
-  process.stdout.write(`  canvas.json, README.md; hero and whole-board stills in ${shotsDir} and public/_explore/ (<id>.png and <id>-full.png)\n`);
+  process.stdout.write(`  canvas.json, README.md; stills in ${shotsDir} and public/_explore/ (<id>.png, <id>-full.png, <id>-inner.png, <id>-mobile.png, <id>-sheet.png)\n`);
+}
+
+/**
+ * The four boards of one direction, in the order they are validated, keyed and shot.
+ *
+ * A missing `presentation` is a REFUSAL rather than a derivation. The other three names could be
+ * derived from the rung, and deriving them would mean a registry that declared nothing still
+ * passes while the client is shown one board out of four, which is the failure this whole
+ * change exists to correct.
+ */
+function boardFiles(b) {
+  const p = b.presentation || {};
+  const missing = ["inner", "mobile", "sheet"].filter((k) => !p[k]);
+  if (missing.length) {
+    die(`board ${b.id} has no presentation.${missing.join(", presentation.")} in src/lib/variants.ts. A direction is four artboards: the home page, the inner page the primary action lands on, the home at ${MOBILE_WIDTH}, and the detail sheet of the kit pieces as used. Register them as presentation: { inner: "I${b.ambition}.dc.html", mobile: "M${b.ambition}.dc.html", sheet: "S${b.ambition}.dc.html" }. Nothing measured.`);
+  }
+  return [
+    { kind: "home", file: b.artboard || `B${b.ambition}.dc.html` },
+    { kind: "inner", file: p.inner },
+    { kind: "mobile", file: p.mobile },
+    { kind: "sheet", file: p.sheet },
+  ];
+}
+
+/**
+ * The kit manifest the detail sheets are checked against.
+ *
+ * The project's own copy first, because a build may legitimately have added a piece, and the
+ * plugin's template as the fallback for a seed drawn before the site was scaffolded. Neither
+ * parsing is a refusal: checking a sheet's marks against an empty manifest passes every mark,
+ * which is the same silence as not checking at all.
+ */
+function loadKit(projectDir) {
+  const candidates = [
+    join(projectDir, "src", "lib", "kit.ts"),
+    join(HERE, "..", "templates", "astro-project", "src", "lib", "kit.ts"),
+  ];
+  for (const p of candidates) {
+    if (!existsSync(p)) continue;
+    const kit = parseKitVariations(readFileSync(p, "utf8"));
+    if (kit.size) return kit;
+  }
+  die(`the website kit manifest could not be read (looked for ${candidates.join(" and ")}). Every data-kit-piece mark on a detail sheet is checked against it, so without it the sheets are UNCHECKED rather than clean.`);
+  return new Map();
 }
 
 /** The calibration references, validated before anything is written. */
@@ -1010,7 +1342,12 @@ function donorArtboard({ rung, slug, name, signature_move, img }) {
 }
 
 function seedReadme(boards, refs, donors = []) {
-  const rows = boards.map((b) => `- \`${b.file}\` - rung ${b.ambition} of ${boards.length}, ${b.name} (${b.id}), ${FRAME_WIDTH} by ${b.h}`);
+  const rows = boards.flatMap((b) => [
+    `- \`${b.file}\` - rung ${b.ambition} of ${boards.length}, ${b.name} (${b.id}), the home page, ${FRAME_WIDTH} by ${b.h}`,
+    `  - \`${b.presentation?.inner}\` - the primary service page, ${FRAME_WIDTH} by ${b.innerH}`,
+    `  - \`${b.presentation?.mobile}\` - the home page on a phone, ${MOBILE_WIDTH} by ${b.mobileH}`,
+    `  - \`${b.presentation?.sheet}\` - the kit pieces as used, with their states, ${FRAME_WIDTH} by ${b.sheetH}`,
+  ]);
   const refRows = refs.map((r) => `- \`Ref${r.position}.dc.html\` - ${r.name} (${r.slug}), ${REF_WIDTH} by ${REF_HEIGHT}`);
   const donorRows = donors.map((d) => `- \`D${d.rung}.dc.html\` - the donor rung ${d.rung} is drawn from, ${d.name} (${d.slug}), ${REF_WIDTH} by ${REF_HEIGHT}`);
   return [
@@ -1021,7 +1358,8 @@ function seedReadme(boards, refs, donors = []) {
     "## Artboards",
     ...(refRows.length ? ["", "Row 0, the calibration references:", ...refRows] : []),
     "",
-    "Row 1, the ladder in order, restrained to bold:",
+    "One ROW per direction, in ladder order, restrained to bold. Each row is the home page, the",
+  "reference it is drawn from, the inner page, the phone and the detail sheet:",
     ...rows,
     ...(donorRows.length ? ["", "Beside each board, the reference it reproduces:", ...donorRows] : []),
     "",

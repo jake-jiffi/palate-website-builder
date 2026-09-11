@@ -49,11 +49,16 @@ cat > "$SITE/src/lib/variants.ts" <<'TS'
 export interface Variant {
   id: string; name: string; artboard: string; href?: string; ambition: number; what: string;
   why: string; feeling: string; donor: string; section: string; motion: string; ctas: string[];
+  // Optional HERE only: this fixture also registers a landing board, and a landing board is
+  // shown on the canvas alone, so it names no artboards of its own. The shipped Variant
+  // requires it, because every rung on the ladder is four boards.
+  presentation?: { inner: string; mobile: string; sheet: string };
   clip?: string; lookAt?: string;
 }
 export const variants: Variant[] = [
   {
     id: "b1", name: "The Quiet Room", artboard: "B1.dc.html", ambition: 1,
+    presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
     what: "One column, one photograph, and a great deal of air.",
     why: "The people arriving are anxious and have been dismissed once already.",
     feeling: "unhurried, private, adult",
@@ -63,6 +68,7 @@ export const variants: Variant[] = [
   },
   {
     id: "b2", name: "The Long Table", artboard: "B2.dc.html", ambition: 2,
+    presentation: { inner: "I2.dc.html", mobile: "M2.dc.html", sheet: "S2.dc.html" },
     what: "A wide table of the work, read left to right.",
     why: "This buyer compares before they commit, so the comparison is the page.",
     feeling: "candid, unhurried",
@@ -145,6 +151,13 @@ writeFileSync(out + "/b2.png", pngFixture(1440, 900));
 // image stays the 1440x900 entrance.
 writeFileSync(out + "/b1-full.png", pngFixture(1440, 2400));
 writeFileSync(out + "/b2-full.png", pngFixture(1440, 2400));
+// THE OTHER THREE BOARDS OF EACH DIRECTION. A direction is four boards now, and the card shows
+// all four: the entrance, the inner page, the phone and the sheet of the pieces as used.
+for (const id of ["b1", "b2"]) {
+  writeFileSync(out + "/" + id + "-inner.png", pngFixture(1440, 900));
+  writeFileSync(out + "/" + id + "-mobile.png", pngFixture(390, 1600));
+  writeFileSync(out + "/" + id + "-sheet.png", pngFixture(1440, 2200));
+}
 ' "$SITE/public/_explore" || { echo "explore-page-boards: could not write the board stills. NOT a pass." >&2; exit 2; }
 
 node -e '
@@ -252,6 +265,22 @@ has "the donor travels"                       'the-modern-house'
 has "the b1 card shows its donor's hero"      'src="/_explore/b1-donor.jpg"'
 has "the b2 card shows its donor's hero"      'src="/_explore/b2-donor.jpg"'
 has "the donor still is captioned"            'Drawn from the-modern-house'
+
+# --- the other three boards of the direction -------------------------------------------
+# A client signing off a DIRECTION is signing off the inner page, the phone and the pieces as
+# used, not only an entrance. Each still is linked at full size and captioned, or the row is
+# three pictures nobody can point at by name.
+has "b1 shows its inner page"                 'data-board-extra="b1-inner"'
+has "b1 shows its mobile board"               'data-board-extra="b1-mobile"'
+has "b1 shows its detail sheet"               'data-board-extra="b1-sheet"'
+has "b2 shows its inner page"                 'data-board-extra="b2-inner"'
+has "b2 shows its detail sheet"               'data-board-extra="b2-sheet"'
+has "the inner still is linked at full size"  'href="/_explore/b1-inner.png"'
+has "the mobile still is linked at full size" 'href="/_explore/b1-mobile.png"'
+has "the sheet still is linked at full size"  'href="/_explore/b1-sheet.png"'
+has "the inner still is captioned"            'Inner page'
+has "the mobile still is captioned"           'Mobile'
+has "the sheet still is captioned"            'The details'
 
 # --- the calibration row, above the ladder ----------------------------------------------
 has "the calibration question is asked"       'how bold you want to be'

@@ -216,6 +216,27 @@ const askedRung = (() => {
                 </figure>
               )}
             </div>
+            {/* THE REST OF THE DIRECTION. The entrance above is one board of four, and the
+                three below are what makes this a direction rather than a home page: the inner
+                page the primary action lands on, the same page on a phone, and the sheet of
+                the pieces as used with their states. They are on the canvas beside the board;
+                this row is the same set for every tool that cannot open one. */}
+            {v.presentation && (
+              <ul class="ex-more">
+                {[
+                  ["inner", "Inner page", `The primary service page of ${v.name}`],
+                  ["mobile", "Mobile", `${v.name} on a phone, at 390`],
+                  ["sheet", "The details", `The kit pieces as used in ${v.name}, with their states`],
+                ].map(([key, label, alt]) => (
+                  <li class="ex-more-item">
+                    <a href={`/_explore/${v.id}-${key}.png`} data-board-extra={`${v.id}-${key}`}>
+                      <img src={`/_explore/${v.id}-${key}.png`} alt={alt} width="720" height="450" loading="lazy" />
+                      <span class="ex-more-label">{label}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
             <dl class="ex-dl">
               <div><dt>What it is</dt><dd>{v.what}</dd></div>
               <div><dt>Why</dt><dd>{v.why}</dd></div>
@@ -427,6 +448,23 @@ const askedRung = (() => {
   /* 0.78 rather than a lighter grey: opacity is a contrast decision, and brand ink at 0.5 on
      paper composites to about 4.17:1, which this page has failed before. */
   .ex-donor figcaption { font-size: 0.8125rem; line-height: 1.5; opacity: 0.78; }
+  /* The other three boards of the direction. Three equal columns, each a link to the still at
+     full size, captioned so the client can point at one by name. The phone sits in the same
+     frame as the other two and is CONTAINED rather than covered: these three are whole boards
+     of wildly different shapes (a 390 by 1600 phone, a 1440 by 2200 sheet), and a cover-crop
+     into a landscape slot shows 15% of the phone, which the rendered gate calls destructive and
+     is right to. Contained, the whole board is on screen, small, and the link opens it. */
+  .ex-more {
+    list-style: none; margin: 0 0 1.5rem; padding: 0; display: grid; gap: 1rem;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .ex-more a { display: grid; gap: 0.5rem; text-decoration: none; color: inherit; }
+  .ex-more img {
+    display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain;
+    object-position: top; border: 1px solid currentColor;
+  }
+  .ex-more-label { font-size: 0.8125rem; line-height: 1.5; opacity: 0.78; min-height: 24px; }
+  .ex-more a:hover .ex-more-label, .ex-more a:focus-visible .ex-more-label { opacity: 1; text-decoration: underline; }
   .ex-dl { margin: 0 0 1.5rem; display: grid; gap: 1rem; }
   .ex-dl > div { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; align-items: baseline; }
   .ex-dl dt {
@@ -445,6 +483,7 @@ const askedRung = (() => {
   @media (max-width: 46rem) {
     .ex-dl > div { grid-template-columns: 1fr; gap: 0.25rem; }
     .ex-shots { grid-template-columns: 1fr; }
+    .ex-more { grid-template-columns: 1fr; }
   }
   @media (max-width: 40rem) {
     .ex { padding: 2.5rem 1.25rem 4rem; }

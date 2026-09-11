@@ -45,6 +45,33 @@ export interface Variant {
    * this file. There is no route; Astro is built once, for the picked direction, at Compose.
    */
   artboard: string;
+  /**
+   * THE OTHER THREE ARTBOARDS OF THIS DIRECTION. REQUIRED.
+   *
+   * A direction is not a home page. What a design agency puts up to have a direction and a style
+   * signed off is the home page, the inner page the primary action lands on, the same home on a
+   * phone, and a sheet of the pieces AS USED with their states: the navigation closed and open,
+   * the footer, the closing call to action, the enquiry form filled in and then with its errors
+   * showing, one card, one trust strip. Signing off on an entrance alone means every one of
+   * those is decided later, by nobody, and discovered by the client on the built site.
+   *
+   * `inner` is 1440 wide and marks its sections `<id>-inner-<piece>`. `mobile` is drawn at
+   * 390 (`x-dc{width:390px}`), the same sections stacked, the navigation as NavMobileSheet
+   * closed. `sheet` is 1440 wide and marks every block `data-kit-piece="<piece>:<Variation>:
+   * <state>"`, with the piece and variation ids taken from `src/lib/kit.ts`.
+   *
+   * `boards-render.mjs` refuses a direction that names none of them, rather than deriving the
+   * names from the rung: a derived name lets a registry that declared nothing pass while the
+   * client is shown one board out of four.
+   */
+  presentation: {
+    /** The inner page artboard, e.g. "I1.dc.html". */
+    inner: string;
+    /** The mobile home artboard at 390, e.g. "M1.dc.html". */
+    mobile: string;
+    /** The detail sheet of the kit pieces as used, e.g. "S1.dc.html". */
+    sheet: string;
+  };
   /** Deprecated. Boards have no route since canvas-first Explore; kept optional for old registries. */
   href?: string;
   /**
@@ -90,6 +117,7 @@ export const variants: Variant[] = [
   //   id: "b1",
   //   name: "The Quiet Room",
   //   artboard: "B1.dc.html",
+  //   presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
   //   ambition: 1,
   //   what: "One column, one photograph, and a great deal of air.",
   //   why: "The people arriving here are anxious and have usually been dismissed once already. Nothing on the page asks anything of them before they have read a sentence.",
