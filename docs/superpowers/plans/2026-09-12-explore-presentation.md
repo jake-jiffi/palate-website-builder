@@ -99,7 +99,23 @@
 
 ---
 
-### Task 6: Doctrine, then release beta.21
+### Task 6: The motion proof is measured, not declared
+
+**Files:**
+- Create: `scripts/motion-proof.mjs`
+- Modify: `scripts/palate-pick.mjs` (`--proof` runs the probe; refuses on no measurable motion; records `explore.proof.measured`), `scripts/gate-done.sh` (the proof branch reads `explore.proof.measured`, skip-with-reason when absent), `references/explore-stage.md` (Compose step 1), `SKILL.md` A.6
+- Test: create `scripts/test/motion-proof.test.mjs`, extend `scripts/test/palate-pick.test.mjs`, `scripts/test/gate-done.test.sh`
+
+**Interfaces:**
+- Produces: `node scripts/motion-proof.mjs <url> [--json <path>]` opens the URL at 1440x900 with the vendored Playwright, records: the sticky header's height before and after an 800 px scroll; for every `<img>`, `<video>` and element with a background image inside the first two sections, its `transform` translateY delta over that scroll as a ratio of the scroll distance; the count of elements whose computed `animationName !== "none"`; whether any element's computed style changed between two samples 600 ms apart with no input (a running marquee or loop); and honours `prefers-reduced-motion: reduce` on a second pass, reporting what still moves. Exit 0 with a JSON summary `{ url, header: { before, after }, parallax: [{ selector, ratio }], animated: n, running: n, reduced: { animated, running } }`; exit 2 `motion-proof: skipped (<reason>)` when the URL does not load.
+- Produces: `palate-pick.mjs --proof <url>` runs the probe first; REFUSES (exit 1) when `animated === 0 && running === 0 && every parallax ratio < 0.05 && header unchanged` with "nothing measurable moves at <url>; the motion proof is what the client was promised, build it before recording it"; otherwise records `explore.proof = { url, verified_at, measured: <summary> }`. `--proof-unmeasured "<reason>"` records the URL with `measured: null, reason` for a page the probe cannot reach (a tunnel, an auth wall). gate-done's proof branch: `measured` absent and no reason -> skip naming the flag.
+- Doctrine: Compose step 1 says the hero is built, then `--proof` MEASURES it, and the measurements must match the board's motion note in kind (a promised parallax must register as a parallax ratio, a promised marquee as `running`); a mismatch is a Compose defect, not a proof.
+
+- [ ] Tests first (probe: a fixture page with a scroll-linked transform and a CSS animation reports ratio > 0.3 and animated 1; a static page reports zeros; reduced-motion pass reports 0 running; pick: refuses on the static page, records `measured` on the moving one, `--proof-unmeasured` records the reason; gate-done: measured absent + no reason -> skip naming `--proof`) -> fail -> implement -> green -> mutations (drop the refusal; drop the reduced pass) -> suites -> commit `proof: the motion is measured before it is recorded`.
+
+---
+
+### Task 7: Doctrine, then release beta.21
 
 **Files:** `references/explore-stage.md` (step 2 gains the four kinds, the sheet's required blocks, the provenance captions, the specimen ban; step 2b the five stills and the row layout; the judge block's three surfaces), `SKILL.md` A.4, `references/build-manifest.md`, `commands/README.md`, `agents/palate-verifier.md` (the judge block count), `scripts/test/docs-truth.test.sh`.
 - [ ] docs-truth assertions first; write; suites green; commit `doctrine: the presentation set, provenance, the three-surface judge`; then `git push origin beta`, `sync-beta.sh ~/dev/palate/skill 1.17.0-beta.21`, bump, `check-tracks.sh` 15/15, commit, push. Report SHAs and counts.
