@@ -57,8 +57,8 @@ onto `/explore` and the canvas.
    One distinct donor per rung.
 
    **THE ARTBOARD CONTRACT.** `scripts/boards-render.mjs` holds every board to
-   it and refuses with every fault named in one pass, so read it as a checklist
-   before drawing rather than after:
+   it and names every fault ON THAT BOARD in one pass, then stops at the first
+   board that fails, so read it as a checklist before drawing rather than after:
 
    - The skeleton is exactly this, verbatim. The editor replaces `support.js` at
      render time, and a different spelling stops the board being editable with
@@ -80,8 +80,8 @@ onto `/explore` and the canvas.
    - **The planned motion is written on the board**: one block with
      `class="motion-note"` and `data-palate-motion`, 40 characters or more,
      saying what moves, when and how it feels.
-   - Every block element carries at least one class naming its role, and at
-     least 60% of them must: the uniqueness gate signs structure by class, and a
+   - Name every block element's role with a class, and **at least 60% of them
+     must carry one**, which is what the validator holds: the uniqueness gate signs structure by class, and a
      board styled only inline signs it blind. Copy is literal markup, because a
      viewer retypes it in place; use inline `style` only on the few properties
      they should be able to drag.

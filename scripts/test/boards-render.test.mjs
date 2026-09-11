@@ -238,7 +238,7 @@ test("canvas.json puts the references on row 0 and the boards 120px below", () =
 });
 
 // ------------------------------------------------------- the artboard contract
-const GOOD = `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>a{color:#000}a:hover{color:#333}</style></helmet><header class="nav" data-section-id="b1-navigation"><a class="nav-logo" href="#">Eastcoast</a><a class="nav-cta" href="#">Ring</a></header><section class="hero" data-section-id="b1-hero"><h1 class="hero-title">Hogan Street</h1><img src="b1-img1.jpg" alt=""></section><section class="services" data-section-id="b1-services"><ul class="list"><li class="row">Doors</li></ul></section><aside class="motion-note" data-palate-motion="">On load the column rules draw down over 800ms on one curve, then hold; nothing loops.</aside><section class="cta" data-section-id="b1-cta"><a class="cta-btn" href="#">Book</a></section><footer class="footer" data-section-id="b1-footer"><p class="footer-line">Ballina</p></footer></x-dc></body></html>`;
+const GOOD = `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>x-dc{display:block;width:1440px;overflow:hidden}a{color:#000}a:hover{color:#333}</style></helmet><header class="nav" data-section-id="b1-navigation"><a class="nav-logo" href="#">Eastcoast</a><a class="nav-cta" href="#">Ring</a></header><section class="hero" data-section-id="b1-hero"><h1 class="hero-title">Hogan Street</h1><img src="b1-img1.jpg" alt=""></section><section class="services" data-section-id="b1-services"><ul class="list"><li class="row">Doors</li></ul></section><aside class="motion-note" data-palate-motion="">On load the column rules draw down over 800ms on one curve, then hold; nothing loops.</aside><section class="cta" data-section-id="b1-cta"><a class="cta-btn" href="#">Book</a></section><footer class="footer" data-section-id="b1-footer"><p class="footer-line">Ballina</p></footer></x-dc></body></html>`;
 
 const fixtureDirs = [];
 function fixtureDirWith(sizes) {
@@ -251,6 +251,28 @@ after(() => { for (const d of fixtureDirs) rmSync(d, { recursive: true, force: t
 
 test("a conforming artboard validates", () => {
   const r = validateArtboard(GOOD, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+// THE FRAME WIDTH IS A CONTRACT, NOT A CONVENTION. The canvas neither scales nor crops a
+// frame, so a board drawn at some other width is cropped or floats in a gutter on the canvas
+// while every other check passes. The doctrine has always said 1440; nothing held it there.
+test("an artboard with no 1440 frame rule is refused", () => {
+  const r = validateArtboard(GOOD.replace("x-dc{display:block;width:1440px;overflow:hidden}", ""), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /1440/);
+});
+
+test("a frame rule at any other width is refused", () => {
+  const r = validateArtboard(GOOD.replace("width:1440px", "width:1280px"), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /1440/);
+});
+
+// Spacing is a matter of taste in a stylesheet, so the check reads the rule rather than the
+// spelling: refusing `x-dc { width: 1440px }` would be refusing a correct board.
+test("the frame rule is read whitespace-tolerantly", () => {
+  const r = validateArtboard(GOOD.replace("x-dc{display:block;width:1440px;overflow:hidden}", "x-dc {\n  display: block;\n  width: 1440px;\n  overflow: hidden;\n}\n"), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
   assert.equal(r.ok, true, r.problems.join("; "));
 });
 

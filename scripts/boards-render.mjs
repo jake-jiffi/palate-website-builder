@@ -258,6 +258,22 @@ export function validateArtboard(html, { id, section, dir }) {
   if (!/^<!doctype html><html><head><meta charset="utf-8"><script src="\.\/support\.js"><\/script><\/head><body><x-dc><helmet><style>/i.test(head)) {
     problems.push('the skeleton must be exactly <!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>...; the editor replaces support.js at render time and a different spelling silently breaks editing');
   }
+  /**
+   * THE FRAME IS 1440 WIDE, AND THAT IS A CONTRACT RATHER THAN A CONVENTION.
+   *
+   * A canvas frame neither scales nor crops, so a board drawn at 1280 or at 100% sits in a
+   * gutter beside every other rung, or is cut off, while every other check on it passes. The
+   * doctrine has said 1440 since the format existed and nothing held a board to it.
+   *
+   * It reads the rule, not its spelling: `x-dc { width: 1440px }` across four lines is a
+   * correct board and refusing it would be refusing correctness.
+   */
+  const helmet = /<helmet>\s*<style>([\s\S]*?)<\/style>/i.exec(html);
+  const helmetStyle = helmet ? helmet[1] : "";
+  if (!/(^|[};\s])x-dc\s*\{[^}]*\bwidth\s*:\s*1440px/i.test(helmetStyle)) {
+    problems.push(`the frame must be ${FRAME_WIDTH} wide: <helmet><style> needs an x-dc{display:block;width:${FRAME_WIDTH}px;overflow:hidden} rule. A canvas frame neither scales nor crops, so a board at any other width is cropped or sits in a gutter beside the rungs next to it`);
+  }
+
   const scripts = [...html.matchAll(/<script\b[^>]*>/gi)].map((m) => m[0]);
   if (scripts.length !== 1 || !/src="\.\/support\.js"/.test(scripts[0])) {
     problems.push(`exactly one <script> is allowed, ./support.js; found ${scripts.length}`);

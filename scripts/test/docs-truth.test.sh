@@ -462,8 +462,13 @@ notline "and the ungated line does not claim a pass" "$UNGATED" "clears the"
 # the one that cost a real build forty minutes before anything was shown.
 present "SKILL.md A.4 names the artboard the board actually is" \
   "SKILL.md" ".palate/explore/seed/B<rung>.dc.html"
-present "SKILL.md A.4 calls a board an artboard" \
-  "SKILL.md" "artboard"
+# A whole-file grep for the word "artboard" passes on one stray mention, so the registry's own
+# declaration is the check that matters: the board IS the file, and `href` cannot be required
+# again without this going red.
+present "variants.ts requires the artboard" \
+  "templates/astro-project/src/lib/variants.ts" "artboard: string;"
+present "variants.ts keeps href optional and unused" \
+  "templates/astro-project/src/lib/variants.ts" "href?: string;"
 absent "SKILL.md no longer routes boards under src/pages/boards" \
   "SKILL.md" "src/pages/boards"
 absent "SKILL.md no longer wraps board sections in SectionMark" \
