@@ -579,6 +579,9 @@ present "SKILL.md A.4 asks for the shape the judge validates" \
 present "SKILL.md A.4 tells the subagent which letter is the candidate" \
   "SKILL.md" "candidate_is"
 
+present "explore-stage holds board copy to the client's own facts" references/explore-stage.md "arithmetic is not a source"
+present "explore-stage says gate-facts never reads an artboard" references/explore-stage.md "never reads an artboard"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

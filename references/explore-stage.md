@@ -69,7 +69,19 @@ onto `/explore` and the canvas.
    habit puts it. THEN re-skin to the LOCKED brand. The registry `why` names what
    this rung took from the donor, in those terms, because a `why` that could have
    been written without opening the reference is the tell that the reference was
-   never opened. **WHEN THE DONOR ROW RUNS, a registered board whose rung has no
+   never opened. **THE COPY ON A BOARD IS HELD TO THE CLIENT'S OWN FACTS**, drawn
+   board or built page alike: a quote is verbatim from a review the business has
+   published, attributed as it is published, never a name from the old site that
+   matches no reviewer anywhere; a rating and its count are read from the live
+   profile on the day, never the old site's number; a year or a decade appears only
+   when the business states it, because "45 years" is not "since the 1970s" and
+   arithmetic is not a source; a spec (a mesh grade, a lock, a turnaround) appears
+   only where they publish it. `gate-facts` never reads an artboard, so the person
+   picking a direction reads whatever the board says as true of the business, and
+   a board that carries a falsehood is a board the client cannot be shown. The
+   re-run of a build on this doctrine drew "4.8 on Google" and three testimonials
+   the previous build had already found to match no real reviewer, on its first
+   two boards, which is why this paragraph exists. **WHEN THE DONOR ROW RUNS, a registered board whose rung has no
    entry in that file is a refusal**: `boards-render.mjs` names the rung and
    writes nothing, rather than drawing half a donor row. It is only a refusal
    when the row runs. With no `donor-heroes.json` there at all the run records
