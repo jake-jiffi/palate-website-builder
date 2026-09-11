@@ -86,6 +86,24 @@ const cannotCheck = (reason) => {
   process.exit(2);
 };
 
+/**
+ * A skip signal for the two cannotCheck-shaped refusals that fire AFTER the browser and its
+ * servers are open (the hero-not-found and the home-did-not-load checks below). cannotCheck()
+ * itself calls process.exit(2), which is right for every refusal above that runs before those
+ * resources exist and wrong down there: an immediate exit skips the `finally` that closes them,
+ * leaking a live Chromium process and up to two open HTTP servers. Thrown instead, caught once
+ * around the whole measurement, printed in cannotCheck's own shape, and reported through
+ * `process.exitCode` (never process.exit(), for the same ONNX-teardown reason the file's closing
+ * comment gives) so `finally` always runs first.
+ */
+class SkipSignal extends Error {
+  constructor(reason) {
+    super(reason);
+    this.name = "SkipSignal";
+  }
+}
+const cannotCheckMidRun = (reason) => { throw new SkipSignal(reason); };
+
 const dir = resolve(positional[0] || ".");
 const refusal = pluginRootRefusal(dir);
 if (refusal) cannotCheck(`refused: ${refusal}. Name the site directory explicitly.`);
@@ -386,7 +404,7 @@ try {
   await boardPage.waitForTimeout(300);
   const boardFacts = await measureHeroScope(boardPage, `[data-section-id="${heroSectionId}"]`);
   if (!boardFacts) {
-    cannotCheck(`the archived render of ${heroPick.variant_id} has no element marked ${heroSectionId}, so its hero could not be scoped.`);
+    cannotCheckMidRun(`the archived render of ${heroPick.variant_id} has no element marked ${heroSectionId}, so its hero could not be scoped.`);
   }
 
   // --- the built home, from its own build directory (a second server) or --serve ------
@@ -400,7 +418,7 @@ try {
   const homeUrl = serveUrl || (distRoot ? await serveDist(distRoot) : null);
   const homePage = await ctx.newPage();
   const res = await homePage.goto(homeUrl, { waitUntil: "networkidle", timeout: 45000 }).catch(() => null);
-  if (!res || !res.ok()) cannotCheck(`the built home did not load at ${homeUrl} (${res ? res.status() : "no response"}).`);
+  if (!res || !res.ok()) cannotCheckMidRun(`the built home did not load at ${homeUrl} (${res ? res.status() : "no response"}).`);
   const homeHtml = await homePage.content();
   await homePage.waitForTimeout(300);
   const heroShot = join(shotsRoot, "_built-hero.png");
@@ -559,6 +577,13 @@ try {
     process.stdout.write(`gate-fidelity: the built home carries the picked direction (${heroPick.variant_id}, rung ${heroPick.rung}, hero ${heroSectionId}).\n`);
     for (const n of notes) process.stdout.write(`  - ${n}\n`);
   }
+} catch (e) {
+  if (!(e instanceof SkipSignal)) throw e;
+  // Printed exactly as cannotCheck() prints it. process.exitCode, never process.exit(), so the
+  // `finally` below still runs and closes the browser and both servers before the process ends.
+  process.stderr.write(`gate-fidelity: skipped (${e.message})\n`);
+  process.stderr.write("gate-fidelity: NOT a pass.\n");
+  exitCode = 2;
 } finally {
   await browser.close().catch(() => {});
   if (boardServer) boardServer.close();

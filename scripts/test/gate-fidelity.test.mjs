@@ -30,6 +30,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
+import { createServer } from "node:http";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
@@ -77,12 +78,13 @@ export function byAmbition(list: Variant[]): Variant[] {
  * control for excluding scaffolding from the comparison: the board carries it and the composed
  * home never does, so a gate that measures it reports "missing ui-monospace" on an honest build.
  */
-const HERO = (mark, badge = "") => `
+const HERO = (mark, badge = "", img = "") => `
 <section class="relative px-6 py-24" style="background:#f7f5ee" ${mark}>${badge}
   <div class="mx-auto max-w-3xl">
     <h1 style="font-family:Georgia,serif;font-size:64px;line-height:1.08;color:#1c1b19">Quiet confidence, in a room that holds it</h1>
     <p style="font-family:Helvetica,Arial,sans-serif;font-size:18px;line-height:1.6;color:#1c1b19">We look after the whole thing, slowly, and we tell you what we found. Nothing here asks anything of you before you have read a sentence, which is the point of the room.</p>
     <a href="/contact" style="display:inline-flex;min-height:44px;align-items:center;padding:12px 24px;background:ACCENT;color:#ffffff;font-family:Helvetica,Arial,sans-serif;font-size:16px">Book a first visit</a>
+    ${img}
   </div>
 </section>`;
 
@@ -110,7 +112,7 @@ function boardArtboard() {
     "<script src=\"./support.js\"></script></head><body><x-dc>" +
     "<helmet><style>a{color:#000}a:hover{color:#333}</style></helmet>" +
     "<header class=\"nav\" data-section-id=\"b1-navigation\"><a class=\"nav-logo\" href=\"#\">Eastcoast</a><a class=\"nav-cta\" href=\"#\">Ring</a></header>" +
-    HERO('data-section-id="b1-hero"', BADGE).replace("ACCENT", "#2f5d50") +
+    HERO('data-section-id="b1-hero"', BADGE, '<img src="b1-img1.jpg" alt="">').replace("ACCENT", "#2f5d50") +
     SERVICES('data-section-id="b1-services"') +
     '<aside class="motion-note" data-palate-motion="">On load the column rules draw down over 800ms on one curve, then hold; nothing loops.</aside>' +
     '<section class="cta" data-section-id="b1-cta"><a class="cta-btn" href="#">Book</a></section>' +
@@ -145,6 +147,34 @@ async function writeBoardFixture() {
 }
 
 /**
+ * A minimal static file server, just enough to prove a relative image resolves when the
+ * board's own directory is the origin — the exact thing this task changed gate-fidelity.mjs
+ * to rely on (serving `shots/<id>/` itself rather than the build's `dist/`). Not a stand-in
+ * for the gate's own server; a separate, independent check of the same fact.
+ */
+const CONTENT_TYPES = { ".html": "text/html; charset=utf-8", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
+function serveStatic(root) {
+  return new Promise((ok, no) => {
+    const server = createServer((req, res) => {
+      let pathname;
+      try { pathname = decodeURIComponent(new URL(req.url, "http://l").pathname); }
+      catch { res.writeHead(400); res.end(); return; }
+      const p = join(root, pathname === "/" ? "rendered.html" : pathname);
+      try {
+        const data = readFileSync(p);
+        res.writeHead(200, { "Content-Type": CONTENT_TYPES[p.slice(p.lastIndexOf("."))] || "application/octet-stream" });
+        res.end(data);
+      } catch {
+        res.writeHead(404);
+        res.end();
+      }
+    });
+    server.on("error", no);
+    server.listen(0, () => ok(server));
+  });
+}
+
+/**
  * A THIRD SECTION, IN A FACE THE BOARD NEVER SET, sitting inside the top 900px.
  *
  * It is the control for the scoping. The comparison used to be "everything above the fold",
@@ -169,16 +199,28 @@ import { business } from "../lib/business";
 </BaseLayout>
 `;
 
-const run = async (args, env = {}) => {
+const run = async (args, env = {}, execOpts = {}) => {
   try {
     const { stdout, stderr } = await promisify(execFile)(process.execPath, [CLI, ...args], {
-      encoding: "utf8", maxBuffer: 32 * 1024 * 1024, env: { ...process.env, ...env },
+      encoding: "utf8", maxBuffer: 32 * 1024 * 1024, env: { ...process.env, ...env }, ...execOpts,
     });
-    return { status: 0, stdout, stderr };
+    return { status: 0, stdout, stderr, killed: false };
   } catch (e) {
-    return { status: e.code ?? 1, stdout: e.stdout ?? "", stderr: e.stderr ?? "" };
+    // `killed` and `signal` are set when execFile's own `timeout` option had to intervene,
+    // which is how a hung gate (a browser or a server left open, keeping the event loop alive)
+    // is told apart from one that exited on its own with a non-zero code.
+    return { status: e.code ?? 1, stdout: e.stdout ?? "", stderr: e.stderr ?? "", killed: Boolean(e.killed), signal: e.signal ?? null };
   }
 };
+
+/** Is this port free to bind right now? Used to prove a server the gate opened was closed. */
+function portIsFree(port) {
+  return new Promise((resolveFree) => {
+    const probe = createServer();
+    probe.once("error", () => resolveFree(false));
+    probe.listen(port, () => probe.close(() => resolveFree(true)));
+  });
+}
 
 const build = () => execFileSync(join(SITE, "node_modules/.bin/astro"), ["build"], {
   cwd: SITE, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, PUBLIC_EXPLORE_MODE: "true" },
@@ -270,6 +312,34 @@ test("the hero is found by name when the board opens with navigation", async (t)
   assert.match(r.stdout, /hero b1-hero/, "the gate names the navigation, not the hero, as the picked hero");
 });
 
+test("the board's own image resolves when its own directory is the origin", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // The point of serving the board from `shots/<id>/` rather than `dist/` (this task): the
+  // hero's bare-filename image resolves against its OWN directory, not the build's. Proven
+  // independently of the CLI, over a plain static server rooted at that exact directory.
+  const shotsDir = join(SITE, ".palate/explore/shots/b1");
+  const server = await serveStatic(shotsDir);
+  const { port } = server.address();
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const failed = [];
+  const responses = [];
+  page.on("requestfailed", (req) => failed.push(req.url()));
+  page.on("response", (res) => responses.push({ url: res.url(), status: res.status() }));
+  try {
+    await page.goto(`http://127.0.0.1:${port}/rendered.html`, { waitUntil: "load", timeout: 30000 });
+    await page.waitForTimeout(200);
+  } finally {
+    await page.close();
+    server.close();
+  }
+  assert.ok(!failed.some((u) => u.includes("b1-img1.jpg")),
+    `the board's own image failed at the network level when served from its own directory: ${failed.join(", ") || "(none)"}`);
+  const imgResponse = responses.find((r) => r.url.includes("b1-img1.jpg"));
+  assert.ok(imgResponse, "no request was ever made for the board's own image (the fixture is missing the <img> reference)");
+  assert.equal(imgResponse.status, 200,
+    `the board's own image did not resolve (status ${imgResponse.status}) when served from its own directory`);
+});
+
 test("an accent moved past deltaE 6 fails, naming both hexes", async (t) => {
   if (!ready) return t.skip(skipReason);
   // Still a green, still a plausible build, and far enough that a reader would see it.
@@ -332,6 +402,63 @@ test("--serve reaches the comparison even with no dist directory", async (t) => 
 
   writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50"));
   build();
+});
+
+test("a mid-run refusal (--serve to a dead port, no dist) exits cleanly with no hang", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // This is the exact shape the Important review finding was about: the home-did-not-load
+  // check fires AFTER the browser and the board's own HTTP server are already open (the board
+  // has to be served first to read its hero section, before the home is even reached). Calling
+  // process.exit(2) from there skips the `finally` that closes them. Nothing listens on port 1
+  // (a privileged port), so the connection refuses immediately rather than timing out slowly.
+  //
+  // Measured directly (a standalone repro of this exact scenario, run against BOTH the fixed
+  // code and process.exit(2) restored, polling `ps` for this suite's own chromium subprocess):
+  // on this platform Playwright's chromium is launched over a debugging PIPE, and it exits on
+  // its own within about a second of that pipe closing, whichever way the parent died. So an OS
+  // process-listing check cannot tell the two implementations apart here — it would pass either
+  // way and give false confidence. What IS deterministic, and is asserted directly below, is
+  // that `cannotCheckMidRun` itself no longer calls `process.exit()`; that is the actual
+  // behaviour the mutation check restores and this suite protects. This test keeps the
+  // behavioural checks that ARE meaningful: the process does not hang, the exit code and
+  // message are right, and the board's own server (owned by this same process) is not left
+  // listening.
+  writeManifest([{ surface: "hero", variant_id: "b1", rung: 1, position: 1, picked_at: new Date().toISOString() }]);
+  rmSync(join(SITE, "dist"), { recursive: true, force: true });
+  const r = await run(
+    [SITE, "--port", String(PORT), "--serve", "http://127.0.0.1:1/nowhere"],
+    {},
+    { timeout: 30000 },
+  );
+  assert.equal(r.killed, false,
+    `the gate had to be force-killed after 30s, which means it never exited on its own:\n${r.stdout}\n${r.stderr}`);
+  assert.equal(r.status, 2, `an unreachable --serve URL with no dist should still be a refusal:\n${r.stdout}\n${r.stderr}`);
+  assert.match(r.stderr, /^gate-fidelity: skipped \(/m,
+    `the mid-run refusal did not print in cannotCheck's own shape:\n${r.stderr}`);
+  assert.match(r.stderr, /gate-fidelity: NOT a pass\./, `the mid-run refusal is missing its "NOT a pass" line:\n${r.stderr}`);
+
+  const free = await portIsFree(PORT);
+  assert.ok(free, `port ${PORT} is still held after the gate exited, so its board server was leaked`);
+
+  writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50"));
+  build();
+});
+
+test("cannotCheckMidRun never calls process.exit (the leak the previous test is about)", () => {
+  // The deterministic half of the same guard: `process.exit(2)` terminates synchronously and
+  // skips whatever `finally` clause it is called from, which is exactly the bug this task fixed
+  // for the two refusals that fire once the browser and the board's server are already open.
+  // Read directly from source rather than inferred from a process-listing side effect, because
+  // (per the note above) the observable side effect does not reliably survive this platform's
+  // browser-teardown behaviour, while the source contract does not depend on any platform at all.
+  const src = readFileSync(join(ROOT, "scripts/gate-fidelity.mjs"), "utf8");
+  const at = src.indexOf("const cannotCheckMidRun");
+  assert.ok(at >= 0, "cannotCheckMidRun is missing from gate-fidelity.mjs");
+  const after = src.slice(at);
+  const end = after.search(/\n(const|let|function|class)\s/);
+  const body = end >= 0 ? after.slice(0, end) : after;
+  assert.doesNotMatch(body, /process\.exit\(/,
+    `cannotCheckMidRun calls process.exit(), which would skip the finally that closes the browser and both servers:\n${body}`);
 });
 
 test("no built home is a refusal with the reason, never a pass", async (t) => {
