@@ -200,9 +200,9 @@ R="$TMP/k16"; mk "$R"; page "$R"; boards "$R" b1 b2 b3; write_valid "$R"
 echo '{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","boards":[]}}' > "$R/build-manifest.json"
 want "shown, no canvas record -> block" BLOCK "$(run "$R")"
 has "and it says what to record" "$R" "explore.canvas"
-echo '{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"}}}' > "$R/build-manifest.json"
+echo '{"schema":3,"explore":{"ran":true,"board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},{"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true}],"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"}}}' > "$R/build-manifest.json"
 want "shown, canvas url recorded -> pass" PASS "$(run "$R")"
-echo '{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"skipped":true,"reason":"no design skill in this session"}}}' > "$R/build-manifest.json"
+echo '{"schema":3,"explore":{"ran":true,"board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},{"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true}],"shown_at":"2026-09-11T04:00:00Z","canvas":{"skipped":true,"reason":"no design skill in this session"}}}' > "$R/build-manifest.json"
 want "shown, canvas skip recorded with a reason -> pass" PASS "$(run "$R")"
 echo '{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"skipped":true}}}' > "$R/build-manifest.json"
 want "shown, canvas skipped with NO reason -> block" BLOCK "$(run "$R")"
@@ -211,6 +211,47 @@ want "shown, canvas skipped with NO reason -> block" BLOCK "$(run "$R")"
 S="$TMP/k17"; mk "$S"; page "$S"; boards "$S" b1 b2 b3; write_valid "$S"
 echo '{"schema":3}' > "$S/build-manifest.json"
 want "not shown yet, no canvas record -> pass" PASS "$(run "$S")"
+
+# === 18. A SHOWN BOARD WITH NO JUDGEMENT. The judge runs on every rung at every intensity, so
+# once the boards are in front of a client, "was this compared with the reference it was drawn
+# from?" has to have an answer for each of them.
+T="$TMP/k18"; mk "$T"; page "$T"; boards "$T" b1 b2; write_valid "$T"
+cat > "$T/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"},
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true}]}}
+JSON
+want "shown, only one of two boards judged -> block" BLOCK "$(run "$T")"
+has "and it names the unjudged board" "$T" "b2"
+has "and it names the gate that judges it" "$T" "gate-board-judge.mjs"
+
+cat > "$T/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"},
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},
+                     {"id":"b2","donor":"the-modern-house","rung":"clearly_worse","consistent":true}]}}
+JSON
+want "shown with a board judged clearly worse -> block" BLOCK "$(run "$T")"
+has "and it says which board is worse than its donor" "$T" "clearly worse"
+
+cat > "$T/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"},
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},
+                     {"id":"b2","donor":"the-modern-house","rung":"better","consistent":true}]}}
+JSON
+want "shown with every board judged comparable or better -> pass" PASS "$(run "$T")"
+
+# The release valve, and it must release the whole check rather than soften it.
+cat > "$T/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"}}}
+JSON
+want "shown, no judgements at all -> block" BLOCK "$(run "$T")"
+export PALATE_GATE_JUDGE=0
+want "PALATE_GATE_JUDGE=0 -> pass" PASS "$(run "$T")"
+unset PALATE_GATE_JUDGE
+
+# Not shown yet: a judgement cannot be owed before a client has seen anything.
+U="$TMP/k18b"; mk "$U"; page "$U"; boards "$U" b1 b2; write_valid "$U"
+echo '{"schema":3}' > "$U/build-manifest.json"
+want "not shown yet, no judgements -> pass" PASS "$(run "$U")"
 
 echo "---"
 echo "passed=$pass failed=$fail"

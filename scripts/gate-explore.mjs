@@ -407,6 +407,35 @@ if (isHigh && entries.length < MIN_BOARDS) {
   }
 }
 
+// --------------------------------------------- 8. every shown board was judged against its donor
+// The board judge (scripts/gate-board-judge.mjs) compares each board with the library reference
+// it was drawn from, both orders, at every intensity. This is the half that makes it bind: once
+// the boards are in front of a client, a board with no judgement, and a board judged clearly
+// worse than its own donor, are both things a person finds out by looking rather than by being
+// told. PALATE_GATE_JUDGE=0 releases the whole check, the same variable the judge itself reads.
+if (process.env.PALATE_GATE_JUDGE !== "0") {
+  const ex = manifest?.explore || {};
+  if (ex.shown_at) {
+    const judged = new Map((Array.isArray(ex.board_judgements) ? ex.board_judgements : []).map((j) => [j?.id, j]));
+    const unjudged = parsed.filter((v) => !judged.has(v.id)).map((v) => v.id);
+    if (unjudged.length) {
+      add(
+        `${unjudged.length} shown board(s) were never compared with their donor`,
+        `${unjudged.join(", ")} have no entry in manifest.explore.board_judgements. Every board is judged against the library reference it was drawn from, both ways round, before a client sees it: run node scripts/gate-board-judge.mjs <projectDir>, dispatch each comparison to a fresh subagent, then run it again with --judgements <file>.`,
+      );
+    }
+    for (const v of parsed) {
+      const j = judged.get(v.id);
+      if (j && j.rung === "clearly_worse") {
+        add(
+          `${v.id} was judged clearly worse than its donor`,
+          `the board judge read ${v.id}${j.donor ? ` against ${j.donor}` : ""} at the bottom rung. Redraw it from the donor's hero, re-render the boards and run scripts/gate-board-judge.mjs again before the canvas is published.`,
+        );
+      }
+    }
+  }
+}
+
 if (!findings.length) {
   console.log(`Explore gate passed: ${entries.length} board(s), each with a rung, a description, an argument, a feeling, a distinct donor, a motion plan and its CTA options, and a page that explains the range.`);
   process.exit(0);

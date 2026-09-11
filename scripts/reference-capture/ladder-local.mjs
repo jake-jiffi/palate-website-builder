@@ -302,3 +302,95 @@ export function naChecks(why) {
     { id: 'signature_move_present', raw: 0, detail: why, applicable: false },
   ];
 }
+
+// ------------------------------------------------------------------ the board judge ----
+//
+// Explore boards are DRAWN, not built, so none of the rendered measurements exist for them and
+// the site ladder's request shape does not fit. What does carry across is the discipline: the
+// same four rungs, the same comparison asked both ways round with a fresh judge each time, and
+// the same rule that the LOWER rung wins when the two orders disagree. A board is compared with
+// the one thing it has to answer to, the library reference it was drawn from, and a board that
+// cannot hold its own beside that reference is redrawn rather than shown.
+//
+// These live beside the site ladder rather than in the gate because RUNGS is the scale the
+// grader is byte-pinned to, and a second copy of it drifting is exactly the divergence the
+// pinning exists to prevent.
+
+/**
+ * The question, fixed. It names what to judge and what to ignore, because the one difference a
+ * judge would otherwise seize on, that the candidate is a drawing and the reference a
+ * photograph of a live site, is the difference that says nothing about the design.
+ */
+export const BOARD_QUESTION =
+  'Two home page entrances, one drawn for this client and one a library reference in its field. On the four rungs, ' +
+  'how does the candidate compare to the reference as a piece of design a senior designer would deliver to a paying ' +
+  'client? Judge composition, type, hierarchy, restraint and specificity; ignore that one is a drawing.';
+
+/**
+ * State one board's comparison, both ways round.
+ *
+ * The run token is in BOTH ids for the same reason it is in the site ladder's: without it the
+ * ids are `<board>:<position>`, which are identical across runs, so judgements written for
+ * yesterday's boards would validate cleanly against today's request and be recorded as though
+ * they described these drawings.
+ */
+export function buildBoardPair({ id, boardPath, donorPath, donorSlug, runToken }) {
+  if (!id) throw new Error('buildBoardPair: no board id');
+  if (!boardPath) throw new Error(`buildBoardPair: ${id} has no board hero`);
+  if (!donorPath) throw new Error(`buildBoardPair: ${id} has no donor hero`);
+  const token = runToken ?? Math.random().toString(36).slice(2, 10);
+  return {
+    id,
+    donor: donorSlug ?? null,
+    runToken: token,
+    comparisons: [
+      { id: `${id}:board-first@${token}`, candidate_is: 'A', A: boardPath, B: donorPath },
+      { id: `${id}:donor-first@${token}`, candidate_is: 'B', A: donorPath, B: boardPath },
+    ],
+    question: BOARD_QUESTION,
+    rungs: RUNGS.map((r) => r.id),
+  };
+}
+
+/**
+ * Score one board's two judgements.
+ *
+ * Strict in the same four ways `validateJudgements` is strict, and for the same measured reason:
+ * a judgement that never happened must not look like one that did. It does not CALL that
+ * function because the request shapes differ (comparisons here carry `candidate_is`, `A` and
+ * `B`, and there is no exemplar), and bending one to fit the other would put the site ladder's
+ * validation one refactor away from being wrong about a board.
+ *
+ * An inconsistent pair is reported, never resolved: it is still read at its lower rung, because
+ * a verdict that moves when the images swap is not evidence of quality.
+ */
+export function scoreBoardPair(pair, judgements) {
+  if (!pair || !Array.isArray(pair.comparisons) || pair.comparisons.length !== 2)
+    throw new Error('scoreBoardPair: a board pair has exactly two comparisons');
+  if (!Array.isArray(judgements)) throw new Error(`scoreBoardPair: ${pair.id}: the judgements must be an array`);
+
+  const wanted = new Map(pair.comparisons.map((c) => [c.id, c]));
+  const byId = new Map();
+  for (const j of judgements) {
+    const id = j?.id;
+    if (!id || !wanted.has(id)) throw new Error(`scoreBoardPair: ${pair.id}: judgement for unknown comparison "${id ?? '(missing id)'}"`);
+    if (byId.has(id)) throw new Error(`scoreBoardPair: ${pair.id}: two judgements returned for comparison "${id}"`);
+    if (rungIndex(j.verdict) < 0)
+      throw new Error(`scoreBoardPair: ${pair.id}: verdict "${j.verdict}" is not one of ${RUNGS.map((r) => r.id).join(', ')}`);
+    // The swap is the whole control. A judgement that says the candidate was the other image
+    // answered a different question, so the two orders were never actually run.
+    if (j.candidate_is && j.candidate_is !== wanted.get(id).candidate_is)
+      throw new Error(`scoreBoardPair: ${pair.id}: candidate_is is "${j.candidate_is}" but the candidate was image ${wanted.get(id).candidate_is}`);
+    byId.set(id, j);
+  }
+  for (const id of wanted.keys()) if (!byId.has(id)) throw new Error(`scoreBoardPair: ${pair.id}: no judgement returned for comparison "${id}"`);
+
+  const verdicts = pair.comparisons.map((c) => byId.get(c.id).verdict);
+  const [i1, i2] = verdicts.map(rungIndex);
+  return {
+    id: pair.id,
+    rung: RUNGS[Math.min(i1, i2)].id,
+    consistent: Math.abs(i1 - i2) <= 1,
+    verdicts,
+  };
+}
