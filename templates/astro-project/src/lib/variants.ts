@@ -32,11 +32,11 @@
  * a direction with its most expensive property invisible; and offering two or three CTA
  * labels turns a guess into a decision the client can make in the same sitting.
  *
- * At Compose time, after the client picks, this file is CLEARED (both arrays back to []),
- * `explore.astro` and the `/boards/*` routes are archived, and the picker stops rendering.
+ * At Compose time, after the client picks, this file is CLEARED (both arrays back to []) and
+ * `explore.astro` is deleted: the board IS the artboard, so there is no route to archive.
  */
 export interface Variant {
-  /** Route id, e.g. "b1" (board) or "lp1" (landing page). */
+  /** The board's id, e.g. "b1" (board) or "lp1" (landing page). The board IS the artboard file; there is no route. */
   id: string;
   /** Short evocative direction name, e.g. "The Quiet Room". Never "Option 3". */
   name: string;
