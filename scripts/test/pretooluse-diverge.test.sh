@@ -524,6 +524,15 @@ I14="$TMP/art-no-intake"; mkdir -p "$I14"; echo "$MARKER" > "$I14/.palate-skill-
 node -e 'const fs=require("fs");const f=process.argv[1];const m=JSON.parse(fs.readFileSync(f,"utf8"));delete m.plan_checkpoint.shown.intake;fs.writeFileSync(f,JSON.stringify(m));' "$I14/build-manifest.json"
 want "an artboard drawn before the intake was asked -> deny" DENY "$(run "$I14" Write "$I14/.palate/explore/seed/B1.dc.html")"
 
+I15="$(mk_cp in15)"; set_cp "$I15" "$(cp_ladder "$(set_key "$INTAKE_OK" calibration '{"position":0,"why":"before the first one"}')")"
+want "a calibration position of 0 (the row starts at 1) -> deny" DENY "$(run "$I15" Write "$I15/src/pages/index.astro")"
+I16="$(mk_cp in16)"; set_cp "$I16" "$(cp_ladder "$(set_key "$INTAKE_OK" calibration '{"position":"2","why":"typed, not counted"}')")"
+want "a calibration position written as a string -> deny" DENY "$(run "$I16" Write "$I16/src/pages/index.astro")"
+I17="$(mk_cp in17)"; set_cp "$I17" "$(cp_ladder "$(set_key "$INTAKE_OK" admired '[""]')")"
+want "an admired list holding one empty answer -> deny" DENY "$(run "$I17" Write "$I17/src/pages/index.astro")"
+I18="$(mk_cp in18)"; set_cp "$I18" "$(cp_ladder "$(set_key "$INTAKE_OK" admired "$(node -e 'console.log(JSON.stringify(Array.from({length:21},(_,i)=>"site"+i)))')")")"
+want "an admired list of 21 (past the cap the deny message states) -> deny" DENY "$(run "$I18" Write "$I18/src/pages/index.astro")"
+
 I9="$(mk_cp in9)"; set_cp "$I9" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"supplied-example","source":"mock.html"}},"go":{"given":true,"how":"asked","quote":"rebuild that"}}'
 want "a supplied example needs no intake (no ladder is drawn) -> allow" ALLOW "$(run "$I9" Write "$I9/src/pages/index.astro")"
 I10="$(mk_cp in10)"; set_cp "$I10" '{"shown":{"host":"vercel","stage":"preview","cms":false,"explore":{"mode":"named-direction","source":"https://northwind.example"}},"go":{"given":true,"how":"brief","quote":"build it like Northwind"}}'

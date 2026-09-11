@@ -195,6 +195,9 @@ function intakeValid(intake) {
   if (!cal || typeof cal !== "object") return false;
   if (!Number.isInteger(cal.position) || cal.position < 1 || cal.position > 4) return false;
   if (!nonEmpty(cal.why)) return false;
+  // 1 to 20: one named site is enough to steer a search, and a list past twenty is a dump of
+  // somebody's bookmarks rather than an answer. The bound is stated in the deny message and in
+  // SKILL.md's checkpoint, so it refuses nothing an agent was not told about.
   if (!nonEmptyList(intake.admired, 1, 20)) return false;
   if (!nonEmptyList(intake.disliked, 1, 20)) return false;
   if (!nonEmpty(intake.primary_action)) return false;
@@ -264,7 +267,7 @@ const CHECKPOINT_REQUIRED_MESSAGE =
   "  6. Host, who edits the copy in six months, and how many directions you want to see.\n" +
   "Then record their answers and run the deep survey with them:\n" +
   "  shown.intake = { calibration: { position: 1..4, why },\n" +
-  "                   admired: [\"...\"] (1 or more), disliked: [\"...\"] (1 or more),\n" +
+  "                   admired: [\"...\"] (1 to 20), disliked: [\"...\"] (1 to 20),\n" +
   "                   primary_action: \"call\"|\"form\"|\"booking\"|\"buy\",\n" +
   "                   wow: \"one sentence\", avoid: [\"...\"] (3 to 5) }\n" +
   "Every field is required and none may be blank. named-direction and supplied-example draw no\n" +

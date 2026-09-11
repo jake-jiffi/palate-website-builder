@@ -72,7 +72,7 @@ onto `/explore` and the canvas.
 
    Record the answers on the checkpoint as
    `plan_checkpoint.shown.intake = { calibration: { position: 1..4, why },
-   admired: [...], disliked: [...], primary_action, wow, avoid: [3 to 5] }`.
+   admired: [1 to 20], disliked: [1 to 20], primary_action, wow, avoid: [3 to 5] }`.
    The write wall refuses a ladder whose checkpoint lacks any of them
    (`hooks/palate-pretooluse.mjs`), because an unanswered intake is a range drawn
    on our own taste rather than theirs. Then hand that block verbatim to the

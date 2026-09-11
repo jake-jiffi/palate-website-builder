@@ -627,6 +627,17 @@ present "the rule puts the recommended option first and labels it" "SKILL.md" "(
 present "the rule caps a round at four questions in one call" "SKILL.md" "four questions in ONE call"
 present "the rule asks for multi-select where answers are not exclusive" "SKILL.md" "multi-select"
 present "the rule falls back to prose only where the tool is absent" "SKILL.md" "only where the tool is absent"
+# ...and it is APPLIED at each checkpoint moment, pinned to that moment's own line. A single
+# "AskUserQuestion appears in SKILL.md" is satisfied by the house rule alone, which is exactly
+# the assertion that goes on passing after the application is deleted.
+matches "checkpoint moment 2 asks the pick round through the tool" \
+  "SKILL.md" "^2\. \*\*After Explore.*AskUserQuestion"
+matches "checkpoint moment 3 asks the Compose confirm through the tool" \
+  "SKILL.md" "^3\. \*\*After Compose.*AskUserQuestion"
+matches "checkpoint moment 4 asks the provisioning confirm through the tool" \
+  "SKILL.md" "^4\. \*\*Before production provisioning.*AskUserQuestion"
+matches "A.5's question round is one call of the tool" \
+  "SKILL.md" "A\.5 PAUSE.*AskUserQuestion"
 present "explore-stage asks the intake through the tool" \
   "references/explore-stage.md" "AskUserQuestion"
 present "explore-stage asks the question round through the tool" \
