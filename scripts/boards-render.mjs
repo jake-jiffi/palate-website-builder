@@ -753,9 +753,24 @@ export function loadDonors(projectDir, donorsPath, boards = []) {
     seen.set(rung, d.slug);
   }
 
+  /**
+   * THE ROW IS MATCHED BY RUNG AND CHECKED BY SLUG.
+   *
+   * The registry names the donor a board REPRODUCES and this file names the donor a rung's card
+   * SHOWS, and the two were only ever joined on the rung number. A registry entry reading
+   * `donor: "linear"` at rung 2 beside a rung-2 entry for `aesop` passed every gate downstream:
+   * the canvas then laid aesop's hero beside that board and captioned it "Drawn from linear",
+   * which is a false claim about published work, made to the one person it is made to, with the
+   * evidence for it sitting right there.
+   */
   for (const b of boards) {
-    if (!seen.has(Number(b.ambition))) {
+    const rung = Number(b.ambition);
+    if (!seen.has(rung)) {
       throw new Error(`board ${b.id} is registered at rung ${b.ambition} and donor-heroes.json carries no entry for rung ${b.ambition}. Record its donor, or run with --no-donors; half a donor row reads as the whole one.`);
+    }
+    const named = seen.get(rung);
+    if (b.donor && String(b.donor) !== named) {
+      throw new Error(`board ${b.id} is registered with donor "${b.donor}" and ${donorsPath} carries "${named}" at rung ${rung}. The card beside that board would show ${named}'s hero captioned "Drawn from ${b.donor}". Name one reference in both.`);
     }
   }
   return donors.slice().sort((a, b) => a.rung - b.rung);

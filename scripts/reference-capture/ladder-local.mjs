@@ -385,9 +385,18 @@ export function scoreBoardPair(pair, judgements) {
     if (byId.has(id)) throw new Error(`scoreBoardPair: ${pair.id}: two judgements returned for comparison "${id}"`);
     if (rungIndex(j.verdict) < 0)
       throw new Error(`scoreBoardPair: ${pair.id}: verdict "${j.verdict}" is not one of ${RUNGS.map((r) => r.id).join(', ')}`);
-    // The swap is the whole control. A judgement that says the candidate was the other image
-    // answered a different question, so the two orders were never actually run.
-    if (j.candidate_is && j.candidate_is !== wanted.get(id).candidate_is)
+    /**
+     * The swap is the whole control, so `candidate_is` is REQUIRED and not merely checked when
+     * it happens to be there. It was optional, and the doctrine's answer format did not ask for
+     * it, so the check could never fire on a real run: every judgement arrived without the field
+     * and the only thing standing between a pasted-in wrong ordering and a recorded verdict was
+     * the dispatcher's attention. The prompt asks for it now (`references/explore-stage.md`),
+     * and an answer that echoes the other letter was judged against the other ordering's
+     * instructions, which is a reading of a question nobody asked.
+     */
+    if (!j.candidate_is)
+      throw new Error(`scoreBoardPair: ${pair.id}: the judgement for "${id}" has no candidate_is; the subagent must echo which of A or B it was told the candidate is`);
+    if (j.candidate_is !== wanted.get(id).candidate_is)
       throw new Error(`scoreBoardPair: ${pair.id}: candidate_is is "${j.candidate_is}" but the candidate was image ${wanted.get(id).candidate_is}`);
     byId.set(id, j);
   }

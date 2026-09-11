@@ -52,7 +52,7 @@ verify-report.json
 # judge's request and answers, restated on every run and refused once stale. donor-heroes.json
 # itself is MEASURED state (the surveyor paid for it) and stays committed.
 .palate/explore/seed/D*.dc.html
-.palate/explore/seed/d*-hero.jpg
+.palate/explore/seed/d[0-9]*-hero.jpg
 .palate/explore/judge-request.json
 .palate/explore/judgements.json
 public/_explore/

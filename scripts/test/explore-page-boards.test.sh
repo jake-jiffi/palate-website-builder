@@ -182,6 +182,38 @@ cat > "$SITE/build-manifest.json" <<'JSON'
 }
 JSON
 
+# --- FIRST, the run that DREW NO DONOR ROW ----------------------------------------------
+# Every registry entry names a donor, so the card used to render `<id>-donor.jpg` on that alone
+# and a `--no-donors` build shipped a broken image on the page the client opens. The manifest is
+# the only thing that knows whether the row was ever drawn.
+setrow() { # <json fragment or "none">
+  node -e '
+    const { readFileSync, writeFileSync } = require("node:fs");
+    const f = process.argv[1], m = JSON.parse(readFileSync(f, "utf8"));
+    if (process.argv[2] === "none") delete m.explore.donor_row;
+    else m.explore.donor_row = JSON.parse(process.argv[2]);
+    writeFileSync(f, JSON.stringify(m, null, 2));
+  ' "$SITE/build-manifest.json" "$1"
+}
+build_explore() { # <log name> -> sets HTML, or returns 1
+  ( cd "$SITE" && PUBLIC_EXPLORE_MODE=true ./node_modules/.bin/astro build ) > "$TMP/$1.log" 2>&1 || {
+    echo "explore-page-boards: the site did not build, so /explore is UNPROVEN. Last lines:" >&2
+    tail -15 "$TMP/$1.log" >&2; return 1; }
+  HTML=""
+  for cand in "$SITE/dist/client/explore/index.html" "$SITE/dist/explore/index.html"; do
+    [ -f "$cand" ] && { HTML="$cand"; break; }
+  done
+  [ -n "$HTML" ]
+}
+
+setrow '{"skipped":true}' || { echo "explore-page-boards: could not write the skipped-row manifest. NOT a pass." >&2; exit 2; }
+build_explore build-skipped || exit 2
+hasnt "a build whose donor row was skipped shows no donor image" '-donor.jpg'
+has   "and the board stills are unaffected by the skip"          '/_explore/b1.png'
+rm -rf "$SITE/dist"
+
+# --- then the ordinary run, which DID draw one ------------------------------------------
+setrow none || { echo "explore-page-boards: could not restore the manifest. NOT a pass." >&2; exit 2; }
 ( cd "$SITE" && PUBLIC_EXPLORE_MODE=true ./node_modules/.bin/astro build ) > "$TMP/build.log" 2>&1 || {
   echo "explore-page-boards: the site did not build, so /explore is UNPROVEN. Last lines:" >&2
   tail -15 "$TMP/build.log" >&2; exit 2; }

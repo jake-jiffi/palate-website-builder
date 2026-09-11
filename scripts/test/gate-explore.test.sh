@@ -35,6 +35,11 @@ want() { if [ "$2" = "$3" ]; then echo "ok   - $1"; pass=$((pass+1));
 has() { local out; out="$(why "$2")"
         if printf '%s' "$out" | grep -qiF "$3"; then echo "ok   - $1"; pass=$((pass+1));
         else echo "FAIL - $1 (no '$3' in output)"; fail=$((fail+1)); fi; }
+# The other half: a finding that must NOT be in the output, so two checks cannot contradict
+# each other over one build.
+hasnt_out() { local out; out="$(why "$2")"
+        if printf '%s' "$out" | grep -qiF "$3"; then echo "FAIL - $1 (found '$3')"; fail=$((fail+1));
+        else echo "ok   - $1"; pass=$((pass+1)); fi; }
 
 mk() { mkdir -p "$1/src/lib" "$1/src/pages" "$1/.palate/explore/seed"; }
 page() { : > "$1/src/pages/explore.astro"; }
@@ -197,15 +202,17 @@ want "an off-enum intensity is treated as high -> block" BLOCK "$(run "$Q")"
 
 # === 16. SHOWN BUT THE CANVAS WAS NEITHER PUBLISHED NOR DECLINED. Silence is the failure.
 R="$TMP/k16"; mk "$R"; page "$R"; boards "$R" b1 b2 b3; write_valid "$R"
-echo '{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","boards":[]}}' > "$R/build-manifest.json"
-want "shown, no canvas record -> block" BLOCK "$(run "$R")"
+# Every board judged, so the canvas is genuinely owed: the two checks are ordered, and check 8
+# suppresses check 7 while a judgement is outstanding (case 18b below).
+echo '{"schema":3,"explore":{"ran":true,"boards":[],"board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},{"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true}],"shown_at":"2026-09-11T04:00:00Z"}}' > "$R/build-manifest.json"
+want "shown and judged, no canvas record -> block" BLOCK "$(run "$R")"
 has "and it says what to record" "$R" "explore.canvas"
 echo '{"schema":3,"explore":{"ran":true,"board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},{"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true}],"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"}}}' > "$R/build-manifest.json"
 want "shown, canvas url recorded -> pass" PASS "$(run "$R")"
 echo '{"schema":3,"explore":{"ran":true,"board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},{"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true}],"shown_at":"2026-09-11T04:00:00Z","canvas":{"skipped":true,"reason":"no design skill in this session"}}}' > "$R/build-manifest.json"
 want "shown, canvas skip recorded with a reason -> pass" PASS "$(run "$R")"
-echo '{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"skipped":true}}}' > "$R/build-manifest.json"
-want "shown, canvas skipped with NO reason -> block" BLOCK "$(run "$R")"
+echo '{"schema":3,"explore":{"ran":true,"board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},{"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true}],"shown_at":"2026-09-11T04:00:00Z","canvas":{"skipped":true}}}' > "$R/build-manifest.json"
+want "shown and judged, canvas skipped with NO reason -> block" BLOCK "$(run "$R")"
 
 # === 17. NOT YET SHOWN: the canvas cannot be owed before the boards exist.
 S="$TMP/k17"; mk "$S"; page "$S"; boards "$S" b1 b2 b3; write_valid "$S"
@@ -223,6 +230,10 @@ JSON
 want "shown, only one of two boards judged -> block" BLOCK "$(run "$T")"
 has "and it names the unjudged board" "$T" "b2"
 has "and it names the gate that judges it" "$T" "gate-board-judge.mjs"
+# WHO dispatches. The verifier has no Agent tool, so a finding that says only "dispatch each
+# comparison to a fresh subagent" reads, to the agent most likely to be running this, as an
+# instruction it cannot follow.
+has "and it says who dispatches the comparisons" "$T" "the main build agent dispatches"
 
 cat > "$T/build-manifest.json" <<'JSON'
 {"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"},
@@ -247,6 +258,35 @@ want "shown, no judgements at all -> block" BLOCK "$(run "$T")"
 export PALATE_GATE_JUDGE=0
 want "PALATE_GATE_JUDGE=0 -> pass" PASS "$(run "$T")"
 unset PALATE_GATE_JUDGE
+
+# === 18b. ROUND ONE: the boards are rendered and judged by nothing yet, and the canvas is not
+# owed until the judge has passed. The two checks used to CO-FIRE and contradict each other,
+# telling one build to publish the canvas and to judge the boards it would have published.
+V="$TMP/k18c"; mk "$V"; page "$V"; boards "$V" b1 b2; write_valid "$V"
+cat > "$V/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z"}}
+JSON
+want "shown, nothing judged and no canvas -> block" BLOCK "$(run "$V")"
+has "and it names both unjudged boards" "$V" "b1, b2"
+hasnt_out "and it does NOT also demand a canvas record" "$V" "neither published nor declined"
+has "and it says the canvas comes after the judge" "$V" "after the judge passes"
+
+# One board judged, one not: still the judge's finding alone, still no canvas demand.
+cat > "$V/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z",
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true}]}}
+JSON
+want "shown, half judged, no canvas -> block" BLOCK "$(run "$V")"
+hasnt_out "and the canvas is still not owed" "$V" "neither published nor declined"
+
+# Every board judged and no canvas record: NOW the canvas is owed, and check 7 fires as it did.
+cat > "$V/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z",
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},
+                     {"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true}]}}
+JSON
+want "shown, fully judged, no canvas -> block" BLOCK "$(run "$V")"
+has "and now it IS the canvas that is owed" "$V" "neither published nor declined"
 
 # Not shown yet: a judgement cannot be owed before a client has seen anything.
 U="$TMP/k18b"; mk "$U"; page "$U"; boards "$U" b1 b2; write_valid "$U"

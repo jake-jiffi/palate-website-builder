@@ -457,5 +457,9 @@ test('a missing, duplicate, unknown or wrongly-oriented judgement throws rather 
   assert.throws(() => scoreBoardPair(p, badRung), /not one of/i);
   const flipped = boardJudgements(p, 'comparable', 'comparable');
   flipped[1] = { ...flipped[1], candidate_is: 'A' };
-  assert.throws(() => scoreBoardPair(p, flipped), /candidate_is/i);
+  assert.throws(() => scoreBoardPair(p, flipped), /candidate_is is "A" but the candidate was image B/);
+  // REQUIRED, not merely checked when present. It was optional and the doctrine never asked for
+  // it, so the check sat dead: every real judgement arrived with the field missing.
+  const bare = boardJudgements(p, 'comparable', 'comparable').map(({ id, verdict }) => ({ id, verdict }));
+  assert.throws(() => scoreBoardPair(p, bare), /has no candidate_is/);
 });

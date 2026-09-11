@@ -140,43 +140,10 @@ onto `/explore` and the canvas.
    argument before anyone reads a word.
 
    **AND YOUR EYE IS THE FIRST PASS, NEVER THE GATE. THE GATE IS THE DONOR
-   COMPARISON.** Every board is judged against the one thing it has to answer to,
-   the library reference it was drawn from. **YOU RUN THIS, in your own session,
-   because the judging happens in subagents and the verifier has no Agent tool**
-   (the same division as the site ladder, `references/local-grade.md`). The
-   verifier states the comparisons and hands you the request path; the four steps
-   are yours:
-
-   1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <project-dir>`
-      writes `<project-dir>/.palate/explore/judge-request.json`: the fixed
-      `question`, the four `rungs` (`clearly_worse`, `somewhat_worse`,
-      `comparable`, `better`) and, per board, TWO comparisons, the same pair with
-      the images swapped.
-   2. **Dispatch ONE FRESH general-purpose subagent per comparison**, never two
-      comparisons in one context. Give it NOTHING about this build: the two image
-      paths (`A` and `B`), the `question` verbatim, the four rung ids, and
-      "answer with the comparison id and one rung id, nothing else". The swap is
-      the position-bias control, so a subagent that has already seen the other
-      ordering is agreeing with itself rather than judging, and one that knows
-      which image you drew is not judging either.
-   3. Collect the answers into `<project-dir>/.palate/explore/judgements.json` as
-      `[{ id, verdict }]`, two per pair, each `id` copied verbatim.
-   4. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <project-dir>
-      --judgements <project-dir>/.palate/explore/judgements.json` takes the LOWER
-      of the two readings, records `manifest.explore.board_judgements`, and exits
-      2 naming any board read `clearly_worse`. **Report its stderr verbatim**, and
-      publish the canvas only once it passes.
-
-   **A board read `clearly_worse` than its donor is refused, at EVERY
-   intensity**: a calm brand is not a reason to hand someone a weak drawing, and
-   the visual rubric every board already clears measures hygiene, which is how
-   five boards scored 25 to 28 out of 30 and were bland. A refused board goes back
-   to the drawing step, redrawn from the donor's hero, re-rendered, and judged
-   from step 1 again (a redrawn `hero.png` makes the standing request stale and the
-   gate says so); three attempts, then the rung is dropped rather than shown.
-   `scripts/gate-explore.mjs` blocks a shown build whose registered boards carry no
-   judgement or carry `clearly_worse`, so a board cannot reach a client by being
-   judged late. `PALATE_GATE_JUDGE=0` releases both.
+   COMPARISON**, and it runs in step 2b rather than here, because it compares the
+   board's entrance still with its donor's hero and neither of those exists until
+   `boards-render.mjs` has drawn them. Register a board once your eye clears it;
+   whether it is SHOWN is the judge's answer, not yours.
 
    As each board is registered, it is also recorded in `build-manifest.json`
    under `explore.shown` (`{ id, name, donor_slug, position }`) so
@@ -198,7 +165,7 @@ onto `/explore` and the canvas.
    bias, never pin (`references/build-memory.md`, "The positive taste profile").
    **Match drawing complexity to the aesthetic vision**: a maximalist board is
    drawn elaborately; a minimalist one practises restraint.
-2b. **Validate, measure, publish** - `node scripts/boards-render.mjs <project-dir>
+2b. **Validate, measure, judge, publish** - `node scripts/boards-render.mjs <project-dir>
    [--out .palate/explore] [--refs .palate/explore/refs.json]
    [--donors .palate/explore/donor-heroes.json | --no-donors]`. It builds
    nothing. It holds every registered artboard to the contract and REFUSES with
@@ -235,8 +202,59 @@ onto `/explore` and the canvas.
    those are the operator's own drawings, not this script's output, and wiping
    them over one oversized image would throw away hours of authoring.
 
-   **THEN PUBLISH THE CANVAS AT ONCE**, when the design skill is present. Seed
-   it from `.palate/explore/seed/` (the `README.md` written there says what to
+   **THEN JUDGE EVERY BOARD AGAINST ITS OWN DONOR, BEFORE ANYTHING IS
+   PUBLISHED.** Every board is judged against the one thing it has to answer to,
+   the library reference it was drawn from. It runs HERE, after the render, because
+   it compares the board's `hero.png` with the donor's `donor.jpg` and neither
+   exists until the step above has drawn them. **YOU RUN IT, in your own session,
+   because the judging happens in subagents and the verifier has no Agent tool**
+   (the same division as the site ladder, `references/local-grade.md`). The
+   verifier states the comparisons and hands you the request path; the four steps
+   are yours:
+
+   1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <project-dir>`
+      writes `<project-dir>/.palate/explore/judge-request.json`: the fixed
+      `question`, the four `rungs` (`clearly_worse`, `somewhat_worse`,
+      `comparable`, `better`) and, per board, TWO comparisons, the same pair with
+      the images swapped.
+   2. **Dispatch ONE FRESH general-purpose subagent per comparison**, never two
+      comparisons in one context. Give it NOTHING about this build: the two image
+      paths (`A` and `B`), the `question` verbatim, the four rung ids, which of
+      `A` or `B` the comparison names as the candidate, and "answer with
+      `{ id, candidate_is, verdict }`: the comparison id, the letter you were told
+      the candidate is, and one rung id, nothing else". **`candidate_is` is
+      REQUIRED and is the check on the dispatch**: an answer that echoes the other
+      letter was judged against the other ordering's instructions, and the gate
+      refuses the pair rather than record a reading of a question nobody asked. The
+      swap is
+      the position-bias control, so a subagent that has already seen the other
+      ordering is agreeing with itself rather than judging, and one that knows
+      which image you drew is not judging either.
+   3. Collect the answers into `<project-dir>/.palate/explore/judgements.json` as
+      `[{ id, candidate_is, verdict }]`, two per pair, each `id` copied verbatim.
+   4. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <project-dir>
+      --judgements <project-dir>/.palate/explore/judgements.json` takes the LOWER
+      of the two readings, records `manifest.explore.board_judgements`, and exits
+      2 naming any board read `clearly_worse`. **Report its stderr verbatim**, and
+      publish the canvas only once it passes.
+
+   **A board read `clearly_worse` than its donor is refused, at EVERY
+   intensity**: a calm brand is not a reason to hand someone a weak drawing, and
+   the visual rubric every board already clears measures hygiene, which is how
+   five boards scored 25 to 28 out of 30 and were bland. A refused board goes back
+   to the drawing step, redrawn from the donor's hero, re-rendered, and judged
+   from step 1 of this block again (a redrawn `hero.png` makes the standing request
+   stale and the gate says so, and an unchanged board is not re-judged: a standing
+   verdict is reported rather than re-asked); three attempts, then the rung is dropped rather than shown.
+   `scripts/gate-explore.mjs` blocks a shown build whose registered boards carry no
+   judgement or carry `clearly_worse`, so a board cannot reach a client by being
+   judged late. `PALATE_GATE_JUDGE=0` releases both.
+
+   **THEN PUBLISH THE CANVAS, once the board judge has passed**, when the design
+   skill is present. The judge is the condition and not a courtesy: publishing
+   first puts a board a client can open in front of them before anything has
+   compared it with the work it was drawn from, and a board refused afterwards has
+   already been seen. Seed it from `.palate/explore/seed/` (the `README.md` written there says what to
    title it and which artboard is which) and publish WITHOUT export, so the link
    opens outside the organisation. Record `manifest.explore.canvas = { url }`
    with the command, never by hand:

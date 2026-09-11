@@ -33,8 +33,8 @@ entry shape is defined in `hooks/build-log-entry.mjs`:
   "explore": {
     "ran": true,
     "shown": [
-      { "id": "v1", "name": "Deep Trawl", "donor_slug": "aesop", "hero_pattern": "centred-display", "position": 1 },
-      { "id": "v3", "name": "Low Tide", "donor_slug": "the-modern-house", "hero_pattern": "full-bleed", "position": 3 }  // hero_pattern: historical, see below
+      { "id": "v1", "name": "Deep Trawl", "donor_slug": "aesop", "position": 1 },
+      { "id": "v3", "name": "Low Tide", "donor_slug": "the-modern-house", "position": 3 }
     ],
     "picks": [{ "surface": "hero", "variant_id": "v3" }, { "surface": "cta", "variant_id": "v1" }],
     "edits": [{ "surface": "hero", "variant_id": "v3", "note": "shortened headline" }]

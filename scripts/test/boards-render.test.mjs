@@ -820,6 +820,28 @@ test("a registered board with no donor entry is refused, naming the rung and the
   );
 });
 
+/**
+ * The registry's donor and the row's donor are joined on the RUNG, so a mismatched slug used to
+ * pass every gate: the canvas laid one reference's hero beside the board and captioned it with
+ * the other's name, which is a false claim about published work shown to the client.
+ */
+test("a board whose registered donor is not the donor recorded at its rung is refused", () => {
+  const dir = donorFile([donorFor(1), donorFor(2, { slug: "aesop" })]);
+  assert.throws(
+    () => loadDonors(dir, "donor-heroes.json", [
+      { id: "b1", ambition: 1, donor: "donor-1" },
+      { id: "b2", ambition: 2, donor: "linear" },
+    ]),
+    (e) => /b2/.test(e.message) && /linear/.test(e.message) && /aesop/.test(e.message) && /donor-heroes\.json/.test(e.message),
+    "a board captioned with a reference it was not drawn from was accepted",
+  );
+});
+
+test("a board whose registered donor matches the rung's entry is accepted", () => {
+  const dir = donorFile([donorFor(1, { slug: "aesop" })]);
+  assert.equal(loadDonors(dir, "donor-heroes.json", [{ id: "b1", ambition: 1, donor: "aesop" }]).length, 1);
+});
+
 test("a donor hero that is not https is refused", () => {
   const dir = donorFile([donorFor(1, { hero_url: "http://example.com/hero.png" })]);
   assert.throws(
@@ -968,8 +990,8 @@ test("a hero the fetch cannot get is refused, naming the URL, and the seed survi
     // with the status check removed because a 404 body also fails the magic-byte check.
     for (const [path, said] of [["missing.png", /HTTP 404/], ["not-an-image.png", /not a PNG, JPEG or WebP/]]) {
       writeFileSync(donorsPath, JSON.stringify([
-        donorFor(1, { hero_url: `http://127.0.0.1:${port}/${path}` }),
-        donorFor(2, { hero_url: `http://127.0.0.1:${port}/hero.png` }),
+        donorFor(1, { slug: "therapy-in-london", hero_url: `http://127.0.0.1:${port}/${path}` }),
+        donorFor(2, { slug: "the-modern-house", hero_url: `http://127.0.0.1:${port}/hero.png` }),
       ], null, 2));
       const r = await run([SITE]);
       assert.equal(r.status, 2, `${path} was accepted as a donor hero`);
@@ -986,7 +1008,7 @@ test("a hero the fetch cannot get is refused, naming the URL, and the seed survi
 test("a board with no donor entry stops the run and leaves the drawn seed alone", async (t) => {
   if (!ready) return t.skip(skipReason);
   const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
-  writeFileSync(donorsPath, JSON.stringify([donorFor(1, { hero_url: "https://example.supabase.co/x/desktop.png" })]));
+  writeFileSync(donorsPath, JSON.stringify([donorFor(1, { slug: "therapy-in-london", hero_url: "https://example.supabase.co/x/desktop.png" })]));
   const r = await run([SITE]);
   assert.equal(r.status, 2, "half a donor row was drawn as though it were the whole one");
   assert.match(r.stderr, /rung 2/, "the refusal does not name the rung with no donor");

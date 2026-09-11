@@ -215,6 +215,60 @@ test('a board REDRAWN after the request cannot be blessed by the old judgements'
   assert.match(r.err, /hero\.png for b2 changed since the request was written; re-run phase 1/);
 });
 
+/**
+ * Phase 1 ran on every verifier round and restated every comparison, so a three-board Explore
+ * with nothing redrawn paid for six fresh subagents again to be told what the manifest already
+ * held, and the standing judgements went out with the request they were bound to.
+ */
+test('phase 1 does not restate comparisons for boards already judged on this drawing', (t) => {
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  assert.equal(judge(dir, answers(request(dir))).code, 0);
+  const first = request(dir);
+
+  const again = run(dir);
+  assert.equal(again.code, 0, again.err);
+  assert.match(again.out, /already judged: b1 comparable, b2 comparable/);
+  assert.deepEqual(request(dir), first, 'the standing request was rewritten over an unchanged board set');
+  // And the record says WHICH drawing each verdict is about, which is the only thing that makes
+  // the skip safe.
+  for (const j of manifest(dir).explore.board_judgements) assert.ok(j.board_hero, `${j.id} recorded no board_hero`);
+});
+
+test('a board redrawn since it was judged is stated again', (t) => {
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  assert.equal(judge(dir, answers(request(dir))).code, 0);
+  const before = request(dir).runToken;
+  writeFileSync(join(dir, '.palate', 'explore', 'shots', 'b2', 'hero.png'), Buffer.concat([PNG, Buffer.from('redrawn')]));
+  const again = run(dir);
+  assert.equal(again.code, 0, again.err);
+  assert.match(again.out, /judge-request\.json/, 'a redrawn board was passed over as already judged');
+  assert.notEqual(request(dir).runToken, before, 'the request was not restated for the redrawn board');
+});
+
+test('a board standing at clearly_worse is not quietly "already judged"', (t) => {
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  assert.equal(judge(dir, answers(request(dir), { b2: 'clearly_worse' })).code, 2);
+  const again = run(dir);
+  assert.equal(again.code, 2, 'a standing refusal reported itself as a clean phase 1');
+  assert.match(again.err, /b2/);
+  assert.match(again.err, /clearly worse/);
+});
+
+test('--judgements with no file named is refused, not read as phase 1', (t) => {
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = run(dir, ['--judgements']);
+  assert.equal(r.code, 2);
+  assert.ok(!skipped(r), 'a slip in the command line was reported as a skip about the build');
+  assert.match(r.err, /--judgements was given with no value/);
+});
+
 test('judgements that could not be recorded are not a pass', (t) => {
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));

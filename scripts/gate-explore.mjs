@@ -390,12 +390,29 @@ if (isHigh && entries.length < MIN_BOARDS) {
   );
 }
 
+/**
+ * Which shown boards have never been compared with their donor. Checks 7 and 8 both read it,
+ * because the canvas is owed only AFTER the judge has passed: doctrine publishes once every
+ * board is judged, so a round-one build with unjudged boards owes a judgement and does NOT yet
+ * owe a canvas. Reported together they contradicted each other, telling the same build to
+ * publish the canvas and to judge the boards it would have published.
+ */
+const unjudgedBoards =
+  process.env.PALATE_GATE_JUDGE === "0" || !manifest?.explore?.shown_at
+    ? []
+    : (() => {
+        const judged = new Set(
+          (Array.isArray(manifest.explore.board_judgements) ? manifest.explore.board_judgements : []).map((j) => j?.id),
+        );
+        return parsed.filter((v) => !judged.has(v.id)).map((v) => v.id);
+      })();
+
 // ------------------------------------------------ 7. shown boards were put somewhere
 // The canvas is where the person iterates. Publishing it is not optional when the design skill
 // is present, and when it is absent that is RECORDED with a reason, never left silent.
 {
   const ex = manifest?.explore || {};
-  if (ex.shown_at) {
+  if (ex.shown_at && !unjudgedBoards.length) {
     const c = ex.canvas || {};
     const ok = (typeof c.url === "string" && c.url.trim()) || (c.skipped === true && typeof c.reason === "string" && c.reason.trim());
     if (!ok) {
@@ -417,11 +434,10 @@ if (process.env.PALATE_GATE_JUDGE !== "0") {
   const ex = manifest?.explore || {};
   if (ex.shown_at) {
     const judged = new Map((Array.isArray(ex.board_judgements) ? ex.board_judgements : []).map((j) => [j?.id, j]));
-    const unjudged = parsed.filter((v) => !judged.has(v.id)).map((v) => v.id);
-    if (unjudged.length) {
+    if (unjudgedBoards.length) {
       add(
-        `${unjudged.length} shown board(s) were never compared with their donor`,
-        `${unjudged.join(", ")} have no entry in manifest.explore.board_judgements. Every board is judged against the library reference it was drawn from, both ways round, before a client sees it: run node scripts/gate-board-judge.mjs <projectDir>, dispatch each comparison to a fresh subagent, then run it again with --judgements <file>.`,
+        `${unjudgedBoards.length} shown board(s) were never compared with their donor`,
+        `${unjudgedBoards.join(", ")} have no entry in manifest.explore.board_judgements. Every board is judged against the library reference it was drawn from, both ways round, before a client sees it: run node scripts/gate-board-judge.mjs <projectDir>, the main build agent dispatches each comparison to a fresh subagent, then run it again with --judgements <file>. Publish the canvas after the judge passes, which is why nothing here asks for a canvas record yet.`,
       );
     }
     for (const v of parsed) {

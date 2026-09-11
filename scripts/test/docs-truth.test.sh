@@ -553,6 +553,21 @@ present "explore-stage.md names the record a skipped donor row leaves" \
 present "explore-stage.md says two judgements are owed per pair" \
   "references/explore-stage.md" "two per pair"
 
+# ================= THE TWO TOOL RULINGS, PINNED ==========================================
+# The surveyor WRITES its packet's two files (.palate/explore/refs.json and donor-heroes.json)
+# and saves the reference stills beside them, so a frontmatter of read-only tools describes an
+# agent that cannot do its own step 6 and step 7. The verifier is the opposite ruling: it has
+# no Agent tool on purpose, because the judging subagents must know nothing about this build,
+# so it STATES the comparisons and the main build agent dispatches them.
+matches "palate-surveyor.md may write the packet files it is told to write" \
+  "agents/palate-surveyor.md" "^tools:.*Write"
+absent "palate-verifier.md is not given an Agent tool" \
+  "agents/palate-verifier.md" "tools: Bash, Read, Grep, Glob, Write, mcp__palate, Agent"
+matches "palate-verifier.md's tools line carries no Agent or Task tool" \
+  "agents/palate-verifier.md" "^tools:[^A-Za-z]*\(Bash\|Read\|Grep\|Glob\|Write\|mcp__palate\|, \)*$"
+present "explore-stage.md publishes the canvas only once the judge has passed" \
+  "references/explore-stage.md" "once the board judge"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
