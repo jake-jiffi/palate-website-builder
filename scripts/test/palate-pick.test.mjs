@@ -257,6 +257,32 @@ test("an intensity outside 1 to 4 is refused", async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("--answer records the question round, key by key, and refuses an unknown key", async () => {
+  const dir = project();
+  await run([dir, "--answer", "motion=the column rules draw down over 800ms, nothing loops"]);
+  await run([dir, "--answer", "mix=b2 services list under the b3 hero"]);
+  await run([dir, "--answer", "cms=false, the office edits nothing"]);
+  const m = manifestOf(dir);
+  assert.equal(m.explore.question_round.motion.startsWith("the column rules"), true);
+  assert.equal(m.explore.question_round.mix.startsWith("b2 services"), true);
+  assert.equal(m.explore.question_round.cms, "false, the office edits nothing");
+  assert.ok(m.explore.question_round.answered_at, "answered_at was not stamped");
+
+  const r = await run([dir, "--answer", "colour=red"]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /motion, mix, cms/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("--answer with no key or no value is refused, not silently dropped", async () => {
+  const dir = project();
+  const noValue = await run([dir, "--answer", "motion="]);
+  assert.equal(noValue.status, 1);
+  const noKey = await run([dir, "--answer", "just some text"]);
+  assert.equal(noKey.status, 1);
+  rmSync(dir, { recursive: true, force: true });
+});
+
 // ----------------------------------------------------------------- the canvas read-back
 const seedBoard = (dir, file, body) => writeFileSync(join(dir, ".palate/explore/seed", file),
   `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style>x-dc{display:block}</style></helmet>${body}</x-dc></body></html>`);
