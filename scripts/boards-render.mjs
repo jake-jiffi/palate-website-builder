@@ -96,6 +96,8 @@ const FRAME_GAP = 80;
 
 /** The image types the canvas resolves from a bare filename beside the artboard. */
 const IMG_OK = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
+/** The only external origins the canvas will fetch: Google's stylesheet host and its font host. */
+const GOOGLE_FONTS = /^(https?:)?\/\/fonts\.(googleapis|gstatic)\.com(\/|$)/i;
 /** The tags whose role a class has to name, so the uniqueness gate can read the structure. */
 const BLOCK_TAGS = /^(section|div|header|footer|main|nav|article|aside|ul|ol|li|figure|h[1-6]|p|table|form)$/i;
 
@@ -280,31 +282,55 @@ export function validateArtboard(html, { id, section, dir }) {
     problems.push(`the planned motion must be written on the board as text: one block with class="motion-note" data-palate-motion carrying what moves, when and how it feels (found ${motionText ? JSON.stringify(motionText) : "none"})`);
   }
 
-  for (const m of html.matchAll(/<img\b[^>]*\bsrc=("[^"]*"|'[^']*'|[^\s>]+)/gi)) {
-    const raw = m[1];
-    if (!raw.startsWith('"')) { problems.push(`img src ${raw} must be double-quoted`); continue; }
-    const src = raw.slice(1, -1);
+  /**
+   * ONE RULE FOR EVERY PICTURE ON THE BOARD, whatever named it.
+   *
+   * An `<img src>` and a `background-image: url()` are the same problem to a canvas with no
+   * egress, and they were not checked the same way: a url() was only tested for being remote, so
+   * `url(/img/hero.jpg)` and `url(pics/hero.jpg)` passed validation and then rendered blank. A
+   * hero photograph is usually a background, so that was the commonest picture on a board going
+   * unchecked for existence and for the ceiling.
+   */
+  const asset = (label, src) => {
     if (/^(https?:)?\/\//i.test(src) || src.startsWith("data:")) {
-      problems.push(`img src ${src} is remote or inline; images are bare filenames beside the artboard`);
-      continue;
+      problems.push(`${label} ${src} is remote or inline; images are bare filenames beside the artboard`);
+      return;
     }
-    if (src.includes("/")) { problems.push(`img src ${src} must be a bare filename beside the artboard`); continue; }
-    if (!IMG_OK.test(src)) { problems.push(`img src ${src} is not an image type the canvas resolves`); continue; }
+    if (src.includes("/")) { problems.push(`${label} ${src} must be a bare filename beside the artboard`); return; }
+    if (!IMG_OK.test(src)) { problems.push(`${label} ${src} is not an image type the canvas resolves; other faces travel as @font-face data URIs`); return; }
     const p = join(dir, src);
-    if (!existsSync(p)) problems.push(`img src ${src} is not beside the artboard`);
+    if (!existsSync(p)) problems.push(`${label} ${src} is not beside the artboard`);
     else if (statSync(p).size > MAX_IMAGE_BYTES) {
       problems.push(`${src} is ${Math.round(statSync(p).size / 1024)} KB; the canvas needs every image under 70 KB`);
     }
+  };
+
+  for (const m of html.matchAll(/<img\b[^>]*\bsrc=("[^"]*"|'[^']*'|[^\s>]+)/gi)) {
+    const raw = m[1];
+    if (!raw.startsWith('"')) { problems.push(`img src ${raw} must be double-quoted`); continue; }
+    asset("img src", raw.slice(1, -1));
+  }
+  // A srcset overrides the bare src with a URL the canvas cannot fetch, so a board whose every
+  // src is conforming still renders a broken image and nothing says why.
+  if (/<[a-z][a-z0-9]*\b[^>]*\bsrcset\s*=/i.test(html)) {
+    problems.push("srcset is not allowed on an artboard; it overrides the bare filename with a URL the canvas cannot fetch");
   }
 
   for (const m of html.matchAll(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi)) {
-    const u = m[2];
-    if (/^(https?:)?\/\//i.test(u) && !/fonts\.gstatic\.com|fonts\.googleapis\.com/.test(u)) {
-      problems.push(`css url(${u}) is remote; only Google Fonts may be fetched`);
-    }
+    const u = m[2].trim();
+    // A fragment names an element in this very document (`filter: url(#grain)`), and a data URI
+    // is already here. Neither is a file that has to sit beside the artboard.
+    if (!u || u.startsWith("#") || u.startsWith("data:")) continue;
+    if (GOOGLE_FONTS.test(u)) continue;
+    if (/^(https?:)?\/\//i.test(u)) { problems.push(`css url(${u}) is remote; only Google Fonts may be fetched`); continue; }
+    asset("css url", u);
   }
-  for (const m of html.matchAll(/<link\b[^>]*href=("[^"]*")/gi)) {
-    if (!/fonts\.googleapis\.com/.test(m[1])) problems.push(`link ${m[1]} is not Google Fonts; nothing else may be fetched`);
+  // Google's own embed is three links, and two of them are preconnects to fonts.gstatic.com,
+  // which is where the face files actually come from. Refusing the standard snippet sent an
+  // operator looking for a fault in a board that was correct.
+  for (const m of html.matchAll(/<link\b[^>]*\bhref=("[^"]*"|'[^']*'|[^\s>]+)/gi)) {
+    const href = /^["']/.test(m[1]) ? m[1].slice(1, -1) : m[1];
+    if (!GOOGLE_FONTS.test(href)) problems.push(`link ${href} is not Google Fonts; nothing else may be fetched`);
   }
 
   const blocks = [...html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*)>/gi)].filter((m) => BLOCK_TAGS.test(m[1]));
@@ -327,9 +353,15 @@ export function validateArtboard(html, { id, section, dir }) {
  * It skips the skeleton the editor replaces, and it is idempotent because an element that
  * already carries a key is left exactly as it was. That matters: the seed file is rewritten in
  * place, so a second run must not renumber a board the client is already looking at.
+ *
+ * THE COUNTER STARTS PAST THE HIGHEST KEY ALREADY ON THE BOARD, not at zero. Skipping keyed
+ * elements is not enough on its own: a board keyed k0..k8 that the client then adds a paragraph
+ * to came back with a SECOND k0, so two different elements carried one key and the read-back
+ * would report an edit on whichever it matched first.
  */
 export function stampKeys(html) {
   let i = 0;
+  for (const m of html.matchAll(/\bdata-palate-k="k(\d+)"/g)) i = Math.max(i, Number(m[1]) + 1);
   return html.replace(/<([a-z][a-z0-9-]*)\b([^>]*?)(\/?)>/gi, (whole, tag, attrs, slash) => {
     if (/^(html|head|meta|script|style|helmet|x-dc|body|link|title|br)$/i.test(tag)) return whole;
     if (/\bdata-palate-k=/.test(attrs)) return whole;

@@ -332,6 +332,92 @@ test("a stylesheet from anywhere but Google Fonts is refused", () => {
   assert.match(r.problems.join("\n"), /Google Fonts/);
 });
 
+test("Google's own three-link embed validates, preconnects included", () => {
+  // The standard snippet is a preconnect to fonts.googleapis.com, a crossorigin preconnect to
+  // fonts.gstatic.com (where the face files actually come from) and the stylesheet. Refusing the
+  // gstatic preconnect sent an operator looking for a fault in a board that was correct.
+  const embed = '<link rel="preconnect" href="https://fonts.googleapis.com">'
+    + '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+    + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Simula&display=swap">';
+  const r = validateArtboard(GOOD.replace("</helmet>", `${embed}</helmet>`), { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("a remote stylesheet is refused however its href is quoted", () => {
+  // Matching only href="..." was a false accept: a single-quoted or bare href produced no match
+  // and therefore no problem, on the one rule that says nothing else may be fetched.
+  for (const href of ['"https://cdn.evil.com/x.css"', "'https://cdn.evil.com/x.css'", "https://cdn.evil.com/x.css"]) {
+    const r = validateArtboard(
+      GOOD.replace("</helmet>", `<link rel="stylesheet" href=${href}></helmet>`),
+      { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+    );
+    assert.equal(r.ok, false, `href=${href} was accepted`);
+    assert.match(r.problems.join("\n"), /cdn\.evil\.com.*not Google Fonts/);
+  }
+});
+
+test("a css background is held to the same rules as an img", () => {
+  // A hero photograph is usually a background, not an <img>, so this was the commonest picture
+  // on a board and the only one that was never checked for existence or for the ceiling.
+  const withBg = (url) => GOOD.replace("a{color:#000}", `a{color:#000}.hero{background-image:url(${url})}`);
+  const dir = fixtureDirWith({ "b1-img1.jpg": 1000, "hero.jpg": 1000, "big.jpg": 71 * 1024 });
+
+  const rooted = validateArtboard(withBg("/img/hero.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(rooted.ok, false, "a root-relative background was accepted and renders blank");
+  assert.match(rooted.problems.join("\n"), /bare filename/);
+
+  const nested = validateArtboard(withBg("pics/hero.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(nested.ok, false, "a nested background path was accepted and renders blank");
+  assert.match(nested.problems.join("\n"), /bare filename/);
+
+  const missing = validateArtboard(withBg("gone.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(missing.ok, false);
+  assert.match(missing.problems.join("\n"), /not beside the artboard/);
+
+  const oversized = validateArtboard(withBg("big.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(oversized.ok, false);
+  assert.match(oversized.problems.join("\n"), /70 KB/);
+
+  const good = validateArtboard(withBg("hero.jpg"), { id: "b1", section: "services", dir });
+  assert.equal(good.ok, true, good.problems.join("; "));
+});
+
+test("a fragment url and a data URI are not files that have to exist", () => {
+  // `filter: url(#grain)` names an element in this very document, and grain is a canonical
+  // technique the bold rungs reach for. A face inlined as a data URI is already here.
+  const r = validateArtboard(
+    GOOD.replace("a{color:#000}", "a{color:#000}.hero{filter:url(#grain)}@font-face{font-family:X;src:url(data:font/woff2;base64,AAAA)}"),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("a file the canvas cannot resolve as an image is refused even when it is right there", () => {
+  // It exists, it is small, and it is not a picture. The canvas renders a broken box for it and
+  // says nothing, so the extension is checked rather than assumed from the filename being local.
+  const dir = fixtureDirWith({ "b1-img1.jpg": 1000, "notes.txt": 200, "Simula.woff2": 4000 });
+  const notAnImage = validateArtboard(GOOD.replace("b1-img1.jpg", "notes.txt"), { id: "b1", section: "services", dir });
+  assert.equal(notAnImage.ok, false);
+  assert.match(notAnImage.problems.join("\n"), /not an image type/);
+  // A face beside the artboard is the same refusal: the contract says non-Google faces travel as
+  // @font-face data URIs, because the canvas will not fetch a file it was not handed.
+  const face = validateArtboard(
+    GOOD.replace("a{color:#000}", "a{color:#000}@font-face{font-family:Simula;src:url(Simula.woff2)}"),
+    { id: "b1", section: "services", dir },
+  );
+  assert.equal(face.ok, false);
+  assert.match(face.problems.join("\n"), /not an image type|data URIs/);
+});
+
+test("a srcset is refused, because it overrides the bare filename", () => {
+  const r = validateArtboard(
+    GOOD.replace('<img src="b1-img1.jpg" alt="">', '<img src="b1-img1.jpg" srcset="https://cdn.example.com/x.jpg 2x" alt="">'),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(r.ok, false);
+  assert.match(r.problems.join("\n"), /srcset/);
+});
+
 test("a remote css url() is refused and a Google Fonts one is not", () => {
   const remote = validateArtboard(
     GOOD.replace("a{color:#000}", "a{color:#000}.hero{background-image:url(https://cdn.example.com/h.jpg)}"),
@@ -382,6 +468,24 @@ test("stampKeys gives every element a stable data-palate-k and is idempotent", (
   assert.equal(new Set(keys).size, keys.length, "a key was repeated, which makes two elements the same element");
   assert.ok(!/<(html|head|body|x-dc|helmet|script|style|meta)\b[^>]*data-palate-k/.test(once),
     "the skeleton the editor replaces was keyed, which changes the shape it looks for");
+});
+
+test("a board that gains an element is keyed without repeating a key", () => {
+  // THE COUNTER HAS TO START PAST THE HIGHEST KEY ALREADY THERE. Skipping keyed elements is not
+  // enough: a board keyed k0..k8 that the client adds a paragraph to came back with a SECOND k0,
+  // so two different elements carried one key and the read-back matched whichever it saw first.
+  const once = stampKeys(GOOD);
+  const before = [...once.matchAll(/data-palate-k="([^"]*)"/g)].map((m) => m[1]);
+  const grown = once.replace("</footer>", '<p class="footer-extra">Added on the canvas</p></footer>');
+  const twice = stampKeys(grown);
+  const after = [...twice.matchAll(/data-palate-k="([^"]*)"/g)].map((m) => m[1]);
+
+  assert.equal(after.length, before.length + 1, "the new element was not keyed");
+  assert.equal(new Set(after).size, after.length, `a key was repeated: ${after.join(",")}`);
+  assert.deepEqual(after.slice(0, before.length), before, "the keys the client's canvas was published with were renumbered");
+  assert.match(/<p class="footer-extra"[^>]*data-palate-k="([^"]*)"/.exec(twice)[1], /^k\d+$/);
+  assert.ok(!before.includes(/<p class="footer-extra"[^>]*data-palate-k="([^"]*)"/.exec(twice)[1]),
+    "the added element reused a key that was already on the board");
 });
 
 test("a stamped artboard still validates, so the seed can be rewritten in place", () => {
