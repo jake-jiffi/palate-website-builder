@@ -40,7 +40,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { invokedDirectly } from "./lib/invoked-directly.mjs";
 import { pluginRootRefusal } from "../hooks/project-dir.mjs";
@@ -58,18 +58,45 @@ function readJSON(p) {
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
 }
 
-/** Written through manifest-merge, never by read-modify-write: the hook writes this file too. */
+/**
+ * Written through manifest-merge, never by read-modify-write: the hook writes this file too.
+ *
+ * A FAILED MERGE IS A FAILED RUN. It used to be swallowed, and then the gate printed "Board
+ * judge passed" over a manifest holding no judgements at all, which is the one state
+ * `gate-explore` reads to decide whether the boards were ever compared with anything. The pass
+ * would have been undone by the next gate with nothing saying why.
+ *
+ * Returns an error string, or null when the record landed.
+ */
 function record(projectDir, judgements) {
   const merge = join(HERE, "manifest-merge.mjs");
   const manifest = join(projectDir, "build-manifest.json");
-  if (!existsSync(manifest) || !existsSync(merge)) return;
+  if (!existsSync(manifest) || !existsSync(merge)) return null; // not a tracked build; nothing owed
   const patch = { explore: { board_judgements: judgements } };
   try {
     execFileSync(process.execPath, [merge, "--manifest", manifest, "--set", JSON.stringify(patch)], {
       stdio: ["ignore", "ignore", "pipe"],
     });
-  } catch { /* the record is a record; a merge failure must not wedge the judging */ }
+  } catch (e) {
+    return `${manifest} was not updated (${e && e.message ? e.message.split("\n")[0] : e})`;
+  }
+  /**
+   * READ IT BACK. manifest-merge always exits 0 on purpose (a merge failure must never wedge a
+   * build), so its exit code cannot tell us whether the record landed: an unparseable manifest
+   * is a no-op that reports success. The only honest check is whether the judgements are in the
+   * file afterwards.
+   */
+  const back = readJSON(manifest);
+  const got = Array.isArray(back?.explore?.board_judgements) ? back.explore.board_judgements.map((j) => j?.id) : null;
+  if (!got || got.length !== judgements.length || got.some((id, i) => id !== judgements[i].id))
+    return `${manifest} does not hold the judgements after the merge (is it valid JSON?)`;
+  return null;
 }
+
+/** What the board hero WAS when the comparison was stated. A redraw has to invalidate it. */
+const heroFingerprint = (p) => {
+  try { return createHash("sha256").update(readFileSync(p)).digest("hex").slice(0, 16); } catch { return null; }
+};
 
 export function main(argv = process.argv.slice(2)) {
   const flag = (name) => { const i = argv.indexOf(name); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null; };
@@ -121,15 +148,22 @@ export function main(argv = process.argv.slice(2)) {
       );
 
     const runToken = randomBytes(4).toString("hex");
-    const pairs = boards.map((b) =>
-      buildBoardPair({
+    const pairs = boards.map((b) => ({
+      ...buildBoardPair({
         id: b.id,
         boardPath: join(shotsDir, b.id, "hero.png"),
         donorPath: join(shotsDir, b.id, "donor.jpg"),
         donorSlug: b.donor,
         runToken,
       }),
-    );
+      /**
+       * THE DRAWING THE JUDGE SAW. A request stands on disk after it is written, so a board
+       * redrawn in between (which is exactly what the refusal asks for) would otherwise have
+       * the OLD judgements applied to the NEW hero, and the redraw would be blessed by a
+       * verdict nobody gave it.
+       */
+      board_hero: heroFingerprint(join(shotsDir, b.id, "hero.png")),
+    }));
     mkdirSync(dirname(requestPath), { recursive: true });
     writeFileSync(
       requestPath,
@@ -147,6 +181,33 @@ export function main(argv = process.argv.slice(2)) {
   const request = readJSON(requestPath);
   if (!request || !Array.isArray(request.pairs) || !request.pairs.length)
     return skip(`no comparisons stated yet: run node scripts/gate-board-judge.mjs ${projectDir} first`);
+
+  /**
+   * THE REQUEST MUST STILL DESCRIBE THIS SET OF BOARDS.
+   *
+   * Phase 2 scored `request.pairs` and never looked at the registry it had just parsed, so a
+   * board registered after the request was written was never judged and never missed: the gate
+   * printed "2 board(s) judged" on a three-board Explore and exited 0. Phase 1 refuses a board
+   * with no evidence on disk for the same reason, and this is the same hole one phase along.
+   */
+  const registered = boards.map((b) => b.id);
+  const judgedSet = request.pairs.map((p) => p.id);
+  const same = registered.length === judgedSet.length && registered.every((id, i) => id === judgedSet[i]);
+  if (!same)
+    return skip(
+      `the request is stale: registered boards ${registered.join(", ")} do not match the judged set ` +
+        `${judgedSet.join(", ")}; re-run phase 1`,
+    );
+
+  /**
+   * AND IT MUST STILL DESCRIBE THESE DRAWINGS. A refused board is redrawn, and the standing
+   * request would then hand the old verdicts to a new hero.
+   */
+  for (const p of request.pairs) {
+    if (!p.board_hero) continue; // a request from before the fingerprint existed claims nothing
+    if (heroFingerprint(join(shotsDir, p.id, "hero.png")) !== p.board_hero)
+      return skip(`hero.png for ${p.id} changed since the request was written; re-run phase 1`);
+  }
   const judgements = readJSON(resolve(judgementsFile));
   if (!Array.isArray(judgements)) {
     process.stderr.write(`gate-board-judge: ${judgementsFile} must hold an array of { id, verdict }. NOT a pass.\n`);
@@ -195,7 +256,7 @@ export function main(argv = process.argv.slice(2)) {
     scored.push({ ...s, donor: pair.donor ?? null, run_token: request.runToken, judged_at: judgedAt });
   }
 
-  record(projectDir, scored.map((s) => ({
+  const recordError = record(projectDir, scored.map((s) => ({
     id: s.id,
     donor: s.donor,
     rung: s.rung,
@@ -203,6 +264,11 @@ export function main(argv = process.argv.slice(2)) {
     run_token: s.run_token,
     judged_at: s.judged_at,
   })));
+  if (recordError) {
+    process.stderr.write(`gate-board-judge: the judgements were scored but not recorded: ${recordError}. NOT a pass.\n`);
+    process.exitCode = 2;
+    return;
+  }
 
   const worse = scored.filter((s) => s.rung === "clearly_worse");
   if (worse.length) {

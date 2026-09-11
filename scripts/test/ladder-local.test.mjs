@@ -403,6 +403,16 @@ test('a board pair is the same comparison asked both ways round', () => {
   assert.match(p.question, /how does the candidate compare to the reference/);
 });
 
+test('a board pair with no run token throws rather than minting a weaker one', () => {
+  // The gate always passes eight hex characters. A silent fallback would be a shorter token
+  // minted at the one moment the caller has forgotten the binding, which is when stale
+  // judgements are most likely to be lying about.
+  assert.throws(
+    () => buildBoardPair({ id: 'b1', boardPath: '/tmp/b1/hero.png', donorPath: '/tmp/b1/donor.jpg', donorSlug: 'aesop' }),
+    /run token/i,
+  );
+});
+
 test('both board comparison ids carry the run token, so yesterday judgements cannot score today board', () => {
   const p = pair('b1', 'deadbeef');
   assert.equal(p.comparisons[0].id, 'b1:board-first@deadbeef');

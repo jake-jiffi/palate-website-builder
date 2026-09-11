@@ -152,7 +152,7 @@ test('a partial judgements file cannot pass: every comparison must come back', (
   const r = judge(dir, answers(req).slice(0, 3));
   assert.equal(r.code, 2);
   assert.ok(!skipped(r), 'an incomplete judgement set is a failure, not a skip');
-  assert.match(r.err, /4/, 'it says how many judgements it wanted');
+  assert.match(r.err, /3 judgement\(s\) returned for 2 board\(s\), which needs 4/, 'it says how many judgements it wanted');
 });
 
 test('no donor hero on disk is a SKIP naming what to run first, never a pass', (t) => {
@@ -176,4 +176,55 @@ test('PALATE_GATE_JUDGE=0 releases it, and says that is why', (t) => {
   const r = run(dir, [], { PALATE_GATE_JUDGE: '0' });
   assert.ok(skipped(r));
   assert.match(r.err, /PALATE_GATE_JUDGE=0/);
+});
+
+test('a board registered after the request was written is a STALE request, not a silent pass', (t) => {
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  const req = request(dir);
+  const js = answers(req);
+  // The third board arrives after the comparisons were stated, which is what an ordinary Explore
+  // round looks like. Scoring the request alone would report "2 board(s) judged" over three.
+  writeFileSync(
+    join(dir, 'src', 'lib', 'variants.ts'),
+    VARIANTS.replace('\n];', `,
+  { id: "b3", name: "The Third", artboard: "B3.dc.html", ambition: 3, what: "w", why: "y", feeling: "f", donor: "aesop", section: "s", motion: "m", ctas: ["a", "b"] },
+];`),
+  );
+  const shots = join(dir, '.palate', 'explore', 'shots', 'b3');
+  mkdirSync(shots, { recursive: true });
+  writeFileSync(join(shots, 'hero.png'), PNG);
+  writeFileSync(join(shots, 'donor.jpg'), JPEG);
+  const r = judge(dir, js);
+  assert.ok(skipped(r), `expected a stale-request skip, got ${r.code}: ${r.err}${r.out}`);
+  assert.match(r.err, /the request is stale: registered boards b1, b2, b3 do not match the judged set b1, b2; re-run phase 1/);
+});
+
+test('a board REDRAWN after the request cannot be blessed by the old judgements', (t) => {
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  const req = request(dir);
+  const js = answers(req);
+  // Exactly what a refusal asks for: b2 is redrawn. The standing request would otherwise apply
+  // verdicts nobody gave to a drawing nobody judged.
+  writeFileSync(join(dir, '.palate', 'explore', 'shots', 'b2', 'hero.png'), Buffer.concat([PNG, Buffer.from('redrawn')]));
+  const r = judge(dir, js);
+  assert.ok(skipped(r), `expected a redraw skip, got ${r.code}: ${r.err}${r.out}`);
+  assert.match(r.err, /hero\.png for b2 changed since the request was written; re-run phase 1/);
+});
+
+test('judgements that could not be recorded are not a pass', (t) => {
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  const req = request(dir);
+  // A manifest the merge cannot write is the one state where "Board judge passed" used to be
+  // printed over a record gate-explore would then read as "never judged".
+  writeFileSync(join(dir, 'build-manifest.json'), '{ not json at all');
+  const r = judge(dir, answers(req));
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.err, /scored but not recorded/);
+  assert.match(r.err, /build-manifest\.json/);
 });

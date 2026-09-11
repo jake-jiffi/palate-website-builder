@@ -338,7 +338,15 @@ export function buildBoardPair({ id, boardPath, donorPath, donorSlug, runToken }
   if (!id) throw new Error('buildBoardPair: no board id');
   if (!boardPath) throw new Error(`buildBoardPair: ${id} has no board hero`);
   if (!donorPath) throw new Error(`buildBoardPair: ${id} has no donor hero`);
-  const token = runToken ?? Math.random().toString(36).slice(2, 10);
+  /**
+   * NO DEFAULT TOKEN. The site ladder tolerates one because it predates the binding; here the
+   * only caller is the gate, which mints eight hex characters per run. A silent fallback would
+   * be a SHORTER, weaker token (Math.random can yield fewer characters) minted at the one moment
+   * a caller has forgotten the binding, which is precisely when yesterday's judgements are most
+   * likely to be lying around.
+   */
+  if (!runToken) throw new Error(`buildBoardPair: ${id} has no run token (judgements must be bound to the run they were written for)`);
+  const token = runToken;
   return {
     id,
     donor: donorSlug ?? null,
