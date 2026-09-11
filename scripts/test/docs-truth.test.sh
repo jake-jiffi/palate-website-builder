@@ -453,6 +453,40 @@ saysline "an ungated line still says it is not a grade" "$UNGATED" "(not a grade
 notline "the score does not lead the line" "$CLEARS" "build hygiene 92/100"
 notline "and the ungated line does not claim a pass" "$UNGATED" "clears the"
 
+# ============ 8. EXPLORE IS DRAWN, NOT BUILT ============================================
+# Explore V3 made every board a real Astro route. It is now a hand-authored Claude Design
+# artboard under `.palate/explore/seed/`, there is no `/boards/*` route to open, and the
+# components that framed a board page (`BoardFrame`, `BoardNotes`, `SectionMark`,
+# `ExploreSwitcher`) no longer ship. Doctrine that still sends a builder to write a board page
+# sends them to write Astro nothing will ever serve, and the boards-are-Astro claim is exactly
+# the one that cost a real build forty minutes before anything was shown.
+present "SKILL.md A.4 names the artboard the board actually is" \
+  "SKILL.md" ".palate/explore/seed/B<rung>.dc.html"
+present "SKILL.md A.4 calls a board an artboard" \
+  "SKILL.md" "artboard"
+absent "SKILL.md no longer routes boards under src/pages/boards" \
+  "SKILL.md" "src/pages/boards"
+absent "SKILL.md no longer wraps board sections in SectionMark" \
+  "SKILL.md" "SectionMark"
+absent "explore-stage.md no longer sends anyone to a /boards/ route" \
+  "references/explore-stage.md" "/boards/"
+present "explore-stage.md names the mark every kit section carries on a board" \
+  "references/explore-stage.md" "data-section-id"
+present "explore-stage.md says the motion is written on the board" \
+  "references/explore-stage.md" "data-palate-motion"
+# The canvas is published or declined, never silently absent: gate-explore.mjs blocks a shown
+# build whose manifest records neither, so the doctrine has to name both shapes.
+present "explore-stage.md records a published canvas" \
+  "references/explore-stage.md" "explore.canvas = { url }"
+present "explore-stage.md records a declined canvas" \
+  "references/explore-stage.md" "skipped: true, reason"
+# The question round is a real refusal in gate-done.sh, so the command that answers it is named
+# where the pick is recorded.
+present "pick.md names the question round flags" \
+  "commands/pick.md" "--answer motion="
+present "explore-stage.md names the question round" \
+  "references/explore-stage.md" "question_round"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
