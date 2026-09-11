@@ -32,7 +32,11 @@ public/_explore/b1-hero.png
 .palate/explore/seed/canvas.json
 .palate/explore/seed/README.md
 .palate/explore/seed/Ref1.dc.html
-.palate/explore/seed/ref1.jpg"
+.palate/explore/seed/ref1.jpg
+.palate/explore/seed/D1.dc.html
+.palate/explore/seed/d1-hero.jpg
+.palate/explore/judge-request.json
+.palate/explore/judgements.json"
 
 # MEASURED state in the same directories. Ignoring these is the opposite failure: the
 # adoption record and the baselines are judgement, and cannot be recomputed.
@@ -45,6 +49,7 @@ KEEP=".palate/adoption/report.json
 .palate/assets.json
 .palate/explore/seed/B1.dc.html
 .palate/explore/seed/b1-hero.jpg
+.palate/explore/donor-heroes.json
 public/logo.png"
 
 # ============ 1. THE WORKSPACE LAYOUT: the script writes the rules at the repo root ========

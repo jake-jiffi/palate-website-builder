@@ -57,8 +57,9 @@ onto `/explore` and the canvas.
    One distinct donor per rung.
 
    **THE DRAWING BRIEF - DRAW FROM THE DONOR, NOT FROM ITS NAME.** Before rung N
-   is drawn, read `.palate/explore/donor-heroes.json[N]` (the surveyor writes it,
-   `agents/palate-surveyor.md`) and the kit's grounding for the pieces that
+   is drawn, read the entry in `.palate/explore/donor-heroes.json` whose `rung`
+   is N (the surveyor writes the file, `agents/palate-surveyor.md`; it is a list
+   keyed by `rung`, not an array you index) and the kit's grounding for the pieces that
    rung's rhythm uses (`src/lib/kit-grounding.ts`). The entry carries the donor's
    `hero_url`, its `signature_move`, the `component_prompts` and `do_dont` lines
    the board will reproduce, and its `copy_voice`. Draw FROM that hero:
@@ -68,9 +69,15 @@ onto `/explore` and the canvas.
    habit puts it. THEN re-skin to the LOCKED brand. The registry `why` names what
    this rung took from the donor, in those terms, because a `why` that could have
    been written without opening the reference is the tell that the reference was
-   never opened. A rung whose donor has no entry in that file is a board drawn
-   from a slug, and `boards-render.mjs` refuses it rather than drawing half a
-   donor row.
+   never opened. **WHEN THE DONOR ROW RUNS, a registered board whose rung has no
+   entry in that file is a refusal**: `boards-render.mjs` names the rung and
+   writes nothing, rather than drawing half a donor row. It is only a refusal
+   when the row runs. With no `donor-heroes.json` there at all the run records
+   `explore.donor_row = { skipped: true, reason }` and draws the boards without
+   their donors, which is the honest record of a survey that never named them and
+   is NOT a path a build held to the stunning standard should ever take: no board
+   sits beside the reference it reproduces, and the board judge then has nothing
+   to compare and skips.
 
    **THE ARTBOARD CONTRACT.** `scripts/boards-render.mjs` holds every board to
    it and names every fault ON THAT BOARD in one pass, then stops at the first
@@ -134,20 +141,42 @@ onto `/explore` and the canvas.
 
    **AND YOUR EYE IS THE FIRST PASS, NEVER THE GATE. THE GATE IS THE DONOR
    COMPARISON.** Every board is judged against the one thing it has to answer to,
-   the library reference it was drawn from, by
-   `node scripts/gate-board-judge.mjs <project-dir>` (the verifier runs it, step
-   2c of `agents/palate-verifier.md`). Each board's entrance still is compared
-   with its donor's hero on four rungs, `clearly_worse`, `somewhat_worse`,
-   `comparable`, `better`, both ways round, and the LOWER of the two readings
-   stands. **A board read `clearly_worse` than its donor is refused, at EVERY
+   the library reference it was drawn from. **YOU RUN THIS, in your own session,
+   because the judging happens in subagents and the verifier has no Agent tool**
+   (the same division as the site ladder, `references/local-grade.md`). The
+   verifier states the comparisons and hands you the request path; the four steps
+   are yours:
+
+   1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <project-dir>`
+      writes `<project-dir>/.palate/explore/judge-request.json`: the fixed
+      `question`, the four `rungs` (`clearly_worse`, `somewhat_worse`,
+      `comparable`, `better`) and, per board, TWO comparisons, the same pair with
+      the images swapped.
+   2. **Dispatch ONE FRESH general-purpose subagent per comparison**, never two
+      comparisons in one context. Give it NOTHING about this build: the two image
+      paths (`A` and `B`), the `question` verbatim, the four rung ids, and
+      "answer with the comparison id and one rung id, nothing else". The swap is
+      the position-bias control, so a subagent that has already seen the other
+      ordering is agreeing with itself rather than judging, and one that knows
+      which image you drew is not judging either.
+   3. Collect the answers into `<project-dir>/.palate/explore/judgements.json` as
+      `[{ id, verdict }]`, two per pair, each `id` copied verbatim.
+   4. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <project-dir>
+      --judgements <project-dir>/.palate/explore/judgements.json` takes the LOWER
+      of the two readings, records `manifest.explore.board_judgements`, and exits
+      2 naming any board read `clearly_worse`. **Report its stderr verbatim**, and
+      publish the canvas only once it passes.
+
+   **A board read `clearly_worse` than its donor is refused, at EVERY
    intensity**: a calm brand is not a reason to hand someone a weak drawing, and
    the visual rubric every board already clears measures hygiene, which is how
-   five boards scored 25 to 28 out of 30 and were bland. A refused board is
-   redrawn from the donor's hero, re-rendered and judged again before the canvas
-   is published, on the same three-attempts-then-drop-the-rung rule as the rest
-   of this gate. `scripts/gate-explore.mjs` blocks a shown build whose registered
-   boards carry no judgement or carry `clearly_worse`, so a board cannot reach a
-   client by being judged late. `PALATE_GATE_JUDGE=0` releases both.
+   five boards scored 25 to 28 out of 30 and were bland. A refused board goes back
+   to the drawing step, redrawn from the donor's hero, re-rendered, and judged
+   from step 1 again (a redrawn `hero.png` makes the standing request stale and the
+   gate says so); three attempts, then the rung is dropped rather than shown.
+   `scripts/gate-explore.mjs` blocks a shown build whose registered boards carry no
+   judgement or carry `clearly_worse`, so a board cannot reach a client by being
+   judged late. `PALATE_GATE_JUDGE=0` releases both.
 
    As each board is registered, it is also recorded in `build-manifest.json`
    under `explore.shown` (`{ id, name, donor_slug, position }`) so
@@ -158,9 +187,12 @@ onto `/explore` and the canvas.
    {audience}, with a {vibe} language, leaning toward {design direction}." A
    board whose Design Read is generic or missing is rejected and redrawn.
    Read `~/.config/palate/builds.log.json` (see `references/build-memory.md`)
-   and exclude any hero pattern used in the last 3 Palate builds and any
+   and exclude any DONOR used in the last 3 Palate builds (`explore.shown[].donor_slug`,
+   which `boards-render.mjs` writes on every canvas-first build) and any
    macrostructure used in the last 5 - the board set actively diversifies
-   away from recent work. ALSO run `node scripts/taste-profile.mjs --variants N`
+   away from recent work. The rule used to be stated on a hero pattern, which
+   `recordShown` has not written since Explore started drawing artboards, so it
+   could never fire. ALSO run `node scripts/taste-profile.mjs --variants N`
    and BIAS the set toward the operator's kept choices (its `summary`), while
    spending the returned `explorationBudget` on directions OUTSIDE the profile -
    bias, never pin (`references/build-memory.md`, "The positive taste profile").

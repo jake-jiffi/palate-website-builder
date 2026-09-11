@@ -11,10 +11,9 @@ read is a judgement that must be grounded in the pixels and the rubric. Never pa
 build to be polite; a near-miss is a fail with the fix named.
 
 **Run in a fresh context every time; do not reuse the building agent's context - you
-are the independent check.** You have `Write` for TWO artefacts only: `verify-report.json`
-at the project root (the computed-evidence artefact the done-gate reads) and
-`.palate/explore/judgements.json` (the board judge's answers, step 2c). Do not write or
-edit any source file - you gate, you do not build.
+are the independent check.** You have `Write` for ONE purpose only: to emit
+`verify-report.json` at the project root (the computed-evidence artefact the done-gate
+reads). Do not write or edit any source file - you gate, you do not build.
 
 ## First: read the build's brand mode (it makes the type checks mode-aware)
 
@@ -74,37 +73,35 @@ never held to the bold bar.
    from, at EVERY intensity - the visual rubric a board already clears measures hygiene, and
    a board can clear it and still be bland):
 
-   1. `node scripts/gate-board-judge.mjs <projectDir>`. It writes
-      `.palate/explore/judge-request.json` and prints its path. A first stderr line reading
-      `gate-board-judge: skipped (<reason>)` with exit 2 is a SKIP, never a block and never a
-      pass: report the reason. The commonest is a board with no `hero.png` or no `donor.jpg`
-      on disk, which means `node scripts/boards-render.mjs <projectDir>` has not run with
-      `.palate/explore/donor-heroes.json` present, and the skip names that.
-   2. Read the request. It carries `question`, the four `rungs` (`clearly_worse`,
-      `somewhat_worse`, `comparable`, `better`) and, per board, TWO `comparisons`, the same
-      pair with the images swapped. **Dispatch each comparison to a FRESH subagent, one per
-      comparison, never two in one context.** Give that subagent NOTHING about this build: the
-      two image paths (`A` and `B`), the `question` verbatim, and the four rung ids, and ask it
-      to answer with ONE rung id. The swap is the position-bias control, so a subagent that has
-      already seen the other ordering is agreeing with itself rather than judging, and a
-      subagent that knows which image you drew is not judging either.
-   3. Collect the answers into `.palate/explore/judgements.json` as
-      `[{ id, verdict }]`, one entry per comparison, the `id` copied verbatim from the request.
-      This is the one file you may write besides `verify-report.json`.
-   4. `node scripts/gate-board-judge.mjs <projectDir> --judgements .palate/explore/judgements.json`.
-      It takes the LOWER rung when the two orders disagree, records every judgement in
-      `manifest.explore.board_judgements`, and exits 2 naming any board read `clearly_worse`
-      than its donor. It also refuses a request that no longer describes these boards (one
-      registered since, or a hero redrawn since), and the fix there is to re-run step 1.
-      **Report its stderr verbatim.**
+   **YOU STATE THE COMPARISONS; YOU DO NOT JUDGE THEM AND YOU DO NOT RUN THEM.** You have no
+   Agent tool, and the judging has to happen in subagents that know nothing about this build,
+   so it belongs to the main build agent in its own session, exactly as the site ladder's
+   comparisons do (`references/local-grade.md`).
 
-   A board judged clearly worse goes BACK TO THE DRAWING STEP: it is redrawn from the donor's
-   hero (`.palate/explore/donor-heroes.json`, `references/explore-stage.md`), re-rendered with
-   `boards-render.mjs`, and judged again from step 1. Three attempts, then the rung is dropped
-   rather than shown. **The canvas is not published, and no board reaches the client, until
-   every registered board has passed**; `gate-explore.mjs` blocks a shown build whose boards
-   carry no judgement or carry `clearly_worse`. `PALATE_GATE_JUDGE=0` releases the whole check,
-   and a build that set it is reported as released, never as passed.
+   1. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <projectDir>`. It writes
+      `<projectDir>/.palate/explore/judge-request.json` and prints its path. A first stderr line
+      reading `gate-board-judge: skipped (<reason>)` with exit 2 is a SKIP, never a block and
+      never a pass: report the reason. The commonest is a board with no `hero.png` or no
+      `donor.jpg` on disk, which means `node "${CLAUDE_PLUGIN_ROOT}/scripts/boards-render.mjs"
+      <projectDir>` has not run with `<projectDir>/.palate/explore/donor-heroes.json` present,
+      and the skip names that.
+   2. **Hand the request path back in your report, and say what is owed on it.** The request
+      carries `question`, the four `rungs` (`clearly_worse`, `somewhat_worse`, `comparable`,
+      `better`) and, per board, TWO `comparisons`, the same pair with the images swapped, so the
+      main agent owes two judgements per pair, one fresh general-purpose subagent each, collected
+      into `<projectDir>/.palate/explore/judgements.json` as `[{ id, verdict }]` and scored by
+      `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <projectDir> --judgements
+      <projectDir>/.palate/explore/judgements.json` before the canvas is published. The
+      procedure is `references/explore-stage.md`; do not run it here.
+   3. **On your NEXT round, the judgements are already a fact and you read them as one.**
+      `node scripts/gate-explore.mjs <projectDir>` (step 2b) blocks a shown build whose
+      registered boards have no entry in `manifest.explore.board_judgements` or carry
+      `clearly_worse`, which is where a board that was never compared, or was compared and
+      lost, becomes a refusal. Report those findings verbatim: the fix is a redraw from the
+      donor's hero, not an argument.
+
+   `PALATE_GATE_JUDGE=0` releases the judge and that half of the Explore gate, and a build that
+   set it is reported as RELEASED, never as passed.
 
 3. **Anti-default / slop lint** (no Claude-default shapes or AI-tell copy):
    `bash scripts/ux-lint.sh <built file(s)>` and read `references/anti-patterns.md` (and
