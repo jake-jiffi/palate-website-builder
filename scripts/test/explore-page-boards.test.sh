@@ -153,7 +153,11 @@ const req = createRequire(process.argv[1] + "/scripts/reference-capture/");
 const sharp = req("sharp");
 const out = process.argv[2];
 (async () => {
-  for (const [name, w, h] of [["ref1.jpg",720,450],["ref2.jpg",720,450],["ref3.jpg",720,450]]) {
+  // The donor heroes too: boards-render writes `<id>-donor.jpg` beside every board still, and
+  // the card renders it whenever the registry names a donor. A real JPEG rather than a PNG under
+  // a .jpg name, so the browser pass measures the picture the client actually gets.
+  for (const [name, w, h] of [["ref1.jpg",720,450],["ref2.jpg",720,450],["ref3.jpg",720,450],
+                              ["b1-donor.jpg",720,450],["b2-donor.jpg",720,450]]) {
     const buf = await sharp({ create: { width: w, height: h, channels: 3, background: { r: 236, g: 233, b: 222 } } })
       .jpeg().toBuffer();
     require("node:fs").writeFileSync(out + "/" + name, buf);
@@ -211,6 +215,11 @@ has "the notes carry what moves"              'What moves'
 has "the motion plan is the registry's"       'the photograph fades in once it is scrolled to'
 has "the CTA options are offered"             'Book a first visit / Ask a question'
 has "the donor travels"                       'the-modern-house'
+# THE DONOR SITS BESIDE THE BOARD. A rung claims it reproduces a library reference; without its
+# hero on the page that claim is a slug in a registry the client never opens.
+has "the b1 card shows its donor's hero"      'src="/_explore/b1-donor.jpg"'
+has "the b2 card shows its donor's hero"      'src="/_explore/b2-donor.jpg"'
+has "the donor still is captioned"            'Drawn from the-modern-house'
 
 # --- the calibration row, above the ladder ----------------------------------------------
 has "the calibration question is asked"       'how bold you want to be'
