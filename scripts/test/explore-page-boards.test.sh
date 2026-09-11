@@ -71,7 +71,20 @@ export const variants: Variant[] = [
     ctas: ["See the work", "Start a project"],
   },
 ];
-export const landingVariants: Variant[] = [];
+// A LANDING BOARD IS SHOWN ON THE CANVAS ONLY. boards-render draws the ladder's rungs and
+// nothing else, so /explore must not offer a still for one: the card used to link
+// /_explore/lp1.png, which nothing ever writes.
+export const landingVariants: Variant[] = [
+  {
+    id: "lp1", name: "The Straight Offer", artboard: "LP1.dc.html", ambition: 1,
+    what: "One promise, one form, nothing else on the page.",
+    why: "The click was paid for, so the page owes the visitor exactly what the ad said.",
+    feeling: "direct, unembarrassed",
+    donor: "attentive", section: "cta",
+    motion: "Nothing moves until the form is answered.",
+    ctas: ["Get a price", "Ask a question"],
+  },
+];
 export function byAmbition(list: Variant[]): Variant[] {
   return [...list].sort((a, b) => (a.ambition ?? 0) - (b.ambition ?? 0));
 }
@@ -128,6 +141,10 @@ function pngFixture(w, h) {
 
 writeFileSync(out + "/b1.png", pngFixture(1440, 900));
 writeFileSync(out + "/b2.png", pngFixture(1440, 900));
+// The WHOLE board, which is what the card links open. boards-render writes both, and the card
+// image stays the 1440x900 entrance.
+writeFileSync(out + "/b1-full.png", pngFixture(1440, 2400));
+writeFileSync(out + "/b2-full.png", pngFixture(1440, 2400));
 ' "$SITE/public/_explore" || { echo "explore-page-boards: could not write the board stills. NOT a pass." >&2; exit 2; }
 
 node -e '
@@ -177,13 +194,19 @@ has "board b1 shows its entrance"            'data-board-shot="b1"'
 has "board b2 shows its entrance"            'data-board-shot="b2"'
 has "the b1 card image is the rendered still" '/_explore/b1.png'
 has "the b2 card image is the rendered still" '/_explore/b2.png'
-has "each card links to its own still"        'href="/_explore/b1.png"'
+has "each card links to the whole board"     'href="/_explore/b1-full.png"'
 # Anchored to the specific element, not just "the string appears somewhere": several sites on
 # the page render the same href for the same id, so a bare substring check cannot tell one
 # broken site from five correct ones. This one catches exactly the b1 card image link.
-has "the b1 card image anchor carries the still's own href" \
-  '<a class="ex-shot" href="/_explore/b1.png" data-board-shot="b1"'
+# It opens `-full.png`, never the card image. `<id>.png` is the top 900px, which is what the
+# fidelity gate measures and the right size for a card; behind a link promising the board it is
+# the entrance again with everything below it cut off.
+has "the b1 card image anchor opens the whole board" \
+  '<a class="ex-shot" href="/_explore/b1-full.png" data-board-shot="b1"'
 hasnt "no route under /boards/ exists"        '/boards/'
+# The landing card is shown on the canvas and has no still on this page, so it must not link one.
+has "the landing board is listed"             'The Straight Offer'
+hasnt "the landing card links no still nothing draws" '/_explore/lp1.png'
 has "the notes carry what moves"              'What moves'
 has "the motion plan is the registry's"       'the photograph fades in once it is scrolled to'
 has "the CTA options are offered"             'Book a first visit / Ask a question'

@@ -107,12 +107,20 @@ const BADGE = '<span data-palate-mark data-section-id="b1-hero" style="font-fami
  * picked (fixed at #2f5d50 throughout this file; the home's own accent is what each test
  * varies).
  */
-function boardArtboard() {
+/**
+ * `heroWrap` re-roots the hero on another tag. A marked root is a sectioning element on a board
+ * boards-render will accept, and this gate must still measure one that is not: the scaffolding
+ * sweep hid `[data-section-id]:not(section)` with no exclusion for the hero itself, so a
+ * div-rooted hero was the one element the whole comparison is scoped to, hidden.
+ */
+const asDiv = (markup) => markup.replace("<section ", "<div ").replace("</section>", "</div>");
+
+function boardArtboard(heroWrap = (x) => x) {
   return "<!doctype html><html><head><meta charset=\"utf-8\">" +
     "<script src=\"./support.js\"></script></head><body><x-dc>" +
     "<helmet><style>a{color:#000}a:hover{color:#333}</style></helmet>" +
     "<header class=\"nav\" data-section-id=\"b1-navigation\"><a class=\"nav-logo\" href=\"#\">Eastcoast</a><a class=\"nav-cta\" href=\"#\">Ring</a></header>" +
-    HERO('data-section-id="b1-hero"', BADGE, '<img src="b1-img1.jpg" alt="">').replace("ACCENT", "#2f5d50") +
+    heroWrap(HERO('data-section-id="b1-hero"', BADGE, '<img src="b1-img1.jpg" alt="">')).replace("ACCENT", "#2f5d50") +
     SERVICES('data-section-id="b1-services"') +
     '<aside class="motion-note" data-palate-motion="">On load the column rules draw down over 800ms on one curve, then hold; nothing loops.</aside>' +
     '<section class="cta" data-section-id="b1-cta"><a class="cta-btn" href="#">Book</a></section>' +
@@ -130,11 +138,11 @@ function boardArtboard() {
  * an honest build lands, so a fixture that is not visually related to that would fail the
  * gate's own 0.85 floor on every honest build and the drift tests would prove nothing.
  */
-async function writeBoardFixture() {
+async function writeBoardFixture(heroWrap = (x) => x) {
   const shotsDir = join(SITE, ".palate/explore/shots/b1");
   mkdirSync(shotsDir, { recursive: true });
   const renderedPath = join(shotsDir, "rendered.html");
-  writeFileSync(renderedPath, boardArtboard());
+  writeFileSync(renderedPath, boardArtboard(heroWrap));
   writeFileSync(join(shotsDir, "b1-img1.jpg"), Buffer.alloc(1024, 0xaa));
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   try {
@@ -148,7 +156,7 @@ async function writeBoardFixture() {
 
 /**
  * A minimal static file server, just enough to prove a relative image resolves when the
- * board's own directory is the origin — the exact thing this task changed gate-fidelity.mjs
+ * board's own directory is the origin, the exact thing this task changed gate-fidelity.mjs
  * to rely on (serving `shots/<id>/` itself rather than the build's `dist/`). Not a stand-in
  * for the gate's own server; a separate, independent check of the same fact.
  */
@@ -188,12 +196,12 @@ const BELOW = `
   <p style="font-family:'Courier New',monospace;font-size:15px;line-height:1.6;color:#1c1b19">A band the board never had, in a face the board never set, close enough to the top of the page to sit inside any fold-shaped window somebody might reach for.</p>
 </section>`;
 
-const homePage = (accent) => `---
+const homePage = (accent, heroWrap = (x) => x) => `---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { business } from "../lib/business";
 ---
 <BaseLayout title={business.name}>
-  <Fragment set:html={${JSON.stringify(HERO('data-palate-section="b1-hero"'))}.replace("ACCENT", ${JSON.stringify(accent)})} />
+  <Fragment set:html={${JSON.stringify(heroWrap(HERO('data-palate-section="b1-hero"')))}.replace("ACCENT", ${JSON.stringify(accent)})} />
   <Fragment set:html={${JSON.stringify(BELOW)}} />
   <Fragment set:html={${JSON.stringify(SERVICES('data-palate-section="b1-services"'))}} />
 </BaseLayout>
@@ -312,6 +320,34 @@ test("the hero is found by name when the board opens with navigation", async (t)
   assert.match(r.stdout, /hero b1-hero/, "the gate names the navigation, not the hero, as the picked hero");
 });
 
+test("a hero marked on a div is measured, and its structure is still compared", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // THE SCAFFOLDING SWEEP USED TO HIDE THE HERO ITSELF. `[data-section-id]:not(section)` is
+  // aimed at the SectionMark badge inside a hero, and it matches a hero root that is a `<div>`
+  // (or a `<header>`), so the one element the comparison is scoped to was set to
+  // `visibility: hidden` and the board measured as setting no type and no accent at all: an
+  // honest build then failed on "the board sets [nothing]". The second half is quieter still:
+  // `sectionMarkup` walked back to the nearest `<section`, which on a div-rooted hero returns
+  // the previous section or nothing, and a null there skips the skeleton comparison in silence.
+  await writeBoardFixture(asDiv);
+  writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50", asDiv));
+  build();
+  writeManifest([{ surface: "hero", variant_id: "b1", rung: 1, position: 1, picked_at: new Date().toISOString() }]);
+  const r = await run([SITE, "--port", String(PORT)]);
+  const said = `${r.stdout}\n${r.stderr}`;
+  assert.doesNotMatch(said, /the board sets \[nothing\]/,
+    `the div-rooted hero was hidden, so the board measured as setting nothing:\n${said}`);
+  assert.equal(r.status, 0, `an honest build whose hero root is a div should pass:\n${said}`);
+  assert.match(r.stdout, /hero b1-hero/, "the gate does not name the div-rooted hero it scoped to");
+  // The skeleton check RAN, rather than returning null and passing over itself.
+  assert.match(r.stdout, /matches the board's structure at/,
+    `the section skeleton comparison was skipped on a div-rooted hero:\n${said}`);
+
+  await writeBoardFixture();
+  writeFileSync(join(SITE, "src/pages/index.astro"), homePage("#2f5d50"));
+  build();
+});
+
 test("the board's own image resolves when its own directory is the origin", async (t) => {
   if (!ready) return t.skip(skipReason);
   // The point of serving the board from `shots/<id>/` rather than `dist/` (this task): the
@@ -416,7 +452,7 @@ test("a mid-run refusal (--serve to a dead port, no dist) exits cleanly with no 
   // code and process.exit(2) restored, polling `ps` for this suite's own chromium subprocess):
   // on this platform Playwright's chromium is launched over a debugging PIPE, and it exits on
   // its own within about a second of that pipe closing, whichever way the parent died. So an OS
-  // process-listing check cannot tell the two implementations apart here — it would pass either
+  // process-listing check cannot tell the two implementations apart here: it would pass either
   // way and give false confidence. What IS deterministic, and is asserted directly below, is
   // that `cannotCheckMidRun` itself no longer calls `process.exit()`; that is the actual
   // behaviour the mutation check restores and this suite protects. This test keeps the

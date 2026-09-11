@@ -10,7 +10,7 @@
  * expensive thing about the ladder is then wasted, and the restrained rung in particular reads
  * as "the boring one" rather than as one deliberate end of a span.
  *
- * So this gate holds six things that are easy to skip and impossible to notice missing:
+ * So this gate holds seven things that are easy to skip and impossible to notice missing:
  *
  *   1. THE COACHING PAGE EXISTS. `src/pages/explore.astro` is what says what happened, draws
  *      the ladder, and tells the client what to do next (react, mix across rungs, ask for
@@ -24,18 +24,23 @@
  *   3. THE LADDER IS REAL. Every rung carries a distinct `ambition`, and they run 1..N with no
  *      gaps, because a set that is all rung 1 or has three rung 4s is a bag wearing a ladder's
  *      labels.
- *   4. THE ARTBOARD EXISTS AND THE MOTION IS WRITTEN. A registered `artboard` with no file
- *      under `.palate/explore/seed/` is a rung the canvas cannot draw, and a board is mostly a
- *      STILL: a direction whose motion plan was never written is chosen with its most expensive
- *      property invisible. A `motion` that restates `what` is that field filled in rather than
- *      thought about.
+ *   4. THE ARTBOARD IS THE RUNG'S OWN, EXISTS, AND THE MOTION IS WRITTEN. `artboard` must be
+ *      exactly `B<rung>.dc.html`, because `/pick --canvas` derives that name from the rung and
+ *      a board naming any other file has its client edits read back from somewhere else. A
+ *      registered file that was never drawn is a rung the canvas cannot draw, and a board is
+ *      mostly a STILL: a direction whose motion plan was never written is chosen with its most
+ *      expensive property invisible. A `motion` that restates `what` is that field filled in
+ *      rather than thought about.
  *   5. THE SET IS A SET. One distinct donor per rung, because five boards drawn from one
  *      reference are one idea wearing five skins, and two or three CTA labels per board,
  *      because one is a guess and four is a survey.
  *   6. A SHOWN CANVAS WAS PUBLISHED OR DECLINED. Once `explore.shown_at` is recorded,
  *      `explore.canvas` must say what happened to it: a published `{ url }`, or a declined
  *      `{ skipped: true, reason }`. Silence reads as "the client never got to see a canvas at
- *      all", which is worse than either honest outcome.
+ *      all", which is worse than either honest outcome. `/pick --canvas-url <url>` and
+ *      `/pick --canvas-skipped "<reason>"` are what write it.
+ *   7. A BOLD BRIEF HAS A REAL LADDER. Three rungs is the floor on a high-intensity brief,
+ *      because below three there is no "between" for a client to point at.
  *
  * ============================ FAIL-OPEN, ALWAYS ============================
  *
@@ -263,8 +268,15 @@ for (const o of entries) {
   // ------------------------------------------- 4. the artboard exists (the board IS the file)
   if (!artboard) {
     add(`${id} has no artboard`, `every board names its file, e.g. artboard: "B${ambition ?? 1}.dc.html". Without it nothing can be drawn on the canvas or shown on /explore.`);
-  } else if (!/^B\d+\.dc\.html$/.test(artboard)) {
-    add(`${id} names an artboard outside the convention`, `artboard must be B<rung>.dc.html (got ${artboard}); the canvas read-back (/pick --canvas) aligns on that name.`);
+  } else if (artboard !== `B${ambition}.dc.html`) {
+    // NOT just the SHAPE of the name, the name itself. `/pick --canvas` derives the file it
+    // reads back from the rung (`B${ambition}.dc.html`), so a board at rung 3 registering
+    // B7.dc.html passes a pattern check and then aligns against a file the read-back will
+    // never open: the client's edits to that rung are silently dropped.
+    add(
+      `${id} names an artboard its rung will never open`,
+      `rung ${ambition} is read back as B${ambition}.dc.html and this board registers ${artboard}. The canvas read-back (/pick --canvas) derives the file from the rung, so anything else is edits nobody reads.`,
+    );
   } else if (!existsSync(join(dir, ".palate/explore/seed", artboard))) {
     add(`${id} registers a board that was never drawn`, `artboard ${artboard} needs .palate/explore/seed/${artboard} and there is no such file. The canvas shows a hole where rung ${ambition} should be.`);
   }

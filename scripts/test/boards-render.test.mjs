@@ -120,6 +120,12 @@ function drawSeed(boards) {
   }
 }
 
+/** The pixel dimensions in a PNG's IHDR: the two numbers that say whether a still is the fold. */
+async function pngSize(path) {
+  const buf = readFileSync(path);
+  return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+}
+
 const run = async (args, opts = {}) => {
   try {
     const { stdout, stderr } = await promisify(execFile)(process.execPath, [CLI, ...args], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024, ...opts });
@@ -288,6 +294,35 @@ test("a whole page is required: nav, cta and footer marks are each named when mi
     assert.equal(r.ok, false, piece);
     assert.match(r.problems.join("\n"), new RegExp(`b1-${piece}`));
   }
+});
+
+// A MARKED ROOT IS A SECTIONING ELEMENT. gate-fidelity scopes its whole comparison to the
+// marked hero and hides everything else on the page, so a `<div>` carrying the mark measured as
+// setting no type, no accent and no scale, and the skeleton check that tells a lifted hero from
+// a rebuilt one stopped running without saying so.
+test("a marked root on a div is refused, naming the tag", () => {
+  const r = validateArtboard(
+    GOOD.replace('<section class="hero" data-section-id="b1-hero">', '<div class="hero" data-section-id="b1-hero">')
+      .replace("</section><section class=\"services\"", "</div><section class=\"services\""),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(r.ok, false);
+  const said = r.problems.join("\n");
+  assert.match(said, /<div>/, `the refusal does not name the offending tag:\n${said}`);
+  assert.match(said, /b1-hero/, `the refusal does not name the mark that sits on it:\n${said}`);
+});
+
+test("a header and a footer are sectioning elements too, so a whole board validates", () => {
+  const r = validateArtboard(GOOD, { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) });
+  assert.equal(r.ok, true, r.problems.join("; "));
+});
+
+test("data-srcset is not srcset, and a conforming board is not refused for carrying one", () => {
+  const r = validateArtboard(
+    GOOD.replace('<img src="b1-img1.jpg" alt="">', '<img src="b1-img1.jpg" data-srcset="handled by a loader" alt="">'),
+    { id: "b1", section: "services", dir: fixtureDirWith({ "b1-img1.jpg": 1000 }) },
+  );
+  assert.equal(r.ok, true, r.problems.join("; "));
 });
 
 test("the registry's own inner section must be on the board", () => {
@@ -545,10 +580,24 @@ test("the artboards are validated, keyed, measured and archived", async (t) => {
     // The archive travels with its pictures, or it renders broken the day it is read.
     assert.ok(existsSync(join(shots, `${b.id}-img1.png`)), `${b.id}'s archived render lost its image`);
 
-    for (const p of [join(shots, "hero.png"), join(SITE, "public/_explore", `${b.id}.png`)]) {
+    for (const p of [
+      join(shots, "hero.png"), join(SITE, "public/_explore", `${b.id}.png`),
+      join(shots, "full.png"), join(SITE, "public/_explore", `${b.id}-full.png`),
+    ]) {
       assert.ok(existsSync(p), `${p} is missing`);
       assert.ok(statSync(p).size > 1024, `${p} is ${statSync(p).size} bytes, which is not a rendered board`);
     }
+    // THE WHOLE BOARD IS A DIFFERENT PICTURE FROM THE TOP OF IT. /explore's link says it opens
+    // the still at full size, and for the whole of the board format's life it opened the same
+    // 1440x900 crop the card already showed. The fixture artboards are taller than the fold, so
+    // a full-page shot that is not bigger than the hero shot is the hero shot under a new name.
+    assert.ok(statSync(join(shots, "full.png")).size > statSync(join(shots, "hero.png")).size,
+      `${b.id}'s full.png is no larger than its hero.png, so the whole-board still is the fold again`);
+    const heroPx = await pngSize(join(shots, "hero.png"));
+    const fullPx = await pngSize(join(shots, "full.png"));
+    assert.equal(heroPx.h, 900, `${b.id}'s hero.png is ${heroPx.h}px tall; the fidelity gate reads it as the 1440x900 entrance`);
+    assert.ok(fullPx.h > heroPx.h,
+      `${b.id}'s full.png is ${fullPx.h}px tall against a ${heroPx.h}px hero, so it is not the whole board`);
   }
 
   const canvas = JSON.parse(readFileSync(join(SEED, "canvas.json"), "utf8"));

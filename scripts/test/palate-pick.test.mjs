@@ -173,6 +173,49 @@ test("the motion proof is a command, not a JSON edit", async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("the canvas is recorded by command, published or declined", async () => {
+  const dir = project();
+  // The gate blocks a shown set whose canvas is neither published nor declined, so a field with
+  // no writer is a gate the model can only clear by hand-editing the manifest it was told never
+  // to touch.
+  const r = await run([dir, "--canvas-url", "https://claude.ai/code/artifact/abc123"]);
+  assert.equal(r.status, 0, r.stderr);
+  const canvas = manifestOf(dir).explore.canvas;
+  assert.equal(canvas.url, "https://claude.ai/code/artifact/abc123");
+  assert.ok(Date.parse(canvas.recorded_at) > 0, "the canvas record carries no timestamp");
+  assert.match(r.stdout, /canvas published/i);
+
+  const skipped = await run([dir, "--canvas-skipped", "no design skill in this session"]);
+  assert.equal(skipped.status, 0, skipped.stderr);
+  const declined = manifestOf(dir).explore.canvas;
+  assert.equal(declined.skipped, true);
+  assert.equal(declined.reason, "no design skill in this session");
+  assert.ok(Date.parse(declined.recorded_at) > 0, "the declined record carries no timestamp");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a canvas that cannot be opened, or declined with no reason, is refused", async () => {
+  const dir = project();
+  const bad = await run([dir, "--canvas-url", "the design canvas"]);
+  assert.equal(bad.status, 1, `a link the client cannot open must be refused:\n${bad.stdout}${bad.stderr}`);
+  assert.match(bad.stderr, /http/i);
+  assert.equal(manifestOf(dir).explore.canvas, undefined, "a refused url was recorded anyway");
+
+  const silent = await run([dir, "--canvas-skipped", "   "]);
+  assert.equal(silent.status, 1, `a declined canvas with no reason must be refused:\n${silent.stdout}${silent.stderr}`);
+  assert.match(silent.stderr, /reason/i);
+  assert.equal(manifestOf(dir).explore.canvas, undefined, "a reasonless skip was recorded anyway");
+
+  // Both at once is a model guessing rather than reporting: the canvas was published, or it
+  // was not.
+  const both = await run([dir, "--canvas-url", "https://claude.ai/code/artifact/abc123", "--canvas-skipped", "no design skill"]);
+  assert.equal(both.status, 1, `both flags at once must be refused:\n${both.stdout}${both.stderr}`);
+  assert.match(both.stderr, /--canvas-url/);
+  assert.match(both.stderr, /--canvas-skipped/);
+  assert.equal(manifestOf(dir).explore.canvas, undefined, "a contradictory call was recorded anyway");
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("the proof still records after Compose has cleared the registry", async () => {
   const dir = project();
   await run([dir, "--hero", "b3"]);

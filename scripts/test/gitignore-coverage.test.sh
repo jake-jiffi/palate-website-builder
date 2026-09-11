@@ -30,7 +30,9 @@ src/pages/index.astro.palate-bak
 public/_explore/b1-hero.png
 .palate/explore/shots/b1-1440.png
 .palate/explore/seed/canvas.json
-.palate/explore/seed/README.md"
+.palate/explore/seed/README.md
+.palate/explore/seed/Ref1.dc.html
+.palate/explore/seed/ref1.jpg"
 
 # MEASURED state in the same directories. Ignoring these is the opposite failure: the
 # adoption record and the baselines are judgement, and cannot be recomputed.

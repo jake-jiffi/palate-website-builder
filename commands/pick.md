@@ -1,6 +1,6 @@
 ---
 description: Record which direction the client picked, what they said, and anything they changed on the canvas.
-argument-hint: "--hero b3 [--section b5] [--intensity 3] [--answer motion=... --answer mix=... --answer cms=...] [--cta \"...\"] [--note \"...\"] [--canvas <dir>] [--proof <url>] [--second-pass]"
+argument-hint: "--hero b3 [--section b5] [--intensity 3] [--answer motion=... --answer mix=... --answer cms=...] [--cta \"...\"] [--note \"...\"] [--canvas <dir>] [--canvas-url <url>] [--canvas-skipped \"<reason>\"] [--proof <url>] [--second-pass]"
 ---
 
 Record the client's pick from the Explore boards, on the canvas or from `/explore`. This is the
@@ -57,6 +57,25 @@ Only `motion`, `mix` and `cms` are accepted and an empty value is refused. Repea
 a later `--answer cms=...` does not erase an earlier `--answer motion=...`. `gate-done.sh` refuses
 a build that recorded a pick and never recorded a complete round, because asking the three one at
 a time across the build is how a client answers the CMS question after the pages are written.
+
+## 3b. Record where the boards went, the moment they go
+
+The canvas is published as soon as the boards are validated, and the manifest says so:
+
+```bash
+node "$PALATE/scripts/palate-pick.mjs" "$SITE" --canvas-url https://claude.ai/code/artifact/<id>
+```
+
+When no design skill can run in this session, say that instead, with the reason:
+
+```bash
+node "$PALATE/scripts/palate-pick.mjs" "$SITE" --canvas-skipped "no design skill in this session"
+```
+
+One or the other, never both in one call: they are opposite claims about the same set. A link
+that is not http(s), and a skip with no reason, are both refused. `gate-explore.mjs` blocks a
+build that recorded `explore.shown_at` and then said nothing about the canvas, because silence
+reads as "the client never saw a canvas at all", which is worse than either honest outcome.
 
 ## 4. Read the canvas back, when there is one
 

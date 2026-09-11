@@ -279,6 +279,21 @@ export function validateArtboard(html, { id, section, dir }) {
     problems.push(`exactly one <script> is allowed, ./support.js; found ${scripts.length}`);
   }
 
+  /**
+   * EVERY MARKED ROOT IS A SECTIONING ELEMENT, and that is a downstream contract rather than
+   * taste. `gate-fidelity.mjs` scopes its whole comparison to the marked hero and hides
+   * everything else, and its scaffolding sweep is written in terms of the tag. A `<div>`
+   * carrying the mark measured as nothing at all, and the skeleton comparison that tells a
+   * lifted hero from a rebuilt one silently stopped running. Refused here, where a board is
+   * still being drawn, rather than at Compose, where it reads as a passing gate.
+   */
+  const marked = [...html.matchAll(/<([a-zA-Z][\w-]*)\b[^>]*\bdata-section-id="([^"]+)"/g)];
+  for (const [, tag, sid] of marked) {
+    const t = tag.toLowerCase();
+    if (t !== "section" && t !== "header" && t !== "footer") {
+      problems.push(`data-section-id="${sid}" sits on a <${t}>; a marked root must be a <section>, <header> or <footer>, because the fidelity gate scopes its comparison to that element and measures nothing at all when it is a <${t}>`);
+    }
+  }
   const ids = [...html.matchAll(/data-section-id="([^"]+)"/g)].map((m) => m[1]);
   // A board is the WHOLE page in that direction, nav to footer, composed from the kit's pieces.
   for (const piece of ["navigation", "hero", "cta", "footer"]) {
@@ -328,7 +343,9 @@ export function validateArtboard(html, { id, section, dir }) {
   }
   // A srcset overrides the bare src with a URL the canvas cannot fetch, so a board whose every
   // src is conforming still renders a broken image and nothing says why.
-  if (/<[a-z][a-z0-9]*\b[^>]*\bsrcset\s*=/i.test(html)) {
+  // Anchored on a word boundary of its own: `data-srcset` is a lazy-loader's attribute and
+  // overrides nothing, so an unanchored match refused a conforming board.
+  if (/<[a-z][a-z0-9]*\b[^>]*(^|\s)srcset\s*=/i.test(html)) {
     problems.push("srcset is not allowed on an artboard; it overrides the bare filename with a URL the canvas cannot fetch");
   }
 
@@ -544,17 +561,28 @@ async function main() {
         return Math.ceil(dc ? Math.max(dc.getBoundingClientRect().height, dc.scrollHeight) : document.documentElement.scrollHeight);
       });
       await page.screenshot({ path: join(boardShots, "hero.png"), fullPage: false });
+      /**
+       * AND THE WHOLE BOARD, because an artboard is the whole home page.
+       *
+       * `hero.png` is the top 900px and nothing else: it is what the fidelity gate compares
+       * against the built hero, and it is the right size for a card. It is the WRONG thing to
+       * open behind a link reading "the still at full size", which is what /explore offered
+       * for the whole of a board's life. `full.png` is the board end to end.
+       */
+      await page.screenshot({ path: join(boardShots, "full.png"), fullPage: true });
 
       // The card image /explore renders. Copied rather than linked so a `public/` that is
       // cleaned between builds cannot empty the page that coaches the client.
       const pub = join(projectDir, "public", "_explore");
       mkdirSync(pub, { recursive: true });
       copyFileSync(join(boardShots, "hero.png"), join(pub, `${b.id}.png`));
+      copyFileSync(join(boardShots, "full.png"), join(pub, `${b.id}-full.png`));
 
       measured.push({ ...b, file, h });
       lines.push(
         `  ${b.id} rung ${b.ambition} ${b.name}: ${file} ${Math.round(stamped.length / 1024)} KB, ` +
-        `hero.png ${Math.round(statSync(join(boardShots, "hero.png")).size / 1024)} KB, ${h}px tall`,
+        `hero.png ${Math.round(statSync(join(boardShots, "hero.png")).size / 1024)} KB, ` +
+        `full.png ${Math.round(statSync(join(boardShots, "full.png")).size / 1024)} KB, ${h}px tall`,
       );
     }
   } finally {
@@ -567,7 +595,7 @@ async function main() {
 
   process.stdout.write(`boards-render: ${measured.length} artboard(s) validated, keyed, measured and archived under ${outDir}\n`);
   for (const l of lines) process.stdout.write(`${l}\n`);
-  process.stdout.write(`  canvas.json, README.md; hero stills in ${shotsDir} and public/_explore/\n`);
+  process.stdout.write(`  canvas.json, README.md; hero and whole-board stills in ${shotsDir} and public/_explore/ (<id>.png and <id>-full.png)\n`);
 }
 
 /** The calibration references, validated before anything is written. */

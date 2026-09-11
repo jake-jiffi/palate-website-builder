@@ -139,8 +139,11 @@ onto `/explore` and the canvas.
    every fault named, stamps a stable `data-palate-k` on each element in place
    (so the published canvas and the read-back align), archives the board as
    `.palate/explore/shots/<id>/rendered.html` with its images, opens it over
-   `file://` at 1440, measures its real height, shoots `hero.png`, copies the
-   still to `public/_explore/<id>.png`, and writes `canvas.json` and `README.md`
+   `file://` at 1440, measures its real height, shoots `hero.png` (the 1440x900
+   entrance, which is what the fidelity gate compares and what `/explore` shows
+   on a card) and `full.png` (the whole board, which is what the card's link
+   opens), copies both to `public/_explore/<id>.png` and
+   `public/_explore/<id>-full.png`, and writes `canvas.json` and `README.md`
    beside the seed. It records `manifest.explore = { ran, shown_at, boards }`,
    and `shown_at` is half of the only number this stage produces, because time
    to pick is `picked_at - shown_at`. **A refusal never deletes the seed**:
@@ -151,10 +154,20 @@ onto `/explore` and the canvas.
    it from `.palate/explore/seed/` (the `README.md` written there says what to
    title it and which artboard is which) and publish WITHOUT export, so the link
    opens outside the organisation. Record `manifest.explore.canvas = { url }`
+   with the command, never by hand:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> \
+     --canvas-url https://claude.ai/code/artifact/<id>
+   ```
+
    and `/explore` links to it first. **A missing design skill is not an error,
    and silence is**: when no design skill can run in this session, record
-   `manifest.explore.canvas = { skipped: true, reason }` and hand over `/explore`
-   instead. `scripts/gate-explore.mjs` blocks a build that showed boards and
+   `manifest.explore.canvas = { skipped: true, reason }` with
+   `--canvas-skipped "no design skill in this session"` and hand over `/explore`
+   instead. The two are mutually exclusive in one call, a link that is not
+   http(s) is refused, and so is a skip with no reason.
+   `scripts/gate-explore.mjs` blocks a build that showed boards and
    recorded neither, because silence reads as "the client never saw a canvas at
    all", which is worse than either honest outcome.
 
@@ -500,9 +513,11 @@ a client reads five guesses, opens two, picks whichever is nearest what they alr
 had in mind, and the restrained rung reads as "the boring one" rather than as one
 deliberate end of a distance the boldest rung defines. So the preview always ships
 `src/pages/explore.astro`, and it is the URL you hand over whenever there is no canvas.
-It shows each board inline (its still from `/_explore/<id>.png`, its argument, its
-motion plan), draws the calibration row above the ladder, and links the canvas first
-when one exists.
+It shows each board inline (its entrance still from `/_explore/<id>.png`, its
+argument, its motion plan), links each card to the whole board at
+`/_explore/<id>-full.png`, draws the calibration row above the ladder, and links
+the canvas first when one exists. A landing board is shown on the canvas only:
+nothing draws a still for one, so `/explore` lists it without a link.
 
 It does four things a list of links cannot:
 
@@ -571,7 +586,8 @@ client selects an element, retypes a word, drags a value and leaves a note, and
 `/pick --canvas` reads all of it back.
 
 **`/explore`** is the surface every tool can open and it ships either way: the
-stills at `/_explore/<id>.png`, the calibration row, the drawn ladder, each
+entrance stills at `/_explore/<id>.png` over the whole board at
+`/_explore/<id>-full.png`, the calibration row, the drawn ladder, each
 rung's own argument, and the canvas link first when one exists. Each board gets
 a short, evocative **name** (not just `b1`) so the pick conversation is human:
 the client can say "go with Deep Trawl" or "b2 hero".

@@ -140,6 +140,28 @@ rm -f "$K/.palate/explore/seed/B2.dc.html"
 want "a registered board with no artboard -> block" BLOCK "$(run "$K")"
 has "and it names the file it needs" "$K" ".palate/explore/seed/B2.dc.html"
 
+# === 11b. AN ARTBOARD THE READ-BACK WILL NEVER OPEN. `/pick --canvas` derives the file from the
+# RUNG, so B7.dc.html on rung 3 clears a shape check and then reads the client's edits back from
+# a file that is not this board's.
+K2="$TMP/k11b"; mk "$K2"; page "$K2"
+cat > "$K2/src/lib/variants.ts" <<'TS'
+export const variants = [
+  { id: "b3", name: "The Loud Room", artboard: "B7.dc.html", ambition: 3,
+    what: "The whole entrance is one photograph with the offer struck across it.",
+    why: "This buyer has already seen four identical quotes and remembers none of them.",
+    feeling: "brash, certain, a little rude",
+    donor: "utsubo", section: "proof",
+    motion: "The struck word redraws itself once, slowly, the first time it is scrolled past.",
+    ctas: ["Get a price", "See the work"] },
+];
+export const landingVariants = [];
+TS
+boards "$K2" b3
+mv "$K2/.palate/explore/seed/B3.dc.html" "$K2/.palate/explore/seed/B7.dc.html"
+want "rung 3 registering B7.dc.html -> block" BLOCK "$(run "$K2")"
+has "and it names the file the rung reads back" "$K2" "B3.dc.html"
+has "and it names the file the board registered" "$K2" "B7.dc.html"
+
 # === 12. A MOTION PLAN THAT RESTATES THE "what". A board is mostly a still, so this is the
 # field whose absence is least visible and most expensive.
 L="$TMP/motion-restate"; mk "$L"; page "$L"; write_valid "$L"

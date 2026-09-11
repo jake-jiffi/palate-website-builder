@@ -236,19 +236,32 @@ function jaccard(a, b) {
   for (const x of a) if (b.has(x)) inter++;
   return inter / (a.size + b.size - inter);
 }
-/** The markup of the section carrying an id, from its opening <section to the matching close. */
+/**
+ * The markup of the element carrying an id, from its own opening tag to the matching close.
+ *
+ * IT READS THE MARKED ELEMENT, WHATEVER TAG IT IS. This used to walk back to the nearest
+ * `<section`, which on a board whose hero root is a `<div>` (or a `<header>`) returns the
+ * PREVIOUS section, or nothing at all, and a null here skips the skeleton comparison in
+ * silence: the one check that tells a lifted hero from a rebuilt one with the same id simply
+ * stopped running, and the gate still printed a pass.
+ */
 function sectionMarkup(html, marker) {
   const at = html.indexOf(marker);
   if (at < 0) return null;
-  const open = html.lastIndexOf("<section", at);
+  // The marker sits inside the element's own opening tag, so the nearest `<` before it starts
+  // that tag.
+  const open = html.lastIndexOf("<", at);
   if (open < 0) return null;
+  const named = /^<([a-zA-Z][\w-]*)/.exec(html.slice(open, at + marker.length));
+  if (!named) return null;
+  const tag = named[1].toLowerCase();
   let i = open;
   let depth = 0;
-  const re = /<\/?section\b/gi;
+  const re = new RegExp(`<\\/?${tag}\\b`, "gi");
   re.lastIndex = open;
   let m;
   while ((m = re.exec(html))) {
-    if (m[0].startsWith("</")) { depth--; if (depth === 0) return html.slice(open, m.index + 10); }
+    if (m[0].startsWith("</")) { depth--; if (depth === 0) return html.slice(open, m.index + tag.length + 3); }
     else depth++;
     i = m.index;
   }
@@ -350,7 +363,16 @@ async function measureHeroScope(page, selector) {
     // labels and sets a monospace face nothing in the design chose, so the board carries it and
     // the composed home never does: measured, that reads as "missing ui-monospace" on an honest
     // build. `:not(section)` covers renders taken before the badge declared itself.
-    for (const el of document.querySelectorAll(scaffolding)) el.style.visibility = "hidden";
+    //
+    // NEVER THE HERO ITSELF, OR ANYTHING IT SITS INSIDE. `[data-section-id]:not(section)`
+    // matches a hero whose root is a `<div>` (or a `<header>`, or a `<footer>`), so the one
+    // element the whole comparison is scoped to was hidden and the board measured as setting
+    // no type, no accent and no scale at all. Hiding an ancestor does the same thing, because
+    // visibility inherits.
+    for (const el of document.querySelectorAll(scaffolding)) {
+      if (el === hero || el.contains(hero)) continue;
+      el.style.visibility = "hidden";
+    }
     return true;
   }, { sel: selector, scaffolding: "[data-palate-mark], .ev-switcher, [data-section-id]:not(section)" });
   if (!scoped) return null;

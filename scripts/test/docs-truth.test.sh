@@ -485,6 +485,17 @@ present "explore-stage.md records a published canvas" \
   "references/explore-stage.md" "explore.canvas = { url }"
 present "explore-stage.md records a declined canvas" \
   "references/explore-stage.md" "skipped: true, reason"
+# A FIELD WITH A BLOCKING GATE AND NO WRITER is a field the model can only fill by hand-editing
+# the manifest, which the doctrine forbids two lines earlier. `explore.canvas` had exactly that
+# shape, so both surfaces name the flags that write it.
+present "pick.md names the flag that records a published canvas" \
+  "commands/pick.md" "--canvas-url"
+present "pick.md names the flag that declines one" \
+  "commands/pick.md" "--canvas-skipped"
+present "explore-stage.md names the flag that records a published canvas" \
+  "references/explore-stage.md" "--canvas-url"
+present "explore-stage.md names the flag that declines one" \
+  "references/explore-stage.md" "--canvas-skipped"
 # The question round is a real refusal in gate-done.sh, so the command that answers it is named
 # where the pick is recorded.
 present "pick.md names the question round flags" \

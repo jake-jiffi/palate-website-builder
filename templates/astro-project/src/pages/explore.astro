@@ -155,7 +155,7 @@ const askedRung = (() => {
         <ol class="ex-rail">
           {rungs.map((v) => (
             <li class="ex-rung">
-              <a href={`/_explore/${v.id}.png`}>
+              <a href={`/_explore/${v.id}-full.png`}>
                 {/* The plot has a FIXED height on purpose: a percentage height against an auto
                     parent resolves to zero, which rendered every bar invisible and left the
                     page arguing for a range it never drew. */}
@@ -180,12 +180,16 @@ const askedRung = (() => {
                 pattern, which is an automatic fail in our own anti-pattern list, and the
                 verifier caught this page shipping eight of them. */}
             <div class="ex-card-head">
+              {/* The link opens the WHOLE board (`<id>-full.png`), never the card image.
+                  `<id>.png` is the top 900px, which is what the fidelity gate measures and the
+                  right size for a card; behind a link promising the still at full size it is a
+                  board cut off below the entrance. */}
               <h3>
-                <a href={`/_explore/${v.id}.png`}><span class="ex-num">{v.ambition}</span>{v.name}</a>
+                <a href={`/_explore/${v.id}-full.png`}><span class="ex-num">{v.ambition}</span>{v.name}</a>
               </h3>
               <p class="ex-feeling">{v.feeling} <span class="ex-of">&middot; rung {v.ambition} of {maxAmbition}</span></p>
             </div>
-            <a class="ex-shot" href={`/_explore/${v.id}.png`} data-board-shot={v.id}>
+            <a class="ex-shot" href={`/_explore/${v.id}-full.png`} data-board-shot={v.id}>
               <img src={`/_explore/${v.id}.png`} alt={`The entrance of ${v.name}`} width="1440" height="900" loading="lazy" />
             </a>
             <dl class="ex-dl">
@@ -198,7 +202,7 @@ const askedRung = (() => {
               {v.lookAt && <div><dt>Look at</dt><dd>{v.lookAt}</dd></div>}
               {v.donor && <div><dt>Craft drawn from</dt><dd><code>{v.donor}</code></dd></div>}
             </dl>
-            <a class="ex-open" href={`/_explore/${v.id}.png`}>Open the still at full size</a>
+            <a class="ex-open" href={`/_explore/${v.id}-full.png`}>Open the whole board</a>
           </article>
         ))}
       </section>
@@ -210,17 +214,21 @@ const askedRung = (() => {
             Single-purpose pages for a campaign, judged on one job rather than on carrying the
             whole business.
           </p>
+          {/* NO STILL, AND NO LINK TO ONE. boards-render draws the ladder's rungs and nothing
+              else, so a landing board has no `/_explore/<id>.png` behind it: the card used to
+              render its name and its "open the still" link as dead ends. A landing page is
+              shown on the canvas, and this page says so rather than pointing at a 404. */}
           {landings.map((v) => (
             <article class="ex-card">
               <div class="ex-card-head">
-                <h3><a href={`/_explore/${v.id}.png`}>{v.name}</a></h3>
+                <h3>{v.name}</h3>
                 <p class="ex-feeling">{v.feeling}</p>
               </div>
               <dl class="ex-dl">
                 <div><dt>What it is</dt><dd>{v.what}</dd></div>
                 <div><dt>Why</dt><dd>{v.why}</dd></div>
               </dl>
-              <a class="ex-open" href={`/_explore/${v.id}.png`}>Open the still at full size</a>
+              <p class="ex-note">Shown on the canvas: landing boards are not drawn as stills here.</p>
             </article>
           ))}
         </section>
