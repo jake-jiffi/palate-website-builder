@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,9 +61,9 @@ function baseResult(overrides = {}) {
 }
 
 /** Run the gate. Never throws: the exit code is part of what is being asserted. */
-function run(dir, env = {}) {
+function run(dir, env = {}, args = []) {
   try {
-    const out = execFileSync(process.execPath, [CLI, dir], {
+    const out = execFileSync(process.execPath, [CLI, dir, ...args], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, ...env },
@@ -193,4 +193,49 @@ test("a custom --out directory named in the default state file's own out field i
   writeResult(dir, baseResult({ ladder: RUNG("comparable") }), { outDir: customOut });
   const r = run(dir);
   assert.equal(r.code, 0);
+});
+
+test("a grade written to .palate/grade/ is found, not reported as never run", () => {
+  // THE SKIP THIS GATE WAS WRITTEN FOR. The eastcoast v3 build ran the local grade with
+  // `--out .palate/grade`, which `grade-local.mjs` honours and records nowhere, so the gate
+  // looked only in `.palate-shots/`, found nothing and printed "the local grade has not run"
+  // over a real result that said `somewhat_worse` at the 12.9th percentile.
+  const dir = project();
+  writeResult(dir, baseResult({ ladder: RUNG("somewhat_worse"), taste: { applicable: true, percentile: 12.9 } }), {
+    outDir: join(".palate", "grade"),
+  });
+  // AND IT IS THE NAMED LOCATION, not merely one the scan happens to reach: a newer file in a
+  // sibling directory does not outrank the directory the grade is supposed to be written to.
+  writeResult(dir, baseResult({ ladder: RUNG("comparable") }), { outDir: join(".palate", "scratch") });
+  const r = run(dir);
+  assert.equal(r.code, 1, `the grade is there to be read: ${r.out}`);
+  assert.match(r.out, /somewhat worse/);
+  assert.match(r.out, /12\.9/);
+});
+
+test("a grade one level under .palate/ is found, and the newest of two wins and is named", () => {
+  const dir = project();
+  // Two runs into two directories. The later one is the build's current reading, and the note
+  // has to say which file it read or the operator cannot tell which run they are arguing with.
+  writeResult(dir, baseResult({ ladder: RUNG("clearly_worse") }), { outDir: join(".palate", "grade-first") });
+  writeResult(dir, baseResult({ ladder: RUNG("comparable") }), { outDir: join(".palate", "grade-second") });
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(join(dir, ".palate", "grade-first", "local-grade.json"), old, old);
+  const r = run(dir);
+  assert.equal(r.code, 0, `the newest run is the one that counts: ${r.out}`);
+  assert.match(r.out, /grade-second/);
+  assert.doesNotMatch(r.out, /clearly worse/);
+});
+
+test("--grade names the file outright, and a named file that is not there is a skip saying so", () => {
+  const dir = project();
+  writeResult(dir, baseResult({ ladder: RUNG("comparable") }), { outDir: "anywhere" });
+  const r = run(dir, {}, ["--grade", join(dir, "anywhere", "local-grade.json")]);
+  assert.equal(r.code, 0, r.out);
+  const missing = run(dir, {}, ["--grade", join(dir, "nowhere", "local-grade.json")]);
+  assert.equal(missing.code, 2);
+  assert.match(missing.out, /does not exist/);
+  const naked = run(dir, {}, ["--grade"]);
+  assert.equal(naked.code, 2);
+  assert.match(naked.out, /--grade was given with no value/);
 });

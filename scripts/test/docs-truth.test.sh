@@ -911,6 +911,30 @@ present "SKILL.md A.9 demotes the six axes to working notes" \
   "SKILL.md" "THE SIX AXES ARE WORKING NOTES, NOT THE GATE"
 present "SKILL.md A.9 says nothing reads the self-scored axes" \
   "SKILL.md" "Nothing reads \`visual.iterations[].axes\`"
+# ... AND A.9 NO LONGER SAYS THE OPPOSITE FOUR HUNDRED WORDS LATER. It listed the artefacts the
+# Stop hook reads and ended the list with "every rubric axis cleared the bar", which gate-done.sh
+# does not read at all: it reads `.visual.pass`, the console, the shot count and the iteration
+# count. A demotion undone inside its own item is a demotion nobody can act on.
+present "SKILL.md A.9 names what the done gate actually reads" \
+  "SKILL.md" "zero console errors, the verifier's own \`visual.pass\`)"
+absent "SKILL.md A.9 no longer claims the done gate reads the rubric axes" \
+  "SKILL.md" "every rubric axis cleared the bar"
+
+# THE JUDGE RUNS LAST, ON THE SETTLED BUILD. The visual loop rebuilds, and a page rebuilt after
+# it was judged makes its comparison stale, so judging before the loop buys every comparison
+# twice and passes none of them.
+present "SKILL.md A.6 puts the page judge after the visual loop" \
+  "SKILL.md" "THE PAGES ARE JUDGED LAST, ON THE SETTLED BUILD"
+present "explore-stage.md says the judge runs on the settled build" \
+  "references/explore-stage.md" "the judge runs on the settled build"
+present "the verifier says its page judge runs last, on the settled build" \
+  "agents/palate-verifier.md" "IT RUNS LAST, ON THE SETTLED BUILD"
+
+# A SURFACE WITH NO PICTURE IS DROPPED, NOT THE RUN. The library holds no whole-page capture for
+# some references, and requiring one switched the whole new instrument off, entrance comparisons
+# included, on a condition the board judge documents as ordinary.
+present "build-manifest.md says a missing surface is dropped rather than the run" \
+  "references/build-manifest.md" "A SURFACE WITH NO PICTURE IS DROPPED, NEVER THE RUN"
 present "the verifier says the six axes are working notes" \
   "agents/palate-verifier.md" "The six axes are WORKING NOTES"
 

@@ -878,6 +878,35 @@ test("a verdict that says nothing is refused with the phrase named", async () =>
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a verdict that uses the word fine in a real reading is recorded", async () => {
+  // "fine" was on the empty-phrase list and matched on word boundaries, so a real sentence
+  // about a real page was refused with a message telling its author they had not opened it.
+  // The other four phrases stay: each of them says nothing on its own.
+  const dir = project();
+  looked(dir);
+  const r = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png",
+    "--verdict", "The hairline rule is fine at 1px, the kicker is gone and the photo bleeds to both edges"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(manifestOf(dir).compose.pages[0].verdict, /fine at 1px/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a value flag given with no value is refused, never read as the next flag", async () => {
+  // `--looked --shot x.png --verdict "..."` recorded a look on a route called `/--shot`,
+  // classified it as a service page, and satisfied gate-look.mjs for a page nobody built.
+  const dir = project();
+  looked(dir);
+  const r = await run([dir, "--looked", "--shot", ".palate-shots/desktop-full.png", "--verdict", VERDICT]);
+  assert.equal(r.status, 2, r.stderr);
+  assert.match(r.stderr, /--looked was given with no value/);
+  assert.equal(manifestOf(dir).compose, undefined, "a route named after a flag was recorded anyway");
+  // The same guard on the flag at the end of the line, where there is no next token at all.
+  const trailing = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png", "--verdict"]);
+  assert.equal(trailing.status, 2, trailing.stderr);
+  assert.match(trailing.stderr, /--verdict was given with no value/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("a second look at the same route replaces the first, one entry per route", async () => {
   const dir = project();
   looked(dir);

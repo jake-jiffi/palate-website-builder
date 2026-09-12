@@ -354,15 +354,42 @@ export async function main(argv = process.argv.slice(2)) {
   try { playwright = engineRequire("playwright"); } catch { playwright = null; }
   if (!playwright) return skip(`playwright not installed: run ${join(HERE, "reference-capture", "setup.sh")}`);
 
-  /** The pictures the stale pages answer to. Missing ones mean the boards were never rendered. */
-  const wantedShots = [...new Set(stale.flatMap((r) =>
-    SURFACE_ORDER.map((sf) => againstFor(shotsDir, r, sf).path)))];
-  const missing = wantedShots.filter((p) => !existsSync(p));
-  if (missing.length)
+  /**
+   * A MISSING PICTURE DROPS ITS SURFACE, NOT THE RUN.
+   *
+   * `donor-foot.png` is cropped by `gate-board-judge.mjs` only when the library holds a
+   * whole-page capture for that reference, and it holds none for some. The board judge treats
+   * that as a fact about the library: it warns, drops the ENDING and judges the rest. This gate
+   * used to require every picture for every route and skip the whole run without one, so a
+   * direction whose donor has no whole-page capture switched the new instrument off entirely,
+   * entrance comparisons included, and read as `page-judge=skipped` in the roll-call. That is
+   * the exact shape this gate exists to end.
+   *
+   * So each route is judged on the surfaces it HAS a picture for, the dropped ones are named
+   * out loud (a missing surface and a surface that passed look identical in a record that does
+   * not distinguish them), and only a route with no picture at all stops the run, because there
+   * is then nothing to hold that page against.
+   */
+  const surfacesFor = new Map();
+  const unpicturable = [];
+  for (const r of stale) {
+    const have = SURFACE_ORDER.filter((sf) => existsSync(againstFor(shotsDir, r, sf).path));
+    if (!have.length) { unpicturable.push(r); continue; }
+    for (const sf of SURFACE_ORDER.filter((x) => !have.includes(x)))
+      process.stderr.write(
+        `gate-page-judge: ${r.route}: ${pick.variant_id} has no ` +
+          `${againstFor(shotsDir, r, sf).path.slice(shotsDir.length + 1)} on disk, so the page ` +
+          `${PAGE_SURFACES[sf].noun} is judged on nothing and is left out of the request.\n`,
+      );
+    surfacesFor.set(r.route, have);
+  }
+  if (unpicturable.length)
     return skip(
-      `the picked direction ${pick.variant_id} has no ${missing.map((m) => m.slice(shotsDir.length + 1)).join(", ")} ` +
-        `on disk: run node ${join(HERE, "gate-board-judge.mjs")} ${projectDir} first, which renders and crops them`,
+      `the picked direction ${pick.variant_id} has no picture on disk for ` +
+        `${unpicturable.map((r) => r.route).join(", ")}: run node ${join(HERE, "gate-board-judge.mjs")} ` +
+        `${projectDir} first, which renders and crops them`,
     );
+
 
   const distRoot = ["dist/client", "dist"].map((d) => join(projectDir, d)).find((d) => existsSync(join(d, "index.html")));
   if (!distRoot && !serveUrl) return skip(`no built site under ${join(projectDir, "dist")} and no --serve URL`);
@@ -385,6 +412,7 @@ export async function main(argv = process.argv.slice(2)) {
       const slug = routeSlug(r.route);
       const outDir = join(projectDir, ".palate-shots/compose", slug);
       mkdirSync(outDir, { recursive: true });
+      const surfaces = surfacesFor.get(r.route);
       const url = `${base}${r.route === "/" ? "/" : r.route}`;
       const pg = await ctx.newPage();
       try {
@@ -394,21 +422,23 @@ export async function main(argv = process.argv.slice(2)) {
           return;
         }
         await pg.waitForTimeout(300);
-        const entrance = join(outDir, "entrance.png");
-        await pg.screenshot({ path: entrance, fullPage: false });
+        if (surfaces.includes("entrance"))
+          await pg.screenshot({ path: join(outDir, "entrance.png"), fullPage: false });
         /**
          * THE ENDING IS A CROP OF THE WHOLE PAGE, never the whole page. A judge handed a
          * capture thousands of pixels tall reads the top and answers about the entrance again,
          * which is the verdict this surface exists to stop standing in for the page.
          */
-        const full = join(outDir, "full.png");
-        await pg.screenshot({ path: full, fullPage: true });
-        await cropFoot(sharp, full, join(outDir, "foot.png"));
+        if (surfaces.includes("foot")) {
+          const full = join(outDir, "full.png");
+          await pg.screenshot({ path: full, fullPage: true });
+          await cropFoot(sharp, full, join(outDir, "foot.png"));
+        }
       } finally {
         await pg.close().catch(() => {});
       }
 
-      for (const surface of SURFACE_ORDER) {
+      for (const surface of surfaces) {
         const spec = PAGE_SURFACES[surface];
         const candidate = join(outDir, spec.still);
         const against = againstFor(shotsDir, r, surface);
@@ -561,7 +591,15 @@ function phase2(projectDir, requestPath, judgementsArg, manifest) {
   const scored = [];
   for (const [route, ps] of byRoute) {
     const surfaces = ps.map((p) => p.surface);
-    const rungs = Object.fromEntries(ps.map((p) => [p.surface, readings.get(p.id).rung]));
+    /**
+     * A SURFACE WITH NO PICTURE IS RECORDED AS null, never left out of the record. The reader
+     * at done time has to be able to tell a page judged on its entrance alone from one judged
+     * on both, and an absent key reads as neither.
+     */
+    const rungs = Object.fromEntries(SURFACE_ORDER.map((sf) => {
+      const p = ps.find((x) => x.surface === sf);
+      return [sf, p ? readings.get(p.id).rung : null];
+    }));
     // THE LOWEST SURFACE STANDS, for the same reason the lower ordering does: a page is as good
     // as its weakest half, and averaging is how a weak ending gets carried by a strong hero.
     const rung = surfaces.map((s) => rungs[s]).reduce((a, r) => (rungOrder.indexOf(r) < rungOrder.indexOf(a) ? r : a));
@@ -641,7 +679,8 @@ function phase2(projectDir, requestPath, judgementsArg, manifest) {
   process.stdout.write(
     `Page judge passed: ${scored.length} page type(s) judged against ${answeredTo}, ` +
       "both orders each, read at the lowest surface: " +
-      scored.map((s) => `${s.route} ${s.rung} (entrance ${s.rungs.entrance}, ending ${s.rungs.foot})`).join(", ") +
+      scored.map((s) =>
+      `${s.route} ${s.rung} (${s.surfaces.map((sf) => `${PAGE_SURFACES[sf].noun} ${s.rungs[sf]}`).join(", ")})`).join(", ") +
       "." + (shaky.length ? ` Unstable across the swap, read at the lower rung: ${shaky.join(", ")}.` : "") + "\n",
   );
 }
@@ -671,7 +710,7 @@ function check(projectDir, manifest, routes, shotsDir, pick) {
     if (refusedRung(j.rung)) {
       findings.push(
         `${r.route} (${r.page_type}) stands judged ${WORSE_PHRASE[j.rung]} than ${againstLabel(r)} ` +
-          `(entrance ${j.rungs?.entrance ?? "?"}, ending ${j.rungs?.foot ?? "?"}).`,
+          `(entrance ${j.rungs?.entrance ?? "not judged"}, ending ${j.rungs?.foot ?? "not judged"}).`,
       );
       continue;
     }
@@ -690,13 +729,12 @@ function check(projectDir, manifest, routes, shotsDir, pick) {
      * skips, so they find the real one two hops later. The stills are the same ones phase 1
      * needs, and they come from the board judge, so the skip names it.
      */
-    const needed = [...new Set(routes.flatMap((r) => SURFACE_ORDER.map((sf) => againstFor(shotsDir, r, sf).path)))];
-    const missing = needed.filter((p) => !existsSync(p));
-    if (missing.length)
+    const unpicturable = routes.filter((r) => !SURFACE_ORDER.some((sf) => existsSync(againstFor(shotsDir, r, sf).path)));
+    if (unpicturable.length)
       return skip(
-        `the picked direction ${pick.variant_id} has no ${missing.map((m) => m.slice(shotsDir.length + 1)).join(", ")} ` +
-          `on disk, so its pages cannot be compared with anything yet: run node ` +
-          `${join(HERE, "gate-board-judge.mjs")} ${projectDir} first, which renders and crops them`,
+        `the picked direction ${pick.variant_id} has no picture on disk for ` +
+          `${unpicturable.map((r) => r.route).join(", ")}, so those pages cannot be compared with anything yet: ` +
+          `run node ${join(HERE, "gate-board-judge.mjs")} ${projectDir} first, which renders and crops them`,
       );
     refuse([
       ...findings,

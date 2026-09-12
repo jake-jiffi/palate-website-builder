@@ -35,14 +35,23 @@
  * A malformed result file is refused as unreadable, never read as a pass: a corrupt record is
  * not evidence the page cleared the bar.
  *
- * Usage: node scripts/gate-taste.mjs <projectDir>
+ * Usage: node scripts/gate-taste.mjs <projectDir> [--grade <path to local-grade.json>]
  * Exit: 0 the ladder is comparable or better with no flattery risk, 1 findings, 2 cannot check
  *       (first stderr line `gate-taste: skipped (<reason>)`).
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const dir = resolve(process.argv[2] || ".");
+/**
+ * `--grade <path>` NAMES THE RESULT FILE, and its value is not a project directory. Without
+ * that exclusion `gate-taste.mjs . --grade out/local-grade.json` would resolve the project to
+ * the file and report a build with no grade.
+ */
+const argv = process.argv.slice(2);
+const gradeIndex = argv.indexOf("--grade");
+const gradeFlag = gradeIndex >= 0 ? argv[gradeIndex + 1] : null;
+const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1] === "--grade"));
+const dir = resolve(positional[0] || ".");
 
 const skip = (reason) => {
   process.stderr.write(`gate-taste: skipped (${reason})\n`);
@@ -52,33 +61,62 @@ const skip = (reason) => {
 const HOW_TO_RUN = "node scripts/reference-capture/grade-local.mjs --url <the built preview URL>";
 
 /**
- * `grade-local.mjs` writes `local-grade.json` beside `local-grade-state.json` in whatever
- * `--out` directory it was given (default `.palate-shots`). The default location is checked
- * first, and it is the one every build actually uses; a state file recording a different `out`
- * is honoured too, on the chance a build ran it with a custom `--out`, but as of this writing
- * `grade-local.mjs`'s own state object carries no such field, so this second branch is
- * defensive rather than load-bearing.
+ * WHERE THE GRADE IS, RATHER THAN WHERE IT WAS SUPPOSED TO BE.
+ *
+ * `grade-local.mjs` writes `local-grade.json` into whatever `--out` directory it was given
+ * (default `.palate-shots`), and its state object records no `out` field, so a build that ran
+ * it with `--out .palate/grade` left a real result this gate could not see. That is exactly
+ * what the eastcoast v3 build did, and this gate skipped saying "the local grade has not run",
+ * which is false and is the one sentence it exists not to print.
+ *
+ * So the file is looked for in the order it is likely to be: the flag if one was given, the
+ * default directory, the directory v3 actually used, then one level under either working
+ * directory, newest first, because a build that ran the grade twice into two directories means
+ * the later run. Only when none of those exists is the grade genuinely absent.
  */
-function resolveResultFile(root) {
-  const primary = join(root, ".palate-shots", "local-grade.json");
-  if (existsSync(primary)) return primary;
+function scanOneLevel(root) {
+  const found = [];
+  for (const base of [".palate", ".palate-shots"]) {
+    let entries = [];
+    try { entries = readdirSync(join(root, base), { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const candidate = join(root, base, e.name, "local-grade.json");
+      try { found.push({ path: candidate, at: statSync(candidate).mtimeMs }); } catch { /* not there */ }
+    }
+  }
+  found.sort((a, b) => b.at - a.at);
+  return found[0]?.path ?? null;
+}
 
-  const stateCandidates = [
+function resolveResultFile(root) {
+  if (gradeFlag) {
+    const named = resolve(gradeFlag);
+    return existsSync(named) ? { path: named, named: true } : null;
+  }
+
+  for (const p of [join(root, ".palate-shots", "local-grade.json"), join(root, ".palate", "grade", "local-grade.json")])
+    if (existsSync(p)) return { path: p, named: false };
+
+  const scanned = scanOneLevel(root);
+  if (scanned) return { path: scanned, named: true };
+
+  /**
+   * A STATE FILE NAMING ITS OWN `out` is honoured last, for a grade written somewhere the scan
+   * above cannot reach (an `--out` outside `.palate/` and `.palate-shots/`). `grade-local.mjs`
+   * writes no such field today, so this branch is defensive rather than load-bearing.
+   */
+  for (const statePath of [
     join(root, ".palate", "grade", "local-grade-state.json"),
     join(root, ".palate-shots", "local-grade-state.json"),
-  ];
-  for (const statePath of stateCandidates) {
+  ]) {
     if (!existsSync(statePath)) continue;
     let state;
-    try {
-      state = JSON.parse(readFileSync(statePath, "utf8"));
-    } catch {
-      continue;
-    }
+    try { state = JSON.parse(readFileSync(statePath, "utf8")); } catch { continue; }
     const out = typeof state?.out === "string" && state.out ? state.out : null;
     if (!out) continue;
     const candidate = join(root, out, "local-grade.json");
-    if (existsSync(candidate)) return candidate;
+    if (existsSync(candidate)) return { path: candidate, named: true };
   }
   return null;
 }
@@ -86,8 +124,17 @@ function resolveResultFile(root) {
 function main() {
   if (process.env.PALATE_GATE_TASTE === "0") return skip("PALATE_GATE_TASTE=0");
 
-  const resultPath = resolveResultFile(dir);
-  if (!resultPath) return skip(`the local grade has not run: ${HOW_TO_RUN}`);
+  if (gradeIndex >= 0 && (!gradeFlag || gradeFlag.startsWith("--")))
+    return skip("--grade was given with no value: name the file, --grade <dir>/local-grade.json");
+
+  const found = resolveResultFile(dir);
+  if (!found)
+    return skip(
+      gradeFlag
+        ? `--grade ${gradeFlag} does not exist`
+        : `the local grade has not run: ${HOW_TO_RUN}`,
+    );
+  const resultPath = found.path;
 
   let result;
   try {
@@ -116,7 +163,8 @@ function main() {
   if (okRung && !atRisk) {
     console.log(
       `gate-taste: the local grade's ladder reads this build ${rung} against its exemplar` +
-        (tastePercentile != null ? ` (taste percentile ${tastePercentile}).` : "."),
+        (tastePercentile != null ? ` (taste percentile ${tastePercentile})` : "") +
+        (found.named ? `, read from ${resultPath}.` : "."),
     );
     return;
   }

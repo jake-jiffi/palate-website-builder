@@ -231,7 +231,9 @@ never held to the bold bar.
 
 5b. **The page judge** (the built pages, held against the picture they were composed from,
    by the same instrument that judged the boards; the visual rubric above is self-scored and
-   cannot see bland):
+   cannot see bland). **IT RUNS LAST, ON THE SETTLED BUILD**: the visual loop at step 5 rebuilds,
+   and a page rebuilt after it was judged makes its comparison stale, so the judgements are
+   stated once the fixes are in rather than before them:
 
    **YOU STATE THE COMPARISONS AND YOU DO NOT RUN THEM**, exactly as at step 2c: you have no
    Agent tool, so the page comparisons are the main build agent's to run, in its own session,
@@ -250,7 +252,10 @@ never held to the bold bar.
       the picked board's `hero.png` and `foot.png`, the route marked `--primary` answers to the
       drawn inner page `inner.png` at its entrance, and every other page type answers to the
       direction's donor (`donor.jpg`, `donor-foot.png`), because nothing ever drew a third
-      service page. The main agent owes one fresh general-purpose subagent per comparison, collected as `[{ id, candidate_is, verdict }]` and scored by the same script with
+      service page. A surface whose picture is not on disk (the library holds no whole-page
+      capture for some references, so `donor-foot.png` may not exist) is DROPPED for that route
+      and named on stderr, and the route is then judged on its entrance alone: report the
+      dropped surface rather than reading a two-surface pass into it. The main agent owes one fresh general-purpose subagent per comparison, collected as `[{ id, candidate_is, verdict }]` and scored by the same script with
       `--judgements <file>`, which takes the lower of each pair and then the LOWEST surface.
       The bar is the board judge's own: comparable or better, so both `somewhat_worse` and
       `clearly_worse` refuse, at every intensity. Any `compose.overrides` recorded for a

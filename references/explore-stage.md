@@ -1030,7 +1030,11 @@ The mechanic when the client says "b3 hero + b5 menu":
    `refs_get { slug, layer:"component_prompts" }`, and check the result against
    `refs_get { slug, layer:"do_dont" }` before emit. The composed section is grounded
    in how the best sites build that page, not assembled from memory.
-4b. **RECORD THE LOOK, ONE PER PAGE TYPE, AND THEN JUDGE THE PAGES.** Open the
+4b. **RECORD THE LOOK, ONE PER PAGE TYPE, AND THEN JUDGE THE PAGES, LAST.** The
+   visual loop and its hygiene fixes run FIRST on the composed pages, because
+   that loop rebuilds and a page rebuilt after it was judged makes its
+   comparison stale; the judge runs on the settled build, immediately before the
+   local grade and done. Open the
    page beside the thing it was composed from and say what you see:
    `--looked <route> --shot .palate-shots/<file>.png --verdict "<what you can see>"`
    (the shot under `.palate-shots/` and newer than the built page, the verdict

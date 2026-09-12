@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { routeSlug as pickSlug } from '../lib/route-kind.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GATE = join(HERE, '..', 'gate-page-judge.mjs');
@@ -71,7 +72,7 @@ const LOOK = (route, type, verdict) => ({
  * A project past the pick: one board picked with every still the judge compares against, three
  * built routes, and a recorded look on each of the three page types.
  */
-function project({ picks = true, looks = null, built = ['/', '/security-windows', '/contact'], overrides = [], stills = true } = {}) {
+function project({ picks = true, looks = null, built = ['/', '/security-windows', '/contact'], overrides = [], stills = true, without = [] } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'page-judge-'));
   for (const route of built) {
     const sub = route === '/' ? 'dist/client' : join('dist/client', route.replace(/^\//, ''));
@@ -81,11 +82,14 @@ function project({ picks = true, looks = null, built = ['/', '/security-windows'
   const shots = join(dir, '.palate', 'explore', 'shots', 'b3');
   mkdirSync(shots, { recursive: true });
   if (stills) {
-    writeFileSync(join(shots, 'hero.png'), PNG);
-    writeFileSync(join(shots, 'foot.png'), PNG);
-    writeFileSync(join(shots, 'inner.png'), PNG);
-    writeFileSync(join(shots, 'donor.jpg'), JPEG);
-    writeFileSync(join(shots, 'donor-foot.png'), PNG);
+    // `without` drops one still, which is how the library really behaves: `donor-foot.png` is
+    // cropped only when the reference has a whole-page capture, and some have none.
+    const put = (name, bytes) => { if (!without.includes(name)) writeFileSync(join(shots, name), bytes); };
+    put('hero.png', PNG);
+    put('foot.png', PNG);
+    put('inner.png', PNG);
+    put('donor.jpg', JPEG);
+    put('donor-foot.png', PNG);
   }
   const pages = looks ?? [
     LOOK('/', 'home', 'The hero bleeds like the board, the wordmark sits on the photo, the band keeps one baseline'),
@@ -454,4 +458,73 @@ test('a boolean flag before the project directory does not swallow it', (t) => {
   const r = spawnSync(process.execPath, [GATE, '--check', dir], { encoding: 'utf8', env: { ...process.env } });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /skipped \(no pick recorded\)/);
+});
+
+test('a donor with no whole-page capture drops the ending for that route, never the whole run', (t) => {
+  if (engineReason) return t.skip(engineReason);
+  // THE FAULT: this used to skip the entire gate, entrance comparisons included, on a condition
+  // `gate-board-judge.mjs` documents as ordinary (the library holds no `full.png` for some
+  // references, so no `donor-foot.png` is ever cropped). The new instrument switched itself off
+  // and read as `page-judge=skipped` in the roll-call, which is the shape it exists to end.
+  const dir = project({ without: ['donor-foot.png'] });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = run(dir);
+  assert.equal(r.code, 0, `the entrance comparisons are unaffected by a missing ending: ${r.err}`);
+  const req = request(dir);
+  // The home keeps BOTH surfaces: it answers to the board, which has its own `foot.png`.
+  assert.deepEqual(req.pairs.map((p) => p.id.split('@')[0]), [
+    'home:entrance', 'home:foot', 'security-windows:entrance', 'contact:entrance',
+  ]);
+  // AND IT IS SAID OUT LOUD, naming the route and the file, because a dropped surface and a
+  // surface that passed look identical in a record that does not distinguish them.
+  assert.match(r.err, /\/security-windows: b3 has no donor-foot\.png on disk/);
+  assert.match(r.err, /\/contact: b3 has no donor-foot\.png on disk/);
+  assert.match(r.err, /ending is judged on nothing/);
+
+  // AND THE RECORD SAYS null RATHER THAN LEAVING THE KEY OUT, so a reader can tell a page
+  // judged on its entrance alone from one judged on both.
+  const j = judge(dir, answers(req));
+  assert.equal(j.code, 0, j.err);
+  const recorded = manifest(dir).compose.page_judgements;
+  const service = recorded.find((x) => x.route === '/security-windows');
+  assert.deepEqual(service.surfaces, ['entrance']);
+  assert.deepEqual(service.rungs, { entrance: 'comparable', foot: null });
+  assert.equal(service.rung, 'comparable');
+  assert.equal(recorded.find((x) => x.route === '/').surfaces.length, 2);
+
+  // AND --check READS IT AS JUDGED. A route judged on the one surface it had a picture for is
+  // judged; refusing it would block every build whose donor has no whole-page capture.
+  const check = run(dir, ['--check']);
+  assert.equal(check.code, 0, check.err);
+});
+
+test('a route with no picture at all is what stops the run, and the skip names the route', (t) => {
+  // Nothing to hold this page against on either surface, so there is genuinely no comparison to
+  // make: a skip, naming the board judge, exactly as before the per-surface degrade.
+  const dir = project({ without: ['donor.jpg', 'donor-foot.png'] });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = run(dir, ['--check']);
+  assert.ok(skipped(r), `expected a named skip, got ${r.code}: ${r.err}`);
+  assert.match(r.err, /\/security-windows/);
+  assert.match(r.err, /gate-board-judge\.mjs/);
+});
+
+test('a nested route keeps a still directory of its own, so it cannot collide', (t) => {
+  if (engineReason) return t.skip(engineReason);
+  // `/a/b` and `/a-b` both used to slug as `a-b`, and the slug names
+  // `.palate-shots/compose/<slug>/`, so the two pages would have shared one directory and the
+  // second's shots would have overwritten the first's between the write and the fingerprint.
+  assert.equal(pickSlug('/a/b'), 'a--b');
+  assert.notEqual(pickSlug('/a/b'), pickSlug('/a-b'));
+  const dir = project({
+    built: ['/', '/a/b'],
+    looks: [
+      LOOK('/', 'home', 'The hero bleeds like the board, the wordmark sits on the photo, the band keeps one baseline'),
+      LOOK('/a/b', 'service', 'The photo is inset rather than bled, the spec table reads down the page'),
+    ],
+  });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = run(dir);
+  assert.equal(r.code, 0, r.err);
+  assert.ok(existsSync(shot(dir, 'a--b', 'entrance.png')), 'a nested route keeps a directory of its own');
 });

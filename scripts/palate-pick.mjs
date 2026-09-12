@@ -58,7 +58,22 @@ const VALUE_FLAGS = new Set([
   "--looked", "--shot", "--verdict",
   "--override", "--what", "--reason",
 ]);
-const opt = (k) => { const i = args.indexOf(k); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : null; };
+/**
+ * A VALUE FLAG WITH NO VALUE IS A REFUSAL, never the next flag read as its value.
+ *
+ * `opt()` returned whatever token followed, so `--looked --shot x.png --verdict "..."` recorded
+ * a look on a route called `/--shot`, classified it as a service page, and satisfied
+ * `gate-look.mjs` for a page nobody built. The board judge and the page judge both refuse this
+ * shape; the record that feeds them has to refuse it too.
+ */
+const opt = (k) => {
+  const i = args.indexOf(k);
+  if (i < 0) return null;
+  const v = args[i + 1];
+  if (VALUE_FLAGS.has(k) && (v === undefined || v.startsWith("--")))
+    badArgs(`${k} was given with no value. Name it: ${k} <value>. NOT a record.`);
+  return v !== undefined ? v : null;
+};
 const flag = (k) => args.includes(k);
 const positional = [];
 for (let i = 0; i < args.length; i++) {
@@ -354,7 +369,9 @@ const existingOverrides = Array.isArray(compose.overrides) ? compose.overrides.s
 // Phrases that read as a look and are not one. Matched on WORD BOUNDARIES: "fine" inside
 // "refined" is a real word in a real reading, and a checker that cannot tell them apart
 // teaches people to write around it rather than to look.
-const EMPTY_VERDICTS = ["looks good", "matches the board", "no issues", "as designed", "fine"];
+// "fine" is gone from this list: "the hairline rule is fine at 1px, the kicker is gone" is a
+// real reading of a real page, and refusing it told the author they had not opened anything.
+const EMPTY_VERDICTS = ["looks good", "matches the board", "no issues", "as designed"];
 const MIN_VERDICT = 40;
 
 const lookedRoute = flag("--looked") ? (opt("--looked") ?? "") : null;

@@ -45,9 +45,17 @@ export function pageTypeOf(route) {
 /**
  * The filename-safe name of a route. `/` is `home` rather than an empty string, because a
  * directory named "" is a directory named after nothing.
+ *
+ * NESTED ROUTES KEEP A FORM OF THEIR OWN. Joining the segments with a single hyphen gave
+ * `/a/b` and `/a-b` the same slug, and the slug names the directory the judge writes its
+ * stills into (`.palate-shots/compose/<slug>/`), so two judged routes would have shared one
+ * directory and the second page's shots would have overwritten the first's between the write
+ * and the fingerprint. Joining with a doubled hyphen keeps them apart. Two routes that still
+ * collided (`/a/b` and `/a--b`) could only ever be the SAME page type, since the type is decided
+ * by the first segment, and the judge takes one route per type, so the collision cannot reach it.
  */
 export function routeSlug(route) {
   const r = normaliseRoute(route);
   if (r === "/") return "home";
-  return r.replace(/^\/+|\/+$/g, "").replace(/\//g, "-");
+  return r.replace(/^\/+|\/+$/g, "").split("/").join("--");
 }
