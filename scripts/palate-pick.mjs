@@ -246,17 +246,25 @@ if (proofUrl) {
       refuse(`the preview at ${proofUrl} could not be measured (${probeErr || "the probe returned nothing"}). If the page really is out of this machine's reach, say so: --proof ${proofUrl} --proof-unmeasured "<reason>".`);
     }
     const parallax = Array.isArray(measured.parallax) ? measured.parallax : [];
-    // A WITHHELD MEASUREMENT IS NOT EVIDENCE OF STILLNESS. On a page too short to scroll the
-    // probe reports no parallax at all, because every ratio would be a small number divided by
-    // a smaller one. Reading that empty list as "nothing moves" would refuse a page on a
-    // measurement nobody took.
-    const stillParallax = !measured.short_page && parallax.every((p) => (Number(p.ratio) || 0) < 0.05);
+    /**
+     * A WITHHELD MEASUREMENT IS NEITHER EVIDENCE NOR A LICENCE.
+     *
+     * On a page too short to scroll the probe reports no parallax at all, because every ratio
+     * would be a small number divided by a smaller one. Reading that empty list as "nothing
+     * moves" would refuse a page on a measurement nobody took; making it PROVE the page moves,
+     * which is what the first fix did, let a wholly static short page record a motion proof.
+     * So on a short page the parallax clause is simply not part of the floor, and the other
+     * three still are.
+     */
+    const shortPage = measured.short_page === true;
     const still = (measured.animated || 0) === 0
       && (measured.running || 0) === 0
-      && stillParallax
+      && (shortPage || parallax.every((p) => (Number(p.ratio) || 0) < 0.05))
       && measured.header?.before === measured.header?.after;
     if (still) {
-      refuse(`nothing measurable moves at ${proofUrl}; the motion proof is what the client was promised, build it before recording it.`);
+      refuse(shortPage
+        ? `nothing measurable moves at ${proofUrl}: no animation, nothing running, the header unchanged, and the page is too short to scroll far enough to measure a parallax. Build the motion the board promised, or if this preview cannot be driven from here say so: --proof ${proofUrl} --proof-unmeasured "<reason>".`
+        : `nothing measurable moves at ${proofUrl}; the motion proof is what the client was promised, build it before recording it.`);
     }
     patch.explore.proof = { url: proofUrl, verified_at: new Date().toISOString(), measured };
   }

@@ -317,19 +317,50 @@ test("a page whose only motion is the header is recorded, not refused", async (t
   } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a page too short to scroll is not refused on a parallax nobody could measure", async (t) => {
-  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
-  const dir = project();
-  // 460px of page: the probe withholds the parallax reading, so the floor cannot count an
-  // absence it never measured as evidence that nothing moves.
-  const site = await serve(`<!doctype html><meta charset="utf-8"><title>Short</title>
+/**
+ * A page too short to scroll is the one case where the probe cannot answer about parallax, and
+ * the first fix turned that into a page that could never be refused at all: a wholly static
+ * short page recorded a motion proof. The withheld reading is not evidence of stillness AND it
+ * is not a licence either. So on a short page the parallax clause is simply not part of the
+ * floor, and the other three still are.
+ */
+const SHORT_STATIC = `<!doctype html><meta charset="utf-8"><title>Short</title>
 <style>body { margin: 0; } section { height: 460px; }</style>
 <section id="one"><img id="para" width="200" height="150" alt="a still"
-  src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></section>`);
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></section>`;
+
+const SHORT_MOVING = `<!doctype html><meta charset="utf-8"><title>Short, moving</title>
+<style>
+  body { margin: 0; } section { height: 460px; }
+  .pulse { width: 80px; height: 80px; background: #e2553d; animation: slide 1s infinite alternate; }
+  @keyframes slide { from { transform: translateX(0); } to { transform: translateX(120px); } }
+</style>
+<section id="one"><div class="pulse"></div></section>`;
+
+test("a short page where nothing else moves is still refused", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(SHORT_STATIC);
   try {
     const r = await run([dir, "--proof", site.url]);
-    assert.equal(r.status, 0, `a withheld measurement is not evidence of stillness:\n${r.stdout}${r.stderr}`);
-    assert.equal(manifestOf(dir).explore.proof.measured.short_page, true);
+    assert.equal(r.status, 1, `a static page is a static page, short or not:\n${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /too short/, `the refusal has to say why the parallax was not measured: ${r.stderr}`);
+    assert.match(r.stderr, /--proof-unmeasured/, "the refusal does not name the way through");
+    assert.equal(manifestOf(dir).explore.proof, undefined, "a refused proof was recorded anyway");
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a short page that does move is recorded on the motion it has", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(SHORT_MOVING);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 0, `a short page with a running animation moves:\n${r.stdout}${r.stderr}`);
+    const measured = manifestOf(dir).explore.proof.measured;
+    assert.equal(measured.short_page, true, "this fixture is meant to be too short to scroll");
+    assert.deepEqual(measured.parallax, [], "the parallax reading is withheld on a short page");
+    assert.ok(measured.animated >= 1);
   } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
