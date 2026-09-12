@@ -566,6 +566,123 @@ present "explore-stage.md names the record a skipped donor row leaves" \
 present "explore-stage.md says two judgements are owed per pair" \
   "references/explore-stage.md" "two per pair"
 
+# ================= THE PRESENTATION SET, PINNED ==========================================
+# A direction stopped being a home page at beta.21: `boards-render.mjs` validates FOUR artboards
+# per direction (KINDS: home, inner, mobile, sheet), refuses a registry with no `presentation`,
+# and shoots five stills. Doctrine that still says "one artboard per rung" describes a client
+# shown one board out of four, which is exactly the sign-off this change exists to widen.
+present "explore-stage says a direction is four artboards" \
+  "references/explore-stage.md" "A DIRECTION IS FOUR ARTBOARDS"
+present "explore-stage names the inner-page artboard" \
+  "references/explore-stage.md" "I<rung>.dc.html"
+present "explore-stage names the phone artboard" \
+  "references/explore-stage.md" "M<rung>.dc.html"
+present "explore-stage names the detail sheet artboard" \
+  "references/explore-stage.md" "S<rung>.dc.html"
+present "explore-stage names the width a phone board is drawn at" \
+  "references/explore-stage.md" "x-dc{width:390px}"
+present "explore-stage names the mark the inner page's sections carry" \
+  "references/explore-stage.md" "<id>-inner-<piece>"
+# The sheet is the one board with a MINIMUM text budget in the validator (SHEET_MIN_TEXT), because
+# the format it is most likely to collapse into is the type specimen Jake rejected on 9 September.
+present "explore-stage bans the type specimen on the detail sheet" \
+  "references/explore-stage.md" "never a type specimen"
+# The registry fields boards-render and gate-explore both REFUSE a direction without.
+present "explore-stage registers the other three artboards" \
+  "references/explore-stage.md" "presentation: { inner:"
+present "explore-stage registers where every piece came from" \
+  "references/explore-stage.md" "pieces: { navigation:"
+present "SKILL.md A.4 registers the other three artboards" \
+  "SKILL.md" "presentation: { inner:"
+present "SKILL.md A.4 registers where every piece came from" \
+  "SKILL.md" "pieces: { navigation:"
+present "explore-stage names the caption every sheet block prints" \
+  "references/explore-stage.md" "Navigation: NavSimple, drawn from aesop"
+# The five stills and the row. A row is a COMPARISON (the columns are constants in boards-render
+# for that reason), so the doctrine names the order a client reads across.
+present "explore-stage names the five stills a direction owes" \
+  "references/explore-stage.md" "hero, full, inner, mobile and sheet"
+present "explore-stage names the direction's own canvas row" \
+  "references/explore-stage.md" "B, D, I, M, S"
+present "explore-stage names the public stills /explore shows" \
+  "references/explore-stage.md" "<id>-sheet.png"
+
+# ================= THE JUDGE READS THREE SURFACES ========================================
+# `SURFACES` in gate-board-judge.mjs is entrance, foot and inner: three pairs per direction, each
+# judged in both orders, and `rung` is the LOWEST across the surfaces judged. Doctrine saying
+# "two comparisons of its entrance still" describes a verdict about the top of a page recorded as
+# a verdict about the page.
+present "explore-stage says the judge states three pairs per direction" \
+  "references/explore-stage.md" "THREE pairs per direction"
+present "explore-stage says three pairs are six comparisons" \
+  "references/explore-stage.md" "six comparisons"
+present "explore-stage names the lowest surface as the one that stands" \
+  "references/explore-stage.md" "lowest across the surfaces judged"
+present "SKILL.md A.4 says the judge states three pairs per direction" \
+  "SKILL.md" "THREE pairs per direction"
+present "palate-verifier.md says the judge states three pairs per direction" \
+  "agents/palate-verifier.md" "THREE pairs per direction"
+# Each pair asks its OWN question. The request carries no top-level `question`, so a surface told
+# to pass "the question" verbatim would ask the entrance's question over a page ending.
+present "palate-verifier.md hands over each pair's own question" \
+  "agents/palate-verifier.md" "each pair carries its own"
+absent "palate-verifier.md no longer promises one question for every pair" \
+  "agents/palate-verifier.md" "carries \`question\`, the four"
+# A MISSING SURFACE AND A PASSING SURFACE MUST NOT LOOK ALIKE. sharp missing is a local fault with
+# a named fix and phase 1 SKIPS on it; a donor with no whole-page capture is a fact about the
+# library, so the ending is dropped, the pass line names only what was judged, and gate-explore
+# warns rather than fails.
+present "explore-stage says a missing sharp skips the judge rather than judging two surfaces" \
+  "references/explore-stage.md" "sharp not installed"
+present "explore-stage says a donor with no whole-page capture drops the ending" \
+  "references/explore-stage.md" "no whole-page capture"
+present "explore-stage says the unjudged ending is a warning, never a block" \
+  "references/explore-stage.md" "WARNS rather than blocks"
+
+# ================= WHAT GATE-EXPLORE NOW HOLDS ===========================================
+# It checks the REGISTRY (every variation against src/lib/kit.ts, every donor against
+# references_surveyed, the sheet's marks against the registry's variations); boards-render owns
+# the missing FILES. Doctrine that credits either with the other's checks sends an operator to
+# the wrong script with a real finding.
+present "explore-stage says the kit is what a variation is checked against" \
+  "references/explore-stage.md" "against src/lib/kit.ts"
+present "explore-stage says a donor is checked against the survey" \
+  "references/explore-stage.md" "references_surveyed"
+present "SKILL.md A.4 says the gate checks the variations and the donors" \
+  "SKILL.md" "references_surveyed"
+
+# ================= MOMENT 2 NO LONGER PROMISES ROUTES ====================================
+# `/v1`..`/vN` have not existed since canvas-first Explore (beta.17): a board is an artboard and
+# there is no route to open. The checkpoint that told the agent to hand over those links was the
+# last surface still promising them.
+absent "SKILL.md's checkpoint no longer promises /v1../vN routes" \
+  "SKILL.md" "The preview link is live with"
+present "SKILL.md's checkpoint hands over the canvas, else /explore" \
+  "SKILL.md" "the canvas is live (else \`/explore\`)"
+
+# ================= THE CALIBRATION ANSWER IS ASKED ONCE AND RECORDED TWICE ================
+# The intake asks it BEFORE the deep survey and the wall holds it on the checkpoint, so the old
+# premise ("the ladder is built before anyone has said how bold they want to be") is false. But
+# explore.astro draws the marker from `commission.intensity_asked`, which only
+# `palate-pick.mjs --intensity` writes, so the doctrine has to say the same answer is recorded
+# there too or the ladder ships with no marker on it.
+absent "explore-stage no longer says the ladder is built before the question is asked" \
+  "references/explore-stage.md" "The ladder is built BEFORE anyone has said how bold they want to be."
+present "explore-stage says the calibration answer is asked at the checkpoint" \
+  "references/explore-stage.md" "asked in the intake, before the deep survey"
+present "explore-stage says the same answer is recorded again for the ladder marker" \
+  "references/explore-stage.md" "recorded AGAIN as \`commission.intensity_asked\`"
+
+# ================= THE REGISTRY AND THE FILE MAP, PINNED =================================
+present "build-manifest.md records the four artboards a direction registers" \
+  "references/build-manifest.md" "presentation:{ inner, mobile, sheet }"
+present "build-manifest.md records where every piece came from" \
+  "references/build-manifest.md" "pieces:{ <piece>:{ variation, donor } }"
+present "commands/README.md says the seed holds four artboards per direction" \
+  "commands/README.md" "four hand-drawn artboards"
+present "commands/README.md says the judge states three surfaces" \
+  "commands/README.md" "three surfaces"
+
 # ================= THE TWO TOOL RULINGS, PINNED ==========================================
 # The surveyor WRITES its packet's two files (.palate/explore/refs.json and donor-heroes.json)
 # and saves the reference stills beside them, so a frontmatter of read-only tools describes an
