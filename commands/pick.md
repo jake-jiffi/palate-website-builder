@@ -1,6 +1,6 @@
 ---
 description: Record which direction the client picked, what they said, and anything they changed on the canvas.
-argument-hint: "--hero b3 [--section b5] [--intensity 3] [--answer motion=... --answer mix=... --answer cms=...] [--cta \"...\"] [--note \"...\"] [--canvas <dir>] [--canvas-url <url>] [--canvas-skipped \"<reason>\"] [--proof <url>] [--second-pass]"
+argument-hint: "--hero b3 [--section b5] [--intensity 3] [--answer motion=... --answer mix=... --answer cms=...] [--cta \"...\"] [--note \"...\"] [--canvas <dir>] [--canvas-url <url>] [--canvas-skipped \"<reason>\"] [--proof <url> [--proof-unmeasured \"<reason>\"]] [--second-pass]"
 ---
 
 Record the client's pick from the Explore boards, on the canvas or from `/explore`. This is the
@@ -106,6 +106,13 @@ Once Compose has written the home page and you have shown it to the client MOVIN
 ```bash
 node "$PALATE/scripts/palate-pick.mjs" "$SITE" --proof <preview-url>
 ```
+
+That command MEASURES the page with `scripts/motion-proof.mjs` and records what it read, so the
+proof is a measurement rather than a claim, and it REFUSES a page where nothing measurably
+moves. What it measures has to match the picked board's motion note in kind: a promised
+parallax as a parallax ratio, a promised marquee as `running`. If the preview cannot be reached
+from this machine, record the reason instead of skipping:
+`--proof <url> --proof-unmeasured "<reason>"`.
 
 That stamp is what `gate-done.sh` reads to decide there is a composed home page to measure
 against the picked board. Without it the fidelity gate skips on every build after Compose, and

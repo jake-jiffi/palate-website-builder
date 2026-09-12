@@ -381,8 +381,26 @@ onto `/explore` and the canvas.
    node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> --proof <preview-url>
    ```
 
+   **THAT COMMAND MEASURES THE PAGE, it does not take your word for it.** It runs
+   `scripts/motion-proof.mjs` against the URL and records what it read: the
+   sticky header's height before and after an 800 px scroll, the translateY each
+   image, video and background gained over that scroll as a ratio of the scroll
+   distance, how many elements carry a CSS animation, how many change with no
+   input at all, and the same counts again under
+   `prefers-reduced-motion: reduce`. A page where none of that moves is REFUSED:
+   the motion proof is what the client was promised, so it is built before it is
+   recorded. **The measurements must match the board's motion note IN KIND** - a
+   promised parallax has to register as a parallax ratio, a promised marquee as
+   `running`, a promised sticky header as two different heights. A note that
+   promises one kind of motion and a page that delivers another is a Compose
+   defect, not a proof. If the preview genuinely cannot be reached from this
+   machine (a tunnel only the client's browser opens, a host behind a login),
+   say so rather than skipping: add
+   `--proof-unmeasured "<reason>"`, which records the URL with `measured: null`
+   and the reason.
+
    **RECORD IT WITH THAT COMMAND, never by editing the manifest.** It writes
-   `explore.proof = { url, verified_at }` through `manifest-merge.mjs`, which is
+   `explore.proof = { url, verified_at, measured }` through `manifest-merge.mjs`, which is
    the only write that survives the PostToolUse hook's own. It is also what
    `scripts/gate-done.sh` reads to decide whether there is a composed home page to
    measure at all: without it every build after Compose reports
@@ -792,8 +810,11 @@ The mechanic when the client says "b3 hero + b5 menu":
 3b. **PROVE IT MOVING BEFORE BUILDING ANYTHING ELSE.** Run the full verify loop
    on `/` alone, hand the client the URL, and record the proof:
    `node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> --proof <preview-url>`.
-   Only after that is the rest of the site built. The fidelity gate does not run
-   until that stamp exists, so skipping it silently turns the check off.
+   That command MEASURES the page and refuses a page where nothing moves, so the
+   proof is a measurement rather than a claim; it has to match the board's motion
+   note in kind. Only after that is the rest of the site built. The fidelity gate
+   does not run until that stamp exists, so skipping it silently turns the check
+   off.
 4. Build the rest of the site's pages (`about`, `services`, etc.) in the same
    direction, ONE PER PAGE in `manifest.architecture` (W16). They get the chosen tokens
    automatically via the brand layer.

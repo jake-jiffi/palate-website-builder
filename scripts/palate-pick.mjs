@@ -28,7 +28,8 @@
  * Usage:
  *   node scripts/palate-pick.mjs <projectDir> --hero b3 [--section b5] [--cta "Book a table"]
  *        [--intensity 3] [--note "..."] [--canvas <extract-dir>] [--second-pass] [--replace]
- *        [--proof <preview-url>] [--answer motion=... --answer mix=... --answer cms=...]
+ *        [--proof <preview-url> [--proof-unmeasured "<reason>"]]
+ *        [--answer motion=... --answer mix=... --answer cms=...]
  *        [--canvas-url <published-url> | --canvas-skipped "<reason>"]
  * Exit: 0 recorded, 1 refused (with the reason), 2 bad arguments.
  */
@@ -43,6 +44,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const VALUE_FLAGS = new Set([
   "--hero", "--section", "--cta", "--intensity", "--note", "--canvas", "--proof", "--answer",
+  "--proof-unmeasured",
   "--canvas-url", "--canvas-skipped",
 ]);
 const opt = (k) => { const i = args.indexOf(k); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : null; };
@@ -201,11 +203,54 @@ if (note) {
  * be named in the doctrine and copied verbatim.
  */
 const proofUrl = opt("--proof");
+const proofUnmeasured = flag("--proof-unmeasured") ? (opt("--proof-unmeasured") ?? "") : null;
+if (proofUnmeasured !== null && !proofUrl) {
+  badArgs("--proof-unmeasured says why the preview could not be measured, so it needs the preview: pass --proof <url> with it.");
+}
 if (proofUrl) {
   if (!/^https?:\/\/\S+$/.test(proofUrl)) {
     refuse(`--proof ${proofUrl} is not a URL. It is the preview the client was shown the home page moving on, so it has to be one they can open.`);
   }
-  patch.explore.proof = { url: proofUrl, verified_at: new Date().toISOString() };
+  if (proofUnmeasured !== null) {
+    // THE HONEST ESCAPE, and it is recorded rather than silent. Some previews cannot be driven
+    // from this machine: a tunnel that only the client's browser reaches, a staging host behind
+    // a login. The proof is still worth recording, and what the gate must never see is an
+    // unmeasured proof that looks exactly like a measured one.
+    const reason = proofUnmeasured.trim();
+    if (!reason) {
+      refuse("--proof-unmeasured needs the reason the probe could not reach the preview. Without it this flag is a way of not measuring that leaves no trace, which is the fault it exists to make visible.");
+    }
+    patch.explore.proof = { url: proofUrl, verified_at: new Date().toISOString(), measured: null, reason };
+  } else {
+    /**
+     * MEASURE IT. A real build recorded this proof on the agent's word: the board promised a
+     * 0.6x parallax, the record said the motion had been shown, and the image moved 7 per cent
+     * of the scroll. The person who opened the preview said there was no motion. Nothing could
+     * have contradicted the record, because the record held nothing that could be wrong.
+     */
+    const probe = join(HERE, "motion-proof.mjs");
+    let measured = null;
+    let probeErr = "";
+    try {
+      measured = JSON.parse(execFileSync(process.execPath, [probe, proofUrl], {
+        encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 8 * 1024 * 1024,
+      }));
+    } catch (e) {
+      probeErr = (e.stderr || e.message || "").toString().trim().split("\n")[0];
+    }
+    if (!measured) {
+      refuse(`the preview at ${proofUrl} could not be measured (${probeErr || "the probe returned nothing"}). If the page really is out of this machine's reach, say so: --proof ${proofUrl} --proof-unmeasured "<reason>".`);
+    }
+    const parallax = Array.isArray(measured.parallax) ? measured.parallax : [];
+    const still = (measured.animated || 0) === 0
+      && (measured.running || 0) === 0
+      && parallax.every((p) => (Number(p.ratio) || 0) < 0.05)
+      && measured.header?.before === measured.header?.after;
+    if (still) {
+      refuse(`nothing measurable moves at ${proofUrl}; the motion proof is what the client was promised, build it before recording it.`);
+    }
+    patch.explore.proof = { url: proofUrl, verified_at: new Date().toISOString(), measured };
+  }
 }
 
 /**

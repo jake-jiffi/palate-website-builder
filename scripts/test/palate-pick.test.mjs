@@ -16,6 +16,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createServer } from "node:http";
+import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -78,6 +80,63 @@ const run = async (args) => {
     return { status: e.code ?? 1, stdout: e.stdout ?? "", stderr: e.stderr ?? "" };
   }
 };
+
+/**
+ * THE PROOF IS NOW A MEASUREMENT, so the tests that exercise it need a page that really moves
+ * and a page that really does not. Two fixtures served from this process, on a loopback port,
+ * because the probe drives a browser and a browser will not read a string.
+ */
+const MOVING_PAGE = `<!doctype html><meta charset="utf-8"><title>Moving</title>
+<style>
+  body { margin: 0; }
+  header { position: sticky; top: 0; height: 120px; background: #222; }
+  header.small { height: 60px; }
+  section { min-height: 1400px; }
+  .pulse { width: 80px; height: 80px; background: #e2553d; animation: slide 1s infinite alternate; }
+  @keyframes slide { from { transform: translateX(0); } to { transform: translateX(120px); } }
+</style>
+<header id="top">Header</header>
+<section id="one">
+  <img id="para" width="400" height="300" alt="a still"
+       src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==">
+  <div class="pulse"></div>
+</section>
+<section id="two"><p>More copy.</p></section>
+<script>
+  addEventListener("scroll", () => {
+    document.getElementById("para").style.transform = "translateY(" + (scrollY * 0.4) + "px)";
+    document.getElementById("top").classList.toggle("small", scrollY > 100);
+  });
+</script>`;
+
+const STILL_PAGE = `<!doctype html><meta charset="utf-8"><title>Still</title>
+<style>body { margin: 0; } header { height: 120px; background: #222; } section { min-height: 1400px; }</style>
+<header id="top">Header</header>
+<section id="one"><img id="para" width="400" height="300" alt="a still"
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></section>
+<section id="two"><p>More copy.</p></section>`;
+
+async function serve(html) {
+  const s = createServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(html);
+  });
+  await new Promise((ok) => s.listen(0, "127.0.0.1", ok));
+  return { url: `http://127.0.0.1:${s.address().port}/`, close: () => new Promise((ok) => s.close(ok)) };
+}
+
+// The probe needs the capture engine's browser. Where it is not installed the measured half of
+// these assertions cannot run, and skipping loudly is the honest outcome: a suite that quietly
+// passes without the instrument is how a dead check survives.
+let hasBrowser = true;
+try { createRequire(join(ROOT, "scripts", "reference-capture", "index.mjs"))("playwright"); }
+catch { hasBrowser = false; }
+
+// A URL nobody is listening on, for the calls whose subject is the RECORD rather than the
+// measurement: they pass --proof-unmeasured, which is the flag for a page the probe cannot
+// reach.
+const UNREACHABLE = "https://palate-fixture.vercel.app/";
+const NO_PROBE = ["--proof-unmeasured", "the preview is behind a tunnel this machine cannot open"];
 
 test("a hero pick is recorded with its rung, its position and when", async () => {
   const dir = project();
@@ -160,16 +219,63 @@ test("the calibration answer, the CTA, a note and a second pass are all recorded
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("the motion proof is a command, not a JSON edit", async () => {
+test("the motion proof is a command, not a JSON edit", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
   const dir = project();
-  const r = await run([dir, "--proof", "https://palate-fixture.vercel.app/"]);
+  const site = await serve(MOVING_PAGE);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 0, r.stderr);
+    const proof = manifestOf(dir).explore.proof;
+    assert.equal(proof.url, site.url);
+    assert.ok(Date.parse(proof.verified_at) > 0, "the proof carries no timestamp");
+    // THE MEASUREMENT IS THE RECORD. A proof that is a URL and a timestamp is the agent's word,
+    // and on a real build that word was wrong by an order of magnitude.
+    assert.ok(proof.measured, "the proof carries no measurement");
+    assert.ok(proof.measured.animated >= 1, `the page loops and the record says animated ${proof.measured.animated}`);
+    assert.ok(Math.max(0, ...proof.measured.parallax.map((x) => x.ratio)) > 0.3,
+      `the hero moves at 0.4 of the scroll and the record says ${JSON.stringify(proof.measured.parallax)}`);
+    // The done gate reads exactly this to decide whether there is a composed home to measure, so
+    // a model that cannot write it leaves the fidelity gate skipped on every real build.
+    assert.match(r.stdout, /motion proof/i);
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a page where nothing measurably moves is refused, not recorded", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(STILL_PAGE);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 1, `a still page must be refused:\n${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /nothing measurable moves/);
+    assert.equal(manifestOf(dir).explore.proof, undefined, "a refused proof was recorded anyway");
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a preview the probe cannot reach is refused until the reason is given", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  // Nothing listens on port 1: the shape of a preview that died or a tunnel that never came up.
+  const r = await run([dir, "--proof", "http://127.0.0.1:1/"]);
+  assert.equal(r.status, 1, `an unmeasurable preview must be refused:\n${r.stdout}${r.stderr}`);
+  assert.match(r.stderr, /--proof-unmeasured/, "the refusal does not name the way through");
+  assert.equal(manifestOf(dir).explore.proof, undefined);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("--proof-unmeasured records the reason instead of a measurement", async () => {
+  const dir = project();
+  const r = await run([dir, "--proof", UNREACHABLE, ...NO_PROBE]);
   assert.equal(r.status, 0, r.stderr);
   const proof = manifestOf(dir).explore.proof;
-  assert.equal(proof.url, "https://palate-fixture.vercel.app/");
-  assert.ok(Date.parse(proof.verified_at) > 0, "the proof carries no timestamp");
-  // The done gate reads exactly this to decide whether there is a composed home to measure, so
-  // a model that cannot write it leaves the fidelity gate skipped on every real build.
-  assert.match(r.stdout, /motion proof/i);
+  assert.equal(proof.url, UNREACHABLE);
+  assert.equal(proof.measured, null, "an unmeasured proof must say so, not leave the field out");
+  assert.match(proof.reason, /tunnel/);
+
+  // And the reason is not optional: an empty one is silence wearing the flag's name.
+  const blank = await run([dir, "--proof", UNREACHABLE, "--proof-unmeasured", "  "]);
+  assert.equal(blank.status, 1, blank.stdout);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -224,13 +330,13 @@ test("the proof still records after Compose has cleared the registry", async () 
   // re-verify and a SECOND --proof. Refusing it with a message about picks is how the fidelity
   // gate ends up skipped on exactly the builds someone cared enough to iterate on.
   writeFileSync(join(dir, "src/lib/variants.ts"), "export const variants = [];\n");
-  const r = await run([dir, "--proof", "https://palate-fixture.vercel.app/second/"]);
+  const r = await run([dir, "--proof", "https://palate-fixture.vercel.app/second/", ...NO_PROBE]);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(manifestOf(dir).explore.proof.url, "https://palate-fixture.vercel.app/second/");
 
   // And with the file gone entirely, which is the archive-first order.
   rmSync(join(dir, "src/lib/variants.ts"));
-  const gone = await run([dir, "--proof", "https://palate-fixture.vercel.app/third/", "--second-pass"]);
+  const gone = await run([dir, "--proof", "https://palate-fixture.vercel.app/third/", ...NO_PROBE, "--second-pass"]);
   assert.equal(gone.status, 0, gone.stderr);
   assert.equal(manifestOf(dir).explore.proof.url, "https://palate-fixture.vercel.app/third/");
   assert.equal(manifestOf(dir).explore.second_passes, 1);
@@ -263,7 +369,7 @@ test("a directory that is not a Palate site is refused, never reported as record
   // invocation takes a <project-dir> the model supplies, and on a real build the manifest sat at
   // a repo root while the site sat one level down, which turned every gate off. A success line
   // on an empty directory is that fault with a reassuring message on top of it.
-  const r = await run([empty, "--proof", "https://palate-fixture.vercel.app/"]);
+  const r = await run([empty, "--proof", UNREACHABLE, ...NO_PROBE]);
   assert.equal(r.status, 2, `an empty directory must be bad arguments, not a recorded proof:\n${r.stdout}${r.stderr}`);
   assert.match(r.stderr, /Not an Explore build/);
   assert.ok(!/motion proof recorded/.test(r.stdout), "it printed a success line for a directory holding nothing");
@@ -272,7 +378,7 @@ test("a directory that is not a Palate site is refused, never reported as record
   // And the case N3 opened stays open: the registry gone, the manifest present.
   const dir = project();
   rmSync(join(dir, "src/lib/variants.ts"));
-  const ok = await run([dir, "--proof", "https://palate-fixture.vercel.app/"]);
+  const ok = await run([dir, "--proof", UNREACHABLE, ...NO_PROBE]);
   assert.equal(ok.status, 0, ok.stderr);
   assert.ok(manifestOf(dir).explore.proof.url);
   rmSync(dir, { recursive: true, force: true });

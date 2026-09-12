@@ -189,6 +189,19 @@ runs() { # <desc> <function name>
   if out="$("$2" 2>&1)"; then ok "$1"; else bad "$1 ($out)"; fi
 }
 
+# A GREP CANNOT TELL A TRUE SENTENCE FROM A FALSE ONE. The claim above is about what a command
+# DOES, so it is run: a page holding nothing but text is served on a loopback port and
+# palate-pick is asked to record it as the motion proof. The refusal is the assertion.
+probe_refuses_a_still_page() {
+  local proj out rc
+  proj="$(mktemp -d)"
+  printf '%s\n' '{"schema":3,"explore":{"ran":true}}' > "$proj/build-manifest.json"
+  out="$(node "$ROOT/scripts/test/fixtures/still-page-server.mjs" "$ROOT/scripts/palate-pick.mjs" "$proj" 2>&1)" && rc=0 || rc=$?
+  rm -rf "$proj"
+  [ "$rc" -ne 0 ] || { echo "palate-pick recorded a proof for a page where nothing moves: $out"; return 1; }
+  printf '%s' "$out" | grep -qF "nothing measurable moves" || { echo "the refusal did not name the fault: $out"; return 1; }
+}
+
 # A throwaway project whose `npm` is a stub: it writes down the environment each script was
 # given, and for a long-running script serves one 200 so serve-preview.sh can finish and hand
 # over a URL the way it does for a real site.
@@ -642,6 +655,35 @@ present "explore-stage asks the intake through the tool" \
   "references/explore-stage.md" "AskUserQuestion"
 present "explore-stage asks the question round through the tool" \
   "references/explore-stage.md" "as one AskUserQuestion call"
+
+# THE MOTION PROOF IS A MEASUREMENT. A board is a still, so the motion note is the one promise
+# the client cannot see before they choose, and until the probe existed the proof of it was a
+# URL, a timestamp and the agent's word. On a real build that word was wrong by an order of
+# magnitude: 0.6x promised, 7 per cent delivered, and the person said there was no motion. The
+# doctrine has to say the command measures, or a model reads it as a stamp again.
+present "explore-stage says the proof command measures the page" \
+  "references/explore-stage.md" "MEASURES THE PAGE, it does not take your word for it"
+present "explore-stage names the probe" \
+  "references/explore-stage.md" "scripts/motion-proof.mjs"
+present "explore-stage says a still page is refused" \
+  "references/explore-stage.md" "A page where none of that moves is REFUSED"
+present "explore-stage says the measurement must match the note in kind" \
+  "references/explore-stage.md" "must match the board's motion note IN KIND"
+present "explore-stage names the honest escape rather than a skip" \
+  "references/explore-stage.md" "--proof-unmeasured"
+present "SKILL.md A.6 says the proof is measured" \
+  "SKILL.md" "THE PROOF IS MEASURED, NOT DECLARED"
+present "SKILL.md A.6 names the field the gate reads" \
+  "SKILL.md" "explore.proof.measured"
+# ...where the browser it drives is installed. Without it the probe skips, and a skip is not a
+# refusal: asserting on it would turn a missing dependency into a doctrine failure.
+if node --input-type=module -e 'import { createRequire } from "node:module"; createRequire(process.argv[1]).resolve("playwright");' \
+     "$ROOT/scripts/reference-capture/index.mjs" >/dev/null 2>&1; then
+  runs "the probe refuses a page where nothing moves, so the doctrine is not describing an intention" \
+    probe_refuses_a_still_page
+else
+  ok "the probe refusal is not checked here (the capture engine's browser is not installed)"
+fi
 
 echo "---"
 echo "passed=$pass failed=$fail"
