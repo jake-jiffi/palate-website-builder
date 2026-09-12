@@ -130,8 +130,13 @@ export const variants: Variant[] = [
   // },
 ];
 
-/** Landing-page boards, only when the brief warrants. Routes /lp1, ... Same required fields. */
-export const landingVariants: Variant[] = [];
+/**
+ * Landing-page boards, only when the brief warrants. Same required fields, MINUS
+ * `presentation`: a landing board is shown on the canvas alone, and boards-render draws the
+ * ladder's rungs and nothing else, so it has no inner page, no phone board and no detail sheet
+ * to name.
+ */
+export const landingVariants: Omit<Variant, "presentation">[] = [];
 
 /** Ladder order, and the single place that order is decided. */
 export function byAmbition(list: Variant[]): Variant[] {

@@ -384,6 +384,110 @@ test("a text edit and a new note on the canvas become feedback Compose must hono
   rmSync(dir, { recursive: true, force: true });
 });
 
+/**
+ * A DIRECTION IS FOUR BOARDS ON ONE ROW, and the read-back has to know which one was edited.
+ *
+ * Every B frame now sits at x 0 on its own row, so a note attributed by horizontal span alone
+ * lands on direction 1 whichever direction it was written beside: one client's sentence about
+ * the boldest direction applied to the most restrained one, in a file Compose is told to
+ * honour. Attribution is by the frame whose x AND y spans contain the note.
+ */
+const FOUR = `export interface Variant { id: string; }
+export const variants: Variant[] = [
+  { id: "b1", name: "The Quiet Room", artboard: "B1.dc.html",
+    presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
+    ambition: 1, what: "A", why: "B", feeling: "quiet", donor: "aesop", section: "services",
+    motion: "One fade.", ctas: ["Book"] },
+  { id: "b2", name: "The Long Table", artboard: "B2.dc.html",
+    presentation: { inner: "I2.dc.html", mobile: "M2.dc.html", sheet: "S2.dc.html" },
+    ambition: 2, what: "C", why: "D", feeling: "candid", donor: "leoleo", section: "proof",
+    motion: "Rows settle.", ctas: ["See"] },
+];
+export const landingVariants: Variant[] = [];
+`;
+
+test("an edit on the detail sheet is read back and tagged with its surface", async () => {
+  const dir = project();
+  writeFileSync(join(dir, "src/lib/variants.ts"), FOUR);
+  const body = (copy) => `<div data-palate-k="k1" style="padding:40px">` +
+    `<h2 data-palate-k="k2" style="font-size:32px">${copy}</h2></div>`;
+  for (const [n, id] of [[1, "b1"], [2, "b2"]]) {
+    for (const f of [`B${n}`, `I${n}`, `M${n}`, `S${n}`]) seedBoard(dir, `${f}.dc.html`, body(`${f} as drawn`));
+    void id;
+  }
+  writeFileSync(join(dir, ".palate/explore/seed/canvas.json"),
+    JSON.stringify({ artboards: [], annotations: [], launch: { view: "canvas" } }));
+
+  const extract = join(dir, "extract");
+  mkdirSync(extract, { recursive: true });
+  for (const f of ["B1", "I1", "M1", "S1", "B2", "I2", "M2", "S2"]) {
+    const src = readFileSync(join(dir, ".palate/explore/seed", `${f}.dc.html`), "utf8");
+    writeFileSync(join(extract, `${f}.dc.html`), f === "S2" ? src.replace("S2 as drawn", "S2, with the form error reworded") : src);
+  }
+  writeFileSync(join(extract, "canvas.json"),
+    JSON.stringify({ artboards: [], annotations: [], launch: { view: "canvas" } }));
+
+  const r = await run([dir, "--canvas", extract]);
+  assert.equal(r.status, 0, r.stderr);
+  const fb = JSON.parse(readFileSync(join(dir, ".palate/explore/feedback.json"), "utf8"));
+  const text = fb.filter((f) => f.kind === "text");
+  assert.equal(text.length, 1, `expected one text edit on the sheet, got ${JSON.stringify(fb)}`);
+  assert.equal(text[0].board, "b2");
+  assert.equal(text[0].surface, "sheet", "the edit was read back without saying which board it was on");
+  assert.equal(text[0].after, "S2, with the form error reworded");
+  // Every surface of every direction is diffed, not only the home board.
+  assert.match(r.stdout, /read cleanly/i);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a note beside the second direction's sheet is attributed to that direction, not the first", async () => {
+  const dir = project();
+  writeFileSync(join(dir, "src/lib/variants.ts"), FOUR);
+  for (const f of ["B1", "I1", "M1", "S1", "B2", "I2", "M2", "S2"]) {
+    seedBoard(dir, `${f}.dc.html`, `<div data-palate-k="k1"><p data-palate-k="k2" style="font-size:18px">${f}</p></div>`);
+  }
+  // The rows boards-render lays: every B at x 0, the sheet at 4310, row 2 a row below row 1.
+  const row = (y, n) => [
+    { file: `B${n}.dc.html`, x: 0, y, w: 1440, h: 2000, title: `Rung ${n}` },
+    { file: `I${n}.dc.html`, x: 2320, y, w: 1440, h: 1800, title: "inner" },
+    { file: `M${n}.dc.html`, x: 3840, y, w: 390, h: 1900, title: "mobile" },
+    { file: `S${n}.dc.html`, x: 4310, y, w: 1440, h: 1600, title: "sheet" },
+  ];
+  const artboards = [...row(0, 1), ...row(2120, 2)];
+  writeFileSync(join(dir, ".palate/explore/seed/canvas.json"),
+    JSON.stringify({ artboards, annotations: [], launch: { view: "canvas" } }));
+
+  const extract = join(dir, "extract");
+  mkdirSync(extract, { recursive: true });
+  for (const f of ["B1", "I1", "M1", "S1", "B2", "I2", "M2", "S2"]) {
+    writeFileSync(join(extract, `${f}.dc.html`), readFileSync(join(dir, ".palate/explore/seed", `${f}.dc.html`), "utf8"));
+  }
+  writeFileSync(join(extract, "canvas.json"), JSON.stringify({
+    artboards,
+    annotations: [
+      // Written inside direction 2's sheet frame. By x span alone this is nobody's; by x span
+      // against the B frames alone it was direction 1's, which is the bug.
+      { id: "client-1", x: 4400, y: 2400, w: 420, text: "The form error should name the field." },
+      // And one inside direction 2's home board, where x alone said direction 1.
+      { id: "client-2", x: 200, y: 2300, w: 420, text: "Warmer photography here." },
+    ],
+    launch: { view: "canvas" },
+  }, null, 2));
+
+  const r = await run([dir, "--canvas", extract]);
+  assert.equal(r.status, 0, r.stderr);
+  const fb = JSON.parse(readFileSync(join(dir, ".palate/explore/feedback.json"), "utf8"));
+  const notes = fb.filter((f) => f.kind === "note");
+  assert.equal(notes.length, 2, JSON.stringify(fb));
+  const sheetNote = notes.find((n) => n.path === "client-1");
+  assert.equal(sheetNote.board, "b2", "the note beside direction 2's sheet was filed against another direction");
+  assert.equal(sheetNote.surface, "sheet", "the note does not say which surface it was written beside");
+  const homeNote = notes.find((n) => n.path === "client-2");
+  assert.equal(homeNote.board, "b2");
+  assert.equal(homeNote.surface, "home");
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("a deleted element is one removed entry, not hundreds of shifted ones", async () => {
   const dir = project();
   // The seed shape boards-render writes: a stable key on every element, which the canvas editor

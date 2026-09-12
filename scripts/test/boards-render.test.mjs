@@ -845,6 +845,45 @@ test("a type specimen is refused as a sheet, and the rule is named", () => {
   assert.match(r.problems.join("\n"), /120 characters|specimen/i);
 });
 
+test("a state the piece does not implement is refused, and default is implicit", () => {
+  // A sheet claiming a state the kit does not build is the same promise as a variation that
+  // does not exist: the client signs off a form error the build has no way to render.
+  const bogus = SHEET_BLOCKS.map(([m, c]) => (m === "trust:TrustRatings:default" ? ["trust:TrustRatings:nonsense", c] : [m, c]));
+  const r = val(asSheet(bogus), { kind: "sheet" });
+  assert.equal(r.ok, false, "a state the kit does not declare was accepted");
+  assert.match(r.problems.join("\n"), /nonsense/);
+  // `default` is the resting state and no piece declares it, so it must never be refused: the
+  // fixture is six blocks of :default and it validates.
+  const kitStates = KIT.get("trust").get("TrustRatings");
+  assert.ok(!kitStates.has("default"), "the kit declares default, so this proves nothing");
+  assert.equal(val(asSheet(), { kind: "sheet" }).ok, true);
+});
+
+test("two data-kit-piece attributes on one tag are refused", () => {
+  // The second one is invisible: a parser reading attributes takes the first and the block is
+  // filed as one piece while its markup claims two, which is how a required block goes missing
+  // on a sheet that says it is there.
+  const doubled = asSheet().replace('data-kit-piece="cta:CtaClosing:default"',
+    'data-kit-piece="cta:CtaClosing:default" data-kit-piece="footer:FooterSimple:default"');
+  const r = val(doubled, { kind: "sheet" });
+  assert.equal(r.ok, false, "a tag carrying two data-kit-piece attributes was accepted");
+  assert.match(r.problems.join("\n"), /two data-kit-piece|more than one/i);
+});
+
+test("an annotation id stays inside the 40 characters a canvas id allows", () => {
+  // `mobile-` is the longest prefix, so the id is what bounds the slice. A board id at the
+  // limit produced a 41-character annotation id, which the canvas rejects and nothing said so.
+  const longId = "b".repeat(60);
+  const doc = writeCanvasJson({
+    boards: [{ file: "B1.dc.html", id: longId, ambition: 1, name: "One", h: 900, feeling: "quiet", what: "A",
+      presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
+      innerH: 900, mobileH: 900, sheetH: 900 }],
+    out: null,
+  });
+  assert.ok(doc.annotations.some((a) => a.id.startsWith("mobile-")), "no mobile annotation to measure");
+  for (const a of doc.annotations) assert.match(a.id, /^[A-Za-z0-9_-]{1,40}$/, `${a.id} is ${a.id.length} characters`);
+});
+
 test("the shared rules hold on every kind, so a broken image is refused on the sheet too", () => {
   const withImg = asSheet().replace("<header class=\"sheet-head", '<img src="https://example.com/x.jpg" alt=""><header class="sheet-head');
   const r = val(withImg, { kind: "sheet" });

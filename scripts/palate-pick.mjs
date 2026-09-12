@@ -368,10 +368,26 @@ export function diffCanvas(seedDir, extractDir, boards) {
   const out = [];
   const clean = [];
   const unaligned = [];
-  const byRung = new Map(boards.map((b) => [Number(b.ambition), b.id]));
 
+  /**
+   * EVERY SURFACE OF EVERY DIRECTION, not only the home board.
+   *
+   * A direction is four artboards on the canvas, and the client can edit any of them. Diffing
+   * `B<n>` alone meant a reworded form error on the detail sheet, or a headline retyped on the
+   * phone, came back as "no change was made on the canvas": the most specific instruction a
+   * client can give, silently dropped. Every entry now carries the surface it was made on, so
+   * Compose applies a sheet edit to the sheet.
+   */
+  const surfaces = boards.flatMap((b) => boardSurfaces(b).map((s) => ({ ...s, board: b })));
+  const byFile = new Map(surfaces.map((s) => [s.file, { board: s.board.id, surface: s.surface }]));
   for (const b of boards) {
-    const file = `B${b.ambition}.dc.html`;
+    // The donor card is the plugin's own, but a note can be written beside it and it belongs to
+    // the direction it sits with.
+    if (Number.isFinite(Number(b.ambition))) byFile.set(`D${Number(b.ambition)}.dc.html`, { board: b.id, surface: "donor" });
+  }
+
+  for (const { board: b, surface, file } of surfaces) {
+    const label = surface === "home" ? b.id : `${b.id} ${surface}`;
     const a = join(seedDir, file);
     const z = join(extractDir, file);
     if (!existsSync(a) || !existsSync(z)) continue;
@@ -395,9 +411,10 @@ export function diffCanvas(seedDir, extractDir, boards) {
     };
     const keyed = before.keyed && after.keyed && !dupes(before.styles) && !dupes(after.styles);
     if (!keyed) {
-      unaligned.push({ board: b.id, why: before.keyed && after.keyed ? "duplicated element keys" : "no element keys in the seed or the extract" });
+      unaligned.push({ board: label, why: before.keyed && after.keyed ? "duplicated element keys" : "no element keys in the seed or the extract" });
       out.push({
         board: b.id,
+        surface,
         kind: "unaligned",
         path: file,
         before: null,
@@ -412,14 +429,14 @@ export function diffCanvas(seedDir, extractDir, boards) {
     const textAfter = new Map(after.texts.map((t) => [t.key, t.text]));
     for (const [key, text] of textBefore) {
       if (!textAfter.has(key)) continue;   // removals are reported once, below
-      if (textAfter.get(key) !== text) out.push({ board: b.id, kind: "text", path: key, before: text, after: textAfter.get(key) });
+      if (textAfter.get(key) !== text) out.push({ board: b.id, surface, kind: "text", path: key, before: text, after: textAfter.get(key) });
     }
 
     const styleBefore = new Map(before.styles.map((t) => [t.key, t.style]));
     const styleAfter = new Map(after.styles.map((t) => [t.key, t.style]));
     for (const [key, style] of styleBefore) {
       if (!styleAfter.has(key)) continue;
-      if (styleAfter.get(key) !== style) out.push({ board: b.id, kind: "style", path: key, before: style, after: styleAfter.get(key) });
+      if (styleAfter.get(key) !== style) out.push({ board: b.id, surface, kind: "style", path: key, before: style, after: styleAfter.get(key) });
     }
 
     // ONE ENTRY PER ELEMENT, whichever way it went. A deleted band is a decision the client
@@ -428,13 +445,13 @@ export function diffCanvas(seedDir, extractDir, boards) {
     const keysAfter = new Set([...styleAfter.keys(), ...textAfter.keys()]);
     for (const key of keysBefore) {
       if (keysAfter.has(key)) continue;
-      out.push({ board: b.id, kind: "removed", path: key, before: textBefore.get(key) ?? styleBefore.get(key) ?? null, after: null });
+      out.push({ board: b.id, surface, kind: "removed", path: key, before: textBefore.get(key) ?? styleBefore.get(key) ?? null, after: null });
     }
     for (const key of keysAfter) {
       if (keysBefore.has(key)) continue;
-      out.push({ board: b.id, kind: "added", path: key, before: null, after: textAfter.get(key) ?? styleAfter.get(key) ?? null });
+      out.push({ board: b.id, surface, kind: "added", path: key, before: null, after: textAfter.get(key) ?? styleAfter.get(key) ?? null });
     }
-    clean.push(b.id);
+    clean.push(label);
   }
 
   // The annotations, which are where a client writes a sentence rather than dragging a value.
@@ -445,7 +462,8 @@ export function diffCanvas(seedDir, extractDir, boards) {
     for (const n of backCanvas.annotations || []) {
       const before = was.has(n.id) ? was.get(n.id) : null;
       if (before === n.text) continue;
-      out.push({ board: boardForAnnotation(n, backCanvas, byRung), kind: "note", path: n.id, before, after: n.text });
+      const where = boardForAnnotation(n, backCanvas, byFile);
+      out.push({ board: where.board, surface: where.surface, kind: "note", path: n.id, before, after: n.text });
     }
   }
   return { entries: out, clean, unaligned };
@@ -454,22 +472,49 @@ export function diffCanvas(seedDir, extractDir, boards) {
 function readJson(p) { try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; } }
 
 /**
- * Which board a note belongs to.
+ * The artboards one direction is made of, and what each of them is.
  *
- * An annotation the plugin wrote names its board in its id. One a CLIENT wrote does not, so it
- * is attributed by geometry: the artboard whose horizontal span contains it. A note that
- * belongs to no frame is recorded against the whole set rather than dropped, because an
+ * `presentation` is required of a registry written by the current template, and absent from an
+ * older one and from the ladder recovered out of `explore.boards` after Compose clears the
+ * registry. A surface with no file is simply not diffed: this reads a canvas back, and refusing
+ * here would turn an old build's feedback into an error message.
+ */
+function boardSurfaces(b) {
+  const p = b.presentation || {};
+  return [
+    { surface: "home", file: b.artboard || `B${b.ambition}.dc.html` },
+    { surface: "inner", file: p.inner },
+    { surface: "mobile", file: p.mobile },
+    { surface: "sheet", file: p.sheet },
+  ].filter((s) => s.file);
+}
+
+/**
+ * Which board, and which of its surfaces, a note belongs to.
+ *
+ * An annotation the plugin wrote names both in its id. One a CLIENT wrote names neither, so it
+ * is attributed by geometry, and the geometry changed underneath it: the canvas lays one ROW
+ * per direction, so every home board sits at x 0 and the old horizontal-span test attributed
+ * every free-form note on the canvas to direction 1. A client's sentence about the boldest
+ * direction was applied to the most restrained one, in the file Compose is told to honour.
+ *
+ * So a note belongs to the frame whose x span AND y span contain it, any of the five in the
+ * row. Rows are 120 apart and the slop is 40, so a note below one row cannot reach the next.
+ * A note inside no frame is recorded against the whole set rather than dropped, because an
  * unattributable sentence from a client is still the most valuable line on the canvas.
  */
-function boardForAnnotation(note, canvas, byRung) {
-  const named = /^board-(.+)$/.exec(note.id || "");
-  if (named) return named[1];
+function boardForAnnotation(note, canvas, byFile) {
+  const named = /^(board|inner|mobile|sheet|donor)-(.+)$/.exec(note.id || "");
+  if (named) return { board: named[2], surface: named[1] === "board" ? "home" : named[1] };
+  const SLOP = 40;
   for (const f of canvas.artboards || []) {
-    const m = /^B(\d+)\.dc\.html$/.exec(f.file || "");
-    if (!m) continue;
-    if (note.x >= f.x - 40 && note.x <= f.x + f.w + 40) return byRung.get(Number(m[1])) || null;
+    const where = byFile.get(f.file || "");
+    if (!where) continue;
+    const inX = note.x >= f.x - SLOP && note.x <= f.x + f.w + SLOP;
+    const inY = note.y >= f.y - SLOP && note.y <= f.y + f.h + SLOP;
+    if (inX && inY) return where;
   }
-  return null;
+  return { board: null, surface: null };
 }
 
 /**

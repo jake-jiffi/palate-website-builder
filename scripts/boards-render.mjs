@@ -237,6 +237,12 @@ function blockAfterKey(src, key, open, close) {
  * Exported because gate-explore checks the registry's own per-piece provenance against the same
  * manifest, and two parsers reading one file differently is how a check passes on one surface
  * and fails on the other.
+ *
+ * The inner value is a Map of variation id to the STATES that variation declares. It answers
+ * `.has(variation)` exactly as a Set does, and it also answers "does this piece build that
+ * state", which the detail sheet needs: a sheet claiming a state the kit cannot render is the
+ * same broken promise as one naming a variation that does not exist. `default` is in nobody's
+ * list, because it is the resting state every variation has.
  */
 export function parseKitVariations(src) {
   const out = new Map();
@@ -245,15 +251,17 @@ export function parseKitVariations(src) {
   for (const piece of objects(body)) {
     const id = field(piece, "id");
     if (!id) continue;
-    const set = new Set();
-    const variations = blockAfterKey(piece, "variations", "[", "]");
-    if (variations) {
-      for (const v of objects(variations)) {
+    const variations = new Map();
+    const block = blockAfterKey(piece, "variations", "[", "]");
+    if (block) {
+      for (const v of objects(block)) {
         const vid = field(v, "id");
-        if (vid) set.add(vid);
+        if (!vid) continue;
+        const states = blockAfterKey(v, "states", "[", "]") || "";
+        variations.set(vid, new Set([...states.matchAll(/"([^"]*)"|'([^']*)'/g)].map((m) => m[1] ?? m[2]).filter(Boolean)));
       }
     }
-    out.set(id, set);
+    out.set(id, variations);
   }
   return out;
 }
@@ -408,6 +416,18 @@ export function validateSheet(html, { id, kit } = {}) {
     return { ok: false, problems };
   }
 
+  /**
+   * ONE MARK PER TAG. A second `data-kit-piece` on the same element is invisible: a reader takes
+   * the first, so the block is filed as one piece while its markup claims two, and the required
+   * block the second one named goes missing on a sheet that appears to carry it.
+   */
+  for (const tag of String(html).matchAll(/<[a-zA-Z][\w-]*((?:"[^"]*"|'[^']*'|[^>"'])*)>/g)) {
+    const on = [...tag[1].matchAll(/\bdata-kit-piece="([^"]*)"/g)].map((m) => m[1]);
+    if (on.length > 1) {
+      problems.push(`one tag carries two data-kit-piece attributes (${on.join(" and ")}); a block is one piece, and only the first of them is ever read`);
+    }
+  }
+
   const marks = [...String(html).matchAll(/\bdata-kit-piece="([^"]*)"/g)].map((m) => m[1]);
   if (!marks.length) {
     problems.push(`the detail sheet carries no data-kit-piece blocks; every block on it is marked data-kit-piece="<piece>:<Variation>:<state>" so the sheet names the pieces the direction actually uses`);
@@ -425,7 +445,20 @@ export function validateSheet(html, { id, kit } = {}) {
       continue;
     }
     if (!kit.get(piece).has(variation)) {
-      problems.push(`data-kit-piece="${raw}" names the variation "${variation}", which is not one of ${piece}'s in src/lib/kit.ts (${[...kit.get(piece)].join(", ") || "none"})`);
+      problems.push(`data-kit-piece="${raw}" names the variation "${variation}", which is not one of ${piece}'s in src/lib/kit.ts (${[...kit.get(piece).keys()].join(", ") || "none"})`);
+      continue;
+    }
+    /**
+     * AND THE STATE IS ONE THE PIECE ACTUALLY BUILDS.
+     *
+     * `default` is the resting state: every variation has it and none declares it, so it is
+     * allowed everywhere. Anything else has to be in the variation's own `states`, because a
+     * sheet showing a form error the kit cannot render is the same broken promise as a sheet
+     * showing a variation that does not exist, and the client signs off both.
+     */
+    const states = kit.get(piece).get(variation);
+    if (state !== "default" && states && !states.has(state)) {
+      problems.push(`data-kit-piece="${raw}" claims the state "${state}", which ${variation} does not implement in src/lib/kit.ts (it builds ${[...states].join(", ") || "no state beyond default"})`);
       continue;
     }
     present.add(`${piece}:${state}`);
@@ -697,7 +730,9 @@ export function writeCanvasJson({ boards, refs = [], donors = [], out }) {
    * or the row cannot be read against the one above it.
    */
   let rowY = refs.length ? rowHeight + ROW_GAP : 0;
-  const safeId = (v) => String(v).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 34);
+  // 33, not 34: a canvas annotation id is at most 40 characters and `mobile-` is the longest
+  // prefix written here, so 7 + 33 is exactly the ceiling.
+  const safeId = (v) => String(v).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 33);
   for (const b of boards) {
     const heights = [b.h || 0];
     const note = (prefix, x, y, text) => annotations.push({ id: `${prefix}-${safeId(b.id)}`, x, y, w: 420, text });
