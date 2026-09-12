@@ -649,6 +649,32 @@ else
   page_judge_note="$GATE_NOTE"
 fi
 
+# THE LOCAL GRADE'S OWN LADDER: did the agent's free self-check already say this build reads
+# worse than its exemplar?
+#
+# On the eastcoast v3 build `grade-local.mjs` had already judged the built home `somewhat_worse`
+# than both exemplars, at the 12.9th taste percentile, with `flattery.risk: true` - the
+# instrument that exists to say "the honest number is likely lower than this" was already
+# tripped. Nothing read the file. It is a done-gate check because A.12 in SKILL.md runs the full
+# local grade before done, not after, so a record almost always exists by the time this asks.
+#
+# IT CAN ONLY READ A RECORD, never make one, so a build that has not run
+# `grade-local.mjs --url ...` yet, or whose ladder was never applicable (no exemplars fetched),
+# skips rather than blocking. PALATE_GATE_TASTE=0 releases it, named, the same discipline as
+# PALATE_GATE_LOOK and PALATE_GATE_JUDGE.
+TASTE_GATE="$HERE/gate-taste.mjs"
+taste_note="taste=skipped"
+if [ ! -f "$TASTE_GATE" ]; then
+  gate_skipped taste "gate-taste.mjs not present"
+elif [ "${PALATE_GATE_TASTE:-1}" != "1" ]; then
+  gate_skipped taste "PALATE_GATE_TASTE=0"
+else
+  if taste_err="$(node "$TASTE_GATE" "$PROJ" 2>&1)"; then taste_rc=0; else taste_rc=$?; fi
+  gate_classify taste "$taste_rc" "$taste_err"
+  gate_record taste pass "The local grade reads this build worse than its own exemplar. ${taste_err}"
+  taste_note="$GATE_NOTE"
+fi
+
 # FIDELITY: did the built home page carry the direction the client actually picked?
 #
 # This is the one promise Explore makes that nothing checked. The failure worth catching is not
@@ -723,5 +749,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $look_note, $page_judge_note, $fidelity_note, $uniq_note, $kit_tokens_note, $kit_complete_note, $kit_fixtures_note, $imagery_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
+  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $look_note, $page_judge_note, $taste_note, $fidelity_note, $uniq_note, $kit_tokens_note, $kit_complete_note, $kit_fixtures_note, $imagery_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
 exit 0

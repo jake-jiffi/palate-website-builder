@@ -677,6 +677,13 @@ mk_look_project() { # <dir> <compose-json|"">
   mkdir -p "$proj/dist/client/security-windows"
   printf '<!doctype html><html><body><h1>home</h1></body></html>' > "$proj/dist/client/index.html"
   printf '<!doctype html><html><body><h1>security windows</h1></body></html>' > "$proj/dist/client/security-windows/index.html"
+  # The picked direction's own stills. Without them the page judge cannot compare anything and
+  # SKIPS as unjudgeable rather than refusing, which is the right answer to a different question
+  # from the one these cases ask.
+  mkdir -p "$proj/.palate/explore/shots/b1"
+  for f in hero.png foot.png inner.png donor.jpg donor-foot.png; do
+    printf 'not a real image' > "$proj/.palate/explore/shots/b1/$f"
+  done
   COMPOSE="$composed" node -e '
 const fs = require("node:fs");
 const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
@@ -843,6 +850,65 @@ if printf '%s' "$lookoff_out" | grep -qF 'look: PALATE_GATE_LOOK=0'; then
 else
   echo "FAIL - PALATE_GATE_LOOK=0 releases the gate and says it did (got: $lookoff_out)"; fail=$((fail+1))
 fi
+
+# --- THE LOCAL GRADE'S OWN LADDER --------------------------------------------------------
+# On the eastcoast v3 build grade-local.mjs had already judged the built home `somewhat_worse`
+# than both exemplars, at the 12.9th taste percentile, with flattery.risk true, and nothing read
+# the file. $LOOKALL already clears the look and page-judge gates, so it is the base for testing
+# this one in isolation.
+write_taste_result() { # <proj> <rung> <flattery-json|"null">
+  local proj="$1" rung="$2" flattery="$3"
+  mkdir -p "$proj/.palate-shots"
+  cat > "$proj/.palate-shots/local-grade.json" <<JSON
+{ "overall": 71, "taste": { "applicable": true, "percentile": 12.9 },
+  "flattery": $flattery,
+  "ladder": { "applicable": true, "rung": "$rung", "meanRaw": 0.4, "results": [] },
+  "findings": [ { "id": "some_check", "detail": "The accent colour is a framework default.", "fix": "Swap it for the client's own accent." } ] }
+JSON
+}
+
+write_taste_result "$LOOKALL" "comparable" "null"
+tasteok_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$tasteok_out" | grep -qF 'taste=pass'; then
+  echo "ok   - a comparable rung with no flattery risk passes the taste gate"; pass=$((pass+1))
+else
+  echo "FAIL - a comparable rung with no flattery risk passes the taste gate (got: $tasteok_out)"; fail=$((fail+1))
+fi
+
+write_taste_result "$LOOKALL" "somewhat_worse" "null"
+tasteworse_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>&1)"
+tasteworse_ec=$?
+if [ "$tasteworse_ec" -eq 2 ] && printf '%s' "$tasteworse_out" | grep -qF 'somewhat worse'; then
+  echo "ok   - a build the local grade reads as somewhat worse than its exemplar blocks at done"; pass=$((pass+1))
+else
+  echo "FAIL - a build the local grade reads as somewhat worse must block (exit $tasteworse_ec: $tasteworse_out)"; fail=$((fail+1))
+fi
+
+write_taste_result "$LOOKALL" "comparable" '{ "risk": true, "tastePercentile": 12.9, "honestRange": [45, 54] }'
+tasteflatter_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>&1)"
+tasteflatter_ec=$?
+if [ "$tasteflatter_ec" -eq 2 ] && printf '%s' "$tasteflatter_out" | grep -qF 'flattery.risk is true'; then
+  echo "ok   - a comparable rung under flattery risk still blocks (both must hold)"; pass=$((pass+1))
+else
+  echo "FAIL - a comparable rung under flattery risk must still block (exit $tasteflatter_ec: $tasteflatter_out)"; fail=$((fail+1))
+fi
+
+rm -f "$LOOKALL/.palate-shots/local-grade.json"
+tasteskip_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$tasteskip_out" | grep -qF 'taste=skipped'; then
+  echo "ok   - no recorded local grade skips the taste gate rather than blocking"; pass=$((pass+1))
+else
+  echo "FAIL - no recorded local grade should skip the taste gate (got: $tasteskip_out)"; fail=$((fail+1))
+fi
+
+write_taste_result "$LOOKALL" "clearly_worse" "null"
+tasteoff_out="$(PALATE_GATE_TASTE=0 bash "$GATE" "$LOOKALL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$tasteoff_out" | grep -qF 'taste: PALATE_GATE_TASTE=0'; then
+  echo "ok   - PALATE_GATE_TASTE=0 releases the taste gate and says it did"; pass=$((pass+1))
+else
+  echo "FAIL - PALATE_GATE_TASTE=0 releases the taste gate and says it did (got: $tasteoff_out)"; fail=$((fail+1))
+fi
+rm -f "$LOOKALL/.palate-shots/local-grade.json"
 
 echo "---"
 echo "passed=$pass failed=$fail"

@@ -865,6 +865,15 @@ else
   bad "rendered-bug-classes says the repeated silhouette blocks, but verify-rendered.mjs never files it as an interaction failure"
 fi
 
+# THE LOCAL GRADE'S LADDER IS A DONE SUB-GATE. On the eastcoast v3 build grade-local.mjs had
+# already judged the home `somewhat_worse` than its exemplar, at the 12.9th taste percentile,
+# with flattery.risk true, and nothing read the file. SKILL.md A.12 and local-grade.md both have
+# to say it runs before done, not after, or the same silent skip happens again.
+present "SKILL.md A.12 says the full local grade runs before done and gate-taste reads it" \
+  "SKILL.md" "Run this before the done gate, not after"
+present "local-grade.md says gate-done's taste sub-gate reads local-grade.json" \
+  "references/local-grade.md" "\`gate-done.sh\`'s \`taste\` sub-gate"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
