@@ -354,6 +354,37 @@ export const BOARD_INNER_QUESTION =
   'type, hierarchy, restraint and specificity; ignore that one is a drawing and that the pages differ in role.';
 
 /**
+ * THE BUILT PAGE, against the picture it was composed from.
+ *
+ * The board questions are about a DRAWING, and a drawing is judged knowing it is one. A built
+ * page is the thing the client actually gets, and by the time it exists the picture it has to
+ * answer to is either the direction board they picked (the home page, which the board drew) or
+ * the library reference the page type was composed from (every inner page, which no board drew).
+ * One question covers both because the answerable thing is the same in both cases: does this
+ * page hold the standard of the picture beside it. The clause about roles is what stops a judge
+ * marking a service page down for not being a home page.
+ */
+export const PAGE_QUESTION =
+  'Two page entrances, one a built web page for this client and one the picture it was composed from: either the ' +
+  'direction board the client picked or a library reference in the same field. On the four rungs, how does the ' +
+  'candidate compare as a piece of design a senior designer would deliver to a paying client? Judge composition, ' +
+  'type, hierarchy, restraint and specificity; ignore that one may be a drawing and that the pages may differ in role.';
+
+/**
+ * The built page's ENDING, which its entrance cannot speak for.
+ *
+ * Same reason the boards are judged on their endings: the closing call to action and the footer
+ * are the half of a page a client asks about first and the half an assembled page is most
+ * likely to have left to the kit. The question says what the two pictures are, because a foot
+ * crop with no context reads as a broken screenshot rather than as the end of a page.
+ */
+export const PAGE_FOOT_QUESTION =
+  'Two page endings, the closing call to action and the footer, one from a built web page for this client and one ' +
+  'from the picture it was composed from: the picked direction board or a library reference in the same field. On ' +
+  'the four rungs, how does the candidate compare as a piece of design a senior designer would deliver? Judge ' +
+  'composition, type, hierarchy, restraint and the care in the details; ignore that one may be a drawing.';
+
+/**
  * State one board's comparison, both ways round.
  *
  * The run token is in BOTH ids for the same reason it is in the site ladder's: without it the

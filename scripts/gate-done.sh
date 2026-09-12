@@ -618,6 +618,37 @@ else
   look_note="$GATE_NOTE"
 fi
 
+# THE JUDGE ON THE BUILT PAGES: is what the client receives as good as what they picked?
+#
+# The board judge asks whether a DRAWING is as good as the reference it was drawn from, before
+# the canvas is published. Nothing then asked the same question about the built site. On the
+# eastcoast v3 build the home page was lifted from the picked board with six safe-looking edits
+# that between them inverted the pick, and eighteen inner pages were kit assembly nobody held
+# against anything, with every mechanical gate passing: they all measure whether a page
+# RENDERED, and none of them can see bland.
+#
+# THIS BRANCH READS THE RECORD ALONE (`--check`). It cannot shoot pages and it cannot dispatch
+# subagents, so it asks the three things a record can answer: every looked page type carries a
+# verdict, none is below the bar, and each verdict still describes the HTML on disk (a page
+# refused, patched and rebuilt would otherwise sail on the verdict its old pixels earned).
+# Stating the comparisons is `node scripts/gate-page-judge.mjs <project>`, which the refusal
+# names.
+#
+# It owes nothing before the pick, for the same reason the look does. PALATE_GATE_JUDGE=0
+# releases it, the same switch that releases the board judge: one switch for one instrument.
+PAGE_JUDGE_GATE="$HERE/gate-page-judge.mjs"
+page_judge_note="page-judge=skipped"
+if [ ! -f "$PAGE_JUDGE_GATE" ]; then
+  gate_skipped page-judge "gate-page-judge.mjs not present"
+elif [ "${PALATE_GATE_JUDGE:-1}" != "1" ]; then
+  gate_skipped page-judge "PALATE_GATE_JUDGE=0"
+else
+  if pj_err="$(node "$PAGE_JUDGE_GATE" "$PROJ" --check 2>&1)"; then pj_rc=0; else pj_rc=$?; fi
+  gate_classify page-judge "$pj_rc" "$pj_err"
+  gate_record page-judge pass "${pj_err}"
+  page_judge_note="$GATE_NOTE"
+fi
+
 # FIDELITY: did the built home page carry the direction the client actually picked?
 #
 # This is the one promise Explore makes that nothing checked. The failure worth catching is not
@@ -692,5 +723,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $look_note, $fidelity_note, $uniq_note, $kit_tokens_note, $kit_complete_note, $kit_fixtures_note, $imagery_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
+  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $look_note, $page_judge_note, $fidelity_note, $uniq_note, $kit_tokens_note, $kit_complete_note, $kit_fixtures_note, $imagery_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
 exit 0

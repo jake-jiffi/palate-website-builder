@@ -100,7 +100,7 @@ export const refusedRung = (rung) => REFUSED_RUNGS.includes(rung);
 export const WORSE_PHRASE = { clearly_worse: "clearly worse", somewhat_worse: "somewhat worse" };
 
 /** How much of the bottom of a page is its ending. Enough for the CTA band and the footer. */
-const FOOT_PX = 900;
+export const FOOT_PX = 900;
 
 /** The stills every direction owes before it can be judged at all. */
 const REQUIRED_SHOTS = ["hero.png", "full.png", "inner.png", "donor.jpg"];
@@ -110,11 +110,13 @@ const skip = (reason) => {
   process.exitCode = 2;
 };
 
-function readJSON(p) {
+export function readJSON(p) {
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
 }
 
 /**
+ * Merge a patch into the manifest, then PROVE it landed.
+ *
  * Written through manifest-merge, never by read-modify-write: the hook writes this file too.
  *
  * A FAILED MERGE IS A FAILED RUN. It used to be swallowed, and then the gate printed "Board
@@ -122,13 +124,16 @@ function readJSON(p) {
  * `gate-explore` reads to decide whether the boards were ever compared with anything. The pass
  * would have been undone by the next gate with nothing saying why.
  *
+ * `landed` is handed the manifest as it reads back and answers whether the patch is in it.
+ * Exported because `gate-page-judge.mjs` owes the same proof about its own record, and a second
+ * copy of the merge-then-verify dance is a second place for the swallow to come back.
+ *
  * Returns an error string, or null when the record landed.
  */
-function record(projectDir, judgements) {
+export function mergeManifest(projectDir, patch, landed) {
   const merge = join(HERE, "manifest-merge.mjs");
   const manifest = join(projectDir, "build-manifest.json");
   if (!existsSync(manifest) || !existsSync(merge)) return null; // not a tracked build; nothing owed
-  const patch = { explore: { board_judgements: judgements } };
   try {
     execFileSync(process.execPath, [merge, "--manifest", manifest, "--set", JSON.stringify(patch)], {
       stdio: ["ignore", "ignore", "pipe"],
@@ -143,16 +148,34 @@ function record(projectDir, judgements) {
    * file afterwards.
    */
   const back = readJSON(manifest);
-  const got = Array.isArray(back?.explore?.board_judgements) ? back.explore.board_judgements.map((j) => j?.id) : null;
-  if (!got || got.length !== judgements.length || got.some((id, i) => id !== judgements[i].id))
-    return `${manifest} does not hold the judgements after the merge (is it valid JSON?)`;
-  return null;
+  return landed(back) ? null : `${manifest} does not hold the judgements after the merge (is it valid JSON?)`;
 }
 
-/** What a still WAS when the comparison was stated. A redraw has to invalidate it. */
-const heroFingerprint = (p) => {
+/**
+ * The board judge's own record, written through the shared merge above.
+ *
+ * Returns an error string, or null when the record landed.
+ */
+function record(projectDir, judgements) {
+  return mergeManifest(projectDir, { explore: { board_judgements: judgements } }, (back) => {
+    const got = Array.isArray(back?.explore?.board_judgements) ? back.explore.board_judgements.map((j) => j?.id) : null;
+    return Boolean(got) && got.length === judgements.length && got.every((id, i) => id === judgements[i].id);
+  });
+}
+
+/**
+ * What a file WAS when the comparison was stated. A redraw has to invalidate it.
+ *
+ * Exported because `gate-page-judge.mjs` binds its own comparisons the same way, to the built
+ * stills AND to the HTML they were shot from. Two copies of a sixteen-character digest would
+ * drift silently: the day one of them takes a different slice, judgements written for one gate
+ * validate against the other's record and nothing says so.
+ */
+export const fingerprint = (p) => {
   try { return createHash("sha256").update(readFileSync(p)).digest("hex").slice(0, 16); } catch { return null; }
 };
+/** The name this file has always called it. Kept so nothing below has to change. */
+const heroFingerprint = fingerprint;
 
 /**
  * Crop the bottom of a page into its own still.
@@ -162,7 +185,7 @@ const heroFingerprint = (p) => {
  * is cropped so the question can be about the ending. A page shorter than the crop keeps its
  * whole height rather than being padded, because a shorter page is a fact about the design.
  */
-async function cropFoot(sharp, src, dest) {
+export async function cropFoot(sharp, src, dest) {
   const { width, height } = await sharp(src).metadata();
   if (!width || !height) throw new Error(`${src} has no readable dimensions`);
   const h = Math.min(FOOT_PX, height);
