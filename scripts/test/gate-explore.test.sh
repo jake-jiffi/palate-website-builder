@@ -301,6 +301,41 @@ export PALATE_GATE_JUDGE=0
 want "PALATE_GATE_JUDGE=0 -> pass" PASS "$(run "$T")"
 unset PALATE_GATE_JUDGE
 
+# === 18a. A DIRECTION WHOSE PAGE ENDING WAS NEVER JUDGED. The library holds no whole-page
+# capture for every reference, so the foot pair is dropped rather than refused, and a dropped
+# surface has to be VISIBLE: "lowest across three surfaces" quietly means "lowest across the two
+# we managed" otherwise, and the record reads the same either way. A warning, never a failure.
+W="$TMP/k18a"; mk "$W"; page "$W"; boards "$W" b1 b2; write_valid "$W"
+cat > "$W/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"},
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true,"rungs":{"entrance":"comparable","foot":"comparable","inner":"comparable"}},
+                     {"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true,"rungs":{"entrance":"comparable","foot":null,"inner":"comparable"}}]}}
+JSON
+want "a direction judged on two surfaces still passes" PASS "$(run "$W")"
+has "and the run WARNS, naming the direction" "$W" "b2"
+has "and it says which surface went unjudged" "$W" "page ending"
+hasnt_out "and it does not name the direction judged on all three" "$W" "b1 (the-modern-house)"
+
+# Every surface judged: nothing to warn about.
+cat > "$W/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"},
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true,"rungs":{"entrance":"comparable","foot":"comparable","inner":"comparable"}},
+                     {"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true,"rungs":{"entrance":"comparable","foot":"comparable","inner":"comparable"}}]}}
+JSON
+want "every surface judged -> pass" PASS "$(run "$W")"
+hasnt_out "and nothing is warned about" "$W" "page ending"
+
+# A record from before the surfaces existed carries no `rungs` at all. That is not a dropped
+# surface, it is an older gate, and inventing a warning for it would cry wolf on every build
+# judged before this change.
+cat > "$W/build-manifest.json" <<'JSON'
+{"schema":3,"explore":{"ran":true,"shown_at":"2026-09-11T04:00:00Z","canvas":{"url":"https://claude.ai/code/artifact/abc"},
+ "board_judgements":[{"id":"b1","donor":"therapy-in-london","rung":"comparable","consistent":true},
+                     {"id":"b2","donor":"the-modern-house","rung":"comparable","consistent":true}]}}
+JSON
+want "a record with no per-surface rungs -> pass" PASS "$(run "$W")"
+hasnt_out "and it is not warned about either" "$W" "page ending"
+
 # === 18b. ROUND ONE: the boards are rendered and judged by nothing yet, and the canvas is not
 # owed until the judge has passed. The two checks used to CO-FIRE and contradict each other,
 # telling one build to publish the canvas and to judge the boards it would have published.

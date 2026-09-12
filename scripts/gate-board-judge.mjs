@@ -231,14 +231,15 @@ export async function main(argv = process.argv.slice(2)) {
      */
     let sharp = null;
     try { sharp = engineRequire("sharp"); } catch { sharp = null; }
-    if (!sharp)
-      process.stderr.write(
-        `gate-board-judge: sharp is not installed (${join(HERE, "reference-capture", "setup.sh")}), so no page ` +
-          `ending can be cropped and every direction is judged on its entrance and its inner page alone.\n`,
-      );
+    /**
+     * NO SHARP IS A SKIP, not a two-surface pass. A library with no whole-page capture for a
+     * reference is a fact about the library and the ending is dropped; sharp missing is a local
+     * fault with a named fix, and judging every direction on two surfaces because of it would
+     * quietly hand back the instrument this task exists to widen.
+     */
+    if (!sharp) return skip("sharp not installed: run scripts/reference-capture/setup.sh");
     const withFoot = new Set();
     for (const b of boards) {
-      if (!sharp) break;
       const dir = join(shotsDir, b.id);
       if (!existsSync(join(dir, "donor-full.png"))) {
         const why = donorFullReason(dir);
@@ -280,7 +281,9 @@ export async function main(argv = process.argv.slice(2)) {
     const held = new Map((Array.isArray(recorded) ? recorded : []).map((j) => [j?.id, j]));
     const stale = boards.filter((b) => {
       const j = held.get(b.id);
-      if (!j || !j.board_hero) return true;
+      // A RECORD WITH NO READABLE RUNG IS NOT A VERDICT. One reached the shortcut and printed
+      // "already judged: b1 undefined" over a drawing nothing had scored.
+      if (!j || !j.board_hero || !RUNGS.some((r) => r.id === j.rung)) return true;
       const now = fingerprints(b.id);
       // EVERY SURFACE, not only the entrance. A direction redrawn at its ending or its inner
       // page and judged on the entrance alone would be waved through on verdicts nobody gave.
@@ -342,7 +345,20 @@ export async function main(argv = process.argv.slice(2)) {
     mkdirSync(dirname(requestPath), { recursive: true });
     writeFileSync(
       requestPath,
-      JSON.stringify({ runToken, question: BOARD_QUESTION, rungs: RUNGS.map((r) => r.id), pairs }, null, 2) + "\n",
+      JSON.stringify(
+        {
+          runToken,
+          // NO TOP-LEVEL QUESTION. The surfaces ask three different things and the dispatching
+          // doctrine says to pass "the question" verbatim, so one question beside three pairs
+          // is an instruction to ask the entrance's question over a page ending, and the answer
+          // would come back valid. Each pair carries its own; there is nothing else to pass.
+          questions: "each pair carries its own question: dispatch that pair's `question` verbatim",
+          rungs: RUNGS.map((r) => r.id),
+          pairs,
+        },
+        null,
+        2,
+      ) + "\n",
     );
     process.stdout.write(
       `gate-board-judge: ${boards.length} direction(s) on ${pairs.length} surface(s), ${pairs.length * 2} comparisons ` +
@@ -505,10 +521,22 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   const shaky = scored.filter((s) => !s.consistent).map((s) => s.id);
+  /**
+   * THE PASS LINE NAMES THE SURFACES THAT WERE ACTUALLY JUDGED. It used to say "the entrance,
+   * the page ending and the inner page" whatever happened, so a run where a donor had no
+   * whole-page capture printed a claim about three surfaces over four comparisons. Phase 1's
+   * warning is a different invocation and usually a different transcript; this is the sentence
+   * an operator reads and reports.
+   */
+  const readOn = (s) => {
+    const judged = Object.keys(s.verdicts).map((sf) => SURFACES[sf].label);
+    const dropped = ["entrance", "foot", "inner"].filter((sf) => !(sf in s.verdicts)).map((sf) => SURFACES[sf].label);
+    return `${s.id} ${s.rung} (${judged.join(", ")}` +
+      (dropped.length ? `; no ${dropped.join(", no ")}, the donor has no whole-page capture` : "") + ")";
+  };
   process.stdout.write(
-    `Board judge passed: ${scored.length} direction(s) judged against their own donors on the entrance, the page ` +
-      `ending and the inner page, both orders each ` +
-      `(${scored.map((s) => `${s.id} ${s.rung}`).join(", ")}).` +
+    `Board judge passed: ${scored.length} direction(s) judged against their own donors, both orders each, ` +
+      `read at the lowest surface: ${scored.map(readOn).join(", ")}.` +
       (shaky.length ? ` Unstable across the swap, read at the lower rung: ${shaky.join(", ")}.` : "") +
       "\n",
   );

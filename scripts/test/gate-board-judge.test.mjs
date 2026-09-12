@@ -16,9 +16,20 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const GATE = join(HERE, '..', 'gate-board-judge.mjs');
+/**
+ * The gate crops the page endings with the vendored sharp, so most of these cases need it on
+ * disk. A checkout that has not run `scripts/reference-capture/setup.sh` SKIPS them with the
+ * reason, the way boards-render.test.mjs skips without playwright: a suite that fails for a
+ * missing optional dependency teaches people to ignore it.
+ */
+let sharpReason = '';
+try { createRequire(join(HERE, '..', 'reference-capture', 'x.js'))('sharp'); }
+catch { sharpReason = 'sharp is not installed (scripts/reference-capture/setup.sh); the page endings cannot be cropped.'; }
 
 /** A one-pixel PNG and a one-pixel JPEG. Nothing reads the pixels; existence is the point. */
 const PNG = Buffer.from(
@@ -75,10 +86,20 @@ function project({ donors = ['b1', 'b2'], donorFull = ['b1', 'b2'], stills = ['b
 
 const shot = (dir, id, name) => join(dir, '.palate', 'explore', 'shots', id, name);
 
-const run = (dir, args = [], env = {}) => {
-  const r = spawnSync(process.execPath, [GATE, dir, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
+const run = (dir, args = [], env = {}, nodeArgs = []) => {
+  const r = spawnSync(process.execPath, [...nodeArgs, GATE, dir, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
   return { code: r.status, out: r.stdout ?? '', err: r.stderr ?? '' };
 };
+
+/**
+ * A preload that makes `require('sharp')` throw, so the no-sharp path can be exercised without
+ * uninstalling anything. Nothing test-only lives in the gate itself for this.
+ */
+function noSharpShim(dir) {
+  const p = join(dir, 'no-sharp.cjs');
+  writeFileSync(p, `const M = require('module');\nconst load = M._load;\nM._load = function (r, ...rest) {\n  if (r === 'sharp') throw new Error('Cannot find module \\'sharp\\'');\n  return load.call(this, r, ...rest);\n};\n`);
+  return ['--require', p];
+}
 const skipped = (r) => r.code === 2 && r.err.split('\n')[0].startsWith('gate-board-judge: skipped (');
 const request = (dir) => JSON.parse(readFileSync(join(dir, '.palate', 'explore', 'judge-request.json'), 'utf8'));
 const manifest = (dir) => JSON.parse(readFileSync(join(dir, 'build-manifest.json'), 'utf8'));
@@ -100,6 +121,7 @@ function judge(dir, judgements) {
 }
 
 test('phase 1 states three surfaces per direction, both orders each, and says where it wrote them', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const r = run(dir);
@@ -115,7 +137,12 @@ test('phase 1 states three surfaces per direction, both orders each, and says wh
   // marking an inner page down for not being a home page.
   assert.equal(new Set(req.pairs.map((p) => p.question)).size, 3, 'the three surfaces share one question');
   assert.ok(req.runToken && /^[0-9a-f]{8}$/.test(req.runToken), `a per-run token, got ${req.runToken}`);
-  assert.ok(req.question && req.rungs.includes('clearly_worse'));
+  assert.ok(req.rungs.includes('clearly_worse'));
+  // NO TOP-LEVEL QUESTION. The doctrine tells the dispatching agent to pass "the question"
+  // verbatim, so one question beside three pairs is an instruction to ask the ENTRANCE question
+  // over a foot crop, and the answer would validate.
+  assert.equal(req.question, undefined, 'a single question sits beside pairs that each ask their own');
+  for (const p of req.pairs) assert.ok(p.question && p.question.length > 40, `${p.id} carries no question`);
   assert.match(r.out, /judge-request\.json/);
   // The paths handed to the judge must be the real files, not names it has to guess at.
   for (const p of req.pairs) for (const c of p.comparisons) for (const k of ['A', 'B'])
@@ -135,6 +162,7 @@ test('phase 1 states three surfaces per direction, both orders each, and says wh
 });
 
 test('every board comparable to its donor passes, and the verdicts are recorded', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -161,6 +189,7 @@ test('every board comparable to its donor passes, and the verdicts are recorded'
 });
 
 test('a board judged clearly worse than its donor is REFUSED, and still recorded', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -178,6 +207,7 @@ test('a board judged clearly worse than its donor is REFUSED, and still recorded
 });
 
 test('the lower rung decides, so one flattering ordering cannot rescue a board', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -192,6 +222,7 @@ test('the lower rung decides, so one flattering ordering cannot rescue a board',
 });
 
 test('a partial judgements file cannot pass: every comparison must come back', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -226,6 +257,7 @@ test('PALATE_GATE_JUDGE=0 releases it, and says that is why', (t) => {
 });
 
 test('a board registered after the request was written is a STALE request, not a silent pass', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -249,6 +281,7 @@ test('a board registered after the request was written is a STALE request, not a
 });
 
 test('a board REDRAWN after the request cannot be blessed by the old judgements', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -268,6 +301,7 @@ test('a board REDRAWN after the request cannot be blessed by the old judgements'
  * held, and the standing judgements went out with the request they were bound to.
  */
 test('phase 1 does not restate comparisons for boards already judged on this drawing', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -284,6 +318,7 @@ test('phase 1 does not restate comparisons for boards already judged on this dra
 });
 
 test('a board redrawn since it was judged is stated again', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -297,6 +332,7 @@ test('a board redrawn since it was judged is stated again', (t) => {
 });
 
 test('a board standing at clearly_worse is not quietly "already judged"', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -317,6 +353,7 @@ test('--judgements with no file named is refused, not read as phase 1', (t) => {
 });
 
 test('judgements that could not be recorded are not a pass', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -338,6 +375,7 @@ test('judgements that could not be recorded are not a pass', (t) => {
 // a surface redrawn after the request cannot be blessed by the old verdicts.
 
 test('the LOWEST of the three surfaces decides the direction, and every reading is recorded', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -353,6 +391,7 @@ test('the LOWEST of the three surfaces decides the direction, and every reading 
 });
 
 test('a page ending judged clearly worse refuses the direction, naming the surface', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -363,6 +402,7 @@ test('a page ending judged clearly worse refuses the direction, naming the surfa
 });
 
 test('an inner page judged clearly worse refuses the direction, naming the surface', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -377,6 +417,7 @@ test('an inner page judged clearly worse refuses the direction, naming the surfa
  * record says so, so nobody later reads a null as "the ending was fine".
  */
 test('a donor with no full capture is judged on two surfaces, said out loud, never refused', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project({ donorFull: ['b1'] });
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const r = run(dir);
@@ -387,6 +428,12 @@ test('a donor with no full capture is judged on two surfaces, said out loud, nev
   assert.match(r.err, /donor-full\.png/);
   const j = judge(dir, answers(req));
   assert.equal(j.code, 0, j.err);
+  // THE PASS LINE IS THE SENTENCE AN OPERATOR READS AND REPORTS, and phase 1's warning is a
+  // different invocation and usually a different transcript. A static "on the entrance, the page
+  // ending and the inner page" over a run that judged four comparisons is a false claim in the
+  // one place it will be quoted.
+  assert.match(j.out, /b1 comparable \(entrance, page ending, inner page\)/);
+  assert.match(j.out, /b2 comparable \(entrance, inner page; no page ending/);
   const b2 = manifest(dir).explore.board_judgements.find((j2) => j2.id === 'b2');
   assert.equal(b2.rungs.foot, null, 'an unjudged page ending was recorded as though it had been judged');
   assert.equal(b2.board_foot, null);
@@ -404,6 +451,7 @@ test('no inner page or full board on disk is a SKIP naming what to run first, ne
 });
 
 test('an inner page REDRAWN after the request cannot be blessed by the old judgements', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -417,6 +465,7 @@ test('an inner page REDRAWN after the request cannot be blessed by the old judge
 });
 
 test('a direction redrawn on any surface is stated again rather than passed over as judged', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
   const dir = project();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   run(dir);
@@ -428,4 +477,37 @@ test('a direction redrawn on any surface is stated again rather than passed over
   const again = run(dir);
   assert.equal(again.code, 0, again.err);
   assert.notEqual(request(dir).runToken, before, 'a redrawn page ending was passed over as already judged');
+});
+
+/**
+ * A MACHINE WITH NO SHARP CANNOT CROP A PAGE ENDING AT ALL, which is a different thing from a
+ * library with no capture: it is a local fault with a named fix, so the gate SKIPS rather than
+ * quietly reverting the instrument to the entrance-and-inner it was before this surface existed.
+ */
+test('sharp missing altogether is a SKIP naming the setup script, never a two-surface pass', (t) => {
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = run(dir, [], {}, noSharpShim(dir));
+  assert.ok(skipped(r), `expected a skip, got ${r.code}: ${r.err}${r.out}`);
+  assert.match(r.err, /sharp not installed/);
+  assert.match(r.err, /setup\.sh/);
+});
+
+/**
+ * A record with no rung reached the already-judged shortcut and printed "already judged: b1
+ * undefined" over a build nothing had scored. A verdict that cannot be read is not a verdict.
+ */
+test('a judgement record with no rung is judged again, not read as a pass', (t) => {
+  if (sharpReason) return t.skip(sharpReason);
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  assert.equal(judge(dir, answers(request(dir))).code, 0);
+  const m = manifest(dir);
+  for (const j of m.explore.board_judgements) delete j.rung;
+  writeFileSync(join(dir, 'build-manifest.json'), JSON.stringify(m, null, 2));
+  const again = run(dir);
+  assert.equal(again.code, 0, again.err);
+  assert.doesNotMatch(again.out, /undefined/, 'a rungless record was printed as a verdict');
+  assert.match(again.out, /judge-request\.json/, 'a rungless record was passed over as already judged');
 });

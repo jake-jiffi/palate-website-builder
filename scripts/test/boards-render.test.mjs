@@ -1593,13 +1593,17 @@ test("--no-donors runs without the file and says so in the manifest", async (t) 
  * fault and no reason to stop an Explore; it is recorded as a sidecar so the gate can leave that
  * surface out and say why, instead of a silence the next reader takes for a clean bill.
  */
-async function serveCaptures({ full = null, fullStatus = 200 } = {}) {
+async function serveCaptures({ full = null, fullStatus = 200, slowFullFor = null, slowMs = 0 } = {}) {
   const hero = pngFixture(1440, 900);
   const server = createServer((req, res) => {
     if (req.url.endsWith("/full.png")) {
       if (fullStatus !== 200) { res.writeHead(fullStatus); res.end("gone"); return; }
-      res.writeHead(200, { "Content-Type": "image/png" });
-      res.end(full ?? pngFixture(1440, 4000));
+      const send = () => {
+        res.writeHead(200, { "Content-Type": "image/png" });
+        res.end(full ?? pngFixture(1440, 4000));
+      };
+      if (slowFullFor && req.url.includes(slowFullFor)) setTimeout(send, slowMs);
+      else send();
       return;
     }
     res.writeHead(200, { "Content-Type": "image/png" });
@@ -1609,6 +1613,16 @@ async function serveCaptures({ full = null, fullStatus = 200 } = {}) {
   return { server, port: server.address().port };
 }
 
+/**
+ * EACH OF THESE TESTS OWNS ITS PRECONDITION. They used to inherit `shots/b1` and `shots/b2` from
+ * tests that happened to run earlier in the file, which is exactly how the first-run ENOENT in
+ * `writeDonorFull` hid: run alone they failed, run in order they passed, and the defect class
+ * they exist to catch is a FIRST run.
+ */
+const freshShots = () => {
+  for (const id of ["b1", "b2"]) rmSync(join(SITE, ".palate/explore/shots", id), { recursive: true, force: true });
+};
+
 const donorsWith = (port) => JSON.stringify([
   donorFor(1, { slug: "therapy-in-london", hero_url: `http://127.0.0.1:${port}/screenshots/therapy-in-london/desktop.png` }),
   donorFor(2, { slug: "the-modern-house", hero_url: `http://127.0.0.1:${port}/screenshots/the-modern-house/desktop.png` }),
@@ -1616,6 +1630,7 @@ const donorsWith = (port) => JSON.stringify([
 
 test("the donor's full-page capture is fetched beside its hero, for the page-ending comparison", async (t) => {
   if (!ready) return t.skip(skipReason);
+  freshShots();
   const { server, port } = await serveCaptures();
   const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
   try {
@@ -1640,6 +1655,7 @@ test("the donor's full-page capture is fetched beside its hero, for the page-end
 
 test("a donor with no full capture is recorded, not refused, and the run finishes", async (t) => {
   if (!ready) return t.skip(skipReason);
+  freshShots();
   const { server, port } = await serveCaptures({ fullStatus: 404 });
   const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
   try {
@@ -1661,9 +1677,10 @@ test("a donor with no full capture is recorded, not refused, and the run finishe
 
 test("a full capture over the ceiling is left behind with its reason, never written", async (t) => {
   if (!ready) return t.skip(skipReason);
+  freshShots();
   // The magic bytes are real and the body is enormous, which is the shape that matters: the cap
   // is checked on what came back, before anything decodes it.
-  const huge = Buffer.concat([pngFixture(8, 8), Buffer.alloc(2 * 1024 * 1024, 7)]);
+  const huge = Buffer.concat([pngFixture(8, 8), Buffer.alloc(17 * 1024 * 1024, 7)]);
   const { server, port } = await serveCaptures({ full: huge });
   const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
   try {
@@ -1671,8 +1688,8 @@ test("a full capture over the ceiling is left behind with its reason, never writ
     const r = await run([SITE]);
     assert.equal(r.status, 0, `an oversized donor capture stopped the Explore:\n${r.stderr}`);
     const dir = join(SITE, ".palate/explore/shots", "b1");
-    assert.ok(!existsSync(join(dir, "donor-full.png")), "a 2 MB capture was kept");
-    assert.match(readFileSync(join(dir, "donor-full.missing"), "utf8"), /1\.5 MB|too large|over/i);
+    assert.ok(!existsSync(join(dir, "donor-full.png")), "a 17 MB capture was kept");
+    assert.match(readFileSync(join(dir, "donor-full.missing"), "utf8"), /16 MB|too large|over/i);
   } finally {
     server.close();
     rmSync(donorsPath, { force: true });
@@ -1681,6 +1698,7 @@ test("a full capture over the ceiling is left behind with its reason, never writ
 
 test("a stale missing-capture note is cleared when the capture is there next time", async (t) => {
   if (!ready) return t.skip(skipReason);
+  freshShots();
   const dir = join(SITE, ".palate/explore/shots", "b1");
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "donor-full.missing"), "from a run when the library had none");
@@ -1692,6 +1710,55 @@ test("a stale missing-capture note is cleared when the capture is there next tim
     assert.ok(existsSync(join(dir, "donor-full.png")));
     assert.ok(!existsSync(join(dir, "donor-full.missing")),
       "the note survived the fetch, so the gate skips a surface it has the evidence for");
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+/**
+ * THE CEILING HAD TO BE MEASURED, NOT REASONED ABOUT. The first version capped the donor's
+ * whole-page capture at 1.5 MB, and a sample of twelve live references put eight of them over
+ * it (stripe 6.6 MB, aesop 3.8 MB, loom 2.9 MB), so on a real ladder most directions would have
+ * lost the page ending, which is the surface the task exists to add.
+ */
+test("a multi-megabyte capture, which is what the library actually serves, is kept", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  freshShots();
+  const big = Buffer.concat([pngFixture(1440, 900), Buffer.alloc(4 * 1024 * 1024, 3)]);
+  const { server, port } = await serveCaptures({ full: big });
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, `a 4 MB donor capture stopped the Explore:\n${r.stderr}`);
+    const full = join(SITE, ".palate/explore/shots", "b1", "donor-full.png");
+    assert.ok(existsSync(full), "a 4 MB capture was refused, so most real references lose their page ending");
+    assert.ok(statSync(full).size > 4 * 1024 * 1024);
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+/**
+ * The hero's ten seconds is right for a frame an operator is waiting on. A whole-page capture is
+ * megabytes, so the same clock turns an ordinary slow link into a recorded "did not answer" and
+ * the page ending is dropped for a reason that has nothing to do with the library.
+ */
+test("the whole-page capture gets its own budget, past the hero's ten seconds", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  freshShots();
+  const { server, port } = await serveCaptures({ slowFullFor: "therapy-in-london", slowMs: 11500 });
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, r.stderr);
+    const dir = join(SITE, ".palate/explore/shots", "b1");
+    assert.ok(existsSync(join(dir, "donor-full.png")),
+      "a capture that took over ten seconds was recorded as missing, on the hero's clock");
+    assert.ok(!existsSync(join(dir, "donor-full.missing")));
   } finally {
     server.close();
     rmSync(donorsPath, { force: true });

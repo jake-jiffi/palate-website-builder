@@ -78,8 +78,19 @@ const MAX_IMAGE_BYTES = 70 * 1024;
  * by the person opening it. This file is opened by one subagent from local disk, so squeezing it
  * would only throw away the detail the page-ending comparison is about. The cap is here to stop
  * a pathological object filling a build directory, not to fit a canvas.
+ *
+ * SIXTEEN MEGABYTES BECAUSE THE LIBRARY WAS MEASURED. A sample of twelve references' own
+ * `full.png` objects ran from 0.79 MB (anthropic) to 6.63 MB (stripe), with eight over 1.5 MB,
+ * so the first ceiling would have dropped the page ending on most real ladders: the surface this
+ * whole comparison exists to add, refused for being the size a full-page capture is.
  */
-const MAX_DONOR_FULL_BYTES = 1.5 * 1024 * 1024;
+const MAX_DONOR_FULL_BYTES = 16 * 1024 * 1024;
+/**
+ * And its own clock. Ten seconds is right for the hero, a single frame an operator is waiting
+ * on; a multi-megabyte capture on an ordinary link needs longer, and timing it out would record
+ * "the library has no capture" about a link, which is a false thing to tell the next reader.
+ */
+const DONOR_FULL_TIMEOUT_MS = 30_000;
 /**
  * The ladder a calibration screenshot is walked down to reach the ceiling: width first, then
  * quality.
@@ -1308,19 +1319,19 @@ export function loadDonors(projectDir, donorsPath, boards = []) {
  * content-type: an error page served as image/png under a .png name is the way this actually
  * goes wrong, and it would otherwise be re-encoded into a broken frame.
  */
-async function fetchHero(url) {
+async function fetchHero(url, timeoutMs = 10000) {
   const ctl = new AbortController();
   // The clock covers the BODY as well as the headers. A host that answers 200 and then dribbles
   // is the shape that hangs a run an operator is watching, and clearing the timer at the end of
   // the headers would leave the read unbounded.
-  const timer = setTimeout(() => ctl.abort(), 10000);
+  const timer = setTimeout(() => ctl.abort(), timeoutMs);
   let buf;
   try {
     const res = await fetch(url, { signal: ctl.signal, redirect: "follow" });
     if (!res.ok) throw new Error(`${url} answered HTTP ${res.status}; the donor hero is not there.`);
     buf = Buffer.from(await res.arrayBuffer());
   } catch (e) {
-    if (e.name === "AbortError") throw new Error(`${url} did not answer within 10 seconds.`);
+    if (e.name === "AbortError") throw new Error(`${url} did not answer within ${Math.round(timeoutMs / 1000)} seconds.`);
     throw e instanceof Error && /answered HTTP/.test(e.message) ? e : new Error(`${url} could not be fetched (${e.message}).`);
   } finally {
     clearTimeout(timer);
@@ -1374,8 +1385,6 @@ async function writeDonors(donors, boards, seedDir, shotsDir, projectDir) {
       buf = fit.buffer;
     }
 
-    await writeDonorFull(d, join(shotsDir, board.id), lines);
-
     const img = `d${d.rung}-hero.jpg`;
     writeFileSync(join(seedDir, img), buf);
     writeFileSync(join(seedDir, `D${d.rung}.dc.html`), donorArtboard({ ...d, img }));
@@ -1384,6 +1393,7 @@ async function writeDonors(donors, boards, seedDir, shotsDir, projectDir) {
     // is what the page and the fidelity trail both address a rung by.
     const boardShots = join(shotsDir, board.id);
     mkdirSync(boardShots, { recursive: true });
+    await writeDonorFull(d, boardShots, lines);
     writeFileSync(join(boardShots, "donor.jpg"), buf);
     const pub = join(projectDir, "public", "_explore");
     mkdirSync(pub, { recursive: true });
@@ -1408,6 +1418,10 @@ async function writeDonors(donors, boards, seedDir, shotsDir, projectDir) {
  * the gate leave that surface out of its request AND say why, which a bare absence cannot.
  */
 async function writeDonorFull(d, boardShots, lines) {
+  // ITS OWN DIRECTORY, because this is the first thing written into it on a FIRST run and the
+  // caller's mkdir used to come after. A render that throws ENOENT on a fresh project is the
+  // one failure this function's "nothing here is fatal" rule cannot absorb.
+  mkdirSync(boardShots, { recursive: true });
   const dest = join(boardShots, "donor-full.png");
   const note = join(boardShots, "donor-full.missing");
   const record = (why) => {
@@ -1422,10 +1436,10 @@ async function writeDonorFull(d, boardShots, lines) {
   }
   const url = d.hero_url.replace(/desktop\.png$/i, "full.png");
   let buf;
-  try { buf = await fetchHero(url); }
+  try { buf = await fetchHero(url, DONOR_FULL_TIMEOUT_MS); }
   catch (e) { record(e.message.replace(/\s+$/, "")); return; }
   if (buf.length > MAX_DONOR_FULL_BYTES) {
-    record(`${url} answered ${(buf.length / (1024 * 1024)).toFixed(1)} MB, over the 1.5 MB ceiling for judge evidence`);
+    record(`${url} answered ${(buf.length / (1024 * 1024)).toFixed(1)} MB, over the 16 MB ceiling for judge evidence`);
     return;
   }
   /**

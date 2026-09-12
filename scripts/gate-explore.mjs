@@ -627,6 +627,36 @@ for (const v of parsed) {
   }
 }
 
+/**
+ * A SURFACE THAT WENT UNJUDGED IS SAID OUT LOUD, and it is a WARNING rather than a finding.
+ *
+ * The judge reads three surfaces per direction and the page ending is dropped when the library
+ * holds no whole-page capture for that reference (`rungs.foot: null`). That is a fact about the
+ * library, not the operator's doing, so refusing over it would switch the instrument off on the
+ * builds it is meant to serve. But nothing downstream reads `rungs`, so without this line
+ * "lowest across three surfaces" quietly becomes "lowest across the two we managed" and the
+ * record is indistinguishable from one that was judged whole.
+ *
+ * A record with NO `rungs` at all predates the surfaces and claims nothing, so it is not warned
+ * about: crying wolf on every older build is how a warning gets ignored.
+ */
+const SURFACE_NAMES = { entrance: "entrance", foot: "page ending", inner: "inner page" };
+const warnings = [];
+if (judgeApplies && manifest?.explore?.shown_at) {
+  for (const v of parsed) {
+    const rungs = judgedById.get(v.id)?.rungs;
+    if (!rungs || typeof rungs !== "object") continue;
+    const dropped = Object.keys(SURFACE_NAMES).filter((k) => k in rungs && rungs[k] === null);
+    if (!dropped.length) continue;
+    warnings.push(
+      `${v.id} (${judgedById.get(v.id)?.donor ?? v.donor}) was judged on ${dropped.length === 1 ? "two surfaces" : "fewer than three surfaces"}: ` +
+        `no ${dropped.map((k) => SURFACE_NAMES[k]).join(", no ")}. The library holds no whole-page capture for that reference, so ` +
+        `${v.id}'s rung is the lowest of the surfaces that WERE judged, not of all three.`,
+    );
+  }
+}
+for (const w of warnings) console.error(`Explore gate warning: ${w}`);
+
 if (!findings.length) {
   console.log(`Explore gate passed: ${entries.length} board(s), each with a rung, a description, an argument, a feeling, a distinct donor, a motion plan and its CTA options, and a page that explains the range.`);
   process.exit(0);
