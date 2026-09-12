@@ -25,7 +25,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 import { createServer } from "node:http";
-import { PROPERTY_LIST, parseRegistry, writeCanvasJson, toArtboard, validateArtboard, validateSheet, parseKitVariations, stampKeys, loadDonors } from "../boards-render.mjs";
+import { PROPERTY_LIST, parseRegistry, writeCanvasJson, toArtboard, validateArtboard, validateSheet, validateSheetCaptions, parseKitVariations, stampKeys, loadDonors } from "../boards-render.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");
@@ -45,6 +45,14 @@ const BOARDS = [
     feeling: "unhurried, private, adult",
     motion: "Nothing moves on load; a single slow fade carries the photograph in.",
     ctas: ["Book a first visit", "Ask a question"],
+    pieces: {
+      navigation: { variation: "NavSimple", donor: "aesop" },
+      hero: { variation: "HeroTextImage", donor: "anthropic" },
+      cta: { variation: "CtaClosing", donor: "parsley-health" },
+      forms: { variation: "FormEnquiry", donor: "pilot-accounting" },
+      footer: { variation: "FooterSimple", donor: "loom" },
+      services: { variation: "BenefitCards", donor: "linear" },
+    },
   },
   {
     id: "b2", name: "The Long Table", ambition: 2, section: "proof", donor: "the-modern-house",
@@ -53,6 +61,14 @@ const BOARDS = [
     feeling: "candid, unhurried",
     motion: "Rows settle into place as the table is scrolled, one after another.",
     ctas: ["See the work", "Start a project", "Ask about a fit"],
+    pieces: {
+      navigation: { variation: "NavDropdown", donor: "stripe" },
+      hero: { variation: "HeroCentredPreview", donor: "linear" },
+      cta: { variation: "CtaWithProof", donor: "vercel" },
+      forms: { variation: "FormContact", donor: "basecamp" },
+      footer: { variation: "FooterGrouped", donor: "glossier" },
+      proof: { variation: "TestimonialGrid", donor: "aesop" },
+    },
   },
 ];
 
@@ -78,11 +94,15 @@ function registryFor(boards) {
     section: ${JSON.stringify(b.section)},
     motion: ${JSON.stringify(b.motion)},
     ctas: ${JSON.stringify(b.ctas)},
+    pieces: {
+${Object.entries(b.pieces || {}).map(([k, v]) => `      ${k}: { variation: ${JSON.stringify(v.variation)}, donor: ${JSON.stringify(v.donor)} },`).join("\n")}
+    },
   },`).join("\n");
   return `export interface Variant {
   id: string; name: string; artboard: string; href?: string; ambition: number; what: string;
   why: string; feeling: string; donor: string; section: string; motion: string; ctas: string[];
   presentation: { inner: string; mobile: string; sheet: string };
+  pieces: Record<string, { variation: string; donor: string }>;
   clip?: string; lookAt?: string;
 }
 export const variants: Variant[] = [
@@ -178,9 +198,23 @@ const SHEET_BLOCKS = [
   ["footer:FooterSimple:default", "The footer: the address, the hours, the licence number and the three legal links."],
 ];
 
+/**
+ * The provenance caption a real sheet carries under each block: the piece, the kit variation it
+ * is, and the reference that variation's craft came from. It is the only place the DONOR of a
+ * piece is ever written down where a client can read it, which is why boards-render checks it.
+ */
+function captionFor(b, mark) {
+  const [piece, variation] = mark.split(":");
+  const prov = b.pieces?.[piece];
+  if (!prov) return "";
+  const name = piece[0].toUpperCase() + piece.slice(1);
+  return `<p class="piece-from">${name}: ${variation}, drawn from ${prov.donor}.</p>`;
+}
+
 function sheetFor(b, blocks = SHEET_BLOCKS) {
   const body = blocks.map(([mark, copy]) =>
     `<section class="piece band" data-kit-piece="${mark}"><h2 class="piece-title">${mark}</h2>` +
+    captionFor(b, mark) +
     `<p class="piece-copy">${copy}</p></section>`).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body>` +
     `<x-dc><helmet><style>` +
@@ -304,6 +338,28 @@ test("the registry parser returns the direction's other three artboards", () => 
   const [v] = parseRegistry(registryFor(BOARDS));
   assert.deepEqual(v.presentation, { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" });
   assert.equal(parseRegistry(registryFor(BOARDS))[1].presentation.sheet, "S2.dc.html");
+});
+
+test("the registry parser returns each direction's per-piece provenance", () => {
+  // The per-piece provenance is what the detail sheet's captions print and what gate-explore
+  // holds against the kit, so a parser that drops it leaves both checking nothing.
+  const [v] = parseRegistry(registryFor(BOARDS));
+  assert.deepEqual(v.pieces.navigation, { variation: "NavSimple", donor: "aesop" });
+  assert.deepEqual(v.pieces.services, { variation: "BenefitCards", donor: "linear" });
+  assert.equal(Object.keys(v.pieces).length, 6);
+  // AND THE NESTED DONORS ARE NOT THE BOARD'S OWN. `pieces` carries a `donor:` per entry, so a
+  // parser reading the first `donor:` in the object reports the navigation's reference as the
+  // direction's, and every downstream check about donors is then about the wrong slug.
+  assert.equal(v.donor, "therapy-in-london");
+  // Written with `pieces` ABOVE the board's own donor, which is the order that exposes it.
+  const above = `export const variants = [
+  { id: "b9", name: "The Ledger", artboard: "B9.dc.html",
+    pieces: { navigation: { variation: "NavSimple", donor: "aesop" } },
+    ambition: 9, donor: "the-modern-house", section: "proof" },
+];`;
+  const [w] = parseRegistry(above);
+  assert.equal(w.donor, "the-modern-house", "the navigation's reference was read as the direction's");
+  assert.equal(w.pieces.navigation.donor, "aesop");
 });
 
 test("parseKitVariations reads the shipped kit: 17 pieces, 50 variations", () => {
@@ -839,6 +895,7 @@ test("a type specimen is refused as a sheet, and the rule is named", () => {
   // A sheet with real blocks and no copy in them is that sheet with different markup.
   const specimen = asSheet(SHEET_BLOCKS.map(([m]) => [m, ""]))
     .replace(/<h2 class="piece-title">[^<]*<\/h2>/g, '<h2 class="piece-title">Ag</h2>')
+    .replace(/<p class="piece-from">[^<]*<\/p>/g, "")
     .replace(/<h1 class="sheet-title">[^<]*<\/h1>/, '<h1 class="sheet-title">Aa</h1>');
   const r = val(specimen, { kind: "sheet" });
   assert.equal(r.ok, false, "a type specimen with no copy on it was accepted as the detail sheet");
@@ -882,6 +939,45 @@ test("an annotation id stays inside the 40 characters a canvas id allows", () =>
   });
   assert.ok(doc.annotations.some((a) => a.id.startsWith("mobile-")), "no mobile annotation to measure");
   for (const a of doc.annotations) assert.match(a.id, /^[A-Za-z0-9_-]{1,40}$/, `${a.id} is ${a.id.length} characters`);
+});
+
+test("every required block's caption names its variation and the reference it came from", () => {
+  // THE ONLY PLACE A PIECE'S DONOR IS EVER WRITTEN WHERE A CLIENT CAN READ IT. The sheet is what
+  // gets signed off; a block with no provenance under it is a piece whose craft came from
+  // wherever the author happened to be looking, and nobody can tell afterwards.
+  const ok = validateSheetCaptions(asSheet(), { id: "b1", pieces: B.pieces });
+  assert.equal(ok.ok, true, ok.problems.join("; "));
+
+  const noDonor = asSheet().replace(", drawn from aesop.", ".");
+  const r = validateSheetCaptions(noDonor, { id: "b1", pieces: B.pieces });
+  assert.equal(r.ok, false, "a navigation block whose caption names no donor was accepted");
+  assert.match(r.problems.join("\n"), /navigation/);
+  assert.match(r.problems.join("\n"), /aesop/);
+
+  // The variation half: a caption that says "the footer" and nothing else leaves the client
+  // approving a footer whose kit variation is decided after the sign-off.
+  const noVariation = asSheet()
+    .replace('<h2 class="piece-title">footer:FooterSimple:default</h2>', '<h2 class="piece-title">The footer</h2>')
+    .replace("Footer: FooterSimple, drawn from loom.", "Drawn from loom.");
+  const f = validateSheetCaptions(noVariation, { id: "b1", pieces: B.pieces });
+  assert.equal(f.ok, false, "a footer block whose caption names no variation was accepted");
+  assert.match(f.problems.join("\n"), /FooterSimple/);
+});
+
+test("the caption check reads the block it is under, not the sheet as a whole", () => {
+  // A donor named once in a heading at the top would otherwise satisfy every block below it,
+  // which is exactly the sheet that carries no provenance at all.
+  const topOnly = asSheet().replace(", drawn from aesop.", ".")
+    .replace('<h1 class="sheet-title">', '<h1 class="sheet-title">aesop NavSimple ');
+  const r = validateSheetCaptions(topOnly, { id: "b1", pieces: B.pieces });
+  assert.equal(r.ok, false, "a donor named in the sheet's heading stood in for the block's own caption");
+});
+
+test("a direction that declared no pieces is not refused by the caption check", () => {
+  // gate-explore owns "this direction declared no provenance". Reporting the same absence here,
+  // in different words, would make one fault read as two on every board.
+  const r = validateSheetCaptions(asSheet(), { id: "b1", pieces: null });
+  assert.equal(r.ok, true, r.problems.join("; "));
 });
 
 test("the shared rules hold on every kind, so a broken image is refused on the sheet too", () => {
@@ -1158,6 +1254,25 @@ test("a direction whose detail sheet was never drawn is refused, naming the file
     assert.equal(r.status, 2, "a direction with no detail sheet was drawn as though it were whole");
     assert.match(r.stderr, /S1\.dc\.html/, "the refusal does not name the file the registry asked for");
     assert.match(r.stderr, /sheet/, "the refusal does not name which of the four boards is missing");
+    assert.ok(existsSync(join(SEED, "B1.dc.html")), "the refusal deleted the hand-drawn artboards");
+  } finally {
+    writeFileSync(sheet, original);
+  }
+});
+
+test("a sheet whose caption drops the donor is refused, naming the piece and the reference", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // The registry knows each piece's donor and the sheet is where a client reads it. A caption
+  // that says which variation it is and not where it came from looks complete and proves
+  // nothing, so the run refuses it rather than shooting a sheet that cannot be traced.
+  const sheet = join(SEED, "S1.dc.html");
+  const original = readFileSync(sheet, "utf8");
+  writeFileSync(sheet, original.replace(", drawn from pilot-accounting.", "."));
+  try {
+    const r = await run([SITE]);
+    assert.equal(r.status, 2, "a sheet whose form block names no donor was drawn as though it were traceable");
+    assert.match(r.stderr, /forms/, "the refusal does not name the piece");
+    assert.match(r.stderr, /pilot-accounting/, "the refusal does not name the reference the caption owes");
     assert.ok(existsSync(join(SEED, "B1.dc.html")), "the refusal deleted the hand-drawn artboards");
   } finally {
     writeFileSync(sheet, original);

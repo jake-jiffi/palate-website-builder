@@ -159,7 +159,18 @@ export function parseRegistry(src) {
   const clean = stripComments(src);
   const body = arrayBody(clean, "variants");
   if (!body) return [];
-  return objects(body).map((o) => ({
+  return objects(body).map((full) => {
+    /**
+     * THE NESTED PROVENANCE IS READ FIRST AND THEN CUT OUT.
+     *
+     * `pieces` carries a `donor:` per entry, and `field()` takes the first match anywhere in the
+     * object, so an entry whose `pieces` sits above its own `donor:` line reports the
+     * navigation's reference as the DIRECTION's. Every check about donors downstream (one
+     * distinct donor per direction, the judge's pairing) would then be about the wrong slug,
+     * and nothing would say so.
+     */
+    const { pieces, rest: o } = splitPieces(full);
+    return {
     id: field(o, "id"),
     name: field(o, "name"),
     // The board IS this file. `href` is deprecated and kept only so an old registry parses.
@@ -181,10 +192,44 @@ export function parseRegistry(src) {
      * while the client is shown one board out of four.
      */
     presentation: presentationOf(o),
-  })).filter((v) => v.id);
+    /**
+     * THE PER-PIECE PROVENANCE. Which kit variation this direction used for its navigation,
+     * hero, closing band, enquiry form, footer and its own inner section, and the reference
+     * each of those came from. It is what the detail sheet's captions print, and it is the
+     * only place a client ever reads where a piece's craft came from. Null when the registry
+     * declared none, which gate-explore refuses; nothing is derived from a board that
+     * declared nothing.
+     */
+    pieces,
+    };
+  }).filter((v) => v.id);
 }
 
-function presentationOf(obj) {
+/**
+ * `pieces: { navigation: { variation, donor }, ... }` as a plain object, and the rest of the
+ * entry with that block CUT OUT.
+ *
+ * Both halves matter. `pieces` carries a `donor:` per entry and `field()` takes the first match
+ * anywhere in the object, so whoever reads the entry's own `donor` has to read it from the rest.
+ * Exported because gate-explore holds the same block against the kit manifest, and two parsers
+ * reading one file differently is how a check passes on one surface and fails on the other.
+ */
+export function splitPieces(obj) {
+  const body = blockAfterKey(obj, "pieces", "{", "}");
+  if (!body) return { pieces: null, rest: obj };
+  const rest = obj.replace(body, "");
+  const out = {};
+  for (const m of body.matchAll(/([A-Za-z_][\w-]*)\s*:\s*\{/g)) {
+    const inner = blockAfterKey(body.slice(m.index), m[1], "{", "}");
+    if (!inner) continue;
+    const variation = field(inner, "variation");
+    const donor = field(inner, "donor");
+    out[m[1]] = { variation: typeof variation === "string" ? variation : null, donor: typeof donor === "string" ? donor : null };
+  }
+  return { pieces: Object.keys(out).length ? out : null, rest };
+}
+
+export function presentationOf(obj) {
   const body = blockAfterKey(obj, "presentation", "{", "}");
   if (!body) return null;
   const inner = field(body, "inner");
@@ -494,6 +539,90 @@ function visibleText(html) {
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Void elements, which never carry a subtree: a mark on one has no caption under it and the
+ * scan must not run off looking for a closing tag that cannot exist.
+ */
+const VOID_TAGS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+
+/** Every `data-kit-piece` block on a sheet, with the visible text INSIDE that block. */
+function kitBlocks(html) {
+  const s = String(html);
+  const out = [];
+  const tagRe = /<([a-zA-Z][\w-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+  let m;
+  while ((m = tagRe.exec(s))) {
+    const mark = /\bdata-kit-piece="([^"]*)"/.exec(m[2]);
+    if (!mark) continue;
+    const name = m[1].toLowerCase();
+    const closed = VOID_TAGS.has(name) || /\/\s*$/.test(m[2]);
+    const [piece, variation, state] = mark[1].split(":").map((x) => x.trim());
+    out.push({ raw: mark[1], piece, variation, state, text: closed ? "" : visibleText(elementBody(s, name, tagRe.lastIndex)) });
+  }
+  return out;
+}
+
+/** The markup between an open tag and its own close, nesting counted. */
+function elementBody(s, name, from) {
+  const re = new RegExp(`<(/?)${name}\\b((?:"[^"]*"|'[^']*'|[^>"'])*)>`, "gi");
+  re.lastIndex = from;
+  let depth = 1;
+  let m;
+  while ((m = re.exec(s))) {
+    if (m[1]) {
+      depth--;
+      if (!depth) return s.slice(from, m.index);
+    } else if (!/\/\s*$/.test(m[2])) depth++;
+  }
+  return s.slice(from);
+}
+
+/**
+ * THE SHEET SAYS WHERE EACH PIECE CAME FROM, IN WORDS A CLIENT READS.
+ *
+ * The registry records each piece's kit variation and its donor, and the detail sheet is the one
+ * artefact where a person ever sees that: "Navigation: NavSimple, drawn from aesop". A block with
+ * no such line looks finished and proves nothing, and once the direction is signed off nobody can
+ * say afterwards which reference the navigation's craft came from.
+ *
+ * The caption is checked INSIDE the block, never across the sheet, because a donor named once in
+ * the heading at the top would otherwise satisfy every block below it, which is the sheet that
+ * carries no provenance at all.
+ *
+ * It reads the BLOCK's own variation rather than the registry's, on purpose: the navigation
+ * legitimately appears twice on a sheet, the bar at rest and the drawer on a phone, and those are
+ * two different kit variations. What the registry owns is the DONOR, and gate-explore's check 10
+ * is what holds the sheet's variations to the registry's.
+ *
+ * Silent when the registry declared no `pieces`: gate-explore owns that absence, and reporting it
+ * here in different words would make one fault read as two on every direction.
+ */
+export function validateSheetCaptions(html, { id, pieces } = {}) {
+  const problems = [];
+  if (!pieces || !Object.keys(pieces).length) return { ok: true, problems };
+  const blocks = kitBlocks(html);
+  for (const need of SHEET_REQUIRED) {
+    for (const piece of need.pieces) {
+      const prov = pieces[piece];
+      if (!prov || !prov.donor) continue;
+      for (const b of blocks.filter((x) => x.piece === piece && x.state === need.state)) {
+        const text = b.text.toLowerCase();
+        const missing = [];
+        if (b.variation && !text.includes(b.variation.toLowerCase())) missing.push(`the kit variation it is (${b.variation})`);
+        if (!text.includes(prov.donor.toLowerCase())) missing.push(`the reference it was drawn from (${prov.donor})`);
+        if (missing.length) {
+          problems.push(
+            `the block marked data-kit-piece="${b.raw}"${id ? ` on ${id}` : ""} does not name ${missing.join(" or ")}. ` +
+            `Write the provenance into the block itself, e.g. "${piece[0].toUpperCase()}${piece.slice(1)}: ${b.variation || prov.variation}, drawn from ${prov.donor}". ` +
+            "The sheet is the only place a client reads where a piece's craft came from.",
+          );
+        }
+      }
+    }
+  }
+  return { ok: problems.length === 0, problems };
 }
 
 export function validateArtboard(html, { id, section, dir, kind = "home", kit = null }) {
@@ -842,8 +971,16 @@ async function main() {
       if (!existsSync(p)) {
         die(`board ${b.id} registers ${file} as its ${KINDS[kind].label} and ${p} does not exist. A direction is four boards (the home page, the inner page, the phone and the detail sheet); three of them read to a client as the whole direction. Nothing measured.`);
       }
-      const v = validateArtboard(readFileSync(p, "utf8"), { id: b.id, section: b.section, dir: seedDir, kind, kit });
+      const html = readFileSync(p, "utf8");
+      const v = validateArtboard(html, { id: b.id, section: b.section, dir: seedDir, kind, kit });
       if (!v.ok) die(`artboard ${file} (${b.id}, the ${KINDS[kind].label}) does not meet the canvas contract:\n  - ${v.problems.join("\n  - ")}`);
+      // AND THE SHEET SAYS WHERE EACH PIECE CAME FROM. The registry knows every piece's donor;
+      // the sheet is where a person reads it, and a run that shoots an untraceable sheet hands a
+      // client a direction nobody can account for afterwards.
+      if (kind === "sheet") {
+        const c = validateSheetCaptions(html, { id: b.id, pieces: b.pieces });
+        if (!c.ok) die(`detail sheet ${file} (${b.id}) does not carry its provenance:\n  - ${c.problems.join("\n  - ")}`);
+      }
     }
   }
 

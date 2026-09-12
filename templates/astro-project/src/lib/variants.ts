@@ -72,6 +72,23 @@ export interface Variant {
     /** The detail sheet of the kit pieces as used, e.g. "S1.dc.html". */
     sheet: string;
   };
+  /**
+   * WHERE EVERY PIECE OF THIS DIRECTION CAME FROM. REQUIRED.
+   *
+   * One entry per piece: the kit variation it is (an id from `src/lib/kit.ts`, under that piece)
+   * and the library reference its craft was drawn from (a slug the survey actually read).
+   * Required at minimum: `navigation`, `hero`, `cta`, `forms`, `footer`, and the direction's own
+   * `section`. A direction is signed off piece by piece, so a direction that records none of this
+   * is one whose navigation, enquiry form and footer are decided later, by nobody, and discovered
+   * by the client on the built site.
+   *
+   * It is also the only place a client ever READS where a piece came from: the detail sheet
+   * prints it under each block ("Navigation: NavSimple, drawn from aesop"), and
+   * `boards-render.mjs` refuses a sheet whose blocks do not. `gate-explore.mjs` holds every
+   * variation against the kit and every donor against `references_surveyed`, and checks that the
+   * sheet shows the variations recorded here.
+   */
+  pieces: Record<string, { variation: string; donor: string }>;
   /** Deprecated. Boards have no route since canvas-first Explore; kept optional for old registries. */
   href?: string;
   /**
@@ -124,6 +141,14 @@ export const variants: Variant[] = [
   //   feeling: "unhurried, private, adult",
   //   donor: "therapy-in-london",
   //   section: "services",
+  //   pieces: {
+  //     navigation: { variation: "NavSimple", donor: "aesop" },
+  //     hero: { variation: "HeroServicePhoto", donor: "therapy-in-london" },
+  //     cta: { variation: "CtaClosing", donor: "parsley-health" },
+  //     forms: { variation: "FormEnquiry", donor: "pilot-accounting" },
+  //     footer: { variation: "FooterSimple", donor: "loom" },
+  //     services: { variation: "BenefitAlternating", donor: "greenwise" },
+  //   },
   //   motion: "Nothing moves on load. The photograph fades in slowly once it is scrolled to, and that is the whole budget.",
   //   ctas: ["Book a first visit", "Ask a question"],
   //   lookAt: "The way the first screen holds a single idea rather than a menu of them.",
