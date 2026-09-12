@@ -13,9 +13,16 @@
  *
  * So every board is now judged against the one thing it has to answer to: the library reference
  * it was drawn from, whose hero is already beside it on the canvas. Both orderings, the lower
- * rung on disagreement, and a board judged clearly worse than its donor is REDRAWN rather than
- * shown. At every intensity, because a calm brand is not a reason to hand someone a weak
- * drawing.
+ * rung on disagreement, and THE BAR IS COMPARABLE OR BETTER ON EVERY SURFACE THE BOARD IS
+ * JUDGED ON: a board read somewhat worse than its donor, on any one of them, is REDRAWN rather
+ * than shown, exactly as one read clearly worse is. At every intensity, because a calm brand is
+ * not a reason to hand someone a weak drawing.
+ *
+ * The bar moved on 2026-09-12 (Jake's ruling) from "not clearly worse". Somewhat worse than the
+ * work a board was drawn FROM is the reading a bland board earns, and the whole point of the
+ * comparison is that bland is what the hygiene rubric cannot see. Nothing about the ladder
+ * changed: all four rungs are still stated, still judged and still recorded, and only what the
+ * gate REFUSES is wider.
  *
  * ================================ TWO PHASES ================================
  *
@@ -27,7 +34,8 @@
  *
  *   node scripts/gate-board-judge.mjs <projectDir> --judgements <file>
  *     Reads `[{ id, candidate_is, verdict }]`, scores every pair, records
- *     `manifest.explore.board_judgements`, and refuses any board at `clearly_worse`.
+ *     `manifest.explore.board_judgements`, and refuses any board that does not read `comparable`
+ *     or `better` on every surface it was judged on.
  *
  * THE JUDGEMENTS ARE RECORDED EVEN WHEN THE GATE REFUSES. A refusal that leaves no trace gets
  * re-argued rather than fixed, and `gate-explore.mjs` reads exactly this record when it asks
@@ -64,13 +72,32 @@ const engineRequire = createRequire(new URL("./reference-capture/", import.meta.
  * averaging is how a weak ending gets carried by a strong hero.
  *
  * `label` is what the refusal calls the surface, in the client's language rather than the
- * file's: "page ending", never "foot.png".
+ * file's: "page ending", never "foot.png". Exported because gate-explore.mjs says the same
+ * sentence about the same board at done-time.
  */
-const SURFACES = {
+export const SURFACES = {
   entrance: { label: "entrance", question: BOARD_QUESTION, candidate: "hero.png", donor: "donor.jpg" },
   foot: { label: "page ending", question: BOARD_FOOT_QUESTION, candidate: "foot.png", donor: "donor-foot.png" },
   inner: { label: "inner page", question: BOARD_INNER_QUESTION, candidate: "inner.png", donor: "donor.jpg" },
 };
+
+/**
+ * THE BAR A DIRECTION HAS TO CLEAR, and the words the refusal says it in.
+ *
+ * A board must read `comparable` or `better` than its donor on EVERY surface it is judged on.
+ * The two lower rungs both refuse: `somewhat_worse` is the reading a competent-but-bland board
+ * earns against the reference it was drawn from, and bland is precisely what the visual rubric
+ * cannot see, so treating it as a pass left the judge unable to refuse the boards it exists for.
+ * A surface that could not be judged at all reads `null` and refuses nothing (the library holds
+ * no whole-page capture for some references), because absence of evidence is not a bad reading.
+ *
+ * Exported because `gate-explore.mjs` refuses the same boards at done-time, and the bar stated
+ * twice is the bar that drifts.
+ */
+export const REFUSED_RUNGS = ["clearly_worse", "somewhat_worse"];
+export const refusedRung = (rung) => REFUSED_RUNGS.includes(rung);
+/** The reading in the client's language: "somewhat worse", never "somewhat_worse". */
+export const WORSE_PHRASE = { clearly_worse: "clearly worse", somewhat_worse: "somewhat worse" };
 
 /** How much of the bottom of a page is its ending. Enough for the CTA band and the footer. */
 const FOOT_PX = 900;
@@ -291,17 +318,19 @@ export async function main(argv = process.argv.slice(2)) {
     });
     if (!stale.length) {
       /**
-       * A STANDING REFUSAL IS STILL A REFUSAL. A board read clearly worse and left alone is not
+       * A STANDING REFUSAL IS STILL A REFUSAL. A board read below the bar and left alone is not
        * "already judged, nothing to do": the verdict stands, and re-stating the comparison would
        * ask a fresh subagent the same question about the same picture until one of them said
        * something kinder.
        */
-      const worse = boards.filter((b) => held.get(b.id).rung === "clearly_worse");
+      const worse = boards.filter((b) => refusedRung(held.get(b.id).rung));
       if (worse.length) {
         for (const b of worse)
           process.stderr.write(
-            `gate-board-judge: ${b.id} (${held.get(b.id).donor ?? b.donor}) stands judged clearly worse than its donor ` +
-              `and has not been redrawn. Redraw it from the donor's hero and re-render before judging again.\n`,
+            `gate-board-judge: ${b.id} (${held.get(b.id).donor ?? b.donor}) stands judged ` +
+              `${WORSE_PHRASE[held.get(b.id).rung]} than its donor and has not been redrawn. A board is shown only ` +
+              `when it reads comparable or better on every surface it is judged on. Redraw it from the donor's ` +
+              `hero and re-render before judging again.\n`,
           );
         process.exitCode = 2;
         return;
@@ -504,16 +533,22 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
-  const worse = scored.filter((s) => s.rung === "clearly_worse");
+  const worse = scored.filter((s) => refusedRung(s.rung));
   if (worse.length) {
     for (const s of worse)
-      // NAMING THE SURFACE, because "redraw it" over a page whose entrance is fine and whose
-      // ending is not sends the operator to the wrong half of the drawing.
+      // NAMING THE SURFACE AND THE READING, because "redraw it" over a page whose entrance is
+      // fine and whose ending is not sends the operator to the wrong half of the drawing, and
+      // "somewhat worse" and "clearly worse" are different amounts of redrawing.
       for (const [surface, verdicts] of Object.entries(s.verdicts)) {
-        if (verdicts[0] !== "clearly_worse" && verdicts[1] !== "clearly_worse") continue;
+        // The SURFACE's own reading, which is the lower of its two orderings, is what refuses
+        // it. Reading the raw verdicts here would name a surface the swap had already rescued.
+        const rung = s.rungs[surface];
+        if (!refusedRung(rung)) continue;
         process.stderr.write(
-          `gate-board-judge: ${s.id} (${s.donor}) judged clearly worse than its donor at the ${SURFACES[surface].label}: ` +
-            `${verdicts[0]} / ${verdicts[1]}. Redraw it from the donor's hero before the canvas is published.\n`,
+          `gate-board-judge: ${s.id} (${s.donor}) judged ${WORSE_PHRASE[rung]} than its donor at the ` +
+            `${SURFACES[surface].label}: ${verdicts[0]} / ${verdicts[1]}. A board is shown only when it reads ` +
+            `comparable or better on every surface it is judged on. Redraw it from the donor's hero before the ` +
+            `canvas is published.\n`,
         );
       }
     process.exitCode = 2;

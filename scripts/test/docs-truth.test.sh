@@ -535,6 +535,23 @@ present "explore-stage.md names the gate that judges a board against its donor" 
   "references/explore-stage.md" "gate-board-judge.mjs"
 present "explore-stage.md names the rung a board is refused at" \
   "references/explore-stage.md" "clearly_worse"
+# THE BAR ITSELF, in every place that states it. It moved on 2026-09-12 from "not clearly worse"
+# to "comparable or better on every judged surface", and a doctrine still telling an agent that
+# somewhat worse is shippable is a doctrine the gate will contradict at done-time.
+present "explore-stage.md states the bar the judge refuses at" \
+  "references/explore-stage.md" "THE BAR IS \`comparable\` OR \`better\`"
+present "explore-stage.md says somewhat_worse is refused as clearly_worse is" \
+  "references/explore-stage.md" "read \`somewhat_worse\` on any one"
+present "SKILL.md A.4 states the bar the judge refuses at" \
+  "SKILL.md" "THE BAR IS \`comparable\` OR \`better\` ON EVERY SURFACE"
+present "palate-verifier.md states the bar the Explore gate refuses at" \
+  "agents/palate-verifier.md" "comparable or better on every surface the direction was judged on"
+present "build-manifest.md says both lower rungs refuse" \
+  "references/build-manifest.md" "both somewhat_worse and clearly_worse refuse"
+# A SURFACE NOBODY COULD JUDGE IS NOT A BAD READING, and a wider bar is exactly where that would
+# be got wrong: the library holds no whole-page capture for some references.
+present "explore-stage.md says a null surface refuses nothing" \
+  "references/explore-stage.md" "reads null and refuses nothing"
 present "SKILL.md A.4 names the judge that runs before the canvas" \
   "SKILL.md" "gate-board-judge.mjs"
 # `^2c\.` and not any "2c." substring: the point is the STEP HEADING, and a mention of the step

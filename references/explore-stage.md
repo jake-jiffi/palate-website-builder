@@ -424,23 +424,34 @@ onto `/explore` and the canvas.
    4. `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-board-judge.mjs" <project-dir>
       --judgements <project-dir>/.palate/explore/judgements.json` takes the LOWER
       of the two readings on each surface and the lowest of the surfaces, records
-      `manifest.explore.board_judgements`, and exits 2 naming any direction read
-      `clearly_worse` AND THE SURFACE IT WAS READ WORSE ON, because "redraw it"
-      over a page whose entrance is fine and whose ending is not sends you to the
-      wrong half of the drawing. **Report its stderr verbatim**, and
+      `manifest.explore.board_judgements`, and exits 2 naming any direction that
+      read below the bar, THE SURFACE IT WAS READ WORSE ON and THE READING in the
+      client's language ("somewhat worse", never "somewhat_worse"), because
+      "redraw it" over a page whose entrance is fine and whose ending is not sends
+      you to the wrong half of the drawing, and somewhat worse and clearly worse
+      are different amounts of redrawing. **Report its stderr verbatim**, and
       publish the canvas only once it passes.
 
-   **A board read `clearly_worse` than its donor is refused, at EVERY
-   intensity**: a calm brand is not a reason to hand someone a weak drawing, and
-   the visual rubric every board already clears measures hygiene, which is how
-   five boards scored 25 to 28 out of 30 and were bland. A refused board goes back
+   **THE BAR IS `comparable` OR `better`, ON EVERY SURFACE THE DIRECTION WAS
+   JUDGED ON, AT EVERY INTENSITY.** A board read `somewhat_worse` on any one
+   surface is refused exactly as one read `clearly_worse` is. A calm brand is not
+   a reason to hand someone a weak drawing, and the visual rubric every board
+   already clears measures hygiene, which is how five boards scored 25 to 28 out
+   of 30 and were bland: somewhat worse than the reference a board was drawn FROM
+   is the reading a competent bland board earns, so passing it left the judge
+   unable to refuse the boards it exists for. The bar moved here on 2026-09-12
+   (Jake's ruling) from "not clearly worse"; the ladder itself is unchanged, all
+   four rungs are still stated, judged and recorded, and only what the gate
+   REFUSES is wider. A surface that could not be judged at all (the library holds
+   no whole-page capture for that reference) reads null and refuses nothing:
+   absence of evidence is not a bad reading. A refused board goes back
    to the drawing step, redrawn from the donor's hero, re-rendered, and judged
    from step 1 of this block again (a redrawn `hero.png` makes the standing request
    stale and the gate says so, and an unchanged board is not re-judged: a standing
    verdict is reported rather than re-asked); three attempts, then the rung is dropped rather than shown.
    `scripts/gate-explore.mjs` blocks a shown build whose registered boards carry no
-   judgement or carry `clearly_worse`, so a board cannot reach a client by being
-   judged late. `PALATE_GATE_JUDGE=0` releases both.
+   judgement or carry a reading below the bar, so a board cannot reach a client by
+   being judged late. `PALATE_GATE_JUDGE=0` releases both.
 
    **THEN PUBLISH THE CANVAS, once the board judge has passed**, when the design
    skill is present. The judge is the condition and not a courtesy: publishing

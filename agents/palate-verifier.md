@@ -105,9 +105,10 @@ never held to the bold bar.
       passing one. The procedure is `references/explore-stage.md`; do not run it here.
    3. **On your NEXT round, the judgements are already a fact and you read them as one.**
       `node scripts/gate-explore.mjs <projectDir>` (step 2b) blocks a shown build whose
-      registered boards have no entry in `manifest.explore.board_judgements` or carry
-      `clearly_worse`, which is where a board that was never compared, or was compared and
-      lost, becomes a refusal. Report those findings verbatim: the fix is a redraw from the
+      registered boards have no entry in `manifest.explore.board_judgements` or read below the
+      bar, which is comparable or better on every surface the direction was judged on, so both
+      `somewhat_worse` and `clearly_worse` refuse. That is where a board that was never
+      compared, or was compared and lost, becomes a refusal. Report those findings verbatim: the fix is a redraw from the
       donor's hero, not an argument.
 
    `PALATE_GATE_JUDGE=0` releases the judge and that half of the Explore gate, and a build that
