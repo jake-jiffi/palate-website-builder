@@ -842,6 +842,29 @@ else
   ok "the hand-off never says 'rung' or 'ladder'"
 fi
 
+# THE REPEATED SILHOUETTE IS A MEASUREMENT, NOT A NOTE TO THE VERIFIER. Two identical
+# five-card grids back to back shipped to a client because rhythm was the one thing no gate
+# read. The bug-class entry has to say all four criteria and say that it blocks, or the next
+# reader takes it for another line in the visual rubric that somebody is meant to eyeball.
+present "rendered-bug-classes names the repeated silhouette as its own class" \
+  "references/rendered-bug-classes.md" "## (i) REPEATED SILHOUETTE"
+present "rendered-bug-classes says the rule is about CONSECUTIVE sections" \
+  "references/rendered-bug-classes.md" "no two CONSECUTIVE sections share a silhouette"
+present "rendered-bug-classes says all four criteria have to hold" \
+  "references/rendered-bug-classes.md" "only when ALL FOUR hold"
+present "rendered-bug-classes names the deliberate escape hatch" \
+  "references/rendered-bug-classes.md" 'data-palate-repeat="deliberate"'
+# ...and the claim that it BLOCKS is a claim about a script, so it is checked against the
+# script rather than against the sentence: the finding has to reach the file the Stop hook
+# reads. `verify-rendered-silhouette.test.sh` drives the browser and proves the finding fires;
+# this asserts the entry it pushes carries the rule the doc names.
+if grep -qF "rule: 'repeated-silhouette'" "$ROOT/scripts/reference-capture/verify-rendered.mjs" \
+   && grep -qF "interactionFailures.push" "$ROOT/scripts/reference-capture/verify-rendered.mjs"; then
+  ok "the repeated-silhouette finding is written to the file the Stop hook blocks on"
+else
+  bad "rendered-bug-classes says the repeated silhouette blocks, but verify-rendered.mjs never files it as an interaction failure"
+fi
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
