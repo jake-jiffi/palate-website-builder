@@ -44,6 +44,43 @@ trap cleanup EXIT
 SITE="$TMP/site"
 scaffold_site "$SITE" boardtest || exit 2
 
+# --- the shipped registry TYPE-CHECKS against the page that reads it --------------------
+# RUN ON THE PRISTINE SCAFFOLD, before the fixture registry below overwrites src/lib/variants.ts.
+# The fixture declares its own copy of the Variant interface, so a check run after it proves
+# something about the fixture and NOTHING about the file a client is shipped. Caught by watching
+# this very assertion pass with the fault reintroduced.
+#
+# A landing board is a Variant minus its `presentation`, and `byAmbition` used to demand the
+# whole type, so `byAmbition(landingVariants)` on line 48 of this very page was a type error
+# that no build reported: Astro does not type-check on build, and nothing in the suite ran
+# `astro check`. Seven seconds, against a fault that reaches a client's repository.
+#
+# THE BAR IS A CEILING, NOT ZERO. The shipped template carries 22 pre-existing errors that
+# belong to other files (optional dependencies that are not installed by default: three,
+# @react-three/*, @zag-js/*, astro-pagefind; implicit `any` in a few frontmatter blocks; a
+# `Cannot find name` in api/contact.ts and one in lib/kit-grounding.ts). Fixing them is not this
+# test's job and asserting zero would mean either fixing them here or deleting the check. A
+# ceiling fails the moment an error is ADDED, which is the thing worth catching, and the second
+# assertion below is absolute: nothing the Explore registry touches may be among them.
+CHECK_BASELINE=22
+( cd "$SITE" && ./node_modules/.bin/astro check ) > "$TMP/astro-check.txt" 2>&1
+checkerrs=$(sed 's/\x1b\[[0-9;]*m//g' "$TMP/astro-check.txt" | grep -cE "^src/.* - error" || true)
+if [ "${checkerrs:-999}" -le "$CHECK_BASELINE" ]; then
+  ok "astro check reports no new type errors ($checkerrs, ceiling $CHECK_BASELINE)"
+else
+  bad "astro check reports $checkerrs errors, over the $CHECK_BASELINE this template ships with"
+  sed 's/\x1b\[[0-9;]*m//g' "$TMP/astro-check.txt" | grep -E "^src/.* - error" | head -8 | sed 's/^/      /'
+fi
+if sed 's/\x1b\[[0-9;]*m//g' "$TMP/astro-check.txt" \
+   | grep -E "^src/.* - error" \
+   | grep -qiE "variants\.ts|landingVariants|byAmbition|presentation"; then
+  bad "a type error names the Explore registry, so the boards the client is shown do not type-check"
+  sed 's/\x1b\[[0-9;]*m//g' "$TMP/astro-check.txt" | grep -iE "variants\.ts|landingVariants|byAmbition|presentation" | head -6 | sed 's/^/      /'
+else
+  ok "no type error names the Explore registry or the page that reads it"
+fi
+
+
 # --- two registered directions, each an artboard, no route -------------------------------
 cat > "$SITE/src/lib/variants.ts" <<'TS'
 export interface Variant {

@@ -138,7 +138,14 @@ export const variants: Variant[] = [
  */
 export const landingVariants: Omit<Variant, "presentation">[] = [];
 
-/** Ladder order, and the single place that order is decided. */
-export function byAmbition(list: Variant[]): Variant[] {
+/**
+ * Ladder order, and the single place that order is decided.
+ *
+ * Generic on purpose: it sorts by one field, and a landing board is a `Variant` minus its
+ * `presentation`, so a signature demanding the whole type refused the very list this file
+ * declares. Constrained to what it actually reads, and it returns the caller's own type, so
+ * `byAmbition(landingVariants)` still hands back landing boards rather than widening them.
+ */
+export function byAmbition<T extends { ambition?: number }>(list: T[]): T[] {
   return [...list].sort((a, b) => (a.ambition ?? 0) - (b.ambition ?? 0));
 }
