@@ -269,7 +269,7 @@ for (const entry of entries) {
   const motion = field(o, "motion");
   const ctas = arrayField(o, "ctas");
   const presentation = presentationOf(o);
-  parsed.push({ id, ambition, pieces, section, sheet: presentation?.sheet || null });
+  parsed.push({ id, ambition, pieces, section, presentation, sheet: presentation?.sheet || null });
 
   const missing = [];
   if (typeof ambition !== "number") missing.push("ambition");
@@ -306,6 +306,26 @@ for (const entry of entries) {
     );
   } else if (!existsSync(join(dir, ".palate/explore/seed", artboard))) {
     add(`${id} registers a board that was never drawn`, `artboard ${artboard} needs .palate/explore/seed/${artboard} and there is no such file. The canvas shows a hole where rung ${ambition} should be.`);
+  }
+
+  /**
+   * AND THE OTHER THREE FILES, AT DONE TIME.
+   *
+   * boards-render.mjs refuses a missing inner, phone or sheet file before it opens a browser,
+   * which is the right place at DRAW time and a hole at DONE time: `gate-done.sh` runs this gate
+   * and never runs boards-render, and the judge fingerprints the stills under `shots/` rather
+   * than the seed. So a registry naming `S3.dc.html` after the file was deleted, renamed or
+   * never committed cleared every done-time gate, check 10 silently skipped the provenance
+   * comparison, and the seed handed to the next session was one board short with nothing saying
+   * so. A direction is four artboards; the client is otherwise shown one of them missing.
+   */
+  for (const [kind, file] of Object.entries(presentation)) {
+    if (file && !existsSync(join(dir, ".palate/explore/seed", file))) {
+      add(
+        `${id} registers a ${kind} board that was never drawn`,
+        `presentation.${kind} names ${file} and there is no .palate/explore/seed/${file}. A direction is four artboards and the client is shown one short.`,
+      );
+    }
   }
 
   {

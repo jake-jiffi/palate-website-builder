@@ -583,6 +583,10 @@ present "explore-stage names the width a phone board is drawn at" \
   "references/explore-stage.md" "x-dc{width:390px}"
 present "explore-stage names the mark the inner page's sections carry" \
   "references/explore-stage.md" "<id>-inner-<piece>"
+# The pipeline table is where an agent grounds when it wants the whole shape in one screen, and
+# it kept telling the agent to draw one board per rung, which boards-render now refuses.
+present "pipeline.md says a direction is four artboards" \
+  "references/pipeline.md" "{B,I,M,S}<rung>.dc.html"
 # The sheet is the one board with a MINIMUM text budget in the validator (SHEET_MIN_TEXT), because
 # the format it is most likely to collapse into is the type specimen Jake rejected on 9 September.
 present "explore-stage bans the type specimen on the detail sheet" \
@@ -664,14 +668,17 @@ present "SKILL.md's checkpoint hands over the canvas, else /explore" \
 # The intake asks it BEFORE the deep survey and the wall holds it on the checkpoint, so the old
 # premise ("the ladder is built before anyone has said how bold they want to be") is false. But
 # explore.astro draws the marker from `commission.intensity_asked`, which only
-# `palate-pick.mjs --intensity` writes, so the doctrine has to say the same answer is recorded
-# there too or the ladder ships with no marker on it.
+# `palate-pick.mjs --intensity` writes and only AFTER the boards were seen, so the page falls
+# back to the intake position. The doctrine has to say so or an agent reading it expects a
+# ladder with no marker on the one handover the doctrine actually describes.
 absent "explore-stage no longer says the ladder is built before the question is asked" \
   "references/explore-stage.md" "The ladder is built BEFORE anyone has said how bold they want to be."
 present "explore-stage says the calibration answer is asked at the checkpoint" \
   "references/explore-stage.md" "asked in the intake, before the deep survey"
-present "explore-stage says the same answer is recorded again for the ladder marker" \
-  "references/explore-stage.md" "recorded AGAIN as \`commission.intensity_asked\`"
+present "explore-stage says the ladder marker falls back to the intake position" \
+  "references/explore-stage.md" "falls back to \`plan_checkpoint.shown.intake.calibration.position\`"
+present "explore-stage says the later record overwrites the marker" \
+  "references/explore-stage.md" "overwrites the marker when it"
 
 # ================= THE REGISTRY AND THE FILE MAP, PINNED =================================
 present "build-manifest.md records the four artboards a direction registers" \

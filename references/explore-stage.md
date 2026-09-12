@@ -674,17 +674,18 @@ dismiss the row as being for a different sort of business. High taste at every
 position, because a weak restrained example teaches the client that restraint is
 the poor option.
 
-**THE ANSWER IS RECORDED TWICE, ON PURPOSE, AND THE SECOND ONE IS EASY TO
-FORGET.** The intake writes it to `plan_checkpoint.shown.intake.calibration =
-{ position, why }`, which is what the write wall holds and what the surveyor's
-act 2 searches on. `src/pages/explore.astro` draws the marker on the ladder from
-`commission.intensity_asked`, which only `/pick --intensity <n>` writes, so the
-same position is **recorded AGAIN as `commission.intensity_asked`** or the ladder
-ships with no marker on it and the client cannot see where their own answer
-sits. It sets the default pick suggestion. It does
-NOT govern the bold bar: `commission.intensity`, the inferred one, still does
-that, because a client under-reporting their own appetite is exactly the case the
-bar exists for.
+**THE ANSWER IS RECORDED IN TWO PLACES, AND THE LADDER READS BOTH.** The intake
+writes it to `plan_checkpoint.shown.intake.calibration = { position, why }`,
+which is what the write wall holds and what the surveyor's act 2 searches on.
+`src/pages/explore.astro` draws the marker on the ladder from
+`commission.intensity_asked` and then
+**falls back to `plan_checkpoint.shown.intake.calibration.position`**, so a
+build that only ever asked the intake still shows the client where their own
+answer sits. The later record is written by `/pick --intensity <n>` and
+overwrites the marker when it exists, which is right: it is the confirmation
+given after the boards were seen, and it sets the default pick suggestion. Neither governs the bold bar:
+`commission.intensity`, the inferred one, still does that, because a client
+under-reporting their own appetite is exactly the case the bar exists for.
 
 **TWO ROWS OF REAL SITES, AND THEY ANSWER DIFFERENT QUESTIONS.** The calibration
 row (`.palate/explore/refs.json`, drawn as `Ref<position>.dc.html` on row 0) is

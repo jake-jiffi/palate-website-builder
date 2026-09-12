@@ -976,7 +976,7 @@ async function main() {
   if (!existsSync(reg)) die(`no ${join("src", "lib", "variants.ts")} under ${projectDir}. Not an Explore build; nothing measured. NOT a pass.`);
   const boards = parseRegistry(readFileSync(reg, "utf8")).sort((a, b) => (a.ambition ?? 0) - (b.ambition ?? 0));
   if (!boards.length) die("no boards registered in src/lib/variants.ts. Register them first; nothing was measured.");
-  if (!existsSync(seedDir)) die(`no ${seedDir}. Draw the artboards first: one .palate/explore/seed/B<rung>.dc.html per registered board.`);
+  if (!existsSync(seedDir)) die(`no ${seedDir}. Draw the artboards first: a direction is four, .palate/explore/seed/{B,I,M,S}<rung>.dc.html, per registered board.`);
 
   // The kit manifest, which is what every `data-kit-piece` mark on a detail sheet is checked
   // against. The project's own copy first (a build may have added a piece), the plugin's

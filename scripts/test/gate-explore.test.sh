@@ -43,7 +43,14 @@ hasnt_out() { local out; out="$(why "$2")"
 
 mk() { mkdir -p "$1/src/lib" "$1/src/pages" "$1/.palate/explore/seed"; }
 page() { : > "$1/src/pages/explore.astro"; }
-boards() { for id in "${@:2}"; do n="${id#b}"; printf '<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style></style></helmet><section class="hero" data-section-id="%s-hero"></section></x-dc></body></html>' "$id" > "$1/.palate/explore/seed/B$n.dc.html"; done; }
+# A DIRECTION IS FOUR ARTBOARDS, so the fixture draws four. The inner page, the phone board and
+# the detail sheet are written as plain frames: the gate checks the sheet's `data-kit-piece`
+# marks (check 10, and `sheet()` below writes a marked one over this) and checks the other two
+# only for EXISTENCE, which is the whole of what check 4 owns.
+boards() { local id n kind; for id in "${@:2}"; do n="${id#b}"
+  printf '<!doctype html><html><head><meta charset="utf-8"><script src="./support.js"></script></head><body><x-dc><helmet><style></style></helmet><section class="hero" data-section-id="%s-hero"></section></x-dc></body></html>' "$id" > "$1/.palate/explore/seed/B$n.dc.html"
+  for kind in I M S; do printf '<!doctype html><html><body><x-dc><section></section></x-dc></body></html>' > "$1/.palate/explore/seed/$kind$n.dc.html"; done
+done; }
 
 # sheet <dir> <rung> <navigation> <footer> <cta> <forms> - the direction's detail sheet.
 #
@@ -208,6 +215,16 @@ mv "$K2/.palate/explore/seed/B3.dc.html" "$K2/.palate/explore/seed/B7.dc.html"
 want "rung 3 registering B7.dc.html -> block" BLOCK "$(run "$K2")"
 has "and it names the file the rung reads back" "$K2" "B3.dc.html"
 has "and it names the file the board registered" "$K2" "B7.dc.html"
+
+# === 11c. THE OTHER THREE ARTBOARDS, REGISTERED AND NEVER DRAWN. boards-render owns this at
+# DRAW time and gate-done never runs boards-render, so a direction whose inner page, phone board
+# or detail sheet was deleted, renamed or never committed used to clear every done-time gate.
+for pk in I M S; do
+  K3="$TMP/k11c-$pk"; mk "$K3"; page "$K3"; write_valid "$K3"
+  rm -f "$K3/.palate/explore/seed/${pk}2.dc.html"
+  want "a direction whose ${pk}2.dc.html was never drawn -> block" BLOCK "$(run "$K3")"
+  has "and it names the file that is missing" "$K3" ".palate/explore/seed/${pk}2.dc.html"
+done
 
 # === 12. A MOTION PLAN THAT RESTATES THE "what". A board is mostly a still, so this is the
 # field whose absence is least visible and most expensive.
@@ -526,10 +543,12 @@ want "a sheet showing a footer the registry does not record -> block" BLOCK "$(r
 has "and it names the piece" "$BA" "footer"
 has "and it names what the registry records" "$BA" "FooterSimple"
 has "and it names what the sheet shows" "$BA" "FooterGrouped"
-# No sheet on disk is not a disagreement: another check owns the missing file, and inventing a
-# finding here would report the same absence twice in two different words.
+# A sheet that is not on disk is reported ONCE, by check 4, which owns the four files. Check 10
+# still says nothing about it: comparing a sheet nobody drew against the registry would report
+# the same absence twice in two different words.
 rm -f "$BA/.palate/explore/seed/S1.dc.html"
-want "no sheet drawn yet -> pass" PASS "$(run "$BA")"
+want "a registered sheet that was never drawn -> block" BLOCK "$(run "$BA")"
+hasnt_out "and check 10 does not report the same absence as a disagreement" "$BA" "disagree about the"
 
 echo "---"
 echo "passed=$pass failed=$fail"

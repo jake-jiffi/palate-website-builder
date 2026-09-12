@@ -262,6 +262,28 @@ hasnt "a build whose donor row was skipped shows no donor image" '-donor.jpg'
 has   "and the board stills are unaffected by the skip"          '/_explore/b1.png'
 rm -rf "$SITE/dist"
 
+# --- and the run whose ONLY record of the calibration answer is the intake ---------------
+# The client answers it in the intake, before the deep survey, and it lands on
+# `plan_checkpoint.shown.intake.calibration.position`. `commission.intensity_asked` is written
+# later, by `/pick --intensity`, which the doctrine runs AFTER the client has picked, so a build
+# handed over exactly as the doctrine describes used to ship a ladder with no marker on it: the
+# one number the client gave about the range, missing from the page built to show them the range.
+cp "$SITE/build-manifest.json" "$TMP/manifest-ordinary.json"
+cat > "$SITE/build-manifest.json" <<'JSON'
+{
+  "schema": 3,
+  "project": ".",
+  "explore": { "ran": true, "canvas": { "url": "https://claude.ai/code/artifact/fixture-canvas" } },
+  "commission": { "intensity": "high" },
+  "plan_checkpoint": { "shown": { "intake": { "calibration": { "position": 3, "why": "the bold one" } } } }
+}
+JSON
+build_explore build-intake || exit 2
+has "the intake position alone draws the marker"             'you said about here'
+has "and it lands where the later record would have put it"  'data-asked-direction="2"'
+cp "$TMP/manifest-ordinary.json" "$SITE/build-manifest.json"
+rm -rf "$SITE/dist"
+
 # --- then the ordinary run, which DID draw one ------------------------------------------
 setrow none || { echo "explore-page-boards: could not restore the manifest. NOT a pass." >&2; exit 2; }
 ( cd "$SITE" && PUBLIC_EXPLORE_MODE=true ./node_modules/.bin/astro build ) > "$TMP/build.log" 2>&1 || {

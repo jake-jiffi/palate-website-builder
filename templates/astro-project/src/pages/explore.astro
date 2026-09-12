@@ -74,7 +74,20 @@ const canvasUrl =
   typeof manifest?.explore?.canvas?.url === "string" ? manifest.explore.canvas.url
   : typeof manifest?.explore?.canvas_url === "string" ? manifest.explore.canvas_url
   : null;
-const asked = Number(manifest?.commission?.intensity_asked) || null;
+/**
+ * THE ANSWER IS RECORDED IN TWO PLACES AND THE INTAKE IS THE EARLIER ONE.
+ *
+ * The client answers the calibration question in the intake, before the deep survey, and it
+ * lands on `plan_checkpoint.shown.intake.calibration.position`. `commission.intensity_asked` is
+ * written later, by `/pick --intensity <n>`, which the doctrine runs AFTER the boards were seen.
+ * Reading only the later field meant a build that followed the doctrine exactly handed the
+ * client a ladder with no marker on it, missing the one number they had given about the range.
+ * `intensity_asked` still wins where it exists, because it is the confirmation.
+ */
+const asked =
+  Number(manifest?.commission?.intensity_asked)
+  || Number(manifest?.plan_checkpoint?.shown?.intake?.calibration?.position)
+  || null;
 
 /**
  * DID THE DONOR ROW ACTUALLY RUN? The card used to render `<id>-donor.jpg` on the registry's
