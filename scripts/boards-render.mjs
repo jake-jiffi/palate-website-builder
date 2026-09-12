@@ -902,9 +902,9 @@ export function writeCanvasJson({ boards, refs = [], donors = [], out }) {
       y: rowY,
       w: FRAME_WIDTH,
       h: b.h,
-      title: `Rung ${b.ambition} of ${boards.length}: ${b.name}`,
+      title: `Direction ${b.ambition} of ${boards.length}: ${b.name}`,
     });
-    note("board", COLUMNS.board, rowY + b.h + 24, `${b.name} - rung ${b.ambition} of ${boards.length}. ${b.feeling}. ${b.what}`);
+    note("board", COLUMNS.board, rowY + b.h + 24, `${b.name} - direction ${b.ambition} of ${boards.length}. ${b.feeling}. ${b.what}`);
 
     /**
      * THE DONOR SITS BESIDE ITS OWN BOARD, on the board's row. A donor card laid in another
@@ -919,7 +919,7 @@ export function writeCanvasJson({ boards, refs = [], donors = [], out }) {
         y: rowY,
         w: REF_WIDTH,
         h: REF_HEIGHT,
-        title: `Donor for rung ${d.rung}: ${d.name}`,
+        title: `Donor for direction ${d.rung}: ${d.name}`,
       });
       note("donor", COLUMNS.donor, rowY + REF_HEIGHT + 24, `Drawn from ${d.slug}: ${d.signature_move}`);
       heights.push(REF_HEIGHT);
@@ -1576,7 +1576,7 @@ function donorArtboard({ rung, slug, name, signature_move, img }) {
     `font-family:system-ui,-apple-system,'Segoe UI',sans-serif;display:flex;flex-direction:column">` +
     `<img src="${escapeHtml(img)}" alt="${escapeHtml(name)}" style="width:${REF_WIDTH}px;height:450px;object-fit:cover;object-position:top;display:block">` +
     `<div style="padding:16px 20px;display:flex;flex-direction:column;gap:6px">` +
-    `<p style="margin:0;font-size:17px;font-weight:600;line-height:1.2">Rung ${escapeHtml(rung)} is drawn from ${escapeHtml(name)} (${escapeHtml(slug)})</p>` +
+    `<p style="margin:0;font-size:17px;font-weight:600;line-height:1.2">Direction ${escapeHtml(rung)} is drawn from ${escapeHtml(name)} (${escapeHtml(slug)})</p>` +
     `<p style="margin:0;font-size:13px;line-height:1.45;color:#5c5c5c">${escapeHtml(signature_move)}</p>` +
     `</div></div>`;
   const head = [
@@ -1595,13 +1595,13 @@ function donorArtboard({ rung, slug, name, signature_move, img }) {
 
 function seedReadme(boards, refs, donors = []) {
   const rows = boards.flatMap((b) => [
-    `- \`${b.file}\` - rung ${b.ambition} of ${boards.length}, ${b.name} (${b.id}), the home page, ${FRAME_WIDTH} by ${b.h}`,
+    `- \`${b.file}\` - direction ${b.ambition} of ${boards.length}, ${b.name} (${b.id}), the home page, ${FRAME_WIDTH} by ${b.h}`,
     `  - \`${b.presentation?.inner}\` - the primary service page, ${FRAME_WIDTH} by ${b.innerH}`,
     `  - \`${b.presentation?.mobile}\` - the home page on a phone, ${MOBILE_WIDTH} by ${b.mobileH}`,
     `  - \`${b.presentation?.sheet}\` - the kit pieces as used, with their states, ${FRAME_WIDTH} by ${b.sheetH}`,
   ]);
   const refRows = refs.map((r) => `- \`Ref${r.position}.dc.html\` - ${r.name} (${r.slug}), ${REF_WIDTH} by ${REF_HEIGHT}`);
-  const donorRows = donors.map((d) => `- \`D${d.rung}.dc.html\` - the donor rung ${d.rung} is drawn from, ${d.name} (${d.slug}), ${REF_WIDTH} by ${REF_HEIGHT}`);
+  const donorRows = donors.map((d) => `- \`D${d.rung}.dc.html\` - the donor direction ${d.rung} is drawn from, ${d.name} (${d.slug}), ${REF_WIDTH} by ${REF_HEIGHT}`);
   return [
     "# Explore canvas seed",
     "",
@@ -1610,7 +1610,7 @@ function seedReadme(boards, refs, donors = []) {
     "## Artboards",
     ...(refRows.length ? ["", "Row 0, the calibration references:", ...refRows] : []),
     "",
-    "One ROW per direction, in ladder order, restrained to bold. Each row is the home page, the",
+    "One ROW per direction, most restrained to boldest. Each row is the home page, the",
   "reference it is drawn from, the inner page, the phone and the detail sheet:",
     ...rows,
     ...(donorRows.length ? ["", "Beside each board, the reference it reproduces:", ...donorRows] : []),
@@ -1622,7 +1622,7 @@ function seedReadme(boards, refs, donors = []) {
     "",
     "## The artboards ARE the directions",
     "",
-    "Each `B<rung>.dc.html` is the whole home page in one direction, navigation to footer, drawn",
+    "Each `B<n>.dc.html` is the whole home page in one direction, navigation to footer, drawn",
     "by hand against the survey and the locked brand tokens. There is no Astro behind a board and",
     "no route to open: these files are the source of truth for the pick. Astro is built once,",
     "after the client picks, for the chosen direction alone.",
@@ -1634,8 +1634,8 @@ function seedReadme(boards, refs, donors = []) {
     "The first artboard is `B1.dc.html`, not `Main.dc.html`. The canvas helper looks for a file",
     "of that name as the entry point and WARNS when it does not find one; the seed opens and",
     "works regardless, because `canvas.json` names the launch view. The warning is expected and",
-    "is not a fault in the seed. The names are the rungs on purpose: `B1` through `BN` is what",
-    "the client and the picker both call them.",
+    "is not a fault in the seed. The names are the direction numbers on purpose: `B1` through",
+    "`BN` is what the client and the picker both call them.",
     "",
     "## What the client changes here",
     "",

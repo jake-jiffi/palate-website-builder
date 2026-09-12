@@ -13,7 +13,7 @@ is a directory, else the current directory).
 
 ## 1. Get the pick, in the client's own words
 
-A pick is a surface and a board, never a vote on a whole set. "Rung 4, but with 5's hero" is two
+A pick is a surface and a board, never a vote on a whole set. "Direction 4, but with 5's hero" is two
 picks and the normal answer. If they named one board for everything, that is a hero pick and a
 section pick on the same board, and it is worth saying back to them so a mix is not lost by
 politeness.
@@ -29,7 +29,7 @@ node "$PALATE/scripts/palate-pick.mjs" "$SITE" --hero b3 --section b5 --intensit
   --cta "Book a table" --note "Warmer photography on the hero"
 ```
 
-It refuses an id that is not registered, a rung outside the ladder, and a second pick on a
+It refuses an id that is not registered, a direction number outside the registered set, and a second pick on a
 surface that already has one. That last refusal is deliberate: pass `--replace` so a change of
 mind is a decision rather than an accident, and the record keeps one pick per surface.
 
@@ -47,7 +47,7 @@ node "$PALATE/scripts/palate-pick.mjs" "$SITE" \
   --answer cms="Yes, the owner will edit the services copy"
 ```
 
-- **motion**: what should actually MOVE on the picked rung. The board is a still and the note
+- **motion**: what should actually MOVE on the picked direction. The board is a still and the note
   written on it is a plan, not something the client has agreed to.
 - **mix**: which sections come across from other boards, in their words.
 - **cms**: whether anyone but us will ever edit this site. It decides the CMS, and it has to be

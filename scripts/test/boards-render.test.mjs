@@ -462,6 +462,9 @@ test("a direction's row is B, its donor, the inner page, the phone and the sheet
   assert.match(doc.annotations.find((a) => a.id === "inner-b1").text, /primary service page/i);
   assert.match(doc.annotations.find((a) => a.id === "mobile-b1").text, /390/);
   assert.match(doc.annotations.find((a) => a.id === "sheet-b1").text, /navigation/i);
+  // Client-facing again: the note under the home board says "direction", not "rung".
+  assert.match(doc.annotations.find((a) => a.id === "board-b1").text, /direction 1 of 2/i);
+  assert.doesNotMatch(doc.annotations.find((a) => a.id === "board-b1").text, /rung/i);
   for (const a of doc.annotations) assert.match(a.id, /^[A-Za-z0-9_-]{1,40}$/);
 });
 
@@ -1109,6 +1112,12 @@ test("the artboards are validated, keyed, measured and archived", async (t) => {
   assert.equal(canvas.annotations.length, 8, "each direction's four frames are each annotated");
   assert.equal(canvas.launch.view, "canvas");
   assert.match(r.stdout, /artboard\(s\) validated, keyed, measured and archived/);
+
+  // THE SEED README IS THE ONE DOCUMENT THAT EXPLAINS THE SET TO WHOEVER SEEDS THE CANVAS, and
+  // "direction" is the client's word for an Explore option, not "rung" or "ladder".
+  const readme = readFileSync(join(SEED, "README.md"), "utf8");
+  assert.match(readme, /direction 1 of 2, The Quiet Room/i, "the README does not name each board by its direction number");
+  assert.doesNotMatch(readme, /rung|ladder/i, "the seed README says rung or ladder, which the client never reads");
 });
 
 test("the declared frame height is the height the artboard actually renders", async (t) => {
@@ -1436,7 +1445,11 @@ test("canvas.json lays each donor beside its own board, and steps the next board
   assert.equal(d1.y, b1.y, "the donor is not on the board's own row");
   assert.equal(d1.w, 720);
   assert.equal(d1.h, 580);
-  assert.match(d1.title, /Donor for rung 1: Donor 1/);
+  assert.match(d1.title, /Donor for direction 1: Donor 1/);
+  // "Direction" is the client's word for an Explore option; "rung" is internal (the ledger,
+  // the ladder module, gate-board-judge.mjs). The canvas title is what the client reads.
+  assert.match(b1.title, /Direction 1 of 2: One/);
+  assert.doesNotMatch(b1.title, /rung/i, "the board's canvas title says rung, which the client never reads");
   assert.equal(b2.x, 0, "the second direction starts its own row");
   assert.equal(b2.y, b1.y + b1.h + 120, "the second direction is not a row below the first");
   const note = doc.annotations.find((a) => a.id === "donor-b1");
@@ -1506,6 +1519,13 @@ test("the donor hero is fetched, re-encoded and laid beside its board", async (t
     }
     assert.match(readFileSync(join(SEED, "D2.dc.html"), "utf8"), /the-modern-house/,
       "the donor card does not name the reference it is");
+    // The donor card's own text is drawn on the canvas the client works on, so it says
+    // "Direction N", never "Rung N".
+    const d1Html = readFileSync(join(SEED, "D1.dc.html"), "utf8");
+    const d1Title = /<p[^>]*>([^<]*is drawn from[^<]*)<\/p>/.exec(d1Html);
+    assert.ok(d1Title, "the donor card has no title line to check");
+    assert.match(d1Title[1], /^Direction 1 is drawn from Therapy in London/);
+    assert.doesNotMatch(d1Title[1], /Rung/i, "the donor card's title says Rung, which the client never reads");
 
     const canvas = JSON.parse(readFileSync(join(SEED, "canvas.json"), "utf8"));
     const b1 = canvas.artboards.find((a) => a.file === "B1.dc.html");

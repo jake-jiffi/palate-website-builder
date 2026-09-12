@@ -685,6 +685,22 @@ else
   ok "the probe refusal is not checked here (the capture engine's browser is not installed)"
 fi
 
+# THE HAND-OFF IS WHAT THE AGENT SAYS TO THE CLIENT, and the client's word for an Explore
+# option is "direction", never "rung" or "ladder" (those stay internal, in the gate code and
+# the ladder module). The rest of this file legitimately says "rung" elsewhere, describing the
+# registry and the artboard file names, so this check is scoped to the hand-off section alone
+# rather than the whole file, which `absent` cannot do.
+present "explore-stage's hand-off names the mistake as asking which direction, not which rung" \
+  "references/explore-stage.md" 'ask "which direction?" and stop'
+handoff="$(awk '/^## The hand-off/{flag=1} /^## The two surfaces/{flag=0} flag' "$ROOT/references/explore-stage.md")"
+if [ -z "$handoff" ]; then
+  bad "explore-stage.md has no hand-off section to check (the heading moved or was deleted)"
+elif printf '%s' "$handoff" | grep -qi 'rung\|ladder'; then
+  bad "the hand-off still says 'rung' or 'ladder' somewhere a client-facing script should say 'direction'"
+else
+  ok "the hand-off never says 'rung' or 'ladder'"
+fi
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

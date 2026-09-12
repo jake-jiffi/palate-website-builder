@@ -318,7 +318,7 @@ for (let i = 0; i < args.length; i++) if (args[i] === "--answer") {
   const k = eq > 0 ? kv.slice(0, eq).trim() : "";
   const v = eq > 0 ? kv.slice(eq + 1).trim() : "";
   if (!ANSWER_KEYS.includes(k) || !v) {
-    refuse(`--answer takes one of motion, mix, cms (as key=text; got ${JSON.stringify(kv)}). These are the three things Compose needs from the person: how the picked rung should move, what to mix in from other boards, and who edits the copy.`);
+    refuse(`--answer takes one of motion, mix, cms (as key=text; got ${JSON.stringify(kv)}). These are the three things Compose needs from the person: how the picked direction should move, what to mix in from other boards, and who edits the copy.`);
   }
   answers[k] = v;
 }
@@ -375,7 +375,7 @@ for (const p of made) {
   const shown = explore.shown_at ? Date.parse(explore.shown_at) : NaN;
   const took = Number.isFinite(shown) ? Math.round((Date.parse(p.picked_at) - shown) / 1000) : null;
   process.stdout.write(
-    `palate-pick: ${p.surface} = ${p.variant_id}, rung ${p.rung} of ${N} (position ${p.position})` +
+    `palate-pick: ${p.surface} = ${p.variant_id}, direction ${p.rung} of ${N} (position ${p.position})` +
     `${took !== null ? `, time to pick ${took}s` : ", time to pick unknown (no shown_at: boards-render did not stamp this build)"}\n`,
   );
 }

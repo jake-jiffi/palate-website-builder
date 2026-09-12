@@ -303,6 +303,12 @@ has "the b1 card shows its donor's hero"      'src="/_explore/b1-donor.jpg"'
 has "the b2 card shows its donor's hero"      'src="/_explore/b2-donor.jpg"'
 has "the donor still is captioned"            'Drawn from the-modern-house'
 
+# --- "direction" IS THE CLIENT'S WORD. A rung is internal (the ledger, the ladder module,
+# gate-board-judge.mjs), and this page is what the client actually reads, so it must say
+# "Direction N of M" and never say "rung".
+has "the first card labels itself as a direction, e.g. Direction 1 of" 'Direction 1 of'
+hasnt "the page the client reads never says rung"                      'rung'
+
 # --- the other three boards of the direction -------------------------------------------
 # A client signing off a DIRECTION is signing off the inner page, the phone and the pieces as
 # used, not only an entrance. Each still is linked at full size and captioned, or the row is
@@ -334,7 +340,7 @@ lcol=$(grep -bo 'more restrained' "$HTML" | head -1 | cut -d: -f1)
 # --- the marker: where they said they were aiming ---------------------------------------
 has "the ladder marks the calibration answer" 'you said about here'
 # intensity_asked 3 of 3 references maps to the top rung of a 2-rung ladder.
-has "the marker sits on the mapped rung"      'data-asked-rung="2"'
+has "the marker sits on the mapped direction" 'data-asked-direction="2"'
 
 # --- the canvas, first when there is one ------------------------------------------------
 has "the canvas is linked"                    'https://claude.ai/code/artifact/fixture-canvas'

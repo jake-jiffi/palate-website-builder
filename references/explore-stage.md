@@ -765,15 +765,15 @@ client.
 ## The hand-off - what you SAY when the preview is ready
 
 The preview being ready is the moment the build is most often mis-handled, because the
-natural instinct is to ask "which one?" and stop. That collapses a range into a vote.
+natural instinct is to ask "which direction?" and stop. That collapses a range into a vote.
 Say all four of these, in this order:
 
 1. **Send them to `/explore`, not to a board.** "Start here: it explains the set and
    walks the range from restrained to bold." One link, not eight.
 2. **Invite reaction, not selection.** Ask them to open BOTH ENDS before forming a view,
-   and say plainly that mixing is normal and expected: "rung 5, but with 8's hero and 2's
-   navigation" is a better answer than a single page, and the section marks exist so they
-   can point at one by name.
+   and say plainly that mixing is normal and expected: "direction 5, but with 8's hero and
+   2's navigation" is a better answer than a single page, and the section marks exist so
+   they can point at one by name.
 3. **Offer another pass, and mean it.** Anything they want tried gets redrawn onto the
    canvas so they look at the thing itself rather than a description of one. Changes are
    cheap here and expensive after Compose, and saying so is what gets the useful feedback
