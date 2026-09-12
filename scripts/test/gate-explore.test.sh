@@ -68,9 +68,10 @@ sheet() { printf '<!doctype html><html><body><x-dc>\
 # both name `aesop`: a PIECE donor is not a BOARD donor, and reading one as the other reports two
 # boards drawn from one reference when nothing of the sort happened.
 write_valid() { cat > "$1/src/lib/variants.ts" <<'TS'
-export interface Variant { id: string; name: string; artboard: string; href?: string; ambition: number; what: string; why: string; feeling: string; donor: string; section: string; motion: string; ctas: string[]; pieces: Record<string, { variation: string; donor: string }>; }
+export interface Variant { id: string; name: string; artboard: string; presentation: { inner: string; mobile: string; sheet: string }; href?: string; ambition: number; what: string; why: string; feeling: string; donor: string; section: string; motion: string; ctas: string[]; pieces: Record<string, { variation: string; donor: string }>; }
 export const variants: Variant[] = [
   { id: "b1", name: "The Quiet Room", artboard: "B1.dc.html", ambition: 1,
+    presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
     what: "One column, one photograph, and a great deal of air.",
     why: "People arriving here are anxious and have usually been dismissed once already, so nothing asks anything of them before they have read a sentence.",
     feeling: "unhurried, private, adult",
@@ -80,12 +81,14 @@ export const variants: Variant[] = [
     pieces: {
       navigation: { variation: "NavSimple", donor: "aesop" },
       hero: { variation: "HeroTextImage", donor: "anthropic" },
+      trust: { variation: "TrustRatings", donor: "lava-dental" },
       cta: { variation: "CtaClosing", donor: "parsley-health" },
       forms: { variation: "FormEnquiry", donor: "pilot-accounting" },
       footer: { variation: "FooterSimple", donor: "loom" },
       services: { variation: "BenefitCards", donor: "linear" },
     } },
   { id: "b2", name: "The Folder", artboard: "B2.dc.html", ambition: 2,
+    presentation: { inner: "I2.dc.html", mobile: "M2.dc.html", sheet: "S2.dc.html" },
     what: "The record itself becomes the interface, opening as you scroll.",
     why: "Their entire pitch is that a clinician finally sees six months of evidence instead of one appointment, so the page should behave like that evidence.",
     feeling: "purposeful, quietly technical",
@@ -95,6 +98,7 @@ export const variants: Variant[] = [
     pieces: {
       navigation: { variation: "NavDropdown", donor: "stripe" },
       hero: { variation: "HeroCentredPreview", donor: "linear" },
+      trust: { variation: "TrustLogos", donor: "mercury" },
       cta: { variation: "CtaWithProof", donor: "vercel" },
       forms: { variation: "FormContact", donor: "basecamp" },
       footer: { variation: "FooterGrouped", donor: "glossier" },
@@ -189,6 +193,7 @@ K2="$TMP/k11b"; mk "$K2"; page "$K2"
 cat > "$K2/src/lib/variants.ts" <<'TS'
 export const variants = [
   { id: "b3", name: "The Loud Room", artboard: "B7.dc.html", ambition: 3,
+    presentation: { inner: "I3.dc.html", mobile: "M3.dc.html", sheet: "S3.dc.html" },
     what: "The whole entrance is one photograph with the offer struck across it.",
     why: "This buyer has already seen four identical quotes and remembers none of them.",
     feeling: "brash, certain, a little rude",
@@ -375,6 +380,12 @@ AB="$TMP/k19b"; mk "$AB"; page "$AB"; write_valid "$AB"
 perl -0pi -e 's/\n      forms: \{ variation: "FormEnquiry", donor: "pilot-accounting" \},//' "$AB/src/lib/variants.ts"
 want "a board whose pieces leave out the form -> block" BLOCK "$(run "$AB")"
 has "and it names the piece that is missing" "$AB" "forms"
+# The trust strip is on the required list because it is a required block on the detail sheet, and
+# it is the block whose copy is most often invented, so it is the one that most needs a donor.
+AB2="$TMP/k19b2"; mk "$AB2"; page "$AB2"; write_valid "$AB2"
+perl -0pi -e 's/\n      trust: \{ variation: "TrustRatings", donor: "lava-dental" \},//' "$AB2/src/lib/variants.ts"
+want "a board whose pieces leave out the trust strip -> block" BLOCK "$(run "$AB2")"
+has "and it names the trust strip" "$AB2" "trust"
 
 # 19c. A VARIATION THE KIT DOES NOT CARRY. The sheet is what the client signs off, so a variation
 # nobody can build is a promise made on the build's behalf.
@@ -383,6 +394,15 @@ sed -i '' 's/variation: "NavSimple"/variation: "NavSplendid"/' "$AC/src/lib/vari
 want "a piece naming a variation the kit does not carry -> block" BLOCK "$(run "$AC")"
 has "and it names the variation" "$AC" "NavSplendid"
 has "and it lists the ones that piece does carry" "$AC" "NavSimple, NavDropdown, NavMobileSheet"
+
+# 19c2. A BESPOKE SECTION NAME. The registry's `section` is free text ("services", "proof"), so
+# its variation cannot be held to one piece's list, and a finding that only says "no piece carries
+# it" leaves the author with nothing to write instead.
+AC2="$TMP/k19c2"; mk "$AC2"; page "$AC2"; write_valid "$AC2"
+sed -i '' 's/services: { variation: "BenefitCards"/services: { variation: "ServiceSplendour"/' "$AC2/src/lib/variants.ts"
+want "a bespoke section naming a variation no piece carries -> block" BLOCK "$(run "$AC2")"
+has "and it says any kit variation would do here" "$AC2" "ANY variation in src/lib/kit.ts is acceptable"
+has "and it enumerates what the kit carries" "$AC2" "benefits: BenefitCards, BenefitAlternating"
 
 # 19d. A REAL VARIATION UNDER THE WRONG PIECE. It passes a spell check and builds nothing.
 AD="$TMP/k19d"; mk "$AD"; page "$AD"; write_valid "$AD"
@@ -394,7 +414,7 @@ has "and it says where that variation actually belongs" "$AD" "belongs to footer
 # provenance invented after the fact, which is the exact fault the survey exists to stop.
 AE="$TMP/k19e"; mk "$AE"; page "$AE"; write_valid "$AE"
 cat > "$AE/build-manifest.json" <<'JSON'
-{"schema":3,"references_surveyed":["aesop","anthropic","parsley-health","pilot-accounting","loom","linear","stripe","vercel","basecamp","glossier"]}
+{"schema":3,"references_surveyed":["aesop","anthropic","lava-dental","parsley-health","pilot-accounting","loom","linear","stripe","mercury","vercel","basecamp","glossier"]}
 JSON
 want "every piece donor surveyed -> pass" PASS "$(run "$AE")"
 sed -i '' 's/donor: "pilot-accounting" }/donor: "a-site-nobody-read" }/' "$AE/src/lib/variants.ts"
@@ -413,9 +433,11 @@ AF="$TMP/k19f"; mk "$AF"; page "$AF"; boards "$AF" b1 b2
 cat > "$AF/src/lib/variants.ts" <<'TS'
 export const variants = [
   { id: "b1", name: "The Quiet Room", artboard: "B1.dc.html", ambition: 1,
+    presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },
     pieces: {
       navigation: { variation: "NavSimple", donor: "aesop" },
       hero: { variation: "HeroTextImage", donor: "anthropic" },
+      trust: { variation: "TrustRatings", donor: "lava-dental" },
       cta: { variation: "CtaClosing", donor: "parsley-health" },
       forms: { variation: "FormEnquiry", donor: "pilot-accounting" },
       footer: { variation: "FooterSimple", donor: "loom" },
@@ -428,9 +450,11 @@ export const variants = [
     motion: "Nothing at all on load. Everything settles slowly once it is scrolled to, never before.",
     ctas: ["Book a first visit", "Ask a question"] },
   { id: "b2", name: "The Folder", artboard: "B2.dc.html", ambition: 2,
+    presentation: { inner: "I2.dc.html", mobile: "M2.dc.html", sheet: "S2.dc.html" },
     pieces: {
       navigation: { variation: "NavDropdown", donor: "aesop" },
       hero: { variation: "HeroCentredPreview", donor: "linear" },
+      trust: { variation: "TrustLogos", donor: "mercury" },
       cta: { variation: "CtaWithProof", donor: "vercel" },
       forms: { variation: "FormContact", donor: "basecamp" },
       footer: { variation: "FooterGrouped", donor: "glossier" },
@@ -448,11 +472,18 @@ TS
 want "pieces written above the board's own donor -> pass" PASS "$(run "$AF")"
 hasnt_out "a shared PIECE donor is not two boards from one reference" "$AF" "drawn from aesop"
 
+# 19g. NO PRESENTATION AT ALL. Check 10 reads the sheet named by presentation.sheet, so a
+# registry that declares none has nothing to compare and the comparison silently does not happen
+# on the direction least likely to survive it.
+AG="$TMP/k19g"; mk "$AG"; page "$AG"; write_valid "$AG"
+perl -0pi -e 's/\n    presentation: \{[^\n]*\},//' "$AG/src/lib/variants.ts"
+want "a direction that names none of its other three artboards -> block" BLOCK "$(run "$AG")"
+has "and it names the field" "$AG" "presentation"
+
 # === 20. THE SHEET AND THE REGISTRY AGREE. The sheet is the artefact the client signs; the
 # registry is what Compose builds from. A direction whose sheet shows one footer and whose
 # registry records another ships a footer nobody approved.
 BA="$TMP/k20"; mk "$BA"; page "$BA"; write_valid "$BA"
-perl -0pi -e 's/\n    pieces: \{/\n    presentation: { inner: "I1.dc.html", mobile: "M1.dc.html", sheet: "S1.dc.html" },\n    pieces: {/' "$BA/src/lib/variants.ts"
 sheet "$BA" 1 NavSimple FooterSimple CtaClosing FormEnquiry
 want "a sheet whose variations match the registry -> pass" PASS "$(run "$BA")"
 sheet "$BA" 1 NavSimple FooterGrouped CtaClosing FormEnquiry

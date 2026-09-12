@@ -77,8 +77,9 @@ export interface Variant {
    *
    * One entry per piece: the kit variation it is (an id from `src/lib/kit.ts`, under that piece)
    * and the library reference its craft was drawn from (a slug the survey actually read).
-   * Required at minimum: `navigation`, `hero`, `cta`, `forms`, `footer`, and the direction's own
-   * `section`. A direction is signed off piece by piece, so a direction that records none of this
+   * Required at minimum: `navigation`, `hero`, `trust`, `cta`, `forms`, `footer`, and the
+   * direction's own `section`. `trust` is on that list because the trust strip is a required
+   * block on the detail sheet and is the block whose copy is most often invented. A direction is signed off piece by piece, so a direction that records none of this
    * is one whose navigation, enquiry form and footer are decided later, by nobody, and discovered
    * by the client on the built site.
    *
@@ -144,6 +145,7 @@ export const variants: Variant[] = [
   //   pieces: {
   //     navigation: { variation: "NavSimple", donor: "aesop" },
   //     hero: { variation: "HeroServicePhoto", donor: "therapy-in-london" },
+  //     trust: { variation: "TrustRatings", donor: "lava-dental" },
   //     cta: { variation: "CtaClosing", donor: "parsley-health" },
   //     forms: { variation: "FormEnquiry", donor: "pilot-accounting" },
   //     footer: { variation: "FooterSimple", donor: "loom" },

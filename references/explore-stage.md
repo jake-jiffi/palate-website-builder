@@ -134,6 +134,21 @@ onto `/explore` and the canvas.
    sits beside the reference it reproduces, and the board judge then has nothing
    to compare and skips.
 
+   **THE DETAIL SHEET NAMES ITS PIECES AND WHERE THEY CAME FROM.** Every block
+   on `S<rung>.dc.html` is marked
+   `data-kit-piece="<piece>:<Variation>:<state>"`, with the piece and variation
+   ids taken from `src/lib/kit.ts`, and the sheet owes eight of them: the
+   navigation at rest and open, the footer, the closing call to action, the
+   enquiry form filled in and then with its errors shown, one card (from
+   `benefits`, `usecases` or `casestudies`) and one trust strip. **Inside each
+   of those blocks, write the provenance as a line a client can read**:
+   `"<Piece>: <Variation>, drawn from <donor>"`, e.g. "Navigation: NavSimple,
+   drawn from aesop". The same variation and donor go in the registry's
+   `pieces`, and `boards-render.mjs` refuses a sheet whose required blocks do
+   not carry that line: the sheet is the only place a person ever reads where a
+   piece's craft came from, so a block without it looks finished and proves
+   nothing.
+
    **THE ARTBOARD CONTRACT.** `scripts/boards-render.mjs` holds every board to
    it and names every fault ON THAT BOARD in one pass, then stops at the first
    board that fails, so read it as a checklist before drawing rather than after:
@@ -396,7 +411,9 @@ onto `/explore` and the canvas.
    promises one kind of motion and a page that delivers another is a Compose
    defect, not a proof. A page too short to scroll reports NO parallax rather
    than a ratio taken over the little it could scroll (`short_page: true`), so
-   on one of those the note has to be checked by eye. If the preview genuinely cannot be reached from this
+   on one of those the note has to be checked by eye; the other three
+   measurements still hold it to the floor, so a short page where nothing else
+   moves is refused like any other still page. If the preview genuinely cannot be reached from this
    machine (a tunnel only the client's browser opens, a host behind a login),
    say so rather than skipping: add
    `--proof-unmeasured "<reason>"`, which records the URL with `measured: null`

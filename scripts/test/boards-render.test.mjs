@@ -48,6 +48,7 @@ const BOARDS = [
     pieces: {
       navigation: { variation: "NavSimple", donor: "aesop" },
       hero: { variation: "HeroTextImage", donor: "anthropic" },
+      trust: { variation: "TrustRatings", donor: "lava-dental" },
       cta: { variation: "CtaClosing", donor: "parsley-health" },
       forms: { variation: "FormEnquiry", donor: "pilot-accounting" },
       footer: { variation: "FooterSimple", donor: "loom" },
@@ -64,6 +65,7 @@ const BOARDS = [
     pieces: {
       navigation: { variation: "NavDropdown", donor: "stripe" },
       hero: { variation: "HeroCentredPreview", donor: "linear" },
+      trust: { variation: "TrustLogos", donor: "mercury" },
       cta: { variation: "CtaWithProof", donor: "vercel" },
       forms: { variation: "FormContact", donor: "basecamp" },
       footer: { variation: "FooterGrouped", donor: "glossier" },
@@ -205,7 +207,10 @@ const SHEET_BLOCKS = [
  */
 function captionFor(b, mark) {
   const [piece, variation] = mark.split(":");
-  const prov = b.pieces?.[piece];
+  // BY THE VARIATION FIRST, then by the piece id, exactly as the check resolves it: the card is
+  // registered under the direction's own section key ("services"), and the drawer on a phone is
+  // a second navigation variation the registry does not name.
+  const prov = Object.values(b.pieces || {}).find((x) => x.variation === variation) || b.pieces?.[piece];
   if (!prov) return "";
   const name = piece[0].toUpperCase() + piece.slice(1);
   return `<p class="piece-from">${name}: ${variation}, drawn from ${prov.donor}.</p>`;
@@ -346,7 +351,7 @@ test("the registry parser returns each direction's per-piece provenance", () => 
   const [v] = parseRegistry(registryFor(BOARDS));
   assert.deepEqual(v.pieces.navigation, { variation: "NavSimple", donor: "aesop" });
   assert.deepEqual(v.pieces.services, { variation: "BenefitCards", donor: "linear" });
-  assert.equal(Object.keys(v.pieces).length, 6);
+  assert.equal(Object.keys(v.pieces).length, 7);
   // AND THE NESTED DONORS ARE NOT THE BOARD'S OWN. `pieces` carries a `donor:` per entry, so a
   // parser reading the first `donor:` in the object reports the navigation's reference as the
   // direction's, and every downstream check about donors is then about the wrong slug.
@@ -962,6 +967,33 @@ test("every required block's caption names its variation and the reference it ca
   const f = validateSheetCaptions(noVariation, { id: "b1", pieces: B.pieces });
   assert.equal(f.ok, false, "a footer block whose caption names no variation was accepted");
   assert.match(f.problems.join("\n"), /FooterSimple/);
+});
+
+test("the card and the trust strip are checked too, not just the pieces named by their own id", () => {
+  // THE TWO BLOCKS MOST LIKELY TO CARRY INVENTED COPY. The card is registered under the
+  // direction's own section key ("services"), not under "benefits", so a lookup by piece id
+  // found nothing for either of them and they were the two nobody checked.
+  const noTrustDonor = asSheet().replace("Trust: TrustRatings, drawn from lava-dental.", "Trust: TrustRatings.");
+  const t = validateSheetCaptions(noTrustDonor, { id: "b1", pieces: B.pieces });
+  assert.equal(t.ok, false, "a trust strip whose caption names no donor was accepted");
+  assert.match(t.problems.join("\n"), /trust:TrustRatings:default/);
+  assert.match(t.problems.join("\n"), /lava-dental/);
+
+  const noCardVariation = asSheet()
+    .replace('<h2 class="piece-title">benefits:BenefitCards:default</h2>', '<h2 class="piece-title">One card</h2>')
+    .replace("Benefits: BenefitCards, drawn from linear.", "Drawn from linear.");
+  const c = validateSheetCaptions(noCardVariation, { id: "b1", pieces: B.pieces });
+  assert.equal(c.ok, false, "a card whose caption names no kit variation was accepted");
+  assert.match(c.problems.join("\n"), /benefits:BenefitCards:default/);
+  assert.match(c.problems.join("\n"), /BenefitCards/);
+
+  // AND ALL EIGHT REQUIRED BLOCKS ARE REACHED. A sheet with no provenance anywhere must produce
+  // one finding per required block; a lookup that quietly resolves to nothing shows up here as a
+  // smaller number rather than as a passing sheet.
+  const bare = asSheet().replace(/<p class="piece-from">[^<]*<\/p>/g, '<p class="piece-from">NO PROVENANCE AT ALL HERE.</p>');
+  const r = validateSheetCaptions(bare, { id: "b1", pieces: B.pieces });
+  assert.equal(r.ok, false);
+  assert.equal(r.problems.length, 8, `only ${r.problems.length} of the eight required blocks were checked`);
 });
 
 test("the caption check reads the block it is under, not the sheet as a whole", () => {

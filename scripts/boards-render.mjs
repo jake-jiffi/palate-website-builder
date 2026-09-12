@@ -596,6 +596,12 @@ function elementBody(s, name, from) {
  * two different kit variations. What the registry owns is the DONOR, and gate-explore's check 10
  * is what holds the sheet's variations to the registry's.
  *
+ * THE DONOR IS FOUND BY THE VARIATION FIRST, and only then by the piece id. The card the sheet
+ * owes is registered under the direction's own `section` key, which is free text ("services"),
+ * so a lookup by piece id finds nothing for `benefits:BenefitCards:default` and the two blocks
+ * that carry the most invented copy, the card and the trust strip, would be the two nobody
+ * checked. Matching the variation resolves `BenefitCards` to whichever key registered it.
+ *
  * Silent when the registry declared no `pieces`: gate-explore owns that absence, and reporting it
  * here in different words would make one fault read as two on every direction.
  */
@@ -603,11 +609,15 @@ export function validateSheetCaptions(html, { id, pieces } = {}) {
   const problems = [];
   if (!pieces || !Object.keys(pieces).length) return { ok: true, problems };
   const blocks = kitBlocks(html);
+  /** The registry entry that owns a block: by the variation it shows, else by its piece id. */
+  const provFor = (b) =>
+    Object.values(pieces).find((p) => p && p.variation && b.variation && p.variation === b.variation)
+    || pieces[b.piece];
   for (const need of SHEET_REQUIRED) {
     for (const piece of need.pieces) {
-      const prov = pieces[piece];
-      if (!prov || !prov.donor) continue;
       for (const b of blocks.filter((x) => x.piece === piece && x.state === need.state)) {
+        const prov = provFor(b);
+        if (!prov || !prov.donor) continue;
         const text = b.text.toLowerCase();
         const missing = [];
         if (b.variation && !text.includes(b.variation.toLowerCase())) missing.push(`the kit variation it is (${b.variation})`);

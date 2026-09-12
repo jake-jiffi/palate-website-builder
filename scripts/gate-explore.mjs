@@ -268,7 +268,8 @@ for (const entry of entries) {
   const section = field(o, "section");
   const motion = field(o, "motion");
   const ctas = arrayField(o, "ctas");
-  parsed.push({ id, ambition, pieces, section, sheet: presentationOf(o)?.sheet || null });
+  const presentation = presentationOf(o);
+  parsed.push({ id, ambition, pieces, section, sheet: presentation?.sheet || null });
 
   const missing = [];
   if (typeof ambition !== "number") missing.push("ambition");
@@ -279,10 +280,14 @@ for (const entry of entries) {
   if (!section) missing.push("section");
   if (!motion) missing.push("motion");
   if (!ctas) missing.push("ctas");
+  // WITHOUT IT, CHECK 10 SKIPS IN SILENCE. The sheet is named by `presentation.sheet`, so a
+  // registry that declares no presentation has no sheet to compare its own provenance against,
+  // and the comparison would simply not happen on the direction least likely to survive it.
+  if (!presentation || !presentation.inner || !presentation.mobile || !presentation.sheet) missing.push("presentation");
   if (missing.length) {
     add(
       `${id} does not argue for itself`,
-      `missing ${missing.join(", ")}. Every rung needs its own position on the ladder, what it is, why it is doing that for THIS business, the feeling it carries, the reference its craft came from, the section it shows, what MOVES on it, and the CTA labels the client can choose between. Without them the client can only judge on taste, and a board is mostly a still, so unwritten motion is unseen motion.`,
+      `missing ${missing.join(", ")}. Every rung needs its own position on the ladder, what it is, why it is doing that for THIS business, the feeling it carries, the reference its craft came from, the section it shows, what MOVES on it, the CTA labels the client can choose between, and the other three artboards of the direction (presentation: { inner, mobile, sheet }). Without them the client can only judge on taste, and a board is mostly a still, so unwritten motion is unseen motion.`,
     );
     continue;
   }
@@ -512,12 +517,14 @@ const kit = loadKit();
 /**
  * The pieces every direction owes, whatever it chose.
  *
- * These five plus the direction's own inner section are what a client is actually signing off:
- * how they are greeted, how they are asked, how they enquire, and what the page says at the
- * bottom. A direction that records none of them is one whose navigation, form and footer are
+ * These six plus the direction's own inner section are what a client is actually signing off:
+ * how they are greeted, why they should believe it, how they are asked, how they enquire, and
+ * what the page says at the bottom. `trust` is on the list because the trust strip is a required
+ * block on the detail sheet, and a sheet block with no registered provenance is a block whose
+ * copy nobody can trace. A direction that records none of them is one whose navigation, form and footer are
  * decided later, by nobody, and discovered by the client on the built site.
  */
-const REQUIRED_PIECES = ["navigation", "hero", "cta", "forms", "footer"];
+const REQUIRED_PIECES = ["navigation", "hero", "trust", "cta", "forms", "footer"];
 // A donor is only checkable against a survey that exists. A build with no `references_surveyed`
 // says nothing here rather than blocking every direction over a manifest nobody wrote.
 const surveyed = new Set(
@@ -568,7 +575,7 @@ for (const v of parsed) {
         // because a variation that belongs to no piece at all belongs to nothing.
         add(
           `${v.id}'s ${piece} names the variation ${prov.variation}`,
-          `no piece in src/lib/kit.ts carries it. Name the kit variation this section is built from, so the sheet and Compose are describing the same thing.`,
+          `"${piece}" is the direction's own section name rather than a kit piece, so ANY variation in src/lib/kit.ts is acceptable here and ${prov.variation} is none of them. The kit carries ${[...kit].map(([p, vars]) => `${p}: ${[...vars.keys()].join(", ")}`).join("; ")}. Name the one this section is built from, so the sheet and Compose describe the same thing.`,
         );
       }
     }
