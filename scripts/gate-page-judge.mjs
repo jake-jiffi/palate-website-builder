@@ -64,7 +64,9 @@ import { pageTypeOf, routeSlug, normaliseRoute } from "./lib/route-kind.mjs";
 import {
   fingerprint, readJSON, cropFoot, mergeManifest, refusedRung, WORSE_PHRASE,
 } from "./gate-board-judge.mjs";
-import { buildBoardPair, scoreBoardPair, PAGE_QUESTION, PAGE_FOOT_QUESTION, RUNGS } from "./reference-capture/ladder-local.mjs";
+import {
+  buildBoardPair, scoreBoardPair, PAGE_QUESTION, PAGE_FOOT_QUESTION, PAGE_INNER_QUESTION, RUNGS,
+} from "./reference-capture/ladder-local.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const engineRequire = createRequire(new URL("./reference-capture/", import.meta.url));
@@ -127,7 +129,8 @@ export function judgedRoutes(manifest) {
   for (const p of pages) {
     if (!p || typeof p.verdict !== "string" || !p.verdict.trim()) continue;
     const type = typeof p.page_type === "string" && p.page_type ? p.page_type : pageTypeOf(p.route);
-    if (!byType.has(type)) byType.set(type, { route: normaliseRoute(p.route), page_type: type });
+    if (!byType.has(type))
+      byType.set(type, { route: normaliseRoute(p.route), page_type: type, primary: p.primary === true });
   }
   return [...byType.values()];
 }
@@ -171,10 +174,31 @@ async function serveOnFreePort(root, first) {
   throw last;
 }
 
-/** What a page type answers to: the picked board for the home, the board's donor for the rest. */
-const againstFor = (shotsDir, pageType, surface) =>
-  join(shotsDir, PAGE_SURFACES[surface][pageType === "home" ? "board" : "donor"]);
-const againstLabel = (pageType) => (pageType === "home" ? "the board" : "the donor");
+/**
+ * WHAT A PAGE ANSWERS TO, per surface, and the words the refusal says it in.
+ *
+ *   the home page            the picked BOARD, which drew this page, on both surfaces
+ *   the primary inner page   the board's DRAWN INNER PAGE at the entrance (the only picture of
+ *                            what this direction's inner pages were meant to be, and the one
+ *                            the client was shown), the donor's ending at the foot, because no
+ *                            inner artboard carries a footer
+ *   every other page type    the board's DONOR, the library reference in the client's field,
+ *                            because nothing drew a third service page
+ *
+ * `phrase` completes "read somewhat worse than ___", so it is written as the sentence needs it
+ * rather than as the file is named: a refusal that says "worse than the donor's donor-foot.png"
+ * sends the reader to a filename instead of to the picture.
+ */
+export function againstFor(shotsDir, route, surface) {
+  if (route.page_type === "home")
+    return { path: join(shotsDir, PAGE_SURFACES[surface].board), phrase: `the board's ${PAGE_SURFACES[surface].noun}`, question: PAGE_SURFACES[surface].question };
+  if (route.primary && surface === "entrance")
+    return { path: join(shotsDir, "inner.png"), phrase: "the drawn inner page", question: PAGE_INNER_QUESTION };
+  return { path: join(shotsDir, PAGE_SURFACES[surface].donor), phrase: `the donor's ${PAGE_SURFACES[surface].noun}`, question: PAGE_SURFACES[surface].question };
+}
+/** What a whole ROUTE answered to, for a sentence that has no surface in it. */
+const againstLabel = (route) =>
+  route.page_type === "home" ? "the board" : route.primary ? "the drawn inner page" : "the donor";
 
 export async function main(argv = process.argv.slice(2)) {
   /**
@@ -191,7 +215,14 @@ export async function main(argv = process.argv.slice(2)) {
     if (!v || v.startsWith("--")) { flagError.push(name); return null; }
     return v;
   };
-  const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--")));
+  /**
+   * A BOOLEAN FLAG DOES NOT SWALLOW THE PROJECT DIRECTORY. Skipping the token after ANY flag
+   * (the board judge's idiom) means `--check /site` judges the current directory instead, which
+   * is a gate reporting on files nobody asked about. Only the flags that take a value consume
+   * the token after them.
+   */
+  const VALUE_FLAGS = new Set(["--judgements", "--serve", "--port"]);
+  const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUE_FLAGS.has(argv[i - 1])));
 
   // The release valve is read FIRST, so a build that has switched the judge off never has to
   // have its artefacts in order to get past it.
@@ -234,7 +265,7 @@ export async function main(argv = process.argv.slice(2)) {
   const requestPath = join(projectDir, ".palate/compose/judge-request.json");
 
   // ------------------------------------------------------------------ done-time check
-  if (checkOnly) return check(projectDir, manifest, routes);
+  if (checkOnly) return check(projectDir, manifest, routes, shotsDir, pick);
 
   // ------------------------------------------------------------------ phase 2
   if (judgementsArg) return phase2(projectDir, requestPath, judgementsArg, manifest);
@@ -262,28 +293,32 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
-  /**
-   * ALREADY JUDGED IS NOT RE-JUDGED, keyed on the HTML the verdict was about.
-   *
-   * A verifier round runs phase 1 every time. Without this it would re-shoot every page and ask
-   * for twelve fresh comparisons on a build where nothing had changed, then throw the standing
-   * verdicts away with the request they were bound to. The HTML fingerprint is the honest key:
-   * a page rebuilt since (the one case where re-judging is the point) does not match.
-   */
   const held = new Map((Array.isArray(manifest?.compose?.page_judgements) ? manifest.compose.page_judgements : [])
     .map((j) => [j?.route, j]));
-  const stale = routes.filter((r) => {
+  const fresh = (r) => {
     const j = held.get(r.route);
-    if (!j || !RUNGS.some((x) => x.id === j.rung)) return true;
-    return j.fingerprints?.html_sha !== fingerprint(html.get(r.route));
-  });
+    if (!j || !RUNGS.some((x) => x.id === j.rung)) return false;
+    return j.fingerprints?.html_sha === fingerprint(html.get(r.route));
+  };
+  /**
+   * ALREADY JUDGED IS NOT RE-JUDGED, PER ROUTE, keyed on the HTML the verdict was about.
+   *
+   * A verifier round runs phase 1 every time. Keyed on the whole build it re-shot every page
+   * and bought twelve fresh comparisons because one inner page had a typo fixed; keyed per
+   * route, an edited page restates its own two pairs and every unchanged page keeps the verdict
+   * it already has. The HTML fingerprint is the honest key: a page rebuilt since (the one case
+   * where re-judging is the point) does not match, and a hand-written or truncated record has
+   * no readable rung and falls through to being judged rather than buying a pass.
+   */
+  const stale = routes.filter((r) => !fresh(r));
+  const carried = routes.filter(fresh);
   if (!stale.length) {
     // A STANDING REFUSAL IS STILL A REFUSAL. Re-stating the comparison would ask a fresh
     // subagent the same question about the same page until one of them said something kinder.
     const worse = routes.filter((r) => refusedRung(held.get(r.route).rung));
     if (worse.length) {
       refuse(worse.map((r) =>
-        `${r.route} stands judged ${WORSE_PHRASE[held.get(r.route).rung]} than ${againstLabel(r.page_type)} and has ` +
+        `${r.route} stands judged ${WORSE_PHRASE[held.get(r.route).rung]} than ${againstLabel(r)} and has ` +
         "not been recomposed. A page ships only when it reads comparable or better on both surfaces. NOT a pass."));
       return;
     }
@@ -294,6 +329,17 @@ export async function main(argv = process.argv.slice(2)) {
     );
     return;
   }
+  /**
+   * A CARRIED ROUTE THAT STANDS REFUSED IS SAID OUT LOUD rather than left to done time. The run
+   * is not refused, because there is real work in front of it (the stale routes have to be
+   * judged), but a refusal that only surfaces two gates later reads as a new finding rather
+   * than as the one the operator was already meant to be fixing.
+   */
+  for (const r of carried.filter((x) => refusedRung(held.get(x.route).rung)))
+    process.stderr.write(
+      `gate-page-judge: ${r.route} still stands judged ${WORSE_PHRASE[held.get(r.route).rung]} than ` +
+        `${againstLabel(r)}; it is unchanged since it was judged, so it is not restated here.\n`,
+    );
 
   /**
    * NO SHARP IS A SKIP, not an entrance-only pass. Judging every page on its entrance because a
@@ -308,9 +354,9 @@ export async function main(argv = process.argv.slice(2)) {
   try { playwright = engineRequire("playwright"); } catch { playwright = null; }
   if (!playwright) return skip(`playwright not installed: run ${join(HERE, "reference-capture", "setup.sh")}`);
 
-  /** The pictures the pages answer to. Missing ones mean the boards were never rendered. */
-  const wantedShots = [...new Set(routes.flatMap((r) =>
-    SURFACE_ORDER.map((s) => againstFor(shotsDir, r.page_type, s))))];
+  /** The pictures the stale pages answer to. Missing ones mean the boards were never rendered. */
+  const wantedShots = [...new Set(stale.flatMap((r) =>
+    SURFACE_ORDER.map((sf) => againstFor(shotsDir, r, sf).path)))];
   const missing = wantedShots.filter((p) => !existsSync(p));
   if (missing.length)
     return skip(
@@ -335,7 +381,7 @@ export async function main(argv = process.argv.slice(2)) {
     const ctx = await browser.newContext({ viewport: { width: WIDTH, height: FOLD }, deviceScaleFactor: 1 });
     const runToken = randomBytes(4).toString("hex");
 
-    for (const r of routes) {
+    for (const r of stale) {
       const slug = routeSlug(r.route);
       const outDir = join(projectDir, ".palate-shots/compose", slug);
       mkdirSync(outDir, { recursive: true });
@@ -365,14 +411,14 @@ export async function main(argv = process.argv.slice(2)) {
       for (const surface of SURFACE_ORDER) {
         const spec = PAGE_SURFACES[surface];
         const candidate = join(outDir, spec.still);
-        const against = againstFor(shotsDir, r.page_type, surface);
+        const against = againstFor(shotsDir, r, surface);
         pairs.push({
           ...buildBoardPair({
             id: slug,
             surface,
-            question: spec.question,
+            question: against.question,
             boardPath: candidate,
-            donorPath: against,
+            donorPath: against.path,
             donorSlug: pick.variant_id,
             runToken,
           }),
@@ -384,6 +430,13 @@ export async function main(argv = process.argv.slice(2)) {
           id: `${slug}:${surface}@${runToken}`,
           route: r.route,
           page_type: r.page_type,
+          /**
+           * WHAT THIS SURFACE ANSWERED TO, in the words the refusal needs. Written here rather
+           * than recomputed in phase 2, because phase 2 reads the request and the request is
+           * the only place that knows whether this route was the primary inner page when the
+           * comparison was stated.
+           */
+          against_phrase: against.phrase,
           candidate,
           /** THE PIXELS THESE ANSWERS WILL BE ABOUT, and the HTML they came from. */
           candidate_sha: fingerprint(candidate),
@@ -412,9 +465,26 @@ export async function main(argv = process.argv.slice(2)) {
       2,
     ) + "\n",
   );
+  /**
+   * NO ROUTE MARKED PRIMARY IS A NOTE, NEVER A REFUSAL.
+   *
+   * The direction has a drawn inner page and nothing says which route it became, so every inner
+   * page answers to the donor's home page: the weaker of the two comparisons, and not the
+   * picture the client was shown. Refusing over it would switch the judge off on every build
+   * made before the flag existed, which is the one outcome worse than the weaker comparison.
+   */
+  if (!routes.some((r) => r.primary) && routes.some((r) => r.page_type !== "home") && existsSync(join(shotsDir, "inner.png")))
+    process.stderr.write(
+      `gate-page-judge: ${pick.variant_id} has a drawn inner page (inner.png) and no route is marked as the one it ` +
+        "became, so every inner page here is judged against the donor's home page instead. Mark it: " +
+        "palate-pick.mjs <project-dir> --looked <route> --shot ... --verdict \"...\" --primary.\n",
+    );
   process.stdout.write(
-    `gate-page-judge: ${routes.length} page type(s) on ${pairs.length} surface(s), ${pairs.length * 2} comparisons ` +
-      `stated in ${requestPath}\n` +
+    `gate-page-judge: ${stale.length} page type(s) on ${pairs.length} surface(s), ${pairs.length * 2} comparisons ` +
+      `stated in ${requestPath}` +
+      (carried.length
+        ? `, and ${carried.length} unchanged page(s) keep the verdict they already hold (${carried.map((r) => r.route).join(", ")})`
+        : "") + "\n" +
       "  Dispatch each comparison to a FRESH subagent (one per ordering, never both in one context), then run\n" +
       `  node ${join(HERE, "gate-page-judge.mjs")} ${projectDir} --judgements <file> with [{ id, candidate_is, verdict }] per comparison.\n`,
   );
@@ -511,6 +581,11 @@ function phase2(projectDir, requestPath, judgementsArg, manifest) {
       judged_at: judgedAt,
       run_token: request.runToken,
       verdicts: Object.fromEntries(ps.map((p) => [p.surface, readings.get(p.id).verdicts])),
+      // Not recorded, like `verdicts`: the refusal below needs it and the manifest does not.
+      phrases: Object.fromEntries(ps.map((p) => [
+        p.surface,
+        p.against_phrase ?? `the donor's ${PAGE_SURFACES[p.surface].noun}`,
+      ])),
     });
   }
 
@@ -521,7 +596,7 @@ function phase2(projectDir, requestPath, judgementsArg, manifest) {
    */
   const kept = (Array.isArray(manifest?.compose?.page_judgements) ? manifest.compose.page_judgements : [])
     .filter((j) => j && !byRoute.has(j.route));
-  const written = [...kept, ...scored.map(({ verdicts, ...j }) => j)];
+  const written = [...kept, ...scored.map(({ verdicts, phrases, ...j }) => j)];
   const recordError = mergeManifest(projectDir, { compose: { page_judgements: written } }, (back) => {
     const got = Array.isArray(back?.compose?.page_judgements) ? back.compose.page_judgements : null;
     return Boolean(got) && got.length === written.length;
@@ -536,8 +611,8 @@ function phase2(projectDir, requestPath, judgementsArg, manifest) {
       for (const surface of s.surfaces) {
         if (!refusedRung(s.rungs[surface])) continue;
         lines.push(
-          `${s.route} ${surface}: ${WORSE_PHRASE[s.rungs[surface]]} than ${againstLabel(s.page_type)}'s ` +
-            `${PAGE_SURFACES[surface].noun}: ${s.verdicts[surface][0]} / ${s.verdicts[surface][1]}. A page ships ` +
+          `${s.route} ${surface}: ${WORSE_PHRASE[s.rungs[surface]]} than ${s.phrases[surface]}: ` +
+            `${s.verdicts[surface][0]} / ${s.verdicts[surface][1]}. A page ships ` +
             "only when it reads comparable or better on both surfaces. Recompose it from the picture it answers " +
             "to and rebuild before judging again.",
         );
@@ -559,10 +634,10 @@ function phase2(projectDir, requestPath, judgementsArg, manifest) {
   // The pass line names WHAT each page answered to, from what was actually judged. Saying "the
   // board and the donor" over a set with no home page in it is a claim about a comparison
   // nobody made, and the pass line is the sentence an operator reads and reports.
-  const answeredTo = [
-    scored.some((s) => s.page_type === "home") ? "the board" : null,
-    scored.some((s) => s.page_type !== "home") ? "the donor" : null,
-  ].filter(Boolean).join(" and ");
+  const answeredTo = [...new Set(scored.flatMap((s) => Object.values(s.phrases)))]
+    .map((ph) => ph.replace(/'s (entrance|ending)$/, ""))
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .join(" and ");
   process.stdout.write(
     `Page judge passed: ${scored.length} page type(s) judged against ${answeredTo}, ` +
       "both orders each, read at the lowest surface: " +
@@ -581,7 +656,7 @@ function phase2(projectDir, requestPath, judgementsArg, manifest) {
  * matters most in practice: a page refused, patched and rebuilt would otherwise keep sailing on
  * the verdict its old pixels earned.
  */
-function check(projectDir, manifest, routes) {
+function check(projectDir, manifest, routes, shotsDir, pick) {
   const held = new Map((Array.isArray(manifest?.compose?.page_judgements) ? manifest.compose.page_judgements : [])
     .map((j) => [normaliseRoute(j?.route), j]));
   const findings = [];
@@ -595,7 +670,7 @@ function check(projectDir, manifest, routes) {
     }
     if (refusedRung(j.rung)) {
       findings.push(
-        `${r.route} (${r.page_type}) stands judged ${WORSE_PHRASE[j.rung]} than ${againstLabel(r.page_type)} ` +
+        `${r.route} (${r.page_type}) stands judged ${WORSE_PHRASE[j.rung]} than ${againstLabel(r)} ` +
           `(entrance ${j.rungs?.entrance ?? "?"}, ending ${j.rungs?.foot ?? "?"}).`,
       );
       continue;
@@ -606,6 +681,23 @@ function check(projectDir, manifest, routes) {
       findings.push(`${r.route} was rebuilt after it was judged, so its verdict describes a page that no longer exists.`);
   }
   if (findings.length) {
+    /**
+     * UNJUDGED AND UNJUDGEABLE ARE DIFFERENT ANSWERS.
+     *
+     * A build whose pages were never compared is a finding: the comparison is available and
+     * nobody made it. A build whose picked direction has no rendered stills CANNOT be compared
+     * from here at all, and telling that operator to "judge them" sends them to a command that
+     * skips, so they find the real one two hops later. The stills are the same ones phase 1
+     * needs, and they come from the board judge, so the skip names it.
+     */
+    const needed = [...new Set(routes.flatMap((r) => SURFACE_ORDER.map((sf) => againstFor(shotsDir, r, sf).path)))];
+    const missing = needed.filter((p) => !existsSync(p));
+    if (missing.length)
+      return skip(
+        `the picked direction ${pick.variant_id} has no ${missing.map((m) => m.slice(shotsDir.length + 1)).join(", ")} ` +
+          `on disk, so its pages cannot be compared with anything yet: run node ` +
+          `${join(HERE, "gate-board-judge.mjs")} ${projectDir} first, which renders and crops them`,
+      );
     refuse([
       ...findings,
       `Judge them: node ${join(HERE, "gate-page-judge.mjs")} ${projectDir}, dispatch the comparisons, then ` +

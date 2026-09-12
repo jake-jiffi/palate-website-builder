@@ -31,7 +31,7 @@
  *        [--proof <preview-url> [--proof-unmeasured "<reason>"]]
  *        [--answer motion=... --answer mix=... --answer cms=...]
  *        [--canvas-url <published-url> | --canvas-skipped "<reason>"]
- *        [--looked <route> --shot .palate-shots/<file>.png --verdict "<what you can see>"]
+ *        [--looked <route> --shot .palate-shots/<file>.png --verdict "<what you can see>" [--primary]]
  *        [--override <route> --section <band> --what "<instead>" --reason "<why>"]
  * Exit: 0 recorded, 1 refused (with the reason), 2 bad arguments.
  */
@@ -398,6 +398,23 @@ if (lookedRoute !== null) {
     refuse(`--verdict says "${empty}", which is the phrase somebody writes when they did not open the page. Say what is on it instead: the hero, the second thing the eye lands on, and one thing that is wrong or deliberately different.`);
   }
 
+  /**
+   * `--primary` NAMES THE ROUTE THE DRAWN INNER PAGE BECAME.
+   *
+   * Every direction is drawn with one inner page (`I<N>`) beside its home, and it is the only
+   * picture of what this direction's inner pages were supposed to be. Nothing on the manifest
+   * said which route it was lifted into, so the page judge had no choice but to hold every
+   * inner page against the donor's HOME page, which is the weaker of the two comparisons
+   * available and is not the promise the client was shown. One mark closes that.
+   *
+   * AT MOST ONE PER BUILD, and the home can never be it: the home has its own board, and a
+   * build claiming two primary inner pages is a build saying the drawing became two things.
+   */
+  const primary = flag("--primary");
+  if (primary && route === "/") {
+    refuse("--primary marks the route the drawn INNER page became, so it cannot be the home page: the home answers to the direction's own board. Mark the inner page the client will spend their time on.");
+  }
+
   const entry = {
     route,
     page_type: pageTypeOf(route),
@@ -405,11 +422,22 @@ if (lookedRoute !== null) {
     shot_sha256: createHash("sha256").update(readFileSync(shotPath)).digest("hex"),
     looked_at: new Date().toISOString(),
     verdict,
+    ...(primary ? { primary: true } : {}),
   };
   // ONE ENTRY PER ROUTE. A second look at the same page is a newer reading of it, not a second
   // page, and a list that grew would let one look at the home page stand in for five.
   patch.compose = patch.compose || {};
-  patch.compose.pages = [...existingPages.filter((p) => normaliseRoute(p?.route) !== route), entry];
+  const others = existingPages.filter((p) => normaliseRoute(p?.route) !== route);
+  patch.compose.pages = [
+    // A SECOND `--primary` MOVES THE MARK rather than adding one. Two routes claiming the drawn
+    // inner page would have the judge comparing one drawing with two pages and reporting both.
+    ...(primary ? others.map(({ primary: _drop, ...p }) => p) : others),
+    entry,
+  ];
+}
+
+if (flag("--primary") && lookedRoute === null) {
+  refuse("--primary marks a route that is being looked at, so it goes with --looked: --looked /security-windows --shot ... --verdict \"...\" --primary.");
 }
 
 if (overrideRoute !== null) {

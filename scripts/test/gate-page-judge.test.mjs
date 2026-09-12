@@ -71,7 +71,7 @@ const LOOK = (route, type, verdict) => ({
  * A project past the pick: one board picked with every still the judge compares against, three
  * built routes, and a recorded look on each of the three page types.
  */
-function project({ picks = true, looks = null, built = ['/', '/security-windows', '/contact'], overrides = [] } = {}) {
+function project({ picks = true, looks = null, built = ['/', '/security-windows', '/contact'], overrides = [], stills = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'page-judge-'));
   for (const route of built) {
     const sub = route === '/' ? 'dist/client' : join('dist/client', route.replace(/^\//, ''));
@@ -80,11 +80,13 @@ function project({ picks = true, looks = null, built = ['/', '/security-windows'
   }
   const shots = join(dir, '.palate', 'explore', 'shots', 'b3');
   mkdirSync(shots, { recursive: true });
-  writeFileSync(join(shots, 'hero.png'), PNG);
-  writeFileSync(join(shots, 'foot.png'), PNG);
-  writeFileSync(join(shots, 'inner.png'), PNG);
-  writeFileSync(join(shots, 'donor.jpg'), JPEG);
-  writeFileSync(join(shots, 'donor-foot.png'), PNG);
+  if (stills) {
+    writeFileSync(join(shots, 'hero.png'), PNG);
+    writeFileSync(join(shots, 'foot.png'), PNG);
+    writeFileSync(join(shots, 'inner.png'), PNG);
+    writeFileSync(join(shots, 'donor.jpg'), JPEG);
+    writeFileSync(join(shots, 'donor-foot.png'), PNG);
+  }
   const pages = looks ?? [
     LOOK('/', 'home', 'The hero bleeds like the board, the wordmark sits on the photo, the band keeps one baseline'),
     LOOK('/security-windows', 'service', 'The photo is inset rather than bled, the spec table reads down the page'),
@@ -337,4 +339,119 @@ test('--check reads the record alone: a page type with no judgement blocks, a co
   const stale = run(dir, ['--check']);
   assert.equal(stale.code, 1, 'a rebuilt page keeps its old verdict without this');
   assert.match(stale.err, /\/contact/);
+});
+
+test('the route marked primary is judged at its entrance against the DRAWN INNER PAGE', (t) => {
+  if (engineReason) return t.skip(engineReason);
+  const primary = LOOK('/security-windows', 'service', 'The photo is inset rather than bled, the spec table reads down the page');
+  primary.primary = true;
+  const dir = project({
+    looks: [
+      LOOK('/', 'home', 'The hero bleeds like the board, the wordmark sits on the photo, the band keeps one baseline'),
+      primary,
+      LOOK('/contact', 'contact', 'The form sits beside the map, the hours run under it, one action in the band'),
+    ],
+  });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = run(dir);
+  assert.equal(r.code, 0, r.err);
+  const req = request(dir);
+  const at = (id) => req.pairs.find((p) => p.id.split('@')[0] === id);
+  // THE ONE COMPARISON THE DIRECTION ACTUALLY DREW for an inner page. Without the mark this
+  // page answers to the donor's HOME page, which is not the picture the client was shown.
+  assert.equal(at('security-windows:entrance').comparisons[0].B, board(dir, 'inner.png'));
+  // Its ending still answers to the donor: no inner artboard carries a footer.
+  assert.equal(at('security-windows:foot').comparisons[0].B, board(dir, 'donor-foot.png'));
+  // Nothing else moves: the home keeps its board, the other inner page keeps the donor.
+  assert.equal(at('home:entrance').comparisons[0].B, board(dir, 'hero.png'));
+  assert.equal(at('contact:entrance').comparisons[0].B, board(dir, 'donor.jpg'));
+  // And it asks its own question, which names both standards.
+  assert.match(at('security-windows:entrance').question, /drawn for the direction they picked/);
+  assert.notEqual(at('security-windows:entrance').question, at('contact:entrance').question);
+  // The refusal has to say what it was held against, in those words.
+  const r2 = judge(dir, answers(request(dir), { [at('security-windows:entrance').id]: 'somewhat_worse' }));
+  assert.equal(r2.code, 1, r2.out);
+  assert.match(r2.err, /\/security-windows entrance: somewhat worse than the drawn inner page/);
+});
+
+test('with a drawn inner page and no route marked, phase 1 says so and judges against the donor anyway', (t) => {
+  if (engineReason) return t.skip(engineReason);
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = run(dir);
+  // A NOTE, NEVER A REFUSAL. Refusing would switch the judge off on every build made before the
+  // flag existed, which is worse than the weaker comparison it is warning about.
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.err, /--primary/);
+  assert.equal(request(dir).pairs.find((p) => p.id.startsWith('security-windows:entrance')).comparisons[0].B, board(dir, 'donor.jpg'));
+});
+
+test('an unchanged route keeps its verdict while a rebuilt one re-states only its own pairs', (t) => {
+  if (engineReason) return t.skip(engineReason);
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  const first = judge(dir, answers(request(dir)));
+  assert.equal(first.code, 0, first.err);
+
+  // ONE PAGE MOVES. Keyed on the whole build this bought twelve fresh comparisons for a typo
+  // fixed on one inner page; keyed per route it buys four.
+  writeFileSync(join(dir, 'dist/client/security-windows/index.html'), page('/security-windows, revised'));
+  const again = run(dir);
+  assert.equal(again.code, 0, again.err);
+  const req = request(dir);
+  assert.deepEqual(req.pairs.map((p) => p.id.split('@')[0]), ['security-windows:entrance', 'security-windows:foot']);
+  assert.match(again.out, /unchanged page\(s\) keep the verdict they already hold \(\/, \/contact\)/);
+  // AND THE STANDING VERDICTS SURVIVE the record of the new ones.
+  const r2 = judge(dir, answers(req));
+  assert.equal(r2.code, 0, r2.err);
+  assert.deepEqual(manifest(dir).compose.page_judgements.map((j) => j.route).sort(), ['/', '/contact', '/security-windows']);
+});
+
+test('a build with nothing rebuilt is not re-judged, and a standing refusal still refuses', (t) => {
+  if (engineReason) return t.skip(engineReason);
+  const dir = project();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  run(dir);
+  judge(dir, answers(request(dir)));
+  // THE CLEAN BRANCH: every page carries a verdict for the HTML on disk, so nothing is restated.
+  const again = run(dir);
+  assert.equal(again.code, 0, again.err);
+  assert.match(again.out, /already judged/);
+
+  // THE REFUSED BRANCH: re-stating the comparison would ask a fresh subagent the same question
+  // about the same page until one of them said something kinder.
+  const dir2 = project();
+  t.after(() => rmSync(dir2, { recursive: true, force: true }));
+  run(dir2);
+  const req2 = request(dir2);
+  judge(dir2, answers(req2, { [req2.pairs.find((p) => p.id.startsWith('security-windows:foot')).id]: 'somewhat_worse' }));
+  const stands = run(dir2);
+  assert.equal(stands.code, 1, `a standing refusal cannot read as "nothing to do": ${stands.out}`);
+  assert.match(stands.err, /stands judged somewhat worse/);
+});
+
+test('--check tells unjudged from unjudgeable: no rendered stills SKIPS naming the board judge', (t) => {
+  const dir = project({ stills: false });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = run(dir, ['--check']);
+  assert.ok(skipped(r), `a direction with no stills cannot be judged from here: ${r.code} ${r.err}`);
+  assert.match(r.err, /gate-board-judge\.mjs/);
+  // And an unjudged build whose stills ARE on disk is a finding, not a skip: the comparison is
+  // available and nobody made it.
+  const dir2 = project();
+  t.after(() => rmSync(dir2, { recursive: true, force: true }));
+  const r2 = run(dir2, ['--check']);
+  assert.equal(r2.code, 1, r2.out);
+  assert.match(r2.err, /gate-page-judge\.mjs/);
+});
+
+test('a boolean flag before the project directory does not swallow it', (t) => {
+  const dir = project({ picks: false });
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  // `--check <dir>` used to judge the current working directory, which is a gate reporting on
+  // files nobody named.
+  const r = spawnSync(process.execPath, [GATE, '--check', dir], { encoding: 'utf8', env: { ...process.env } });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /skipped \(no pick recorded\)/);
 });

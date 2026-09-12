@@ -895,6 +895,56 @@ test("a second look at the same route replaces the first, one entry per route", 
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("--primary marks the route the drawn inner page became, at most one per build", async () => {
+  const dir = project();
+  looked(dir, "/security-windows");
+  looked(dir, "/gallery", { shot: ".palate-shots/gallery.png" });
+  const second = "The grid runs three wide, the captions sit under the frames, the enquiry band closes it";
+
+  // EVERY DIRECTION DRAWS ONE INNER PAGE, and until the mark existed nothing said which route
+  // it became, so the page judge held every inner page against the donor's HOME page instead.
+  const r = await run([dir, "--looked", "/security-windows", "--shot", ".palate-shots/desktop-full.png",
+    "--verdict", VERDICT, "--primary"]);
+  assert.equal(r.status, 0, r.stderr);
+  let pages = manifestOf(dir).compose.pages;
+  assert.equal(pages.filter((p) => p.primary).length, 1);
+  assert.equal(pages.find((p) => p.primary).route, "/security-windows");
+
+  // A SECOND --primary MOVES THE MARK. Two routes claiming the drawn inner page would have the
+  // judge comparing one drawing with two pages and reporting both.
+  const moved = await run([dir, "--looked", "/gallery", "--shot", ".palate-shots/gallery.png",
+    "--verdict", second, "--primary"]);
+  assert.equal(moved.status, 0, moved.stderr);
+  pages = manifestOf(dir).compose.pages;
+  assert.equal(pages.filter((p) => p.primary).length, 1, "two routes claim the drawn inner page");
+  assert.equal(pages.find((p) => p.primary).route, "/gallery");
+  assert.equal(pages.length, 2, "the mark moved by dropping a page");
+
+  // A LOOK WITHOUT THE FLAG IS NOT PRIMARY, or every page would claim the drawing.
+  const plain = await run([dir, "--looked", "/security-windows", "--shot", ".palate-shots/desktop-full.png",
+    "--verdict", VERDICT]);
+  assert.equal(plain.status, 0, plain.stderr);
+  assert.equal(manifestOf(dir).compose.pages.find((p) => p.route === "/security-windows").primary, undefined);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("--primary is refused on the home page and outside a look", async () => {
+  const dir = project();
+  looked(dir);
+  // THE HOME HAS ITS OWN BOARD. Marking it the inner page would hold it against a drawing of a
+  // different page while the drawing of this one sat unused.
+  const home = await run([dir, "--looked", "/", "--shot", ".palate-shots/desktop-full.png",
+    "--verdict", VERDICT, "--primary"]);
+  assert.equal(home.status, 1, home.stdout);
+  assert.match(home.stderr, /cannot be the home page/);
+  assert.equal(manifestOf(dir).compose, undefined, "a refused look wrote a record anyway");
+
+  const loose = await run([dir, "--primary"]);
+  assert.notEqual(loose.status, 0, "a mark with no route to put it on cannot be recorded");
+  assert.match(loose.stderr, /--looked/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("a deliberate departure from the board is recorded as an override, with its reason", async () => {
   const dir = project();
   const r = await run([dir, "--override", "/security-windows", "--section", "hero",

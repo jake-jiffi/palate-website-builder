@@ -385,6 +385,22 @@ export const PAGE_FOOT_QUESTION =
   'composition, type, hierarchy, restraint and the care in the details; ignore that one may be a drawing.';
 
 /**
+ * The PRIMARY inner page, against the inner artboard that was drawn for it.
+ *
+ * One inner page is drawn per direction (`I<N>`), and until the build records which route it was
+ * lifted into, every page but the home answered to the donor's home page alone. That is the
+ * weaker comparison of the two available: the drawn inner page is the only picture of what this
+ * direction's inner pages were supposed to be, and it is the promise the client saw. The
+ * question asks for both standards at once because the drawing is a drawing and the donor is
+ * the field's bar, and a page that holds the first and not the second is still not good enough.
+ */
+export const PAGE_INNER_QUESTION =
+  'A built inner page for this client beside the inner page that was drawn for the direction they picked. On the ' +
+  'four rungs, does the built page hold the drawn page and the standard of the library reference the direction was ' +
+  'drawn from, as a piece of design a senior designer would deliver? Judge composition, type, hierarchy, restraint ' +
+  'and specificity; ignore that one is a drawing.';
+
+/**
  * State one board's comparison, both ways round.
  *
  * The run token is in BOTH ids for the same reason it is in the site ladder's: without it the
