@@ -42,7 +42,7 @@
  * Exit: 0 validated and measured, 2 could not (with the reason and the board named).
  */
 import {
-  existsSync, mkdirSync, readFileSync, writeFileSync, statSync, copyFileSync,
+  existsSync, mkdirSync, readFileSync, writeFileSync, statSync, copyFileSync, rmSync,
 } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -71,6 +71,15 @@ export const PROPERTY_LIST = [
 ];
 
 const MAX_IMAGE_BYTES = 70 * 1024;
+/**
+ * The ceiling on a donor's WHOLE-PAGE capture, which is judge evidence and never a frame.
+ *
+ * The 70 KB canvas ceiling exists because a canvas has no egress and every frame is downloaded
+ * by the person opening it. This file is opened by one subagent from local disk, so squeezing it
+ * would only throw away the detail the page-ending comparison is about. The cap is here to stop
+ * a pathological object filling a build directory, not to fit a canvas.
+ */
+const MAX_DONOR_FULL_BYTES = 1.5 * 1024 * 1024;
 /**
  * The ladder a calibration screenshot is walked down to reach the ceiling: width first, then
  * quality.
@@ -1365,6 +1374,8 @@ async function writeDonors(donors, boards, seedDir, shotsDir, projectDir) {
       buf = fit.buffer;
     }
 
+    await writeDonorFull(d, join(shotsDir, board.id), lines);
+
     const img = `d${d.rung}-hero.jpg`;
     writeFileSync(join(seedDir, img), buf);
     writeFileSync(join(seedDir, `D${d.rung}.dc.html`), donorArtboard({ ...d, img }));
@@ -1380,6 +1391,51 @@ async function writeDonors(donors, boards, seedDir, shotsDir, projectDir) {
     lines.push(`  donor rung ${d.rung} ${d.slug}: D${d.rung}.dc.html, ${img} ${Math.round(buf.length / 1024)} KB`);
   }
   return lines;
+}
+
+/**
+ * Fetch the donor's whole-page capture beside its hero, for the page ending the judge compares.
+ *
+ * The library serves a reference's captures as public objects under one prefix, so the full-page
+ * one is the desktop hero's own URL with the last segment swapped. A `hero_url` that does not
+ * name a `desktop.png` is not guessed at: fetching the same URL twice under a different name
+ * would put the entrance on disk as though it were the ending, and the judge would then be
+ * comparing two heroes and reporting it as a verdict about two footers.
+ *
+ * NOTHING HERE IS FATAL. A reference with no full capture, a capture that is too large, a host
+ * that will not answer: each leaves a sidecar saying so and the run carries on, because none of
+ * them is the operator's doing and none of them makes the canvas wrong. The sidecar is what lets
+ * the gate leave that surface out of its request AND say why, which a bare absence cannot.
+ */
+async function writeDonorFull(d, boardShots, lines) {
+  const dest = join(boardShots, "donor-full.png");
+  const note = join(boardShots, "donor-full.missing");
+  const record = (why) => {
+    rmSync(dest, { force: true });
+    writeFileSync(note, `${why}\n`);
+    lines.push(`  donor rung ${d.rung} ${d.slug}: no whole-page capture (${why}); its page ending is not judged`);
+  };
+
+  if (!/desktop\.png$/i.test(d.hero_url)) {
+    record(`its hero_url does not name a desktop.png capture, so there is no full.png beside it`);
+    return;
+  }
+  const url = d.hero_url.replace(/desktop\.png$/i, "full.png");
+  let buf;
+  try { buf = await fetchHero(url); }
+  catch (e) { record(e.message.replace(/\s+$/, "")); return; }
+  if (buf.length > MAX_DONOR_FULL_BYTES) {
+    record(`${url} answered ${(buf.length / (1024 * 1024)).toFixed(1)} MB, over the 1.5 MB ceiling for judge evidence`);
+    return;
+  }
+  /**
+   * KEPT AS FETCHED, under a .png name whatever the container. It is decoded by content and
+   * cropped by the gate, which writes the PNG the judge is actually shown; re-encoding it here
+   * would cost a second decode of a large image to change nothing downstream.
+   */
+  rmSync(note, { force: true });
+  writeFileSync(dest, buf);
+  lines.push(`  donor rung ${d.rung} ${d.slug}: donor-full.png ${Math.round(buf.length / 1024)} KB (the page ending)`);
 }
 
 /**

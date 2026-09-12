@@ -1580,3 +1580,120 @@ test("--no-donors runs without the file and says so in the manifest", async (t) 
     "a run with no donor row is byte-identical to one with it, which is the fault this records");
   rmSync(join(SITE, "build-manifest.json"), { force: true });
 });
+
+// ------------------------------------------------- the donor's whole-page capture
+/**
+ * THE JUDGE READS THE PAGE ENDING TOO, and the donor's half of that comparison is the reference's
+ * own full-page capture, which sits beside its desktop hero as a public object. It is fetched
+ * here rather than in the gate because this is the one place that already knows the donor's URL,
+ * and it is NEVER put on the canvas: it is judge evidence, so the 70 KB canvas ceiling does not
+ * apply to it and it keeps whatever the library served.
+ *
+ * A donor with no full capture is NOT a refusal. Some references have none, which is nobody's
+ * fault and no reason to stop an Explore; it is recorded as a sidecar so the gate can leave that
+ * surface out and say why, instead of a silence the next reader takes for a clean bill.
+ */
+async function serveCaptures({ full = null, fullStatus = 200 } = {}) {
+  const hero = pngFixture(1440, 900);
+  const server = createServer((req, res) => {
+    if (req.url.endsWith("/full.png")) {
+      if (fullStatus !== 200) { res.writeHead(fullStatus); res.end("gone"); return; }
+      res.writeHead(200, { "Content-Type": "image/png" });
+      res.end(full ?? pngFixture(1440, 4000));
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "image/png" });
+    res.end(hero);
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  return { server, port: server.address().port };
+}
+
+const donorsWith = (port) => JSON.stringify([
+  donorFor(1, { slug: "therapy-in-london", hero_url: `http://127.0.0.1:${port}/screenshots/therapy-in-london/desktop.png` }),
+  donorFor(2, { slug: "the-modern-house", hero_url: `http://127.0.0.1:${port}/screenshots/the-modern-house/desktop.png` }),
+], null, 2);
+
+test("the donor's full-page capture is fetched beside its hero, for the page-ending comparison", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const { server, port } = await serveCaptures();
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, `boards-render failed:\n${r.stderr}`);
+    for (const id of ["b1", "b2"]) {
+      const full = join(SITE, ".palate/explore/shots", id, "donor-full.png");
+      assert.ok(existsSync(full), `${id} has no donor full capture, so its page ending can be judged against nothing`);
+      assert.ok(statSync(full).size > 0);
+      assert.ok(!existsSync(join(SITE, ".palate/explore/shots", id, "donor-full.missing")),
+        `${id} recorded the capture as missing and fetched it anyway`);
+      // NEVER ON THE CANVAS. It is judge evidence, so it is not copied into the seed or /explore.
+      assert.ok(!existsSync(join(SEED, `d${id === "b1" ? 1 : 2}-full.png`)), "the full capture was written into the canvas seed");
+    }
+    assert.match(r.stdout, /donor-full\.png/, "the run does not say it fetched the whole-page captures");
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+test("a donor with no full capture is recorded, not refused, and the run finishes", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const { server, port } = await serveCaptures({ fullStatus: 404 });
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, `a reference with no full.png stopped the whole Explore:\n${r.stderr}`);
+    for (const id of ["b1", "b2"]) {
+      const dir = join(SITE, ".palate/explore/shots", id);
+      assert.ok(!existsSync(join(dir, "donor-full.png")));
+      const sidecar = join(dir, "donor-full.missing");
+      assert.ok(existsSync(sidecar), `${id} recorded nothing about its missing capture, so the gate cannot say why`);
+      assert.match(readFileSync(sidecar, "utf8"), /404/, "the sidecar does not say what went wrong");
+    }
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+test("a full capture over the ceiling is left behind with its reason, never written", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  // The magic bytes are real and the body is enormous, which is the shape that matters: the cap
+  // is checked on what came back, before anything decodes it.
+  const huge = Buffer.concat([pngFixture(8, 8), Buffer.alloc(2 * 1024 * 1024, 7)]);
+  const { server, port } = await serveCaptures({ full: huge });
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    const r = await run([SITE]);
+    assert.equal(r.status, 0, `an oversized donor capture stopped the Explore:\n${r.stderr}`);
+    const dir = join(SITE, ".palate/explore/shots", "b1");
+    assert.ok(!existsSync(join(dir, "donor-full.png")), "a 2 MB capture was kept");
+    assert.match(readFileSync(join(dir, "donor-full.missing"), "utf8"), /1\.5 MB|too large|over/i);
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
+
+test("a stale missing-capture note is cleared when the capture is there next time", async (t) => {
+  if (!ready) return t.skip(skipReason);
+  const dir = join(SITE, ".palate/explore/shots", "b1");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "donor-full.missing"), "from a run when the library had none");
+  const { server, port } = await serveCaptures();
+  const donorsPath = join(SITE, ".palate/explore/donor-heroes.json");
+  try {
+    writeFileSync(donorsPath, donorsWith(port));
+    assert.equal((await run([SITE])).status, 0);
+    assert.ok(existsSync(join(dir, "donor-full.png")));
+    assert.ok(!existsSync(join(dir, "donor-full.missing")),
+      "the note survived the fetch, so the gate skips a surface it has the evidence for");
+  } finally {
+    server.close();
+    rmSync(donorsPath, { force: true });
+  }
+});
