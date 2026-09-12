@@ -74,35 +74,77 @@ const skip = (reason) => {
  */
 const pageScript = async ({ scroll, settle, gap, max }) => {
   const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  const round = (n) => Math.round(n * 1000) / 1000;
+  const total = document.querySelectorAll("*").length;
+  const truncated = total > max;
   const els = () => Array.from(document.querySelectorAll("*")).slice(0, max);
 
+  // An nth-of-type suffix where the tag repeats, because "div.card" names four things and a
+  // finding somebody cannot find is a finding they will not act on.
   const selectorFor = (el) => {
     const tag = el.tagName.toLowerCase();
     if (el.id) return tag + "#" + el.id;
     const cls = (el.getAttribute("class") || "").trim().split(/\s+/).filter(Boolean)[0];
-    return cls ? tag + "." + cls : tag;
-  };
-  const translateY = (el) => {
-    const t = getComputedStyle(el).transform;
-    if (!t || t === "none") return 0;
-    try { return new DOMMatrixReadOnly(t).m42; } catch { return 0; }
-  };
-  // Only the properties motion actually shows up in. Reading every property would report a
-  // font finishing loading as movement.
-  const sample = (el) => {
-    const s = getComputedStyle(el);
-    const r = el.getBoundingClientRect();
-    return [s.transform, s.opacity, s.backgroundPosition, s.filter, s.clipPath,
-      Math.round(r.top), Math.round(r.left), Math.round(r.width), Math.round(r.height)].join("|");
+    const base = cls ? tag + "." + cls : tag;
+    const sibs = el.parentElement
+      ? Array.from(el.parentElement.children).filter((c) => c.tagName === el.tagName)
+      : [el];
+    return sibs.length > 1 ? base + ":nth-of-type(" + (sibs.indexOf(el) + 1) + ")" : base;
   };
 
-  // --- the sticky header: the first full-width bar pinned at the top of the viewport -------
-  const header = els().find((el) => {
+  /**
+   * WHERE THE ELEMENT SITS IN THE DOCUMENT, not what transform it happens to carry.
+   *
+   * Reading the media element's own transform reads one of the several ways a parallax is
+   * built, and not the commonest: the layer that moves is usually a WRAPPER, and plenty of
+   * them move with `top` or a translated ancestor instead. `rect.top + scrollY` is constant
+   * for anything that just scrolls with the page, so whatever it does move by is the motion,
+   * however it was produced.
+   */
+  const docPos = (el) => el.getBoundingClientRect().top + window.scrollY;
+  // And the one kind of parallax that moves nothing at all: a background sliding inside a box
+  // that does not.
+  const bgPosY = (el) => {
+    const m = /^(-?[\d.]+)px$/.exec(String(getComputedStyle(el).backgroundPositionY || "").trim());
+    return m ? parseFloat(m[1]) : null;
+  };
+
+  /**
+   * THE PROPERTIES MOTION LIVES IN, AND NOT THE BOX.
+   *
+   * The box was in here and it counted a reflow as a running animation: an image arriving after
+   * load moves everything under it, and on a real page that read 50 elements "running" on a
+   * page where nothing moved. What a reader then does with a number that is never zero is
+   * ignore it.
+   */
+  const sample = (el) => {
     const s = getComputedStyle(el);
-    if (s.position !== "sticky" && s.position !== "fixed") return false;
-    const r = el.getBoundingClientRect();
-    return r.height > 0 && r.top <= 4 && r.width >= innerWidth * 0.5;
-  }) || null;
+    return [s.transform, s.opacity, s.backgroundPosition, s.filter, s.clipPath].join("|");
+  };
+
+  /**
+   * THE TOPMOST PINNED FULL-WIDTH BAR, re-found after the scroll rather than remembered.
+   *
+   * It used to require `top <= 4` at load, so an announcement strip above the header (which is
+   * how a good share of the library's flagships open) pushed the sticky bar to 40 and the probe
+   * reported no header at all. Re-finding it after the scroll is what lets a bar that is
+   * replaced, revealed or taken away on scroll read as the motion it is.
+   */
+  const findHeader = () => {
+    let best = null;
+    for (const el of els()) {
+      const s = getComputedStyle(el);
+      if (s.position !== "sticky" && s.position !== "fixed") continue;
+      const r = el.getBoundingClientRect();
+      if (r.height <= 0 || r.width < innerWidth * 0.5) continue;
+      if (r.top > 120 || r.bottom <= 0) continue;
+      if (!best || r.top < best.top) best = { el, top: r.top };
+    }
+    return best ? best.el : null;
+  };
+
+  const headerAtLoad = findHeader();
+  const headerBefore = headerAtLoad ? Math.round(headerAtLoad.getBoundingClientRect().height) : null;
 
   // --- the parallax candidates: media inside the first two sections ------------------------
   const sections = Array.from(document.querySelectorAll("section")).slice(0, 2);
@@ -118,22 +160,33 @@ const pageScript = async ({ scroll, settle, gap, max }) => {
       const bg = getComputedStyle(el).backgroundImage;
       if (tag !== "img" && tag !== "video" && (!bg || bg === "none")) continue;
       seen.add(el);
-      candidates.push({ el, selector: selectorFor(el), before: translateY(el) });
+      candidates.push({ el, selector: selectorFor(el), pos: docPos(el), bg: bgPosY(el) });
     }
   }
-
-  const headerBefore = header ? Math.round(header.getBoundingClientRect().height) : null;
 
   // --- scroll, then let whatever the scroll started finish ---------------------------------
   window.scrollTo(0, scroll);
   await sleep(settle);
-  const travelled = Math.max(1, Math.round(window.scrollY));
+  const travelled = Math.round(window.scrollY);
 
-  const headerAfter = header ? Math.round(header.getBoundingClientRect().height) : null;
-  const parallax = candidates.map((c) => ({
-    selector: c.selector,
-    ratio: Math.round((Math.abs(translateY(c.el) - c.before) / travelled) * 1000) / 1000,
-  }));
+  /**
+   * A PAGE THAT CANNOT SCROLL CANNOT BE ASKED ABOUT PARALLAX.
+   *
+   * Every ratio is a distance divided by the distance scrolled, so on a page with 50 px of
+   * scroll in it a 20 px reveal reports a confident 0.4, which is a fabricated measurement in
+   * the exact units somebody downstream compares against a motion note. Below half the
+   * intended distance the parallax reading is withheld and said to be withheld.
+   */
+  const shortPage = travelled < scroll * 0.5;
+
+  const headerNow = findHeader();
+  const headerAfter = headerNow ? Math.round(headerNow.getBoundingClientRect().height) : null;
+  const parallax = shortPage ? [] : candidates.map((c) => {
+    const moved = Math.abs(docPos(c.el) - c.pos);
+    const now = bgPosY(c.el);
+    const bgMoved = c.bg !== null && now !== null ? Math.abs(now - c.bg) : 0;
+    return { selector: c.selector, ratio: round(Math.max(moved, bgMoved) / Math.max(1, travelled)) };
+  });
 
   // --- declared animations ------------------------------------------------------------------
   const animated = els().filter((el) => {
@@ -142,6 +195,9 @@ const pageScript = async ({ scroll, settle, gap, max }) => {
   }).length;
 
   // --- and what changes on its own, which is the half no declaration covers ------------------
+  // A second settle first: the two samples are meant to catch a page moving by itself, not a
+  // page still arriving.
+  await sleep(settle);
   const watched = els();
   const first = watched.map(sample);
   await sleep(gap);
@@ -155,6 +211,8 @@ const pageScript = async ({ scroll, settle, gap, max }) => {
     animated,
     running,
     scrolled: travelled,
+    short_page: shortPage,
+    truncated,
   };
 };
 
@@ -210,6 +268,8 @@ export async function measureMotion(url) {
       animated: full.animated,
       running: full.running,
       scrolled: full.scrolled,
+      short_page: full.short_page,
+      truncated: full.truncated,
       reduced: reduced ? { animated: reduced.animated, running: reduced.running } : null,
     };
   } finally {
@@ -234,9 +294,11 @@ async function main() {
     process.exitCode = 2;
     return;
   }
-  if (!/^https?:\/\/\S+$/.test(url)) {
-    process.stderr.write(`motion-proof: ${url} is not an http(s) url.\n`);
-    process.exitCode = 2;
+  // `file://` is supported because that is what an artboard renders over, and a scheme the
+  // browser cannot open is reported in the SKIP grammar rather than as bad arguments: the
+  // caller classifies on that first line, and "we could not look" is not "you typed it wrong".
+  if (!/^(https?|file):\/\/\S+$/.test(url)) {
+    skip(`${url} is not an http(s) or file url, so nothing could be opened`);
     return;
   }
 

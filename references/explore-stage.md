@@ -383,17 +383,20 @@ onto `/explore` and the canvas.
 
    **THAT COMMAND MEASURES THE PAGE, it does not take your word for it.** It runs
    `scripts/motion-proof.mjs` against the URL and records what it read: the
-   sticky header's height before and after an 800 px scroll, the translateY each
-   image, video and background gained over that scroll as a ratio of the scroll
-   distance, how many elements carry a CSS animation, how many change with no
-   input at all, and the same counts again under
+   sticky header's height before and after an 800 px scroll, how far each image,
+   video and background travelled over that scroll as a ratio of the scroll
+   distance (however the motion was built: the element, its wrapper, or the
+   background inside it), how many elements carry a CSS animation, how many
+   change with no input at all, and the same counts again under
    `prefers-reduced-motion: reduce`. A page where none of that moves is REFUSED:
    the motion proof is what the client was promised, so it is built before it is
    recorded. **The measurements must match the board's motion note IN KIND** - a
    promised parallax has to register as a parallax ratio, a promised marquee as
    `running`, a promised sticky header as two different heights. A note that
    promises one kind of motion and a page that delivers another is a Compose
-   defect, not a proof. If the preview genuinely cannot be reached from this
+   defect, not a proof. A page too short to scroll reports NO parallax rather
+   than a ratio taken over the little it could scroll (`short_page: true`), so
+   on one of those the note has to be checked by eye. If the preview genuinely cannot be reached from this
    machine (a tunnel only the client's browser opens, a host behind a login),
    say so rather than skipping: add
    `--proof-unmeasured "<reason>"`, which records the URL with `measured: null`

@@ -253,6 +253,86 @@ test("a page where nothing measurably moves is refused, not recorded", async (t)
   } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
+/**
+ * THE FLOOR HAS FOUR CLAUSES AND THREE OF THEM WERE NEVER EXERCISED. A refusal condition whose
+ * clauses are only ever tested together is a refusal condition where any one of them could be
+ * inverted, missing or always-true and every test would still pass. These two pages each move in
+ * exactly ONE of the four ways, so each recording proves its own clause carries weight.
+ */
+const PARALLAX_ONLY = `<!doctype html><meta charset="utf-8"><title>Parallax only</title>
+<style>body { margin: 0; } header { height: 90px; background: #222; } section { min-height: 1400px; }</style>
+<header>Header</header>
+<section id="one"><div id="layer"><img id="para" width="400" height="300" alt="a still"
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></div></section>
+<section id="two"><p>More copy.</p></section>
+<script>
+  addEventListener("scroll", () => {
+    document.getElementById("layer").style.transform = "translateY(" + (scrollY * 0.35) + "px)";
+  });
+</script>`;
+
+const HEADER_ONLY = `<!doctype html><meta charset="utf-8"><title>Header only</title>
+<style>
+  body { margin: 0; }
+  header { position: sticky; top: 0; height: 120px; background: #222; }
+  header.small { height: 56px; }
+  section { min-height: 1400px; }
+</style>
+<header id="top">Header</header>
+<section id="one"><p>Copy.</p></section>
+<section id="two"><p>More copy.</p></section>
+<script>
+  addEventListener("scroll", () => {
+    document.getElementById("top").classList.toggle("small", scrollY > 100);
+  });
+</script>`;
+
+test("a page whose only motion is a parallax is recorded, not refused", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(PARALLAX_ONLY);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 0, `a real parallax is motion:\n${r.stdout}${r.stderr}`);
+    const measured = manifestOf(dir).explore.proof.measured;
+    assert.equal(measured.animated, 0, "this fixture is meant to move in one way only");
+    assert.equal(measured.running, 0, "this fixture is meant to move in one way only");
+    assert.ok(Math.max(0, ...measured.parallax.map((x) => x.ratio)) >= 0.05,
+      `the parallax is the only thing keeping this page off the floor: ${JSON.stringify(measured.parallax)}`);
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a page whose only motion is the header is recorded, not refused", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  const site = await serve(HEADER_ONLY);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 0, `a header that moves out of the way is motion:\n${r.stdout}${r.stderr}`);
+    const measured = manifestOf(dir).explore.proof.measured;
+    assert.equal(measured.animated, 0, "this fixture is meant to move in one way only");
+    assert.equal(measured.running, 0, "this fixture is meant to move in one way only");
+    assert.notEqual(measured.header.before, measured.header.after,
+      `the header is the only thing keeping this page off the floor: ${JSON.stringify(measured.header)}`);
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a page too short to scroll is not refused on a parallax nobody could measure", async (t) => {
+  if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
+  const dir = project();
+  // 460px of page: the probe withholds the parallax reading, so the floor cannot count an
+  // absence it never measured as evidence that nothing moves.
+  const site = await serve(`<!doctype html><meta charset="utf-8"><title>Short</title>
+<style>body { margin: 0; } section { height: 460px; }</style>
+<section id="one"><img id="para" width="200" height="150" alt="a still"
+  src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="></section>`);
+  try {
+    const r = await run([dir, "--proof", site.url]);
+    assert.equal(r.status, 0, `a withheld measurement is not evidence of stillness:\n${r.stdout}${r.stderr}`);
+    assert.equal(manifestOf(dir).explore.proof.measured.short_page, true);
+  } finally { await site.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("a preview the probe cannot reach is refused until the reason is given", async (t) => {
   if (!hasBrowser) return t.skip("the capture engine's browser is not installed, so nothing can be measured");
   const dir = project();

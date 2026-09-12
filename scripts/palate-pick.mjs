@@ -234,6 +234,10 @@ if (proofUrl) {
     try {
       measured = JSON.parse(execFileSync(process.execPath, [probe, proofUrl], {
         encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 8 * 1024 * 1024,
+        // A bound, because the probe drives a browser at a URL somebody typed. Without it a
+        // page that never finishes loading hangs the command the doctrine tells every build to
+        // run, and a hang reads as a broken tool rather than as an unreachable preview.
+        timeout: 60_000,
       }));
     } catch (e) {
       probeErr = (e.stderr || e.message || "").toString().trim().split("\n")[0];
@@ -242,9 +246,14 @@ if (proofUrl) {
       refuse(`the preview at ${proofUrl} could not be measured (${probeErr || "the probe returned nothing"}). If the page really is out of this machine's reach, say so: --proof ${proofUrl} --proof-unmeasured "<reason>".`);
     }
     const parallax = Array.isArray(measured.parallax) ? measured.parallax : [];
+    // A WITHHELD MEASUREMENT IS NOT EVIDENCE OF STILLNESS. On a page too short to scroll the
+    // probe reports no parallax at all, because every ratio would be a small number divided by
+    // a smaller one. Reading that empty list as "nothing moves" would refuse a page on a
+    // measurement nobody took.
+    const stillParallax = !measured.short_page && parallax.every((p) => (Number(p.ratio) || 0) < 0.05);
     const still = (measured.animated || 0) === 0
       && (measured.running || 0) === 0
-      && parallax.every((p) => (Number(p.ratio) || 0) < 0.05)
+      && stillParallax
       && measured.header?.before === measured.header?.after;
     if (still) {
       refuse(`nothing measurable moves at ${proofUrl}; the motion proof is what the client was promised, build it before recording it.`);
