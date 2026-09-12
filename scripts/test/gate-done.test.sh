@@ -664,6 +664,86 @@ else
   echo "FAIL - and the tool-written manifest outranks the agent-written report (got: $both_summary)"; fail=$((fail+1))
 fi
 
+# --- THE LOOK: SOMEBODY HAS TO HAVE OPENED THE PAGES ------------------------------------
+# A real client build took 101 screenshots and finished with no record that one of them had
+# been held against the board it was composed from. The shots prove a page RENDERED; they say
+# nothing about whether it still carries the picked direction. So once a pick exists, the done
+# gate asks for one recorded look per PAGE TYPE the build shipped.
+#
+# The fixture carries picks AND a complete question round, because the question-round check
+# sits downstream of this one and a build missing it would block for the wrong reason.
+mk_look_project() { # <dir> <compose-json|"">
+  local proj="$1" composed="$2"
+  mkdir -p "$proj/dist/client/security-windows"
+  printf '<!doctype html><html><body><h1>home</h1></body></html>' > "$proj/dist/client/index.html"
+  printf '<!doctype html><html><body><h1>security windows</h1></body></html>' > "$proj/dist/client/security-windows/index.html"
+  COMPOSE="$composed" node -e '
+const fs = require("node:fs");
+const m = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+m.explore = {
+  ran: true,
+  picks: [{ surface: "hero", variant_id: "b1", rung: 1, position: 0.2, picked_at: "2026-09-11T00:00:00Z" }],
+  question_round: { motion: "the rules draw down", mix: "nothing", cms: "false", answered_at: "2026-09-11T00:01:00Z" },
+};
+if (process.env.COMPOSE) m.compose = JSON.parse(process.env.COMPOSE);
+fs.writeFileSync(process.argv[2], JSON.stringify(m, null, 2));
+' "$DEEP" "$proj/build-manifest.json"
+  make_shots "$proj" 0
+  cp "$PASS/verify-report.json" "$proj/verify-report.json"
+}
+
+LOOKNONE="$TMP/look-none"; mkdir -p "$LOOKNONE"
+mk_look_project "$LOOKNONE" ""
+looknone_out="$(bash "$GATE" "$LOOKNONE/build-manifest.json" 2>&1)"
+looknone_ec=$?
+if [ "$looknone_ec" -eq 2 ] && printf '%s' "$looknone_out" | grep -qF 'look: no page has a recorded look'; then
+  echo "ok   - a picked, built site with no recorded look blocks and says so"; pass=$((pass+1))
+else
+  echo "FAIL - a picked, built site with no recorded look must block (exit $looknone_ec: $looknone_out)"; fail=$((fail+1))
+fi
+
+# ONE LOOK IS NOT EVERY LOOK. The home page is the one that always gets opened, so a gate that
+# stopped at "is there a look" would pass a build whose every inner page went unread. The page
+# types come from the build output, so the finding can NAME the route nobody opened.
+LOOKHOME="$TMP/look-home-only"; mkdir -p "$LOOKHOME"
+mk_look_project "$LOOKHOME" '{"pages":[{"route":"/","page_type":"home","shot":".palate-shots/desktop-full.png","shot_sha256":"abc","looked_at":"2026-09-11T00:10:00Z","verdict":"The hero bleeds like the board, the wordmark sits on the photo, the columns share a baseline"}]}'
+lookhome_out="$(bash "$GATE" "$LOOKHOME/build-manifest.json" 2>&1)"
+lookhome_ec=$?
+if [ "$lookhome_ec" -eq 2 ] && printf '%s' "$lookhome_out" | grep -qF 'look: 1 page type never looked at: service (/security-windows)'; then
+  echo "ok   - a look at the home page alone names the page type nobody opened"; pass=$((pass+1))
+else
+  echo "FAIL - a look at the home page alone must name the unopened type (exit $lookhome_ec: $lookhome_out)"; fail=$((fail+1))
+fi
+
+# AND WITH ONE LOOK PER PAGE TYPE IT PASSES. Without this the two assertions above are equally
+# satisfied by a gate that can never pass, which protects nothing and blocks every build.
+LOOKALL="$TMP/look-all"; mkdir -p "$LOOKALL"
+mk_look_project "$LOOKALL" '{"pages":[{"route":"/","page_type":"home","shot":".palate-shots/desktop-full.png","shot_sha256":"abc","looked_at":"2026-09-11T00:10:00Z","verdict":"The hero bleeds like the board, the wordmark sits on the photo, the columns share a baseline"},{"route":"/security-windows","page_type":"service","shot":".palate-shots/mobile-full.png","shot_sha256":"def","looked_at":"2026-09-11T00:12:00Z","verdict":"The photo is inset rather than bled, the spec table reads down, the enquiry band closes it"}]}'
+lookall_out="$(bash "$GATE" "$LOOKALL/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$lookall_out" | grep -qF 'look=pass'; then
+  echo "ok   - one look per page type passes the look gate"; pass=$((pass+1))
+else
+  echo "FAIL - one look per page type passes the look gate (got: $lookall_out)"; fail=$((fail+1))
+fi
+check "a build with a look on every page type -> pass" 0 "$LOOKALL/build-manifest.json"
+
+# BEFORE THE PICK THERE IS NO BOARD TO HOLD A PAGE AGAINST, so the gate owes nothing and says
+# which reason it skipped for. $PASS has no picks.
+if printf '%s' "$summary" | grep -qF 'look: no pick recorded'; then
+  echo "ok   - a build with no pick skips the look gate, naming the reason"; pass=$((pass+1))
+else
+  echo "FAIL - a build with no pick skips the look gate, naming the reason (got: $summary)"; fail=$((fail+1))
+fi
+
+# THE RELEASE IS NAMED, NEVER SILENT. A gate switched off that reads like a gate that passed is
+# the fault this whole file exists to close.
+lookoff_out="$(PALATE_GATE_LOOK=0 bash "$GATE" "$LOOKNONE/build-manifest.json" 2>/dev/null)"
+if printf '%s' "$lookoff_out" | grep -qF 'look: PALATE_GATE_LOOK=0'; then
+  echo "ok   - PALATE_GATE_LOOK=0 releases the gate and says it did"; pass=$((pass+1))
+else
+  echo "FAIL - PALATE_GATE_LOOK=0 releases the gate and says it did (got: $lookoff_out)"; fail=$((fail+1))
+fi
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

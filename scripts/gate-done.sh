@@ -593,6 +593,31 @@ else
   gate_skipped explore "gate-explore.mjs not present"
 fi
 
+# THE LOOK: did anybody OPEN the pages this build shipped?
+#
+# A real client build took 101 screenshots and finished with no record that one of them had
+# been held against the board it was composed from. Screenshots prove a page RENDERED; they say
+# nothing about whether it still carries the direction the client picked. The look is recorded
+# by `palate-pick.mjs --looked` (never by a hook, never by hand) and this asks for one per PAGE
+# TYPE the build actually shipped, which is why nine service pages cost one look rather than
+# nine.
+#
+# It owes nothing before the pick, because there is no direction to hold a page against yet, so
+# a build with no picks skips. PALATE_GATE_LOOK=0 releases it with a named skip rather than a
+# silent one.
+LOOK_GATE="$HERE/gate-look.mjs"
+look_note="look=skipped"
+if [ ! -f "$LOOK_GATE" ]; then
+  gate_skipped look "gate-look.mjs not present"
+elif [ "${PALATE_GATE_LOOK:-1}" != "1" ]; then
+  gate_skipped look "PALATE_GATE_LOOK=0"
+else
+  if look_err="$(node "$LOOK_GATE" "$PROJ" 2>&1)"; then look_rc=0; else look_rc=$?; fi
+  gate_classify look "$look_rc" "$look_err"
+  gate_record look pass "${look_err}"
+  look_note="$GATE_NOTE"
+fi
+
 # FIDELITY: did the built home page carry the direction the client actually picked?
 #
 # This is the one promise Explore makes that nothing checked. The failure worth catching is not
@@ -667,5 +692,5 @@ skip_clause="."
 # the tail is a roll-call of names. The tail is INDENTED because the Stop hook forwards a
 # matched headline's indented continuation lines, so the two travel together to the operator.
 echo "Done gate: $GATES_RAN of $GATES_TOTAL sub-gates ran, $GATES_SKIPPED skipped${skip_clause}
-  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $fidelity_note, $uniq_note, $kit_tokens_note, $kit_complete_note, $kit_fixtures_note, $imagery_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
+  Passed: visual=pass (0 console errors, $shot_count shot(s), $sweep_note), verifier=pass, $novelty_note, $shipready_note, $seo_note, $headless_note, $ca_note, $facts_note, $explore_note, $look_note, $fidelity_note, $uniq_note, $kit_tokens_note, $kit_complete_note, $kit_fixtures_note, $imagery_note, intensity=${intensity:-calm}, $bold_note.$facts_detail"
 exit 0
