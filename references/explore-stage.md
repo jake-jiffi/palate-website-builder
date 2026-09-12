@@ -957,18 +957,34 @@ is what makes it read as a range rather than as a stack of tabs.
 
 ## Compose - turning picks into the canonical pages
 
+Compose is a DESIGN ACT, page by page. The model composes when it is asked to
+compose, and until this rewrite nothing after the pick asked it: one build's home
+page was the picked board degraded by six safe-looking edits, and its eighteen
+inner pages were kit assembly done in a single 22-minute burst with no board, no
+library call and nobody opening a page. Every mechanical gate passed, because
+every mechanical gate measures whether a page rendered.
+
 The mechanic when the client says "b3 hero + b5 menu":
 
-1. **Read the picked artboards; there are no files to lift.** A board is a
+1. **LIFT THE PICKED BOARD, do not rebuild it from the kit.** A board is a
    drawing, so open `.palate/explore/shots/b3/rendered.html` and its `hero.png`
-   and build the picked sections in Astro from the kit pieces that board
-   composed, on the board's own rhythm. This is the FIRST Astro of the build.
-2. Write a new `src/pages/index.astro` composing them in the board's order,
-   using the canonical `loadPage(query, params, fallback)` pattern, and carry
-   each section's id across as `data-palate-section="b3-hero"`. The board was
-   the whole home page, so the sections it drew are the sections the page has;
-   honour `explore.question_round.mix` for anything carried across from another
-   rung, and `question_round.motion` for what moves.
+   and re-skin the board's own markup into Astro, on the board's rhythm. This is
+   the FIRST Astro of the build.
+2. Write a new `src/pages/index.astro` composing the picked sections in the
+   board's order, using the canonical `loadPage(query, params, fallback)` pattern,
+   and carry each section's id across as `data-palate-section="b3-hero"`. The
+   board was the whole home page, so the sections it drew are the sections the
+   page has; honour `explore.question_round.mix` for anything carried across from
+   another rung, and `question_round.motion` for what moves.
+2b. **A DEPARTURE FROM THE BOARD IS AN OVERRIDE, AND IT IS RECORDED.** Bleed to
+   inset, the h1's role or size, a section's shape, the form's field count: each
+   of those changes the framing the client chose, and each is defensible on its
+   own, which is exactly why six of them can invert a direction with nothing
+   objecting. Record it:
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/palate-pick.mjs" <project-dir> --override <route> --section <band> --what "<what was done instead>" --reason "<why>"`.
+   `gate-fidelity.mjs` suppresses exactly the measurement the override names and
+   prints its reason beside the report; an unrecorded departure is
+   indistinguishable from drift, which is why it is refused as one.
 3. **Adopt the design tokens of the dominant board** - by default, whichever
    supplied the hero (the hero sets the tone). Confirm with the client if it
    is ambiguous. Token overrides live in `src/styles/globals.css` (or the
@@ -981,9 +997,23 @@ The mechanic when the client says "b3 hero + b5 menu":
    note in kind. Only after that is the rest of the site built. The fidelity gate
    does not run until that stamp exists, so skipping it silently turns the check
    off.
-4. Build the rest of the site's pages (`about`, `services`, etc.) in the same
-   direction, ONE PER PAGE in `manifest.architecture` (W16). They get the chosen tokens
-   automatically via the brand layer.
+4. **Compose each remaining PAGE TYPE as a designed page, not as a fill.** One
+   per page in `manifest.architecture` (W16), and the sheet `S<rung>` is the
+   vocabulary: the navigation, footer, closing band, form, card and trust strip
+   exactly as drawn. The kit is parts and states, never the page.
+   - **The drawn inner page is lifted too.** `I<rung>` is the picture of what this
+     direction's inner pages were meant to be, so the route the primary action
+     lands on is built from it and marked `--primary` when its look is recorded.
+   - **A page template is composed ONCE as a designed page type**, and its content
+     and its photographs are chosen per route, not just its words. `[service].astro`
+     rendering the same option grid for twelve routes is one page repeated twelve
+     times, and it is what put two identical five-card grids back to back.
+   - **Choose the page's one idea and decide its rhythm.** Ground, density and
+     media alternate, and no two consecutive sections share a silhouette:
+     `verify-rendered.sh` reports `repeated-silhouette` and it blocks.
+   - **Crop the photographs by looking at them** (`references/assets.md`). A hero
+     photograph under the bleed floor is cropped to its subject and served at the
+     size it has, or it is not the hero.
    **Ground EVERY inner page in a page-type-matched donor (gap4 W18), not just the
    conversion ones.** For each archetype page (about, work, case-study, team, process,
    pricing, contact, ...), pull the best donor PAGES OF THAT TYPE via
@@ -1000,6 +1030,20 @@ The mechanic when the client says "b3 hero + b5 menu":
    `refs_get { slug, layer:"component_prompts" }`, and check the result against
    `refs_get { slug, layer:"do_dont" }` before emit. The composed section is grounded
    in how the best sites build that page, not assembled from memory.
+4b. **RECORD THE LOOK, ONE PER PAGE TYPE, AND THEN JUDGE THE PAGES.** Open the
+   page beside the thing it was composed from and say what you see:
+   `--looked <route> --shot .palate-shots/<file>.png --verdict "<what you can see>"`
+   (the shot under `.palate-shots/` and newer than the built page, the verdict
+   past 40 characters and never "looks good"). `gate-look.mjs` refuses a build
+   where a page type was never opened. Then
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/gate-page-judge.mjs" <project-dir>` shoots
+   each looked route's entrance and ending and states two comparisons per surface:
+   the home against the board's `hero.png` and `foot.png`, the primary inner page
+   against `inner.png`, every other page type against the direction's donor. The
+   MAIN AGENT dispatches one fresh subagent per comparison, exactly as for the
+   boards, then re-runs the gate with `--judgements <file>`. The bar is the board
+   judge's own, comparable or better on every surface, and a refused page is
+   recomposed rather than accepted. `PALATE_GATE_JUDGE=0` releases both.
 5. **Leave no Explore surface on the site.** Delete `public/_explore/`, clear
    `src/lib/variants.ts`, and delete `src/pages/explore.astro`. There is no
    board route to archive: `.palate/explore/` is working state and never ships.

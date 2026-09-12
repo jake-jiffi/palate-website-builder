@@ -50,7 +50,7 @@ Change the site. Each one runs the loop.
 | `/palate-website-builder:fact` | Change a business fact once, in the record, and report every surface that changed with it, structured data and footer included. |
 | `/palate-website-builder:image` | Add or replace an image. Resized, optimised, alt text written, wired to the route, kept out of git history. |
 | `/palate-website-builder:campaign` | A landing page with its matched hero copy, its UTM destination and its tracking, created as one change. No campaign without its own copy. |
-| `/palate-website-builder:pick` | Record which Explore direction the client picked, the calibration answer, and anything they changed on the canvas. The only moment Explore produces a number. |
+| `/palate-website-builder:pick` | Record which Explore direction the client picked, the calibration answer, and anything they changed on the canvas. The only moment Explore produces a number. It is also Compose's recorder: `--proof` the motion proof, `--looked` the reading of each page type (with `--primary` on the route the drawn inner page became) and `--override` a deliberate departure from the board with its reason. |
 
 ## Ship
 

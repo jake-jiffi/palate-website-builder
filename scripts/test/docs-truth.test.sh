@@ -874,6 +874,95 @@ present "SKILL.md A.12 says the full local grade runs before done and gate-taste
 present "local-grade.md says gate-done's taste sub-gate reads local-grade.json" \
   "references/local-grade.md" "\`gate-done.sh\`'s \`taste\` sub-gate"
 
+# ============ COMPOSE IS A DESIGN ACT ====================================================
+# A client build was handed over with a home page that was the picked board degraded by six
+# safe-looking edits and eighteen inner pages assembled from kit pieces in one 22-minute burst
+# with no board, no library call and nobody opening a page. Every gate passed, because after the
+# pick nothing in the process was a design act. These sentences are what make it one, and every
+# one of them is now carried by a script, so a doc that loses one is a doc describing a build
+# step that still runs and is no longer written down.
+present "SKILL.md A.6 says Compose is a design act" \
+  "SKILL.md" "COMPOSE IS A DESIGN ACT"
+present "SKILL.md A.6 says the home page lifts the picked board" \
+  "SKILL.md" "LIFTS THE PICKED BOARD"
+present "SKILL.md A.6 names the command that records a departure from the board" \
+  "SKILL.md" '--override <route> --section'
+present "SKILL.md A.6 marks the route the drawn inner page became" \
+  "SKILL.md" "marked --primary when its look is recorded"
+present "SKILL.md A.6 says the kit is parts and states" \
+  "SKILL.md" "the kit is parts and states, never the page"
+absent "SKILL.md A.6 no longer tells Compose to write the rest of the site's pages" \
+  "SKILL.md" "the rest of the site's pages in the picked direction"
+present "SKILL.md A.6 composes a page template once, as a designed page type" \
+  "SKILL.md" "composed ONCE as a designed page type"
+present "SKILL.md A.6 refuses the native-size fallback for a photograph" \
+  "SKILL.md" '"inset at native size" is never a fallback'
+present "SKILL.md A.6 records the look per page type" \
+  "SKILL.md" '--looked <route> --shot'
+present "SKILL.md A.6 says the page judge's subagents are dispatched by you" \
+  "SKILL.md" "built pages are judged the way the boards were, and YOU dispatch"
+present "SKILL.md A.6 says fidelity now measures the framing" \
+  "SKILL.md" "the hero media's framing"
+
+# THE RUBRIC IS NOT THE GATE. On that build all six axes came back 4 of 4 at both viewports with
+# `defects: []` while the observations beside them named the duplication as defect 10 and marked
+# it accepted. A score somebody awards themselves cannot be the thing that decides.
+present "SKILL.md A.9 demotes the six axes to working notes" \
+  "SKILL.md" "THE SIX AXES ARE WORKING NOTES, NOT THE GATE"
+present "SKILL.md A.9 says nothing reads the self-scored axes" \
+  "SKILL.md" "Nothing reads \`visual.iterations[].axes\`"
+present "the verifier says the six axes are working notes" \
+  "agents/palate-verifier.md" "The six axes are WORKING NOTES"
+
+# THE THREE NEW DONE SUB-GATES, named where the gates are listed, or a reader learns about them
+# only when one blocks.
+present "SKILL.md names the look gate" "SKILL.md" "scripts/gate-look.mjs"
+present "SKILL.md names the page judge" "SKILL.md" "scripts/gate-page-judge.mjs"
+present "SKILL.md names the taste gate" "SKILL.md" "scripts/gate-taste.mjs"
+present "SKILL.md names the repeated-silhouette finding in the rendered gate" \
+  "SKILL.md" "repeated-silhouette"
+
+# COMPOSE READS THE SAME WAY IN THE FILE A BUILDER OPENS FOR EXPLORE.
+present "explore-stage says Compose lifts the board rather than rebuilding it" \
+  "references/explore-stage.md" "LIFT THE PICKED BOARD, do not rebuild it from the kit"
+present "explore-stage names the override command" \
+  "references/explore-stage.md" "--override <route> --section"
+present "explore-stage records the look per page type" \
+  "references/explore-stage.md" "--looked <route> --shot"
+present "explore-stage composes a page template once, with photographs chosen per route" \
+  "references/explore-stage.md" "chosen per route, not just its words"
+present "explore-stage names the page judge" \
+  "references/explore-stage.md" "gate-page-judge.mjs"
+
+# THE VERIFIER STATES THE PAGE COMPARISONS AND DISPATCHES NOTHING, because its frontmatter
+# carries no Agent tool. A doctrine sentence telling an agent to do something is only true if
+# that agent has the tool for it, which is the lesson of 11 September.
+present "the verifier carries the page judge as its own step" \
+  "agents/palate-verifier.md" "5b. **The page judge**"
+present "the verifier says the page comparisons are the main agent's to run" \
+  "agents/palate-verifier.md" "the page comparisons are the main build agent's to run"
+
+# THE PICK COMMAND'S OWN PAGE HAS TO CARRY ITS FLAGS, or the only way to find them is the source.
+present "pick.md documents the recorded look" "commands/pick.md" "--looked"
+present "pick.md documents the primary inner page mark" "commands/pick.md" "--primary"
+present "pick.md documents the override" "commands/pick.md" "--override"
+
+# THE PHOTO RULES. A width rule shipped ten of twelve service pages with a 423-572px picture box
+# in a 1440px page, under the comment that it was never cropped, and the asset review was honest
+# and complete throughout: the review was of the FILES, and nothing said the crop is a decision.
+present "assets.md says the crop is decided by looking, per slot" \
+  "references/assets.md" "A photograph enters a slot with a DECIDED CROP"
+present "assets.md refuses the native-size fallback" \
+  "references/assets.md" '"inset at native size" is never a fallback'
+present "assets.md says a raw job snap never leads a page" \
+  "references/assets.md" "A raw job snap never leads a page"
+
+# RELEASING THE LOOK GATE NARROWS THE JUDGE. `gate-page-judge.mjs` takes its routes from
+# `compose.pages[]`, which `--looked` writes, so `PALATE_GATE_LOOK=0` does not only switch off the
+# look: it quietly shrinks what is judged to whatever somebody happened to look at.
+present "build-manifest says releasing the look narrows the judge's coverage" \
+  "references/build-manifest.md" "releasing the look narrows the judge's coverage"
+
 echo "---"
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
