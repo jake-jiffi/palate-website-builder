@@ -39,6 +39,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveBuildContext } from "./project-dir.mjs";
+import { handleLiveWorkflow } from "./live-workflow.mjs";
 
 function readStdin() {
   try {
@@ -703,6 +704,7 @@ function adoptStaleManifest(ctx) {
 function main() {
   const p = readStdin();
   if (!p) return;
+  if (handleLiveWorkflow(p, "PostToolUse")) return;
   const tool = p.tool_name || "";
   const input = p.tool_input || {};
   const result = normaliseResult(p.tool_response ?? p.tool_output ?? p.toolResponse ?? null);
@@ -712,6 +714,7 @@ function main() {
   // The file being written is the strongest hint available: a write into src/pages/index.astro
   // names its project even when the session cwd sits two levels above it.
   const ctx = resolveBuildContext(p.cwd || process.cwd(), { hint: written });
+  if (handleLiveWorkflow(p, "PostToolUse", [ctx.dir, ctx.manifest])) return;
   // NEVER RECORD A BUILD INTO THE PLUGIN. This wrote five stray build-manifest.json files into
   // the skill repo, one of them recording 188 files_written across three unrelated
   // repositories, because the resolver fell back to whatever directory the session sat in.
