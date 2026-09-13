@@ -741,17 +741,17 @@ present "explore-stage says gate-facts never reads an artboard" references/explo
 # answer could not steer anything it was for. The surveyor now runs in two acts and the wall
 # holds the six answers on the checkpoint; these assertions pin the doctrine that says so.
 present "the surveyor names its calibration-only first act" \
-  "agents/palate-surveyor.md" "calibration only"
+  "references/legacy-survey.md" "calibration only"
 present "the surveyor names the intake it is handed for the deep survey" \
-  "agents/palate-surveyor.md" "the intake"
+  "references/legacy-survey.md" "the intake"
 present "the surveyor sets the intensity facet from the calibration answer" \
-  "agents/palate-surveyor.md" "\`intensity\` facet from the calibration position"
+  "references/legacy-survey.md" "\`intensity\` facet from the calibration position"
 present "the surveyor searches the admired sites with refs_for_business" \
-  "agents/palate-surveyor.md" "\`refs_for_business\` on each site they admire"
+  "references/legacy-survey.md" "\`refs_for_business\` on each site they admire"
 present "the surveyor treats the avoid list as an exclusion" \
-  "agents/palate-surveyor.md" "never a donor"
+  "references/legacy-survey.md" "never a donor"
 present "the surveyor names the primary action in the composition note" \
-  "agents/palate-surveyor.md" "COMPOSITION NOTE: the primary action is"
+  "references/legacy-survey.md" "COMPOSITION NOTE: the primary action is"
 present "LEGACY.md's checkpoint names the recorded intake" "LEGACY.md" "shown.intake"
 present "LEGACY.md's checkpoint says the intake comes before the deep survey" \
   "LEGACY.md" "BEFORE THE DEEP SURVEY"
