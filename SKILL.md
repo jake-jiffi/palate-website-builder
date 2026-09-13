@@ -1,11 +1,11 @@
 ---
 name: palate-website-builder
-description: Build and improve websites with Palate's real design reference library. Turn an existing website, brief and assets into expressive, working Astro design options, then carry the selected direction into a complete site. Motion is part of the normal experience. Recognise the product and preserve its customer journeys; use Shopify only for Shopify commerce or an explicit migration. Also maintain existing sites, manage site content and create brand packages.
+description: Build and improve websites with Palate's real design reference library. Start with an existing website, brand guides or assets, an idea, or nothing prepared. Develop expressive, working Astro design options and carry the selected direction into a complete site. Motion is part of the normal experience. Recognise the product and preserve its customer journeys; use Shopify only for Shopify commerce or an explicit migration. Also maintain existing sites, manage site content and create brand packages.
 ---
 
 # Palate website builder
 
-Make the website worth opening. Use the client's facts and assets, study real composition and interaction in the Palate MCP, and show a working design early. The reference library should improve what people see and use.
+Make the website worth opening. Use whatever the client brings, study real composition and interaction in the Palate MCP, and show a working design early. A website, brand guide, logo or photography is not a prerequisite. When even the site's purpose is unknown, establish that with one focused question, then develop the identity and website through live options.
 
 Resolve the local project before changing it. A source website URL or captured assets are rebuild inputs, not an existing local codebase. In an empty target, a request to improve or redesign that website uses the new Astro workflow while preserving its backend and external app destinations. Keep an existing stack when its local project is supplied for in-place work or the user explicitly requests maintenance.
 
@@ -18,6 +18,6 @@ Expressive motion is part of a new design's composition, including on touch devi
 
 For design options, show the first useful live option immediately and continue the others. Default to three distinct compositions when options are requested, honour an explicit count and accept an early choice. Selection happens in chat and is saved with the project CLI. It leads to the full website in the same codebase.
 
-Use source-specific copy and imagery. Keep observed facts separate from design inferences and missing information. Avoid invented reviews, claims and product data, generic stock filler, decorative dashboards, repeated card grids and reference identities copied onto the client.
+Use copy and imagery grounded in the available brief and material. With no supplied identity, propose one within the design options and label it as provisional; a separate brand package is only needed when requested. Keep observed facts separate from design proposals and missing information. Avoid invented reviews, claims and product data, generic stock filler, decorative dashboards, repeated card grids and reference identities copied onto the client.
 
 Both Codex and Claude use the same project commands and hosted `palate` MCP connection. Use actual tool results and inspect the supporting screenshots or motion clips. Never claim that a search, process exit or screenshot proves a complete customer journey.

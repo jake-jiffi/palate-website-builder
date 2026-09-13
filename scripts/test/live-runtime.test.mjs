@@ -60,6 +60,66 @@ test('isolated directions keep evidence while shared and source-profile changes 
   await ready(project); assert.equal(readStatus(project).validity.selectionCurrent, true);
   await mutate(project, 'source', { productKind: 'service', platform: 'unknown', facts: ['New facts'] }); assert.equal(readStatus(project).validity.selectionCurrent, false);
 });
+test('intake provenance and option proposals survive late brand updates and a fresh restored wrapper', async t => {
+  const { project, root } = await initial(t);
+  const wrapperStatus = target => {
+    const result = spawnSync(process.execPath, [path.join(target, 'scripts/palate.mjs'), 'status'], { cwd: root, env: { PATH: process.env.PATH }, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr); return JSON.parse(result.stdout);
+  };
+  const empty = { productKind: 'unknown', platform: 'unknown', facts: [], identity: [], assets: [], routes: [], journeys: [], integrations: [], unresolved: [], artefacts: [] };
+  await mutate(project, 'source', empty); assert.deepEqual(wrapperStatus(project).state.profile, empty);
+  write(project, '.palate/evidence/intake.json', { origin: 'supplied guide', inspected: true });
+  const profile = {
+    ...empty, productKind: 'service',
+    facts: ['Legacy text remains valid', { status: 'supplied', value: 'Acoustic panels for studios', basis: { file: 'guide.pdf', page: 1 } }],
+    identity: [{ status: 'supplied', value: { colour: '#003C46' }, basis: 'guide.pdf page 2' }, { status: 'supplied', value: 'Keep the logo proportions', basis: 'guide.pdf page 3' }],
+    assets: [{ status: 'supplied', value: 'logo.svg', basis: { visibility: 'public', source: 'client attachment' } }],
+    routes: [{ status: 'proposed', value: '/', basis: 'one-page studio brief' }],
+    journeys: [{ status: 'supplied', value: 'Explore panels and enquire', basis: 'user brief' }],
+    integrations: [{ status: 'unknown', value: 'Enquiry delivery', basis: 'no backend supplied' }],
+    unresolved: [{ status: 'unknown', value: 'Font licence availability', basis: 'guide omits licence details' }],
+    artefacts: ['.palate/evidence/intake.json'],
+  };
+  await mutate(project, 'source', profile);
+  const proposals = { a: 'Proposed identity: editorial serif and sliding panel composition.', b: 'Proposed identity: geometric sans and spatial tile composition.' };
+  for (const id of ['a', 'b']) {
+    write(project, `src/directions/${id}/index.astro`, `<h1>Studio ${id}</h1>`);
+    await mutate(project, 'option', { id, status: 'ready', rationale: proposals[id], previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
+    assert.equal(readStatus(project).validity.directions.find(direction => direction.id === 'a').current, true);
+    assert.deepEqual(readState(project).profile, profile);
+  }
+  await mutate(project, 'select', { optionId: 'a' });
+  const selected = wrapperStatus(project), choice = selected.state.selection;
+  assert.equal(choice.optionId, 'a'); assert.equal(selected.validity.selectionCurrent, true);
+  const newColour = { status: 'supplied', value: { colour: '#174C3C' }, basis: 'later explicit user instruction, supersedes guide.pdf page 2' };
+  const chosenProposal = { status: 'proposed', value: 'Editorial serif', basis: 'selected option a' };
+  const merged = { ...selected.state.profile, identity: [newColour, ...selected.state.profile.identity.slice(1), chosenProposal] };
+  await mutate(project, 'source', merged);
+  const expected = { ...profile, identity: [newColour, profile.identity[1], chosenProposal] };
+  const stale = wrapperStatus(project);
+  assert.deepEqual(stale.state.profile, expected); assert.deepEqual(stale.state.selection, choice);
+  assert.equal(stale.validity.selectionCurrent, false); assert.ok(stale.validity.directions.every(direction => !direction.current));
+  await mutate(project, 'option', { id: 'a', status: 'ready' });
+  const refreshed = wrapperStatus(project);
+  assert.equal(refreshed.validity.selectionCurrent, true);
+  assert.equal(refreshed.validity.directions.find(direction => direction.id === 'b').current, false);
+  assert.deepEqual(refreshed.state.selection, choice); assert.deepEqual(refreshed.state.profile, expected);
+  assert.deepEqual(Object.fromEntries(refreshed.state.directions.map(direction => [direction.id, direction.rationale])), proposals);
+  const checkpoint = await mutate(project, 'checkpoint', {}, { action: 'create' });
+  const into = path.join(root, 'restored-intake');
+  await execute({ command: 'checkpoint', action: 'restore', project, id: checkpoint.checkpoint.id, into, expect: String(readState(project).revision), op: 'restore-intake' });
+  const restored = wrapperStatus(into);
+  assert.deepEqual(restored.state.profile, expected); assert.deepEqual(restored.state.selection, choice);
+  assert.deepEqual(Object.fromEntries(restored.state.directions.map(direction => [direction.id, direction.rationale])), proposals);
+  assert.equal(restored.validity.selectionCurrent, false);
+  assert.ok(restored.state.directions.every(direction => direction.status === 'pending' && !direction.previewUrl));
+  assert.ok(restored.validity.directions.every(direction => !direction.current));
+  const marker = path.join(into, 'palate.project.json'), before = fs.readFileSync(marker);
+  const unsafe = write(root, 'unsafe-intake.json', { ...restored.state.profile, integrations: [...restored.state.profile.integrations, { basis: { attachment: [{ accessToken: 'synthetic-test-value' }] } }] });
+  const rejected = spawnSync(process.execPath, [path.join(into, 'scripts/palate.mjs'), 'source', '--input', unsafe, '--expect', String(restored.state.revision), '--op', 'unsafe-intake'], { cwd: root, env: { PATH: process.env.PATH }, encoding: 'utf8' });
+  assert.equal(rejected.status, 1); assert.match(rejected.stderr, /Credentials do not belong/);
+  assert.deepEqual(fs.readFileSync(marker), before); assert.deepEqual(wrapperStatus(into).state, restored.state);
+});
 test('two native processes cannot both select at the same revision', async t => {
   const { project, root } = await initial(t); await source(project); await ready(project); await ready(project, 'b');
   const revision = String(readState(project).revision), a = write(root, 'a.json', { optionId: 'a' }), b = write(root, 'b.json', { optionId: 'b' });
