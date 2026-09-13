@@ -7,11 +7,11 @@ description: Build and improve websites with Palate's real design reference libr
 
 Make the website worth opening. Use the client's facts and assets, study real composition and interaction in the Palate MCP, and show a working design early. The reference library should improve what people see and use.
 
-Resolve the project before changing it:
+Resolve the local project before changing it. A source website URL or captured assets are rebuild inputs, not an existing local codebase. In an empty target, a request to improve or redesign that website uses the new Astro workflow while preserving its backend and external app destinations. Keep an existing stack when its local project is supplied for in-place work or the user explicitly requests maintenance.
 
 - **New site or a rebuild in a new empty directory:** read [live-build.md](references/live-build.md). Create the neutral Astro project with the package's `scripts/palate.mjs init`, then use that project's portable `scripts/palate.mjs`. Do not initialise over an existing site.
 - **Existing `palate.project.json` with `workflow: "live-design"`:** read [live-build.md](references/live-build.md), run the project's `node scripts/palate.mjs status` and continue from its saved source, choice and unresolved work. Do not restart discovery or generate options for a small edit.
-- **Existing project without that marker, BUILD BRAND, or legacy BUILD/CONTINUE/RUN SITE work:** read [LEGACY.md](LEGACY.md) and follow the relevant mode or command. Preserve its stack, identity, state and working integrations.
+- **Existing local codebase without that marker, BUILD BRAND, or explicit legacy BUILD/CONTINUE/RUN SITE work:** read [LEGACY.md](LEGACY.md) and follow the relevant mode or command. Preserve its stack, identity, state and working integrations. For an explicitly chosen legacy build before any project exists, first establish that intent with `node <package>/hooks/palate-manifest.mjs --init-legacy --project <working-directory>`, then follow the legacy reference survey.
 - **Unknown, corrupt or conflicting project markers:** report the conflict and leave state untouched. Do not guess a version or run a legacy reset.
 
 Expressive motion is part of a new design's composition, including on touch devices. Honour a visitor's reduced-motion preference with a considered alternative. Do not make reduced motion the design default, infer a quiet style from the industry, or replace a stated motion preference with generic fades.

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { invokedDirectly } from "./invoked-directly.mjs";
 import { validateState, LEGACY_MARKERS } from "../live/project.mjs";
 
 const MARKER = "palate.project.json";
@@ -130,7 +130,11 @@ export function routeOrExit(kind, operation, targets) {
   if (code !== 0) process.exit(code === 10 ? 0 : code);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (invokedDirectly(import.meta.url)) {
   const [kind, operation, ...targets] = process.argv.slice(2);
+  if (!["reader", "gate", "writer"].includes(kind) || !operation) {
+    process.stderr.write("Usage: workflow-route.mjs <reader|gate|writer> <operation> [targets...]\n");
+    process.exit(2);
+  }
   process.exit(routeCommand(kind, operation, targets.length ? targets : [process.cwd()]));
 }

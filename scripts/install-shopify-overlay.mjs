@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readState, resolveProject, LEGACY_MARKERS } from './live/project.mjs';
+import { invokedDirectly } from './lib/invoked-directly.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export async function installShopifyOverlay(project, { confirmShopify = false } = {}) {
@@ -62,7 +63,7 @@ async function installOwnedOverlay(root) {
   }
   return { installed: true, files: files.length, dependencies: { redis: '6.2.1', '@astrojs/vercel': '11.0.10' }, next: 'Run npm install, configure server-only Shopify and Redis environment values, then style CommerceLayout using the selected design.' };
 }
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (invokedDirectly(import.meta.url)) {
   try { const project = process.argv.slice(2).find(arg => !arg.startsWith('--')); if (!project) throw new Error('Usage: install-shopify-overlay.mjs <project> --confirm-shopify'); console.log(JSON.stringify(await installShopifyOverlay(project, { confirmShopify: process.argv.includes('--confirm-shopify') }))); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

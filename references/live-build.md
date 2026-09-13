@@ -15,7 +15,7 @@ Record a source profile through the CLI, separating observed facts, inferred dec
 | Services, locations, projects and an enquiry action | Service website. Preserve contact routes and actual details; record how enquiries will reach the business. No cart. |
 | Work, articles or an editorial archive | Portfolio/editorial. Preserve content routes and contact actions; add a CMS only for an actual editing need. |
 | Marketing pages, pricing and links to an external app | SaaS marketing. Keep sign-in, trial and billing destinations; do not invent the application. |
-| Shopify catalogue, variants and a buying journey | Shopify commerce. Astro design first, then the optional Shopify integration for the selected site. |
+| Shopify catalogue, variants and a buying journey | Shopify commerce. Astro design first, then [the optional Shopify integration](live-commerce.md) for the selected site. Record unresolved Storefront access, durable cart/session persistence and checkout requirements during discovery; these do not block design previews. |
 | WooCommerce or another existing commerce backend | Preserve the actual backend and checkout. A Shopify migration requires an explicit decision. |
 | Service business with a Shopify shop | Hybrid. Commerce belongs on the shop journey; preserve the service and enquiry journeys. |
 | Shopify CDN images without products or checkout | Image hosting is not proof of commerce. Do not add Shopify. |
@@ -57,9 +57,11 @@ On restart, `status` shows the saved choice and unresolved work. Continue the se
 
 Finish all promised routes and customer journeys. Cover responsive navigation, keyboard/focus, loading, empty, success, error and recovery states where the actual feature needs them. Preserve business details, social proof that the source supports, links and supplied identity. Optimise oversized media without changing its meaning.
 
-For Shopify, use the optional integration only after source classification or an explicit choice. Connect authoritative catalogue/variant/cart/checkout behaviour, including stock and price changes, market/currency, persistence and ambiguous-response recovery. Never use the first variant as a fallback or sampled catalogue data as live purchase authority. Preserve unsupported merchant features as launch blockers.
+For Shopify, read [live-commerce.md](live-commerce.md) and use its installer only after source classification or an explicit choice. Resolve server-only Storefront access and a durable Redis session journal before enabling purchases. Missing credentials or persistence remain explicit integration work while design previews continue. Connect authoritative catalogue/variant/cart/checkout behaviour, including stock and price changes, market/currency, persistence and ambiguous-response recovery. Never use the first variant as a fallback or sampled catalogue data as live purchase authority. Preserve unsupported merchant features as launch blockers.
 
 For service forms, agree the real delivery/storage destination and hosting limits before launch. A local demonstration must say it saves locally or is a demonstration. A saved local record does not prove email delivery. Never send a test enquiry to the business. Preserve the source's file limit only with a transport that supports it, including the deployment adapter's limits.
+
+Full-site additions and shared source changes make earlier option evidence stale. Reopen the selected direction, check that its composition and interaction still hold, and refresh its ready record with current proof through `option`. Keep the saved choice; this refresh does not ask the user to select again. Before a changed choice, likewise reopen and refresh the alternative if its evidence is stale.
 
 Run direct type check, build and dependency audit, then exercise the full selected journeys in an actual browser. Check normal motion first, reduced motion and no-JS separately. Verify that discarded direction routes, private state and evidence are absent from the production output. Keep command results, screenshots and browser reports tied to the tested source/build fingerprints. Runtime-executed checks and supplied reviews are different evidence, not interchangeable approvals.
 

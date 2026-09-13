@@ -12,6 +12,8 @@ const { title, description } = Astro.props;
 <script>
   const status = document.querySelector('[data-commerce-status]');
   const drawer = document.querySelector<HTMLDialogElement>('#shopping-drawer');
+  const feedbackTarget = () => drawer?.open ? drawer.querySelector('[data-drawer-status]') || status : status;
+  const announce = (message: string) => { const target = feedbackTarget(); if (target) target.textContent = message; };
   let opener: HTMLElement | null = null;
   let openerSelector = '[data-open-cart]';
   const pendingKey = 'palate-uncertain-shopping-intent';
@@ -26,7 +28,7 @@ const { title, description } = Astro.props;
     document.querySelectorAll<HTMLButtonElement>('form[data-commerce-form]:not([data-kind="recover"]) button').forEach(button => button.disabled = true);
   };
   function pendingNotice() {
-    const target = drawer?.open ? drawer.querySelector('[data-drawer-status]') || status : status;
+    const target = feedbackTarget();
     const intent = readPending(); if (!intent || !target) return;
     blockPendingForms();
     target.textContent = 'A shopping response is unresolved. Check that same action’s result, or review your cart and explicitly recover it.';
@@ -38,8 +40,8 @@ const { title, description } = Astro.props;
         const result = await fetch('/api/shopify/cart', { method: 'POST', headers: { Accept: 'application/json' }, body: new URLSearchParams(intent.body) });
         const receipt = await result.json();
         if (!validReceipt(receipt, result.status)) throw new Error('Unrecognised shopping response');
-        if (!['unknown', 'pending'].includes(receipt.code)) { clearPending(); target.textContent = receipt.message; await refreshPageForms(); if (drawer?.open) await refreshDrawer(); }
-        else { target.textContent = receipt.message; pendingNotice(); }
+        if (!['unknown', 'pending'].includes(receipt.code)) { clearPending(); announce(receipt.message); await refreshPageForms(); if (drawer?.open) await refreshDrawer(); }
+        else { announce(receipt.message); pendingNotice(); }
       } catch { button.disabled = false; }
     }); target.append(button);
     const link = document.createElement('a'); link.href = '/cart'; link.textContent = 'Review or recover cart'; target.append(link);
@@ -101,7 +103,7 @@ const { title, description } = Astro.props;
     if (refreshing || document.hidden || document.querySelector('form[data-pending]') || document.activeElement?.matches('input,select,textarea')) return;
     refreshing = true;
     try { await refreshPageForms(); if (drawer?.open) await refreshDrawer(); }
-    catch { if (status) status.textContent = 'Current shopping controls could not be refreshed. Reload before your next action.'; }
+    catch { announce('Current shopping controls could not be refreshed. Reload before your next action.'); }
     finally { refreshing = false; }
   }
   window.addEventListener('focus', refreshVisibleCart);
@@ -116,7 +118,7 @@ const { title, description } = Astro.props;
     if (readPending() && form.dataset.kind !== 'recover') { pendingNotice(); return; }
     form.dataset.pending = 'true'; form.setAttribute('aria-busy', 'true');
     const buttons = form.querySelectorAll<HTMLButtonElement>('button'); buttons.forEach(b => b.disabled = true);
-    if (status) status.textContent = 'Updating your cart…';
+    announce('Updating your cart…');
     let knownResult = false;
     const body = new URLSearchParams(new FormData(form) as any);
     savePending({ body: [...body.entries()], kind: form.dataset.kind });
@@ -127,19 +129,20 @@ const { title, description } = Astro.props;
       const receipt = await result.json();
       if (!validReceipt(receipt, result.status)) throw new Error('Unrecognised shopping response');
       if (!['unknown', 'pending'].includes(receipt.code)) clearPending();
-      if (status) status.textContent = receipt.message;
+      announce(receipt.message);
       if (receipt.code === 'context-conflict') {
         const restore = document.createElement('form'); restore.method = 'post'; restore.action = '/api/shopify/session';
         const token = document.createElement('input'); token.type = 'hidden'; token.name = 'restore'; token.value = String(new FormData(form).get('token')); restore.append(token);
-        const button = document.createElement('button'); button.textContent = 'Continue with this tab’s cart'; restore.append(button); status?.append(restore);
+        const button = document.createElement('button'); button.textContent = 'Continue with this tab’s cart'; restore.append(button); feedbackTarget()?.append(restore);
       } else if (receipt.status === 200 || receipt.code === 'cart-adjusted') {
         knownResult = true;
         await refreshPageForms(); // A known result permits a new deliberate shopping intent.
         channel?.postMessage('changed');
         const trigger = document.querySelector<HTMLElement>(`.commerce-main form[data-kind="${form.dataset.kind}"] button`) || undefined;
         await openCart(trigger);
+        announce(receipt.message);
       } else if (['unknown', 'pending'].includes(receipt.code)) { pendingNotice(); await openCart(); }
-    } catch { if (knownResult) { if (status) status.textContent = 'Your cart action completed. Reload the page to get fresh shopping controls.'; } else pendingNotice(); }
+    } catch { if (knownResult) { announce('Your cart action completed. Reload the page to get fresh shopping controls.'); } else pendingNotice(); }
     finally { delete form.dataset.pending; form.removeAttribute('aria-busy'); buttons.forEach(b => b.disabled = knownResult || Boolean(readPending())); }
   });
   pendingNotice();
@@ -151,6 +154,6 @@ const { title, description } = Astro.props;
     };
     // The lock covers the Set-Cookie response. A second tab then sees the established SID.
     const locks = navigator.locks;
-    (locks ? locks.request('palate-shop-bootstrap', establish) : establish()).catch(() => { if (status) status.textContent = 'Use the start shopping button to establish your session.'; });
+    (locks ? locks.request('palate-shop-bootstrap', establish) : establish()).catch(() => { announce('Use the start shopping button to establish your session.'); });
   }
 </script>
