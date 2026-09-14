@@ -41,14 +41,36 @@ test('live checkpoints occur after selection and before final handover without d
   assert.ok(skill.indexOf('Explicit jury review') < skill.indexOf('Existing local codebase without that marker'));
 });
 
-test('default and opt-in loops have distinct bounds and cannot reset on resume', () => {
-  assert.match(protocol, /one builder correction round/);
-  assert.match(protocol, /one targeted repair round/);
-  assert.match(protocol, /up to four builder revision rounds/);
+test('correction, escalation and final repair share one persistent allowance', () => {
+  assert.match(protocol, /at most four total builder revision rounds/);
+  assert.match(protocol, /Lightweight corrections, escalated jury revisions and final repairs \*\*all consume the same allowance/);
+  assert.match(protocol, /Three rounds consumed means at most one remains, including any final repair/);
   assert.match(protocol, /two consecutive rounds show no evidence-backed improvement/);
   assert.match(protocol, /initial critique can meet the target without a builder round/);
-  assert.match(protocol, /Persist the consumed round count, including interrupted builder attempts/);
+  assert.match(protocol, /Before delegating each builder/);
+  assert.match(protocol, /persist the consumed round count, including interrupted builder attempts/);
+  assert.match(protocol, /Escalation, a stage change, a command or a session restart does not reset/);
+  assert.match(protocol, /Only a genuinely new user-authorised direction or scope/);
   assert.match(protocol, /target not met/);
+});
+
+test('coordinator escalates observed craft gaps without manual invocation or rating prerequisite', () => {
+  assert.match(skill, /autonomously escalate/);
+  assert.match(skill, /no manual jury request or rating event is needed/);
+  assert.match(protocol, /The coordinator owns escalation/);
+  assert.match(protocol, /Do not wait for a manual jury request, a ladder result or a rating event/);
+  assert.match(protocol, /Design below 9, Creativity or Motion below 8/);
+  assert.match(protocol, /useful signals, not required triggers/);
+  assert.match(protocol, /Do not merely list those gaps at handover/);
+  assert.match(protocol, /not a prerequisite or a hard ceiling/);
+  assert.match(protocol, /arbitrary spacing tweaks for a missing creative idea/);
+  assert.match(protocol, /proceed without routine approval pauses/);
+  assert.match(protocol, /Missing browser evidence, credentials or an external service are different/);
+  assert.match(protocol, /the evidence justifying escalation/);
+  assert.match(read('commands/jury.md'), /additional entry, not a prerequisite/);
+  for (const text of [skill, live, protocol, read('README.md')]) {
+    assert.doesNotMatch(text, /at most one focused correction round|Explicitly requested through `jury`|without restarting aesthetic iteration|instead of starting another aesthetic loop/);
+  }
 });
 
 test('actual independent delegation, completion and unavailable-tool outcomes are explicit', () => {
