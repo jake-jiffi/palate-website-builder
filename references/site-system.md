@@ -25,6 +25,7 @@ Design options explore freely. The system starts at the pick. Codify the chosen 
 - Bare tags carry the default look. A class expresses a deliberate variation.
 - A heading's size comes only from its tag or a `heading-style-*` class. Page and component CSS never set a heading's font-size, not even with a token. That is how a title ends up looking like another level.
 - Type (font-size, line-height, letter-spacing, font-weight, font-family) and colour come from the system. That means a `var(--token)`, a system class, or a relative unit (`em`, `%`). No literal values outside the system.
+- Set type and colour only in `<style>` blocks, `.css` files or plain `style="..."` attributes. The check reads those three and nothing else, so an arbitrary utility class (`text-[17px]`) or a JavaScript style object would hide a value from it.
 - Spacing uses a token where the value is shared. Spacing literals are reported, not refused.
 - Layout lives in scoped component classes. There is no grid utility system.
 - Not taken from Client-First, because it solves problems Webflow has and Astro does not: underscore "folder" class names, `is-` combo classes, two-class margin and padding utilities, and spacer divs. Scoped styles, component props and `gap` do those jobs.
