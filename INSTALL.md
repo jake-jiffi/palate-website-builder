@@ -115,7 +115,7 @@ claude plugin uninstall palate-website-builder@palate
 claude plugin install palate-classic@palate
 ```
 
-Then restart Claude Code. Its commands are `/palate-classic:<name>`. Use one Palate plugin at a time:
+Then restart Claude Code. Its slash commands carry the palate-classic prefix. Use one Palate plugin at a time:
 both register the same hooks, so two installed together double-count a build's library calls.
 
 ### Uninstalling
