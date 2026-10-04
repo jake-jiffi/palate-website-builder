@@ -35,7 +35,7 @@ async function site(t, { select = true, system = SYSTEM } = {}) {
   await mutate(project, 'source', { productKind: 'service', platform: 'wordpress', routes: ['/'], journeys: ['enquiry'] });
   for (const id of ['a', 'b']) {
     write(project, `src/directions/${id}/index.astro`, `<h1>${id}</h1>`);
-    await mutate(project, 'option', { id, status: 'ready', label: id, previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
+    await mutate(project, 'option', { id, status: 'ready', referenceDecisions: [{ slug: 'aesop' }], label: id, previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
   }
   if (select) await mutate(project, 'select', { optionId: 'a' });
   if (system !== null) write(project, 'src/styles/system.css', system);

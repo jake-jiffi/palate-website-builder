@@ -57,6 +57,34 @@ function safeProfile(input) {
   inspect(profile);
   return profile;
 }
+/** Slugs of Palate references this project actually read, from the hook record; null where no hook ran (Codex). */
+function recordedSlugs(project) {
+  const folder = path.join(project, '.palate', 'events');
+  if (!fs.existsSync(folder)) return null;
+  let palate = false; const seen = new Set();
+  for (const name of fs.readdirSync(folder)) {
+    if (!name.endsWith('.json')) continue;
+    let event; try { event = JSON.parse(fs.readFileSync(path.join(folder, name), 'utf8')); } catch { continue; }
+    if (!String(event.tool || '').startsWith('mcp__palate__')) continue;
+    palate = true;
+    if (event.ok) for (const slug of event.slugs || []) seen.add(slug);
+  }
+  return palate ? seen : null;
+}
+/** A ready option is grounded in references it actually read, or says plainly why it is not. */
+function groundOption(project, record, input) {
+  if (!record.referenceDecisions.length) {
+    const why = input.ungrounded ?? record.ungrounded;
+    if (typeof why !== 'string' || !why.trim()) fail('A ready option needs at least one reference decision from a Palate reference you inspected, or "ungrounded" with the reason (for example the library was unreachable). An ungrounded option is labelled as one.', 'UNGROUNDED');
+    record.ungrounded = why.trim();
+    return;
+  }
+  delete record.ungrounded;
+  const seen = recordedSlugs(project);
+  if (!seen) return;
+  const unread = record.referenceDecisions.map(d => d.slug).filter(slug => !seen.has(slug));
+  if (unread.length) fail(`These reference decisions name references this project never read: ${unread.join(', ')}. Read them with the Palate tools first.`, 'UNGROUNDED');
+}
 function optionRecord(project, input, old) {
   if (!input || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.id || '') || !['pending', 'ready', 'failed'].includes(input.status)) fail('Option needs a safe ID and pending, ready or failed status.');
   const record = { ...old, id: input.id, label: input.label ?? old?.label ?? input.id, status: input.status, rationale: input.rationale ?? old?.rationale ?? '', entry: input.entry ?? old?.entry ?? `src/directions/${input.id}/index.astro`, referenceDecisions: input.referenceDecisions ?? old?.referenceDecisions ?? [] };
@@ -70,8 +98,10 @@ function optionRecord(project, input, old) {
   }
   if (input.thumbnail) record.thumbnail = proof(project, input.thumbnail);
   if (input.proofs) { if (!Array.isArray(input.proofs)) fail('Option proofs must be an array.'); record.proofs = input.proofs.map(value => proof(project, value)); }
+  if (record.referenceDecisions.some(d => !d || typeof d !== 'object' || typeof d.slug !== 'string' || !d.slug.trim())) fail('Each reference decision needs the slug of a Palate reference that was actually inspected.');
   if (input.status === 'ready') {
     if (!fs.existsSync(confined(project, record.entry)) || !fs.statSync(confined(project, record.entry)).isFile() || !record.previewUrl) fail('A ready option needs its actual entry file and live preview URL.');
+    groundOption(project, record, input);
     record.fingerprint = fingerprint(project, record.id); record.checkedAt = new Date().toISOString(); delete record.error;
   }
   return record;
@@ -272,8 +302,9 @@ source input (facts are public, observed source details; keep unknowns explicit)
 productKind: service, portfolio, editorial, saas-marketing, commerce, hybrid or unknown. Shopify uses platform "shopify" with observed evidence.
 
 option input (pending and failed work may be registered before a file exists):
-{"id":"a","label":"Coastal architecture","status":"ready","entry":"src/directions/a/index.astro","rationale":"Source-specific composition and interaction decisions","previewUrl":"http://127.0.0.1:4321/_palate/directions/a","referenceDecisions":[]}
+{"id":"a","label":"Coastal architecture","status":"ready","entry":"src/directions/a/index.astro","rationale":"Source-specific composition and interaction decisions","previewUrl":"http://127.0.0.1:4321/_palate/directions/a","referenceDecisions":[{"slug":"linear","observed":"Sticky product stage","uses":"Pinned hero that changes as the visitor scrolls"}]}
 Optional thumbnail/proofs: {"path":".palate/previews/a.png","sha256":"optional-verified-hash"}. Reference decisions describe actual inspected evidence, never invented calls.
+A ready option needs at least one reference decision whose slug this project actually read (checked against the hook record where one exists), or "ungrounded":"<reason>" when the library could not be reached. An ungrounded option is labelled as one.
 Ready registration records current source bytes after reopening the option. Refresh it after shared/full-site edits before verification. Isolated sibling directions do not stale each other.
 
 select input: {"optionId":"a"}

@@ -26,7 +26,7 @@ async function initial(t) { const fixture = setup(t); await execute({ command: '
 async function source(project) { return mutate(project, 'source', { productKind: 'service', platform: 'wordpress', facts: ['Source business'], routes: ['/'], journeys: ['enquiry'] }); }
 async function ready(project, id = 'a') {
   write(project, `src/directions/${id}/index.astro`, `<h1>${id}</h1>`);
-  return mutate(project, 'option', { id, status: 'ready', label: id, previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
+  return mutate(project, 'option', { id, status: 'ready', referenceDecisions: [{ slug: 'aesop' }], label: id, previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
 }
 function child(args) {
   return new Promise(resolve => { const proc = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '', stderr = ''; proc.stdout.on('data', data => stdout += data); proc.stderr.on('data', data => stderr += data); proc.on('exit', (code, signal) => resolve({ code, signal, stdout, stderr })); });
@@ -84,7 +84,7 @@ test('intake provenance and option proposals survive late brand updates and a fr
   const proposals = { a: 'Proposed identity: editorial serif and sliding panel composition.', b: 'Proposed identity: geometric sans and spatial tile composition.' };
   for (const id of ['a', 'b']) {
     write(project, `src/directions/${id}/index.astro`, `<h1>Studio ${id}</h1>`);
-    await mutate(project, 'option', { id, status: 'ready', rationale: proposals[id], previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
+    await mutate(project, 'option', { id, status: 'ready', referenceDecisions: [{ slug: 'aesop' }], rationale: proposals[id], previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
     assert.equal(readStatus(project).validity.directions.find(direction => direction.id === 'a').current, true);
     assert.deepEqual(readState(project).profile, profile);
   }
@@ -99,7 +99,7 @@ test('intake provenance and option proposals survive late brand updates and a fr
   const stale = wrapperStatus(project);
   assert.deepEqual(stale.state.profile, expected); assert.deepEqual(stale.state.selection, choice);
   assert.equal(stale.validity.selectionCurrent, false); assert.ok(stale.validity.directions.every(direction => !direction.current));
-  await mutate(project, 'option', { id: 'a', status: 'ready' });
+  await mutate(project, 'option', { id: 'a', status: 'ready', referenceDecisions: [{ slug: 'aesop' }] });
   const refreshed = wrapperStatus(project);
   assert.equal(refreshed.validity.selectionCurrent, true);
   assert.equal(refreshed.validity.directions.find(direction => direction.id === 'b').current, false);
@@ -184,7 +184,7 @@ test('changed selection checkpoints first and stale worker registration cannot r
   const { project } = await initial(t); await source(project); await ready(project); await ready(project, 'b'); await mutate(project, 'select', { optionId: 'a' });
   const oldDecision = readState(project).selection.decisionId, oldRevision = String(readState(project).revision);
   const changed = await mutate(project, 'select', { optionId: 'b' }); assert.equal(changed.stage, 'building'); assert.ok(changed.checkpoint.id); assert.equal(changed.selection.parentDecision, oldDecision);
-  await assert.rejects(mutate(project, 'option', { id: 'a', status: 'ready' }, { expect: oldRevision }), /Revision conflict/); assert.equal(readState(project).selection.optionId, 'b');
+  await assert.rejects(mutate(project, 'option', { id: 'a', status: 'ready', referenceDecisions: [{ slug: 'aesop' }] }, { expect: oldRevision }), /Revision conflict/); assert.equal(readState(project).selection.optionId, 'b');
 });
 test('restore interruption retains owned staging and the original is unchanged', async t => {
   const { project, root } = await initial(t); await source(project); await ready(project);
@@ -214,4 +214,22 @@ test('compatibility policy refuses new creation without touching the target, whi
   const status = await child([path.join(packageRoot, 'scripts/palate.mjs'), 'status', '--project', project]); assert.equal(status.code, 0, status.stderr);
   const pinnedInit = await child([path.join(project, 'scripts/palate.mjs'), 'init', '--project', target, '--expect', '0', '--op', 'pinned']); assert.equal(pinnedInit.code, 1); assert.match(pinnedInit.stderr, /INSTALLED_PACKAGE_REQUIRED/);
   const help = await child([cli, '--help']); assert.equal(help.code, 0); assert.match(help.stdout, /"productKind":"service"/);
+});
+
+test('a ready option is grounded in references actually read, or says why it is not', async t => {
+  const { project } = await initial(t);
+  await source(project);
+  write(project, 'src/directions/a/index.astro', '<h1>a</h1>');
+  const preview = 'http://127.0.0.1:4321/_palate/directions/a';
+  await assert.rejects(mutate(project, 'option', { id: 'a', status: 'ready', label: 'a', previewUrl: preview }), /UNGROUNDED|at least one reference decision/);
+  await assert.rejects(mutate(project, 'option', { id: 'a', status: 'ready', label: 'a', previewUrl: preview, referenceDecisions: ['aesop'] }), /slug/);
+  await mutate(project, 'option', { id: 'a', status: 'ready', label: 'a', previewUrl: preview, ungrounded: 'The Palate library was unreachable' });
+  assert.equal(readState(project).directions.find(d => d.id === 'a').ungrounded, 'The Palate library was unreachable');
+  // Where the hook recorded Palate calls, a decision must name a reference that was actually read.
+  write(project, '.palate/events/one.json', { schema: 1, event: 'PostToolUse', tool: 'mcp__palate__refs_get', slugs: ['linear'], ok: true });
+  write(project, '.palate/events/two.json', { schema: 1, event: 'PostToolUse', tool: 'mcp__palate__refs_get', slugs: ['aesop'], ok: false });
+  await assert.rejects(mutate(project, 'option', { id: 'a', status: 'ready', label: 'a', previewUrl: preview, referenceDecisions: [{ slug: 'aesop' }] }), /never read: aesop/);
+  await mutate(project, 'option', { id: 'a', status: 'ready', label: 'a', previewUrl: preview, referenceDecisions: [{ slug: 'linear', observed: 'sticky product stage', uses: 'pinned hero' }] });
+  const a = readState(project).directions.find(d => d.id === 'a');
+  assert.equal(a.ungrounded, undefined, 'a grounded option drops the ungrounded label');
 });
