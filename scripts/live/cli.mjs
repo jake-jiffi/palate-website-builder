@@ -190,16 +190,36 @@ async function initialise(args, input, digest) {
     activate(staging, project); return result;
   } catch (error) { error.message += ` Staging retained at ${staging}.`; throw error; }
 }
+// Scopes whose evidence is a command this runtime runs itself. A supplied review cannot stand in
+// for them, and no other command can claim them: verification passed on `true` until this.
+const PINNED = { check: ['npm', 'run', 'check'], build: ['npm', 'run', 'build'], system: ['node', 'scripts/palate.mjs', 'system', 'check'] };
+/** The project's own check and build must really check and build; `astro check || true` checks nothing. */
+function realScripts(project) {
+  const scripts = json(confined(project, 'package.json')).scripts || {};
+  for (const [name, tool] of [['check', 'astro check'], ['build', 'astro build']]) {
+    const script = String(scripts[name] || '').trim();
+    if (!script.startsWith(tool) || script.includes('||')) fail(`package.json "${name}" must run ${tool} (it is "${script}"); verification cannot pass on a ${name} that does nothing.`);
+  }
+}
+/** Browser evidence is the journeys actually walked: named cases, each passed or failed. */
+function browserCases(project, review) {
+  let evidence; try { evidence = JSON.parse(fs.readFileSync(confined(project, review.path), 'utf8')); } catch { fail('Browser evidence must be JSON with the journeys that were walked.'); }
+  const cases = Array.isArray(evidence?.cases) ? evidence.cases : [];
+  if (!cases.length || cases.some(c => !c || typeof c.name !== 'string' || !c.name.trim() || !['passed', 'failed'].includes(c.result))) fail('Browser evidence needs "cases": each a named journey with result passed or failed.');
+  const allPassed = cases.every(c => c.result === 'passed');
+  if (review.result === 'passed' && !allPassed) fail('Browser evidence says passed, but a case in it failed.');
+}
 function runVerification(project, state, input) {
   if (!state.selection) fail('Select a direction before verifying the full site.');
+  realScripts(project);
   if (!Array.isArray(input.commands) || !Array.isArray(input.reviews || []) || !Array.isArray(input.required || [])) fail('Verification needs commands, optional reviews and required scopes.');
   const required = [...new Set(['check', 'build', 'browser', 'system', ...(input.required || [])])];
   const before = fingerprint(project);
   const checks = [];
   for (const command of input.commands) {
     if (!command.scope || !Array.isArray(command.argv) || !command.argv.length || command.argv.some(value => typeof value !== 'string')) fail('Each executed check needs scope and an argv string array.');
-    if (['check', 'build'].includes(command.scope) && stable(command.argv) !== stable(['npm', 'run', command.scope])) fail(`The ${command.scope} scope must execute npm run ${command.scope}; arbitrary commands cannot claim that scope.`);
-    if (command.scope === 'system' && stable(command.argv) !== stable(['node', 'scripts/palate.mjs', 'system', 'check'])) fail('The system scope must execute node scripts/palate.mjs system check.');
+    if (PINNED[command.scope] && stable(command.argv) !== stable(PINNED[command.scope])) fail(`The ${command.scope} scope must execute ${PINNED[command.scope].join(' ')}; arbitrary commands cannot claim that scope.`);
+    if (command.scope === 'browser') fail('The browser scope is the journeys actually walked, supplied as a review with cases, not a command.');
     const result = spawnSync(command.argv[0], command.argv.slice(1), { cwd: project, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 10 * 60 * 1000, shell: false });
     const report = `.palate/verification/${crypto.randomUUID()}.json`; fs.mkdirSync(path.dirname(confined(project, report)), { recursive: true });
     atomicJson(confined(project, report), { argv: command.argv, status: result.status, signal: result.signal, error: result.error?.message || null, stdout: result.stdout || '', stderr: result.stderr || '' });
@@ -207,11 +227,13 @@ function runVerification(project, state, input) {
   }
   for (const review of input.reviews || []) {
     if (!review.scope || !['passed', 'failed'].includes(review.result)) fail('A supplied review needs scope and passed/failed result.');
+    if (PINNED[review.scope]) fail(`The ${review.scope} scope cannot be a supplied review; run ${PINNED[review.scope].join(' ')}.`);
+    if (review.scope === 'browser') browserCases(project, review);
     checks.push({ scope: review.scope, kind: 'supplied-review', result: review.result, ...proof(project, review) });
   }
   const source = fingerprint(project), build = buildFingerprint(project);
   const status = readStatus(project);
-  const passed = before === source && build && status.validity.selectionCurrent && ['check', 'build'].every(scope => checks.some(check => check.scope === scope && check.kind === 'executed-command' && check.result === 'passed')) && required.every(scope => checks.some(check => check.scope === scope && check.result === 'passed')) && checks.every(check => check.result === 'passed');
+  const passed = before === source && build && status.validity.selectionCurrent && Object.keys(PINNED).every(scope => checks.some(check => check.scope === scope && check.kind === 'executed-command' && check.result === 'passed')) && required.every(scope => checks.some(check => check.scope === scope && check.result === 'passed')) && checks.every(check => check.result === 'passed');
   return { id: crypto.randomUUID(), at: new Date().toISOString(), decisionId: state.selection.decisionId, scope: input.scope || 'full-site', required, checks, sourceFingerprint: source, buildFingerprint: build, result: passed ? 'passed' : 'failed', sourceChangedDuringChecks: before !== source };
 }
 async function media(args, input) {
@@ -312,7 +334,7 @@ Combine: {"optionId":"a","combine":["b"],"instructions":"Explicit chosen mechani
 
 verify input:
 {"commands":[{"scope":"check","argv":["npm","run","check"]},{"scope":"build","argv":["npm","run","build"]},{"scope":"system","argv":["node","scripts/palate.mjs","system","check"]}],"reviews":[{"scope":"browser","path":".palate/evidence/browser.json","result":"passed"}],"required":["browser"]}
-Executed commands and supplied reviews remain separate. check, build, system and browser are always required; independent release testing lives outside this runtime.
+Executed commands and supplied reviews remain separate. check, build, system and browser are always required. check, build and system are only ever the commands above, and package.json must run astro check and astro build. Browser evidence is a JSON file with "cases": [{"name":"enquiry journey","result":"passed"}], one per journey walked.
 node scripts/palate.mjs system check    type and colour from src/styles/system.css only, after a direction is chosen (references/site-system.md)
 node scripts/palate.mjs verify --check is read-only and refuses stale source/build evidence.
 

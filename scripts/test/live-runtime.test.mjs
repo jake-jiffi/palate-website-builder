@@ -153,18 +153,28 @@ test('unknown, corrupt, nested and symlinked projects refuse mutation before sid
 });
 test('verification distinguishes executed commands from reviews and expires after source or build edits', async t => {
   const { project } = await initial(t); await source(project); await ready(project); await mutate(project, 'select', { optionId: 'a' });
-  const pkg = JSON.parse(fs.readFileSync(path.join(project, 'package.json')));
-  pkg.scripts.check = 'node -e "process.exit(0)"'; pkg.scripts.build = `node -e "require('fs').mkdirSync('dist',{recursive:true});require('fs').writeFileSync('dist/index.html','built')"`;
-  write(project, 'package.json', pkg); await ready(project);
+  // A stub astro keeps the real "astro check" / "astro build" scripts without installing Astro.
+  const astro = write(project, 'node_modules/.bin/astro', '#!/bin/sh\ncase "$1" in check) exit 0;; build) mkdir -p dist && echo built > dist/index.html;; *) exit 1;; esac\n');
+  fs.chmodSync(astro, 0o755); await ready(project);
   write(project, '.palate/evidence/browser.json', { cases: [{ name: 'enquiry journey', result: 'passed' }] });
   write(project, 'src/styles/system.css', 'h1{font-size:var(--h1)}h2{font-size:var(--h2)}h3{font-size:var(--h3)}h4{font-size:var(--h4)}h5{font-size:var(--h5)}h6{font-size:var(--h6)}.padding-global{}.container-large{}.padding-section-large{}.heading-style-h1{}.heading-style-h2{}.heading-style-h3{}.heading-style-h4{}.heading-style-h5{}.heading-style-h6{}.text-size-regular{}'); await ready(project);
   const input = { commands: [{ scope: 'check', argv: ['npm', 'run', 'check'] }, { scope: 'build', argv: ['npm', 'run', 'build'] }, { scope: 'system', argv: ['node', 'scripts/palate.mjs', 'system', 'check'] }], reviews: [{ scope: 'browser', path: '.palate/evidence/browser.json', result: 'passed' }] };
   const verification = await mutate(project, 'verify', input); assert.equal(verification.verification.result, 'passed'); assert.deepEqual(verification.verification.checks.map(check => check.kind), ['executed-command', 'executed-command', 'executed-command', 'supplied-review']);
   assert.equal((await execute({ command: 'verify', project, check: true })).verified, true);
-  write(project, '.palate/evidence/browser.json', { changed: true }); await assert.rejects(execute({ command: 'verify', project, check: true }), /No current/); await mutate(project, 'verify', input);
+  write(project, '.palate/evidence/browser.json', { cases: [{ name: 'enquiry journey', result: 'passed' }], changed: true }); await assert.rejects(execute({ command: 'verify', project, check: true }), /No current/); await mutate(project, 'verify', input);
   write(project, 'dist/index.html', 'different build'); await assert.rejects(execute({ command: 'verify', project, check: true }), /No current/);
   await mutate(project, 'verify', input); write(project, 'src/new.astro', '<p>new</p>'); await assert.rejects(execute({ command: 'verify', project, check: true }), /No current/);
-  const claimed = await mutate(project, 'verify', { commands: [], reviews: [{ scope: 'check', path: '.palate/evidence/browser.json', result: 'passed' }, { scope: 'build', path: '.palate/evidence/browser.json', result: 'passed' }] }); assert.equal(claimed.verification.result, 'failed');
+  await assert.rejects(mutate(project, 'verify', { commands: [], reviews: [{ scope: 'check', path: '.palate/evidence/browser.json', result: 'passed' }] }), /cannot be a supplied review/);
+  await assert.rejects(mutate(project, 'verify', { ...input, commands: [...input.commands, { scope: 'browser', argv: ['true'] }] }), /browser scope is the journeys/);
+  write(project, '.palate/evidence/browser.json', { cases: [{ name: 'enquiry journey', result: 'failed' }] });
+  await assert.rejects(mutate(project, 'verify', input), /a case in it failed/);
+  write(project, '.palate/evidence/browser.json', {});
+  await assert.rejects(mutate(project, 'verify', input), /needs "cases"/);
+  const pkg = JSON.parse(fs.readFileSync(path.join(project, 'package.json')));
+  for (const fake of ['true', 'astro check || true', 'node -e "process.exit(0)"']) {
+    write(project, 'package.json', { ...pkg, scripts: { ...pkg.scripts, check: fake } });
+    await assert.rejects(mutate(project, 'verify', input), /must run astro check/);
+  }
 });
 test('checkpoint restore preserves the original, excludes private data and carries a working runtime', async t => {
   const { project, root } = await initial(t); await source(project); await ready(project); await mutate(project, 'select', { optionId: 'a' });

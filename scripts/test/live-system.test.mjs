@@ -129,7 +129,7 @@ test('the check exits non-zero through the project wrapper, so verify can requir
 
 test('verify requires the system scope and refuses any other command claiming it', async t => {
   const project = await site(t);
-  write(project, '.palate/evidence/browser.json', '{}');
+  write(project, '.palate/evidence/browser.json', JSON.stringify({ cases: [{ name: 'home', result: 'passed' }] }));
   const missing = await mutate(project, 'verify', { commands: [], reviews: [{ scope: 'browser', path: '.palate/evidence/browser.json', result: 'passed' }] });
   assert.ok(missing.verification.required.includes('system'));
   assert.equal(missing.verification.result, 'failed');
