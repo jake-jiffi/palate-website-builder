@@ -7,12 +7,13 @@ import { SCHEMA, RUNTIME_VERSION, MARKER, sha256, stable, json, fail, noSymlinks
 import { allowedArtefact, emptyTarget, stagingDirectory, activate, createCheckpoint, restoreCheckpoint, discardStaging } from './checkpoint.mjs';
 import { detect, readBudget, summary, consent, quote, generate, record } from './media.mjs';
 import { checkSystem } from './system.mjs';
+import { seoCheck, factsCheck, tasteEvidence, probeRelease } from './gates.mjs';
 
 const runtimeRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 function options(args) {
   const parsed = { command: args.shift() || 'status' };
   if (parsed.command === '--help') return { command: 'help' };
-  if (['checkpoint', 'media', 'system'].includes(parsed.command)) parsed.action = args.shift();
+  if (['checkpoint', 'media', 'system', 'seo', 'facts'].includes(parsed.command)) parsed.action = args.shift();
   while (args.length) {
     const flag = args.shift();
     if (!['--project', '--input', '--expect', '--op', '--id', '--into', '--check', '--help'].includes(flag)) fail(`Unknown argument: ${flag}`);
@@ -125,6 +126,8 @@ function vendor(staging) {
     ['palate.mjs', path.join(runtimeRoot, 'palate.mjs')],
     ...listFiles(path.join(runtimeRoot, 'live'), 'live').map(name => [name, path.join(runtimeRoot, name)]),
     ...listFiles(template, 'template').map(name => [name, path.join(template, name.slice('template/'.length))]),
+    ...['gate-seo.mjs', 'gate-facts.mjs', 'palate-index.mjs', 'lib/invoked-directly.mjs'].map(name => [`gates/${name}`, path.join(runtimeRoot, name)]),
+    ['hooks/project-dir.mjs', path.resolve(runtimeRoot, '../hooks/project-dir.mjs')],
   ];
   for (const [name, source] of copies) { const output = confined(destination, name); fs.mkdirSync(path.dirname(output), { recursive: true }); fs.copyFileSync(noSymlinks(source), output); }
   const files = listFiles(destination).map(name => ({ path: name, sha256: sha256(fs.readFileSync(path.join(destination, name))) }));
@@ -192,7 +195,7 @@ async function initialise(args, input, digest) {
 }
 // Scopes whose evidence is a command this runtime runs itself. A supplied review cannot stand in
 // for them, and no other command can claim them: verification passed on `true` until this.
-const PINNED = { check: ['npm', 'run', 'check'], build: ['npm', 'run', 'build'], system: ['node', 'scripts/palate.mjs', 'system', 'check'] };
+const PINNED = { check: ['npm', 'run', 'check'], build: ['npm', 'run', 'build'], system: ['node', 'scripts/palate.mjs', 'system', 'check'], seo: ['node', 'scripts/palate.mjs', 'seo', 'check'], facts: ['node', 'scripts/palate.mjs', 'facts', 'check'] };
 /** The project's own check and build must really check and build; `astro check || true` checks nothing. */
 function realScripts(project) {
   const scripts = json(confined(project, 'package.json')).scripts || {};
@@ -213,7 +216,9 @@ function runVerification(project, state, input) {
   if (!state.selection) fail('Select a direction before verifying the full site.');
   realScripts(project);
   if (!Array.isArray(input.commands) || !Array.isArray(input.reviews || []) || !Array.isArray(input.required || [])) fail('Verification needs commands, optional reviews and required scopes.');
-  const required = [...new Set(['check', 'build', 'browser', 'system', ...(input.required || [])])];
+  const required = [...new Set(['check', 'build', 'browser', 'system', 'seo', 'facts', 'taste', ...(input.required || [])])];
+  const order = input.commands.map(command => command?.scope);
+  for (const scope of ['seo', 'facts']) if (order.includes(scope) && order.indexOf(scope) < order.indexOf('build')) fail(`Run ${scope} after build: it reads the built site.`);
   const before = fingerprint(project);
   const checks = [];
   for (const command of input.commands) {
@@ -229,7 +234,8 @@ function runVerification(project, state, input) {
     if (!review.scope || !['passed', 'failed'].includes(review.result)) fail('A supplied review needs scope and passed/failed result.');
     if (PINNED[review.scope]) fail(`The ${review.scope} scope cannot be a supplied review; run ${PINNED[review.scope].join(' ')}.`);
     if (review.scope === 'browser') browserCases(project, review);
-    checks.push({ scope: review.scope, kind: 'supplied-review', result: review.result, ...proof(project, review) });
+    const taste = review.scope === 'taste' ? tasteEvidence(project, review) : {};
+    checks.push({ scope: review.scope, kind: 'supplied-review', result: review.result, ...taste, ...proof(project, review) });
   }
   const source = fingerprint(project), build = buildFingerprint(project);
   const status = readStatus(project);
@@ -253,17 +259,20 @@ export async function execute(args) {
   const input = args.input ? json(noSymlinks(path.resolve(args.input))) : {};
   if (args.command === 'media') return media(args, input);
   if (args.command === 'system') { if (args.action !== 'check') fail('Use system check.'); return checkSystem(resolveProject(args.project)); }
+  if (args.command === 'seo') { if (args.action !== 'check') fail('Use seo check.'); return seoCheck(resolveProject(args.project)); }
+  if (args.command === 'facts') { if (args.action !== 'check') fail('Use facts check.'); return factsCheck(resolveProject(args.project)); }
   if (args.command === 'status') return { ok: true, ...readStatus(resolveProject(args.project)) };
   if (args.command === 'verify' && args.check) {
     const status = readStatus(resolveProject(args.project));
     if (!status.validity.verificationCurrent) fail('No current passing verification for the selected source and build.', 'NOT_VERIFIED');
     return { ok: true, verified: true, revision: status.state.revision, validity: status.validity };
   }
-  if (!['init', 'source', 'option', 'select', 'verify', 'checkpoint'].includes(args.command)) fail(`Unknown operation: ${args.command}`);
+  if (!['init', 'source', 'option', 'select', 'verify', 'checkpoint', 'release'].includes(args.command)) fail(`Unknown operation: ${args.command}`);
   const digest = mutationIdentity(args, input);
   if (args.command === 'init') return initialise(args, input, digest);
   const project = resolveProject(args.project);
   readState(project); // Unknown schemas never create even a lock artefact.
+  const receipt = args.command === 'release' ? await probeRelease(input) : null;
   const release = await acquireLock(project);
   try {
     const state = readState(project);
@@ -297,6 +306,12 @@ export async function execute(args) {
       state.stage = parent || donors.length ? 'building' : 'selected'; state.verification = []; details.selection = state.selection;
     } else if (args.command === 'verify') {
       const verification = runVerification(project, state, input); state.verification.push(verification); state.stage = verification.result === 'passed' ? 'verified' : 'building'; details.verification = verification;
+    } else if (args.command === 'release') {
+      const status = readStatus(project);
+      if (!status.validity.verificationCurrent) fail('Release needs a current passing verification of the selected source and build. Run verify, then deploy that build.', 'NOT_VERIFIED');
+      const verification = [...state.verification].reverse().find(record => record.result === 'passed' && record.sourceFingerprint === status.validity.sourceFingerprint && record.buildFingerprint === status.validity.buildFingerprint);
+      state.release = { ...receipt, at: new Date().toISOString(), decisionId: state.selection.decisionId, verificationId: verification.id, sourceFingerprint: status.validity.sourceFingerprint, buildFingerprint: status.validity.buildFingerprint };
+      state.stage = 'released'; details.release = state.release;
     } else if (args.action === 'create') details.checkpoint = createCheckpoint(project, state);
     else if (args.action === 'restore') {
       if (!args.into) fail('checkpoint restore needs --into <empty directory>.');
@@ -332,11 +347,18 @@ Ready registration records current source bytes after reopening the option. Refr
 select input: {"optionId":"a"}
 Combine: {"optionId":"a","combine":["b"],"instructions":"Explicit chosen mechanisms"}. Recompose and reopen the chosen direction before verification.
 
-verify input:
-{"commands":[{"scope":"check","argv":["npm","run","check"]},{"scope":"build","argv":["npm","run","build"]},{"scope":"system","argv":["node","scripts/palate.mjs","system","check"]}],"reviews":[{"scope":"browser","path":".palate/evidence/browser.json","result":"passed"}],"required":["browser"]}
-Executed commands and supplied reviews remain separate. check, build, system and browser are always required. check, build and system are only ever the commands above, and package.json must run astro check and astro build. Browser evidence is a JSON file with "cases": [{"name":"enquiry journey","result":"passed"}], one per journey walked.
+verify input (after npm run build; seo and facts read the built site, so they come after build):
+{"commands":[{"scope":"check","argv":["npm","run","check"]},{"scope":"build","argv":["npm","run","build"]},{"scope":"system","argv":["node","scripts/palate.mjs","system","check"]},{"scope":"seo","argv":["node","scripts/palate.mjs","seo","check"]},{"scope":"facts","argv":["node","scripts/palate.mjs","facts","check"]}],"reviews":[{"scope":"browser","path":".palate/evidence/browser.json","result":"passed"},{"scope":"taste","path":".palate/grade/local-grade.json","result":"passed"}]}
+check, build, system, seo, facts, browser and taste are always required. The five commands are only ever the ones above, and package.json must run astro check and astro build.
+Browser evidence is a JSON file with "cases": [{"name":"enquiry journey","result":"passed"}], one per journey walked.
+Facts evidence is .palate/evidence/facts.json: {"claims":[{"page":"/about/","quote":"verbatim from the page","source":"client URL or profile fact","verdict":"supported"}]}. Every claim must be supported by the client's own source; gate-facts disagreements are fixed or explained under "disagreements".
+Taste evidence is local-grade.json from grade-local.mjs: passed only when its ladder reads comparable or better with no flattery risk. A ladder that could not run is recorded with "unjudged":"<reason>".
 node scripts/palate.mjs system check    type and colour from src/styles/system.css only, after a direction is chosen (references/site-system.md)
+node scripts/palate.mjs seo check       gate-seo over dist: sitemap, robots, canonicals, structured data, llms.txt
+node scripts/palate.mjs facts check     gate-facts over dist, plus the claims in .palate/evidence/facts.json
 node scripts/palate.mjs verify --check is read-only and refuses stale source/build evidence.
+release input, after deploying the verified build: {"url":"https://example.com/","host":"vercel","production":true}
+node scripts/palate.mjs release --input FILE --expect REV --op ID   needs current verification; checks the URL answers
 
 node scripts/palate.mjs checkpoint create --expect REV --op ID
 node scripts/palate.mjs checkpoint restore --id HASH --into /absolute/empty-target --expect REV --op ID

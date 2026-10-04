@@ -28,6 +28,25 @@ async function ready(project, id = 'a') {
   write(project, `src/directions/${id}/index.astro`, `<h1>${id}</h1>`);
   return mutate(project, 'option', { id, status: 'ready', referenceDecisions: [{ slug: 'aesop' }], label: id, previewUrl: `http://127.0.0.1:4321/_palate/directions/${id}` });
 }
+const liveDist = fileURLToPath(new URL('./fixtures/live-dist', import.meta.url));
+/** A project whose stub astro builds .stub-dist (an SEO-clean site) into dist, with passing evidence for every scope. */
+async function verifiable(t) {
+  const fixture = await initial(t); const { project } = fixture;
+  await source(project); await ready(project); await mutate(project, 'select', { optionId: 'a' });
+  // A stub astro keeps the real "astro check" / "astro build" scripts without installing Astro.
+  const astro = write(project, 'node_modules/.bin/astro', '#!/bin/sh\ncase "$1" in check) exit 0;; build) rm -rf dist && cp -R .stub-dist dist;; *) exit 1;; esac\n');
+  fs.chmodSync(astro, 0o755); fs.cpSync(liveDist, path.join(project, '.stub-dist'), { recursive: true });
+  write(project, '.palate/evidence/browser.json', { cases: [{ name: 'enquiry journey', result: 'passed' }] });
+  write(project, '.palate/evidence/facts.json', { claims: [{ page: '/', quote: 'The project is ready for design.', source: 'profile', verdict: 'supported' }] });
+  write(project, '.palate/grade/local-grade.json', { ladder: { applicable: true, rung: 'comparable' }, flattery: { risk: false } });
+  write(project, 'src/styles/system.css', 'h1{font-size:var(--h1)}h2{font-size:var(--h2)}h3{font-size:var(--h3)}h4{font-size:var(--h4)}h5{font-size:var(--h5)}h6{font-size:var(--h6)}.padding-global{}.container-large{}.padding-section-large{}.heading-style-h1{}.heading-style-h2{}.heading-style-h3{}.heading-style-h4{}.heading-style-h5{}.heading-style-h6{}.text-size-regular{}'); await ready(project);
+  return fixture;
+}
+const run = (scope, ...argv) => ({ scope, argv });
+const verifyInput = {
+  commands: [run('check', 'npm', 'run', 'check'), run('build', 'npm', 'run', 'build'), run('system', 'node', 'scripts/palate.mjs', 'system', 'check'), run('seo', 'node', 'scripts/palate.mjs', 'seo', 'check'), run('facts', 'node', 'scripts/palate.mjs', 'facts', 'check')],
+  reviews: [{ scope: 'browser', path: '.palate/evidence/browser.json', result: 'passed' }, { scope: 'taste', path: '.palate/grade/local-grade.json', result: 'passed' }],
+};
 function child(args) {
   return new Promise(resolve => { const proc = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '', stderr = ''; proc.stdout.on('data', data => stdout += data); proc.stderr.on('data', data => stderr += data); proc.on('exit', (code, signal) => resolve({ code, signal, stdout, stderr })); });
 }
@@ -152,14 +171,8 @@ test('unknown, corrupt, nested and symlinked projects refuse mutation before sid
   fs.symlinkSync(path.join(root, 'outside'), path.join(project, 'src', 'escape')); await assert.rejects(execute({ command: 'status', project }), /Symlinked/);
 });
 test('verification distinguishes executed commands from reviews and expires after source or build edits', async t => {
-  const { project } = await initial(t); await source(project); await ready(project); await mutate(project, 'select', { optionId: 'a' });
-  // A stub astro keeps the real "astro check" / "astro build" scripts without installing Astro.
-  const astro = write(project, 'node_modules/.bin/astro', '#!/bin/sh\ncase "$1" in check) exit 0;; build) mkdir -p dist && echo built > dist/index.html;; *) exit 1;; esac\n');
-  fs.chmodSync(astro, 0o755); await ready(project);
-  write(project, '.palate/evidence/browser.json', { cases: [{ name: 'enquiry journey', result: 'passed' }] });
-  write(project, 'src/styles/system.css', 'h1{font-size:var(--h1)}h2{font-size:var(--h2)}h3{font-size:var(--h3)}h4{font-size:var(--h4)}h5{font-size:var(--h5)}h6{font-size:var(--h6)}.padding-global{}.container-large{}.padding-section-large{}.heading-style-h1{}.heading-style-h2{}.heading-style-h3{}.heading-style-h4{}.heading-style-h5{}.heading-style-h6{}.text-size-regular{}'); await ready(project);
-  const input = { commands: [{ scope: 'check', argv: ['npm', 'run', 'check'] }, { scope: 'build', argv: ['npm', 'run', 'build'] }, { scope: 'system', argv: ['node', 'scripts/palate.mjs', 'system', 'check'] }], reviews: [{ scope: 'browser', path: '.palate/evidence/browser.json', result: 'passed' }] };
-  const verification = await mutate(project, 'verify', input); assert.equal(verification.verification.result, 'passed'); assert.deepEqual(verification.verification.checks.map(check => check.kind), ['executed-command', 'executed-command', 'executed-command', 'supplied-review']);
+  const { project } = await verifiable(t); const input = verifyInput;
+  const verification = await mutate(project, 'verify', input); assert.equal(verification.verification.result, 'passed', JSON.stringify(verification.verification.checks)); assert.deepEqual(verification.verification.checks.map(check => check.kind), ['executed-command', 'executed-command', 'executed-command', 'executed-command', 'executed-command', 'supplied-review', 'supplied-review']);
   assert.equal((await execute({ command: 'verify', project, check: true })).verified, true);
   write(project, '.palate/evidence/browser.json', { cases: [{ name: 'enquiry journey', result: 'passed' }], changed: true }); await assert.rejects(execute({ command: 'verify', project, check: true }), /No current/); await mutate(project, 'verify', input);
   write(project, 'dist/index.html', 'different build'); await assert.rejects(execute({ command: 'verify', project, check: true }), /No current/);
@@ -242,4 +255,59 @@ test('a ready option is grounded in references actually read, or says why it is 
   await mutate(project, 'option', { id: 'a', status: 'ready', label: 'a', previewUrl: preview, referenceDecisions: [{ slug: 'linear', observed: 'sticky product stage', uses: 'pinned hero' }] });
   const a = readState(project).directions.find(d => d.id === 'a');
   assert.equal(a.ungrounded, undefined, 'a grounded option drops the ungrounded label');
+});
+test('seo, facts and taste bind verification, and release needs a verified build answering at its URL', async t => {
+  const { project } = await verifiable(t);
+  const failed = async (scope, pattern) => {
+    const result = (await mutate(project, 'verify', verifyInput)).verification;
+    assert.equal(result.result, 'failed', `${scope} should fail verification`);
+    const check = result.checks.find(c => c.scope === scope); assert.equal(check.result, 'failed');
+    if (pattern) assert.match(JSON.parse(fs.readFileSync(path.join(project, check.path), 'utf8')).stdout, pattern);
+  };
+  // seo and facts read the build, so they cannot run before it.
+  await assert.rejects(mutate(project, 'verify', { ...verifyInput, commands: [verifyInput.commands[3], ...verifyInput.commands] }), /after build/);
+  // SEO: a built page with no canonical fails.
+  const clean = fs.readFileSync(path.join(project, '.stub-dist/index.html'), 'utf8');
+  write(project, '.stub-dist/index.html', clean.replace(/<link rel="canonical"[^>]*>/, '')); await failed('seo');
+  write(project, '.stub-dist/index.html', clean);
+  // Facts: an unsupported claim, a quote the page does not carry, and an unexplained disagreement each fail.
+  write(project, '.palate/evidence/facts.json', { claims: [{ page: '/', quote: 'The project is ready for design.', source: 'nothing says so', verdict: 'unsupported' }] }); await failed('facts', /unsupported/);
+  write(project, '.palate/evidence/facts.json', { claims: [{ page: '/', quote: 'Family owned since 1990', source: 'profile', verdict: 'supported' }] }); await failed('facts', /does not appear/);
+  write(project, '.palate/evidence/facts.json', { claims: [] }); await failed('facts', /noClaims/);
+  fs.rmSync(path.join(project, '.palate/evidence/facts.json')); await failed('facts', /facts\.json/);
+  write(project, '.stub-dist/about/index.html', clean.replace('<body>', '<body><p>We are rated 4.9 stars across 42 reviews.</p>'));
+  write(project, '.stub-dist/contact/index.html', clean.replace('<body>', '<body><p>We are rated 4.8 stars across 41 reviews.</p>'));
+  write(project, '.palate/evidence/facts.json', { claims: [{ page: '/', quote: 'The project is ready for design.', source: 'profile', verdict: 'supported' }] });
+  assert.equal(spawnSync('npm', ['run', 'build'], { cwd: project }).status, 0);
+  const factsCheck = () => spawnSync(process.execPath, [path.join(project, 'scripts/palate.mjs'), 'facts', 'check'], { cwd: project, encoding: 'utf8' });
+  const disagree = factsCheck(); assert.equal(disagree.status, 1); assert.match(disagree.stdout, /two values for \\"rating\\"/); assert.match(disagree.stdout, /two values for \\"reviews\\"/);
+  write(project, '.palate/evidence/facts.json', { claims: [{ page: '/', quote: 'The project is ready for design.', source: 'profile', verdict: 'supported' }], disagreements: [{ label: 'rating', reason: 'Two branches, rated separately.' }] });
+  assert.equal(factsCheck().status, 1, 'one explained disagreement does not excuse the other');
+  write(project, '.palate/evidence/facts.json', { claims: [{ page: '/', quote: 'The project is ready for design.', source: 'profile', verdict: 'supported' }], disagreements: [{ label: 'rating', reason: 'Two branches, rated separately.' }, { label: 'reviews', reason: 'Two branches, rated separately.' }] });
+  assert.equal(factsCheck().status, 0, factsCheck().stdout);
+  fs.rmSync(path.join(project, '.stub-dist/about'), { recursive: true }); fs.rmSync(path.join(project, '.stub-dist/contact'), { recursive: true });
+  write(project, '.palate/evidence/facts.json', { claims: [{ page: '/', quote: 'The project is ready for design.', source: 'profile', verdict: 'supported' }] });
+  // Taste: a worse rung or flattery risk cannot be marked passed; a ladder that did not run must say why.
+  assert.equal((await mutate(project, 'verify', { ...verifyInput, reviews: [verifyInput.reviews[0]] })).verification.result, 'failed', 'taste is required');
+  assert.equal((await mutate(project, 'verify', { ...verifyInput, commands: verifyInput.commands.slice(0, 4) })).verification.result, 'failed', 'facts is required');
+  for (const grade of [{ ladder: { applicable: true, rung: 'somewhat_worse' }, flattery: { risk: false } }, { ladder: { applicable: true, rung: 'comparable' }, flattery: { risk: true } }]) {
+    write(project, '.palate/grade/local-grade.json', grade); await assert.rejects(mutate(project, 'verify', verifyInput), /cannot be marked passed/);
+  }
+  write(project, '.palate/grade/local-grade.json', { ladder: { applicable: false, reason: 'no exemplars' } });
+  await assert.rejects(mutate(project, 'verify', verifyInput), /did not run/);
+  const unjudged = { ...verifyInput, reviews: [verifyInput.reviews[0], { ...verifyInput.reviews[1], unjudged: 'The library was unreachable.' }] };
+  const judged = (await mutate(project, 'verify', unjudged)).verification;
+  assert.equal(judged.result, 'passed'); assert.equal(judged.checks.find(c => c.scope === 'taste').unjudged, 'The library was unreachable.');
+  // Release: refused without a current verification, refused when the URL does not answer, recorded when it does.
+  const http = await import('node:http');
+  const server = http.createServer((req, res) => { res.statusCode = req.url === '/' ? 200 : 404; res.end('ok'); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); t.after(() => server.close());
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  write(project, 'src/new.astro', '<p>new</p>');
+  await assert.rejects(mutate(project, 'release', { url: `${origin}/`, host: 'vercel' }), /current passing verification/);
+  await ready(project); assert.equal((await mutate(project, 'verify', unjudged)).verification.result, 'passed');
+  await assert.rejects(mutate(project, 'release', { url: `${origin}/missing`, host: 'vercel' }), /answered 404/);
+  await assert.rejects(mutate(project, 'release', { url: 'http://example.com/', host: 'vercel' }), /https/);
+  const released = await mutate(project, 'release', { url: `${origin}/`, host: 'vercel', production: true });
+  assert.equal(released.stage, 'released'); assert.equal(readState(project).release.url, `${origin}/`); assert.equal(readState(project).release.buildFingerprint, readStatus(project).validity.buildFingerprint);
 });
