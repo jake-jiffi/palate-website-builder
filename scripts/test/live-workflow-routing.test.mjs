@@ -202,3 +202,19 @@ test("board writers guard their output destination as well as their source", () 
   assert.notEqual(result.status, 0); assert.match(result.stderr, /live-design/);
   assert.deepEqual(snapshot(root), before);
 });
+
+test("a live project can write outside itself, but never into another Palate project", () => {
+  const root = site("outside-writer");
+  const notes = path.join(scratch, "not-a-project", "notes.md");
+  const legacy = path.join(scratch, "legacy-site");
+  fs.mkdirSync(legacy, { recursive: true });
+  fs.writeFileSync(path.join(legacy, "build-manifest.json"), "{}");
+  const write = file => hook("pretooluse", { cwd: root, tool_name: "Write", tool_use_id: `w-${path.basename(file)}`, tool_input: { file_path: file, content: "x" } });
+  const free = write(notes);
+  assert.equal(free.status, 0, free.stderr);
+  assert.doesNotMatch(free.stdout, /"deny"/, "a plain file outside every project must not be refused");
+  const blocked = write(path.join(legacy, "src", "x.astro"));
+  assert.equal(JSON.parse(blocked.stdout).hookSpecificOutput.permissionDecision, "deny");
+  const inside = write(path.join(root, "src", "pages", "about.astro"));
+  assert.doesNotMatch(inside.stdout, /"deny"/);
+});

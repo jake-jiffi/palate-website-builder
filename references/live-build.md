@@ -49,7 +49,7 @@ For a truncated or oversized screenshot response, open its returned image URL in
 
 For each adopted decision, retain the reference slug, actual result/capture path and hash, what was observed, what the direction uses and any limitation. Describe the useful relationship between visitor input, images/type/space, the state change and its resting result. Keep this brief and attached to the relevant option, not a separate worksheet. Use the reference's craft while retaining the client's identity. There is no mandatory call count or donor count.
 
-If authentication or quota fails, make one useful correction attempt. Continue with suitable cached evidence or clearly label an ungrounded preview. Do not claim a grounded result when no reference was retrieved or inspected. Keep secrets in the environment, never in source, screenshots or saved state.
+If authentication fails, make one useful correction attempt. If a deep read is refused because the monthly allowance is used up, stop deep reads at once and give the person the upgrade link from the refusal, in its own words; search still works. Then continue with suitable cached evidence or clearly label an ungrounded preview. Do not claim a grounded result when no reference was retrieved or inspected. Keep secrets in the environment, never in source, screenshots or saved state.
 
 ## Compose live options
 
