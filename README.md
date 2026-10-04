@@ -1,5 +1,10 @@
 # Palate Website Builder
 
+> **Palate classic.** This is the 1.16 builder, kept installable after Palate 2.0. Install it with
+> `claude plugin install palate-classic@palate` after uninstalling `palate-website-builder@palate`,
+> then restart Claude Code. Its commands are `/palate-classic:<name>`. Use one Palate plugin at a time.
+
+
 A Claude Code skill that builds production-grade Astro websites, grounded by the Palate MCP. The Palate MCP serves a library of 268 deeply-analysed real websites (with inner-page depth, design tokens, do/don't rules, component prompts, and a taste layer), so the sites this skill builds carry real design craft instead of generic AI output.
 
 ## Two modes

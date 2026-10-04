@@ -5,6 +5,18 @@ What changed in the Palate website builder, and why it matters to a build you ar
 Update from a terminal with `claude plugin marketplace update palate`, then restart Claude Code.
 No reinstall is needed.
 
+## 1.16.2 (Palate classic)
+
+**This is Palate classic: the 1.16 builder, kept installable after Palate 2.0.** Install it with
+`claude plugin install palate-classic@palate` (uninstall `palate-website-builder@palate` first, then
+restart Claude Code). Its commands are `/palate-classic:<name>`. It is frozen: it gets security,
+install and MCP-compatibility fixes, and nothing else.
+
+Two fixes make it work under its own name. The status line Palate prints when a session starts now
+names this plugin's command. The project scaffold's `scripts/palate.mjs` now finds `palate-classic`;
+a project made before classic existed needs that file replaced from this plugin's
+`templates/astro-project/scripts/palate.mjs`.
+
 ## 1.16.1
 
 **Install and update from the terminal.** Typed into the Claude Code desktop app's chat box,

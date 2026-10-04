@@ -5,6 +5,9 @@ description: >
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Skill, WebSearch, WebFetch, mcp__palate]
 ---
 
+> **Palate classic.** This is the 1.16 builder, kept installable as `palate-classic` after Palate 2.0. Its commands are `/palate-classic:<name>`. It is frozen: only security, install and MCP-compatibility fixes. A project scaffolded before classic existed carries a `scripts/palate.mjs` that looks only for `palate-website-builder` and `palate-beta`. If it reports that the Palate plugin was not found, replace the project's `scripts/palate.mjs` with this plugin's `templates/astro-project/scripts/palate.mjs`, which also finds `palate-classic`.
+
+
 # Palate Website Builder
 
 One skill, three capabilities. It builds production-grade Astro websites grounded by the Palate MCP's library of deeply-analysed real websites, keeps building them after launch (add pages, sections and features with the same rigour), and builds the brand packages that feed those builds. The Palate MCP provides the taste; this skill provides the craft.
