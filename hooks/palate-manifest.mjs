@@ -727,6 +727,9 @@ function initialiseLegacy() {
     const state = blank();
     state.project = dir;
     state.project_resolved_by = "explicit-legacy";
+    // Durable: the recorder rewrites project_resolved_by on every write, and this is what tells
+    // a deliberate Palate start from a stray manifest once it has (see isStrayManifest).
+    state.started = "explicit-legacy";
     const fd = fs.openSync(target, "wx", 0o600);
     const owned = fs.fstatSync(fd);
     try {

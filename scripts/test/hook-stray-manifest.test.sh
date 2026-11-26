@@ -19,7 +19,9 @@ SHOOK="$ROOT/hooks/palate-stop.mjs"
 pass=0; fail=0
 ok()  { echo "ok   - $1"; pass=$((pass+1)); }
 bad() { echo "FAIL - $1"; fail=$((fail+1)); }
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+# The physical path: on macOS /var is a symlink to /private/var, and --init-legacy records the
+# resolved path, so writes through the unresolved one would read as a different project.
+TMP="$(cd "$(mktemp -d)" && pwd -P)"; trap 'rm -rf "$TMP"' EXIT
 
 write() { # <cwd> <file_path>
   printf '{"hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"%s"},"tool_response":{},"cwd":"%s"}' "$2" "$1" |
@@ -84,6 +86,15 @@ D="$TMP/agent-block"; app "$D"
 node -e 'const f=process.argv[1],m=require(f);m.business="a bakery in Newtown";require("fs").writeFileSync(f,JSON.stringify(m))' "$D/build-manifest.json"
 out="$(stop "$D")"
 printf '%s' "$out" | grep -qiE "ungrounded|zero palate mcp calls" && ok "an agent-filled block keeps a zero-call build gated" || bad "an agent-filled block did not keep the build gated: $out"
+
+# 9. An explicit start with the library down. --init-legacy marks the manifest, and the recorder
+#    rewrites project_resolved_by on every write, so the mark has to survive more than one write.
+E="$TMP/explicit-start"; mkdir -p "$E"
+PALATE_PROJECT_DIR="" CLAUDE_PLUGIN_ROOT="$ROOT" node "$MHOOK" --init-legacy --project "$E" >/dev/null 2>&1
+write "$E" "$E/notes.astro"; write "$E" "$E/more.astro"
+grep -qF "$E/more.astro" "$E/build-manifest.json" && ok "an explicit start keeps recording after its first write" || bad "an explicit start stopped recording after its first write"
+out="$(stop "$E")"
+printf '%s' "$out" | grep -qiE "ungrounded|zero palate mcp calls" && ok "an explicit start with zero calls is still labelled UNGROUNDED" || bad "UNGROUNDED was swallowed for an explicit start: $out"
 
 echo "$pass passed, $fail failed"
 [ "$fail" = "0" ]

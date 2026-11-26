@@ -261,19 +261,21 @@ function hasManifest(dir) {
  * hook read "files written, zero Palate calls" as an ungrounded Palate build and printed the
  * reconnect warning on every turn of unrelated work.
  *
- * EVIDENCE is something only Palate produces: a library call or a refused one, a survey, a
- * block the agent fills in during a build (business, signature_move, diverge, converge,
- * commission, explore, architecture), a library stamp, or Palate's own files beside the
- * manifest. Fields the hooks and the merge step write on every pass (files_written, grounding,
+ * EVIDENCE is something only Palate produces: an explicit start (`started`), a library call or
+ * a refused one, a survey, a block the agent fills in during a build (business,
+ * signature_move, diverge, converge, commission, explore, architecture), a library stamp, or
+ * Palate's own files beside the manifest (state files, shots, the verifier's report). Fields the hooks and the merge step write on every pass (files_written, grounding,
  * visual, verifier, gates, the version stamps) are deliberately NOT evidence: they are what
  * the stray manifests are made of.
  */
 const EVIDENCE_LISTS = ["mcp_calls", "mcp_failures", "references_surveyed", "inner_pages_viewed", "layers_read", "sections", "variants"];
-const EVIDENCE_BLOCKS = ["business", "signature_move", "diverge", "converge", "commission", "explore", "architecture", "library"];
-const EVIDENCE_FILES = [".palate", ".palate-skill-state.json", ".palate-brand-state.json", ".palate-shots"];
+const EVIDENCE_BLOCKS = ["started", "business", "signature_move", "diverge", "converge", "commission", "explore", "architecture", "library"];
+const EVIDENCE_FILES = [".palate", ".palate-skill-state.json", ".palate-brand-state.json", ".palate-shots", "verify-report.json"];
 
 export function hasPalateEvidence(dir, m) {
   if (m && typeof m === "object") {
+    // An explicit start (--init-legacy) before its first write, from a version without `started`.
+    if (m.project_resolved_by === "explicit-legacy") return true;
     for (const k of EVIDENCE_LISTS) if (Array.isArray(m[k]) && m[k].length) return true;
     for (const k of EVIDENCE_BLOCKS) if (m[k] != null && m[k] !== "") return true;
   }
