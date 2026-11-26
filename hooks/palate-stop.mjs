@@ -57,7 +57,7 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { buildLogEntry } from "./build-log-entry.mjs";
-import { resolveBuildContext } from "./project-dir.mjs";
+import { isStrayManifest, resolveBuildContext } from "./project-dir.mjs";
 import { handleLiveWorkflow } from "./live-workflow.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -459,9 +459,11 @@ function recordGatesOff(startDir) {
   let manifestPath = null;
   let firstTime = false;
   try {
-    const candidate = resolveBuildContext(startDir).manifest;
+    const gctx = resolveBuildContext(startDir);
+    const candidate = gctx.manifest;
     if (!candidate || !fs.existsSync(candidate)) return;
     const m = JSON.parse(fs.readFileSync(candidate, "utf8"));
+    if (isStrayManifest(gctx, m)) return; // not a Palate build: nothing was bypassed
     // THE SAME TEST THE GATED PATH APPLIES. That path exits on !wroteSource before it records
     // anything, so a bypass must not record MORE than the gate it bypassed: a session that keeps
     // the variable set and stands near any stale build-manifest.json was logging a build that
@@ -522,6 +524,11 @@ try {
   const m = JSON.parse(fs.readFileSync(manifest, "utf8"));
   const wroteSource = (m.files_written ?? []).some((f) => SOURCE.test(f));
   if (!wroteSource) process.exit(0);
+  // A manifest an older recorder left in a non-Palate directory, with no Palate evidence in
+  // it, is not an ungrounded build. Gating it printed the reconnect warning on every turn of
+  // unrelated work. A real build with zero Palate calls still has evidence (its state files,
+  // or the blocks the agent fills in) and is still labelled UNGROUNDED below.
+  if (isStrayManifest(ctx, m)) process.exit(0);
 } catch {
   process.exit(0);
 }

@@ -91,8 +91,10 @@ gstate() { # manifest_dir -> prints the recorded grounding state
   printf '{"cwd":"%s"}' "$1" | HOME="$2" node "$STOP_HOOK" >/dev/null 2>&1
   node -e "try{process.stdout.write(String((JSON.parse(require('fs').readFileSync('$1/build-manifest.json','utf8')).grounding||{}).state))}catch(e){process.stdout.write('none')}"
 }
+# The manifest carries a brief, as a real build's does: one with no Palate evidence at all is a
+# stray left in a non-Palate directory, and the Stop hook rightly ignores it (hook-stray-manifest).
 GD="$(mktemp -d)"; GH="$(mktemp -d)"
-printf '{"files_written":["src/pages/x.astro"],"mcp_calls":[]}' > "$GD/build-manifest.json"
+printf '{"business":"fixture build","files_written":["src/pages/x.astro"],"mcp_calls":[]}' > "$GD/build-manifest.json"
 got="$(gstate "$GD" "$GH")"
 if [ "$got" = "ungrounded" ]; then
   echo "ok   - zero MCP calls is recorded as ungrounded"; pass=$((pass + 1))
@@ -101,7 +103,7 @@ else
 fi
 
 # Same manifest, gate unable to run. Must be "unknown", and must NOT be "grounded".
-printf '{"files_written":["src/pages/x.astro"],"mcp_calls":[]}' > "$GD/build-manifest.json"
+printf '{"business":"fixture build","files_written":["src/pages/x.astro"],"mcp_calls":[]}' > "$GD/build-manifest.json"
 NOJQ="$(mktemp -d)"
 for b in bash node sed grep cat mktemp dirname; do
   src="$(command -v "$b" 2>/dev/null)" && ln -sf "$src" "$NOJQ/$b"

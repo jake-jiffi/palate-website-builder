@@ -31,6 +31,7 @@ that read it cannot be talked around. Every enforcement gate hangs off this file
   "files_written_outside": [],                    // hook-set: writes that landed OUTSIDE the project. Recorded, never counted as part of the build
   "project": "/abs/path/to/{slug}-site",          // hook-set: the project this manifest is FOR (hooks/project-dir.mjs). A different project starts a fresh manifest
   "project_resolved_by": "hint",                  // hook-set: env | hint | cwd | child | fallback. "fallback" means nothing was detected
+  "started": "explicit-legacy",                   // set once by --init-legacy, never rewritten. Marks a deliberate Palate start; without it (or other Palate evidence) a manifest found where no project was detected is a stray, and the hooks ignore it
   "mcp_failures": [],                             // hook-set: Palate calls that were REFUSED or came back empty. NOT grounding, but never erased
   "stop_gate": null,                              // Stop-hook release latch: { fingerprint, unchanged, total, reasons, at }. Cleared once the evidence clears
   "sections": [],                                 // optional, agent-set: section -> donor provenance

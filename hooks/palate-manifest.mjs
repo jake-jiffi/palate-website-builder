@@ -38,7 +38,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveBuildContext } from "./project-dir.mjs";
+import { isStrayManifest, resolveBuildContext } from "./project-dir.mjs";
 import { handleLiveWorkflow } from "./live-workflow.mjs";
 import { inspectWorkflow } from "../scripts/lib/workflow-route.mjs";
 import { pluginRootRefusal } from "./project-dir.mjs";
@@ -727,6 +727,9 @@ function initialiseLegacy() {
     const state = blank();
     state.project = dir;
     state.project_resolved_by = "explicit-legacy";
+    // Durable: the recorder rewrites project_resolved_by on every write, and this is what tells
+    // a deliberate Palate start from a stray manifest once it has (see isStrayManifest).
+    state.started = "explicit-legacy";
     const fd = fs.openSync(target, "wx", 0o600);
     const owned = fs.fstatSync(fd);
     try {
@@ -786,6 +789,20 @@ function main() {
     const quota = detectQuota(result);
     if (quota) process.stdout.write(JSON.stringify({ decision: "block", reason: quotaStopDirective(quota, result) }) + "\n");
     return;
+  }
+  // A STRAY MANIFEST IS NOT A BUILD. Nothing detected a project here and the manifest that
+  // exists carries no Palate evidence (see isStrayManifest), so this is unrelated work in a
+  // directory an older recorder once wrote into. Record nothing. A Palate call is the one
+  // exception: it is evidence by itself, so it is recorded and the manifest counts from then on.
+  // An unreadable manifest is left to the normal path below, which archives and restarts it.
+  if (!tool.startsWith("mcp__palate__")) {
+    let existing = null;
+    try {
+      existing = JSON.parse(fs.readFileSync(ctx.manifest, "utf8"));
+    } catch {
+      /* missing or unreadable: not this guard's case */
+    }
+    if (existing && isStrayManifest(ctx, existing)) return;
   }
   const MANIFEST = adoptStaleManifest(ctx);
   const projectDir = ctx.dir;
