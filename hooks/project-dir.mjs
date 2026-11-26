@@ -253,6 +253,53 @@ function hasManifest(dir) {
 }
 
 /**
+ * Did Palate ever actually run here? A manifest on its own does not say so.
+ *
+ * THE FAULT THIS EXISTS FOR. Older recorders started a manifest on the first Write in ANY
+ * directory, so non-Palate repositories still carry one (some committed it). The recorder
+ * then kept filing every write into it, including writes outside the repository, and the Stop
+ * hook read "files written, zero Palate calls" as an ungrounded Palate build and printed the
+ * reconnect warning on every turn of unrelated work.
+ *
+ * EVIDENCE is something only Palate produces: a library call or a refused one, a survey, a
+ * block the agent fills in during a build (business, signature_move, diverge, converge,
+ * commission, explore, architecture), a library stamp, or Palate's own files beside the
+ * manifest. Fields the hooks and the merge step write on every pass (files_written, grounding,
+ * visual, verifier, gates, the version stamps) are deliberately NOT evidence: they are what
+ * the stray manifests are made of.
+ */
+const EVIDENCE_LISTS = ["mcp_calls", "mcp_failures", "references_surveyed", "inner_pages_viewed", "layers_read", "sections", "variants"];
+const EVIDENCE_BLOCKS = ["business", "signature_move", "diverge", "converge", "commission", "explore", "architecture", "library"];
+const EVIDENCE_FILES = [".palate", ".palate-skill-state.json", ".palate-brand-state.json", ".palate-shots"];
+
+export function hasPalateEvidence(dir, m) {
+  if (m && typeof m === "object") {
+    for (const k of EVIDENCE_LISTS) if (Array.isArray(m[k]) && m[k].length) return true;
+    for (const k of EVIDENCE_BLOCKS) if (m[k] != null && m[k] !== "") return true;
+  }
+  if (typeof dir !== "string" || !dir) return false;
+  for (const f of EVIDENCE_FILES) {
+    try {
+      if (fs.existsSync(path.join(dir, f))) return true;
+    } catch {
+      /* unreadable is not evidence */
+    }
+  }
+  return false;
+}
+
+/**
+ * A manifest found WITHOUT detecting a project (the cwd, or the nearest one above it) that
+ * carries no Palate evidence. Neither hook should record into it or gate it. A Palate call
+ * made here is evidence in itself, so the recorder still records that call, and from then on
+ * the manifest counts.
+ */
+export function isStrayManifest(ctx, m) {
+  if (!ctx || (ctx.how !== "fallback" && ctx.how !== "ancestor")) return false;
+  return !hasPalateEvidence(ctx.dir, m);
+}
+
+/**
  * Where this build's manifest is, and where it BELONGS.
  *
  * Readers use `manifest` and get the file that actually exists, so a build mid-scaffold is

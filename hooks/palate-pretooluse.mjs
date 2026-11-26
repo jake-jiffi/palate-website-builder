@@ -70,7 +70,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { resolveBuildContext } from "./project-dir.mjs";
+import { isStrayManifest, resolveBuildContext } from "./project-dir.mjs";
 import { handleLiveWorkflow } from "./live-workflow.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -329,8 +329,11 @@ function allow() {
  */
 function recordGatesOff(startDir, hint) {
   try {
-    const manifestPath = resolveBuildContext(startDir, { hint }).manifest;
+    const gctx = resolveBuildContext(startDir, { hint });
+    const manifestPath = gctx.manifest;
     if (!manifestPath || !fs.existsSync(manifestPath)) return;
+    // Not a Palate build, so there is no gate being bypassed to record (see isStrayManifest).
+    if (isStrayManifest(gctx, JSON.parse(fs.readFileSync(manifestPath, "utf8")))) return;
     execFileSync("node", [MERGE, "--manifest", manifestPath, "--gates-off"], {
       cwd: path.dirname(manifestPath),
       stdio: ["ignore", "ignore", "ignore"],
